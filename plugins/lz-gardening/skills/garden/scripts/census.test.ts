@@ -314,6 +314,19 @@ test('a census of the commit already recorded leaves the census file as it was',
   assert.equal(readFileSync(out, 'utf8'), recorded);
 });
 
+test('a census of the recorded commit under another rev records the new rev', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  const out = join(dirname(dir), 'census.json');
+  const first = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  assert.equal(first.status, 0, first.stderr);
+
+  const second = spawnSync(process.execPath, [script, '--rev', 'main', '--out', out], { cwd: dir, encoding: 'utf8' });
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.rev, 'main');
+});
+
 test('the CLI writes the census, and a second run reports what grew', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
