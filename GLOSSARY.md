@@ -39,8 +39,8 @@ One run of watching: a census, a reading of what landed since the last tick, and
 _Avoid_: scan, pass, garden pass
 
 **Seed pass**:
-The first tick in a codebase, which queues the weeds already present, from the census, the records and the history,
-instead of only what is new.
+The tick that queues the weeds already present in a codebase, from the census, the records and the history, instead
+of only what is new. Every tick runs it until one has been recorded.
 
 **Census**:
 A count of every census pattern's hits, and of duplicate helpers, at one commit of the base branch. Each tick

@@ -4,7 +4,8 @@ Run on every tick until a seed pass has committed (`site.ts open` reports `seede
 current hit as its starting count, so nothing in it is "new"; the seed pass queues what the repository already
 shows instead, so the first tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file,
 first. Queue with the tick's step 4 command, `--file` included, and stay in the repository's working directory
-throughout. Run all four steps: the records and the history find the weeds the census cannot, so a seed that stops after the seed list misses them.
+throughout. Run all four steps: the records and the history find the weeds the census cannot, so a seed that stops
+after the seed list misses them.
 
 ## 1. The seed list
 

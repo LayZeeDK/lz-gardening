@@ -14,7 +14,7 @@ a check; when one fails, report the command and its output and stop.
 Two scripts of the garden skill do the site's bookkeeping, run from the repository's checkout: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/site.ts"`, and `weeds` is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
-call. Commands run from the repository's checkout. Point git at the site or the bed (`<bed>`, the full path
+call. Point git at the site or the bed (`<bed>`, the full path
 `<site>/beds/<class>`) with `git -C "<site>"` or `git -C "<bed>"`. Run the repository's own lint, type-check and
 test commands in the bed as one Bash call, `cd "<bed>" && <command>`. `site` finds the site from the directory it
 runs in, so when the shell is no longer in the checkout, `cd` back to it before calling `site`.

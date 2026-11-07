@@ -7,7 +7,7 @@ gardener branch, worktree or stash in that checkout is one more thing for them t
 the checkout, write into a **site** instead: a local clone beside the repository.
 
 ```text
-<parent>/<repo>/                 the repository (read only, through the clone's `origin`)
+<parent>/<repo>/                 the repository (read only; the clone's `origin`)
 <parent>/<repo>.garden/          the site: a clone with branch `garden` checked out
   .garden/weeds.jsonl            the weeds queue (scripts/weeds.ts)
   .garden/census.json            the last census (scripts/census.ts)
