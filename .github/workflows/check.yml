@@ -10,11 +10,12 @@ permissions:
 
 jobs:
   check:
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        # The plugin's floor (package.json engines) and the current LTS.
+        # The Node.js floor in package.json engines (tools/hygiene.test.ts checks it) and the current LTS.
         node: ['22.18.0', '24']
     runs-on: ${{ matrix.os }}
     steps:
