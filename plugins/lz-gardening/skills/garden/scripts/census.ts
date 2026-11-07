@@ -228,7 +228,8 @@ const definitionPrefilter =
 
 /** Top-level function names defined in two or more files, each with its sorted file list. */
 async function findDuplicates(cwd: string, sha: string, exclude: readonly string[]): Promise<Record<string, string[]>> {
-  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*']);
+  // Dot-directories hold tool and agent folders (.claude, .github), often byte-copied mirrors of each other on purpose.
+  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', '**/.*/**']);
   const hits = await grepRevision(cwd, sha, definitionPrefilter, specs, 'definitions');
   const definitions = hits.flatMap((hit) => {
     const parts = splitHit(hit);

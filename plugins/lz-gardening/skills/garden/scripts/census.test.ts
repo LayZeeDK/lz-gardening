@@ -91,6 +91,19 @@ test('definitions in test files, non-source files and excluded globs are not cou
   assert.deepEqual(census.duplicates, {});
 });
 
+test('definitions under a dot-directory, such as mirrored agent skills, are not counted as duplicates', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.ts': 'export function isRecord() {}\n',
+    '.claude/skills/x/scripts/run.ts': 'function isRecord() {}\nfunction runSkill() {}\n',
+    '.commandcode/skills/x/scripts/run.ts': 'function isRecord() {}\nfunction runSkill() {}\n',
+  });
+
+  const census = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual(census.duplicates, {});
+});
+
 test('reads the revision, not the working tree', async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
