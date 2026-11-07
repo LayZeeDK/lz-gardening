@@ -22,10 +22,10 @@ no dependencies).
 
 ## Use
 
-| Command                                  | What it does                                                                                                                                                                                                |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/lz-gardening:garden [--base <branch>]` | One watch tick: census the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the repository's history and records. |
-| `/lz-gardening:tend [<class>]`           | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                       |
+| Command                                          | What it does                                                                                                                                                                                                |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/lz-gardening:garden [--base <branch>]`         | One watch tick: census the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the repository's history and records. |
+| `/lz-gardening:tend [<class>] [--base <branch>]` | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                       |
 
 Run the watch on a loop and tend by hand:
 

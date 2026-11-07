@@ -15,8 +15,8 @@ On a first census, the census output prints the seed list above its JSON line:
 - `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
   in the most files first. Read the definitions; when they do the same job, queue one `duplicate-helper` weed per
   file, `--source census:seed`, the note naming the copy to keep. Names that only share a word (two different
-  `parse` functions) are not weeds. A last line `<n> more duplicate names not listed` counts the rest; leave them
-  for later ticks. Files under dot-directories (`.claude/`, `.github/` and other tool folders, often deliberate
+  `parse` functions) are not weeds. A last line `<n> more duplicate names not listed` counts the rest; say how many in
+  the report. Later ticks report only what is new, so the seed list is the one time these are listed. Files under dot-directories (`.claude/`, `.github/` and other tool folders, often deliberate
   mirrors of each other) are left out of duplicate names, though their pattern hits count.
 
 Done when every `=` line has its weeds queued. No `=` lines means the census found no hits and no duplicates; say so

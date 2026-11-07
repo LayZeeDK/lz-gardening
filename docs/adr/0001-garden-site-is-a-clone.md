@@ -28,7 +28,7 @@ the clone. Nothing is pushed: a human fetches a bed's branch into the repository
 The site is still where every write goes, but a tick no longer reads through it. A garden tick runs as a forked
 subagent under the skill's own permission rules, and a practice run showed that every write or `cd` outside the
 working directory was refused. So a tick stays in the repository's checkout and reads it with read-only git commands
-(`git log`, `git show`, `git ls-tree`, `git rev-parse`) and the Grep and Read tools; the scripts write into the site
+(`git log`, `git show`, `git ls-tree`, `git rev-parse`) and the Read, Grep and Glob tools; the scripts write into the site
 by path. Two consequences above change:
 
 - The site's freshness no longer matters to a tick, which reads the repository directly; `site.ts open` does not
