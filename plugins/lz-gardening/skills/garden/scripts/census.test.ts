@@ -183,11 +183,11 @@ test('the CLI names a helper that became duplicated since the last census, not o
     'src/y.ts': 'export const toKey = (x) => x;\n',
   });
   const out = join(dir, 'census.json');
-  const first = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
   commit(dir, { 'src/b.ts': 'function isRecord() {}\n' });
 
-  const second = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const second = census(dir, ['--rev', 'HEAD', '--out', out]);
 
   assert.equal(second.status, 0, second.stderr);
   const summary: unknown = JSON.parse(second.stdout.trim().split('\n').at(-1) ?? '');
@@ -254,10 +254,7 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
 
-  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--ot', join(dir, 'census.json')], {
-    cwd: dir,
-    encoding: 'utf8',
-  });
+  const result = census(dir, ['--rev', 'HEAD', '--ot', join(dir, 'census.json')]);
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /--ot/);
@@ -287,7 +284,7 @@ test('the CLI creates the folder it writes the census into', (t) => {
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
   const out = join(dirname(dir), 'repo.garden', '.garden', 'census.json');
 
-  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const result = census(dir, ['--rev', 'HEAD', '--out', out]);
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.sha, git(dir, ['rev-parse', 'HEAD']));
@@ -297,11 +294,11 @@ test('a census of the commit already recorded leaves the census file as it was',
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
   const out = join(dirname(dir), 'census.json');
-  const first = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
   const recorded = readFileSync(out, 'utf8');
 
-  const second = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const second = census(dir, ['--rev', 'HEAD', '--out', out]);
 
   assert.equal(second.status, 0, second.stderr);
   assert.equal(readFileSync(out, 'utf8'), recorded);
@@ -324,10 +321,10 @@ test('a census of the recorded commit under another rev records the new rev', (t
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
   const out = join(dirname(dir), 'census.json');
-  const first = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
 
-  const second = spawnSync(process.execPath, [script, '--rev', 'main', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const second = census(dir, ['--rev', 'main', '--out', out]);
 
   assert.equal(second.status, 0, second.stderr);
   assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.rev, 'main');
@@ -337,11 +334,11 @@ test('the CLI writes the census, and a second run reports what grew', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
   const out = join(dir, 'census.json');
-  const first = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
 
   commit(dir, { 'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n' });
-  const second = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  const second = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(second.status, 0, second.stderr);
 
   const summary: unknown = JSON.parse(second.stdout.trim().split('\n').at(-1) ?? '');
