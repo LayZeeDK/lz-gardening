@@ -5,6 +5,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 
+// Git run by the tests, and by the scripts they start, ignores the machine's own settings (commit signing, hooks).
+process.env['GIT_CONFIG_GLOBAL'] = '/dev/null';
+process.env['GIT_CONFIG_NOSYSTEM'] = '1';
+
 export function git(cwd: string, args: readonly string[]): string {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);

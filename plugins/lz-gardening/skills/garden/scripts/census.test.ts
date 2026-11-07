@@ -224,6 +224,7 @@ test('the seed list keeps a colon inside a file path', (t) => {
     input: '// eslint-disable-next-line\n',
     encoding: 'utf8',
   });
+  git(dir, ['config', 'core.protectNTFS', 'false']);
   git(dir, ['update-index', '--add', '--cacheinfo', `100644,${blob.stdout.trim()},src/a:b.ts`]);
   git(dir, ['commit', '-q', '-m', 'colon']);
 
