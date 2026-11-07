@@ -208,11 +208,23 @@ function main(argv: readonly string[], cwd: string): number {
     return 2;
   }
 
-  const worktree = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
-  const top = dirname(resolve(worktree, git(worktree, ['rev-parse', '--git-common-dir'])));
+  const [gitDir, sharedGitDir] = git(cwd, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--absolute-git-dir',
+    '--git-common-dir',
+  ]).split('\n');
+  // A linked worktree finds the main checkout first in the worktree list.
+  const mainCheckout =
+    gitDir === sharedGitDir
+      ? git(cwd, ['rev-parse', '--show-toplevel'])
+      : git(cwd, ['worktree', 'list', '--porcelain'])
+          .split('\n')[0]
+          ?.replace(/^worktree /, '');
+  const top = resolve(mainCheckout ?? cwd);
 
   if (basename(top).endsWith('.garden')) {
-    throw new Error(`${worktree} is a garden site or bed; run site.ts from the repository's checkout`);
+    throw new Error(`${cwd} is in a garden site or bed; run site.ts from the repository's checkout`);
   }
 
   const site = join(dirname(top), `${basename(top)}.garden`);

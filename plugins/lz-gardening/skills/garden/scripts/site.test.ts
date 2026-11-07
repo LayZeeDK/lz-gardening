@@ -395,6 +395,20 @@ test('open run with GIT_DIR set, as from a git hook, plants the site and leaves 
   assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%s', 'garden']), 'garden: plant');
 });
 
+test('open in a checkout whose git folder lives elsewhere plants the site beside the checkout', (t) => {
+  const parent = dirname(repo(t));
+  const checkout = join(parent, 'separate');
+  git(parent, ['init', '-q', '-b', 'main', '--separate-git-dir', join(parent, 'separate.git'), checkout]);
+  git(checkout, ['config', 'user.email', 'test@example.com']);
+  git(checkout, ['config', 'user.name', 'test']);
+  commit(checkout, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(checkout, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(join(parent, 'separate.garden'), ['log', '--format=%s', 'garden']), 'garden: plant');
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
