@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The weeds queue: an append-only JSONL log of findings, one event per line. Rows are never edited; a close is a new
 // row. The same class, place and source is one weed, so a loop that finds it again adds nothing.
-// Usage (default file .garden/weeds.jsonl, override with --file <path>):
+// Usage (--file defaults to .garden/weeds.jsonl, and any other path must also end in .garden/weeds.jsonl):
 //   node weeds.ts add --class <kebab> --where <path[:line]> --source <kind:ref> --note <text> [--layer <1-6>]
 //     Prints `added <id>`, `seen <id>` (already open), `regrown <id>` (it was closed and came back) or `kept <id>`
 //     (it was closed with --keep: a weed left on purpose is never queued again).
@@ -53,6 +53,8 @@ export interface Group {
 
 const classPattern = /^[a-z0-9][a-z0-9-]*$/;
 const sourcePattern = /^[a-z][a-z-]*:\S/;
+// The skills allow this script with any arguments, so it writes nowhere but a garden queue.
+const queuePattern = /[\\/]\.garden[\\/]weeds\.jsonl$/;
 
 export function weedId(weedClass: string, where: string, source: string): string {
   return createHash('sha256').update(`${weedClass}\u0000${where}\u0000${source}`).digest('hex').slice(0, 10);
@@ -240,6 +242,13 @@ function main(argv: readonly string[], now: Date): number {
   });
   const command = positionals.length === 1 ? positionals[0] : undefined;
   const { file } = values;
+
+  if (!queuePattern.test(resolve(file))) {
+    process.stderr.write(`weeds: --file must be a .garden/weeds.jsonl file, got ${file}\n`);
+
+    return 2;
+  }
+
   const rows = readQueue(file);
   const write = (line: string): void => {
     process.stdout.write(`${line}\n`);

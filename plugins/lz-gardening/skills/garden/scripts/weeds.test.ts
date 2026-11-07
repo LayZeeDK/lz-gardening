@@ -1,7 +1,7 @@
 // Run: node --test weeds.test.ts
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -53,7 +53,7 @@ function queue(t: TestContext): string {
 }
 
 function cli(dir: string, args: readonly string[]): { code: number | null; stdout: string; stderr: string } {
-  const result = spawnSync(process.execPath, [script, ...args, '--file', join(dir, 'weeds.jsonl')], {
+  const result = spawnSync(process.execPath, [script, ...args, '--file', join(dir, '.garden', 'weeds.jsonl')], {
     encoding: 'utf8',
   });
 
@@ -160,11 +160,12 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
 
 test('the CLI exits 2 on a malformed queue instead of treating it as empty', (t) => {
   const dir = queue(t);
-  writeFileSync(join(dir, 'weeds.jsonl'), 'not json\n');
+  mkdirSync(join(dir, '.garden'));
+  writeFileSync(join(dir, '.garden', 'weeds.jsonl'), 'not json\n');
 
   const result = cli(dir, ['list']);
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /weeds:/);
+  assert.match(result.stderr, /weeds: queue line 1/);
 });
 
 test('a mistyped flag is a usage error, not ignored', (t) => {
@@ -296,6 +297,35 @@ test('a different weed is added beside open, closed and kept weeds', () => {
   assert.match(addWeed(rows, input({ where: 'src/new.ts:1' }), now).status, /^added /);
 });
 
+test('the CLI refuses a --file outside a .garden folder and writes nothing', (t) => {
+  const dir = queue(t);
+  const target = join(dir, 'profile');
+
+  const result = spawnSync(
+    process.execPath,
+    [script, 'add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type', '--file', target],
+    { encoding: 'utf8' },
+  );
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /\.garden\/weeds\.jsonl/);
+  assert.equal(existsSync(target), false);
+});
+
+test('the CLI refuses a --file that only starts with .garden/weeds.jsonl', (t) => {
+  const dir = queue(t);
+  const target = join(dir, '.garden', 'weeds.jsonl.sh');
+
+  const result = spawnSync(
+    process.execPath,
+    [script, 'add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type', '--file', target],
+    { encoding: 'utf8' },
+  );
+
+  assert.equal(result.status, 2);
+  assert.equal(existsSync(target), false);
+});
+
 test('the CLI keeps the queue in .garden/weeds.jsonl when no --file is given', (t) => {
   const dir = queue(t);
 
@@ -391,7 +421,7 @@ test('closing a class of several weeds appends one valid row per weed', (t) => {
   const closed = cli(dir, ['close-class', '--class', 'any-type', '--by', 'abc1234']);
 
   assert.equal(closed.stdout, 'closed 2\n');
-  assert.equal(readQueue(join(dir, 'weeds.jsonl')).length, 4);
+  assert.equal(readQueue(join(dir, '.garden', 'weeds.jsonl')).length, 4);
 });
 
 test('add says which flag is wrong', (t) => {
@@ -425,7 +455,7 @@ test('a word after the command is a usage error and queues nothing', (t) => {
 
   assert.equal(result.code, 2);
   assert.match(result.stderr, /^usage: weeds\.ts/);
-  assert.equal(readQueue(join(dir, 'weeds.jsonl')).length, 0);
+  assert.equal(readQueue(join(dir, '.garden', 'weeds.jsonl')).length, 0);
 });
 
 test('an unknown command prints the usage line', (t) => {
