@@ -103,7 +103,7 @@ function recordedRev(site: string): string | undefined {
     return undefined;
   }
 
-  const unreadable = new Error(`${census} is not a census; pass --base <branch>, or remove it to take a new census`);
+  const unreadable = new Error(`${census} is not a census; remove it, and the next tick records a new one`);
   let json: unknown;
 
   try {

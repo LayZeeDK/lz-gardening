@@ -388,15 +388,16 @@ async function main(argv: readonly string[]): Promise<number> {
   const extra =
     extraPath !== undefined && existsSync(extraPath) ? parsePatternSet(readJson(extraPath), extraPath) : null;
   const set = mergePatternSets(parsePatternSet(readJson(join(here, 'patterns.json')), 'patterns.json'), extra);
-  const before = out !== undefined && existsSync(out) ? parseCensus(readJson(out)) : null;
+  const recorded = out !== undefined && existsSync(out) ? readFileSync(out, 'utf8') : null;
+  const before = recorded === null ? null : parseCensus(JSON.parse(recorded));
   const after = await takeCensus(process.cwd(), rev, set, new Date());
   const deltas = diffCensus(before, after);
-
-  const changed = before === null || JSON.stringify({ ...after, takenAt: before.takenAt }) !== JSON.stringify(before);
+  const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
+  const changed = before === null || serialize({ ...after, takenAt: before.takenAt }) !== recorded;
 
   if (out !== undefined && changed) {
     mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, `${JSON.stringify(after, null, 2)}\n`);
+    writeFileSync(out, serialize(after));
   }
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
