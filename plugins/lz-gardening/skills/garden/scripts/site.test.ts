@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { resolveBase } from './site.ts';
+import type { BaseFacts } from './site.ts';
 import { commit, git, repo } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
@@ -24,60 +25,69 @@ function site(cwd: string, args: readonly string[]): SiteRun {
   return { status: result.status, stderr: result.stderr, summary };
 }
 
+// A repository with feature/x checked out, no remote default, nothing recorded and nothing asked for.
+function facts(known: Partial<BaseFacts>): BaseFacts {
+  return {
+    base: undefined,
+    censusRev: undefined,
+    originHead: undefined,
+    current: 'feature/x',
+    originIsLocal: false,
+    branches: ['feature/x', 'main'],
+    originBranchNames: [],
+    ...known,
+  };
+}
+
 test('with nothing recorded and no remote default, the base is main, not the branch checked out', () => {
-  assert.equal(resolveBase({ current: 'feature/x', branches: ['feature/x', 'main'] }), 'main');
+  assert.equal(resolveBase(facts({})), 'main');
 });
 
 test('a repository with master and no main uses master', () => {
-  assert.equal(resolveBase({ current: 'feature/y', branches: ['feature/y', 'master'] }), 'master');
+  assert.equal(resolveBase(facts({ branches: ['feature/x', 'master'] })), 'master');
 });
 
 test('an explicit base wins over every other source', () => {
   assert.equal(
-    resolveBase({
-      base: 'develop',
-      censusRev: 'release',
-      originHead: 'trunk',
-      current: 'feature/x',
-      branches: ['develop', 'feature/x', 'main', 'release', 'trunk'],
-    }),
+    resolveBase(
+      facts({
+        base: 'develop',
+        censusRev: 'release',
+        originHead: 'trunk',
+        branches: ['develop', 'feature/x', 'main', 'release', 'trunk'],
+      }),
+    ),
     'develop',
   );
 });
 
 test('without an explicit base, the base the last census recorded wins', () => {
   assert.equal(
-    resolveBase({
-      censusRev: 'release',
-      originHead: 'trunk',
-      current: 'feature/x',
-      branches: ['feature/x', 'main', 'release', 'trunk'],
-    }),
+    resolveBase(
+      facts({ censusRev: 'release', originHead: 'trunk', branches: ['feature/x', 'main', 'release', 'trunk'] }),
+    ),
     'release',
   );
 });
 
 test('with no census yet, the remote default branch is the base', () => {
-  assert.equal(
-    resolveBase({ originHead: 'trunk', current: 'feature/x', branches: ['feature/x', 'main', 'trunk'] }),
-    'trunk',
-  );
+  assert.equal(resolveBase(facts({ originHead: 'trunk', branches: ['feature/x', 'main', 'trunk'] })), 'trunk');
 });
 
 test('a remote default that is only the branch checked out in a local source is passed over for main', () => {
-  assert.equal(
-    resolveBase({
-      originHead: 'feature/x',
-      current: 'feature/x',
-      originIsLocal: true,
-      branches: ['feature/x', 'main'],
-    }),
-    'main',
-  );
+  assert.equal(resolveBase(facts({ originHead: 'feature/x', originIsLocal: true })), 'main');
 });
 
 test('a remote default of a hosted origin is the base even while it is checked out', () => {
-  assert.equal(resolveBase({ originHead: 'develop', current: 'develop', branches: ['develop', 'main'] }), 'develop');
+  assert.equal(
+    resolveBase(facts({ originHead: 'develop', current: 'develop', branches: ['develop', 'main'] })),
+    'develop',
+  );
+});
+
+test('a branch only origin has is read as origin/<name>', () => {
+  assert.equal(resolveBase(facts({ branches: ['feature/x'], originBranchNames: ['main'] })), 'origin/main');
+  assert.equal(resolveBase(facts({ branches: ['feature/x'], originBranchNames: ['master'] })), 'origin/master');
 });
 
 test('open without a base reports main while a feature branch is checked out', (t) => {

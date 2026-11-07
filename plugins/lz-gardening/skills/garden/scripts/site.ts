@@ -30,25 +30,36 @@ function gitSucceeds(cwd: string, args: readonly string[]): boolean {
 }
 
 export interface BaseFacts {
-  readonly base?: string | undefined;
-  readonly censusRev?: string | undefined;
-  readonly originHead?: string | undefined;
-  readonly current?: string | undefined;
-  readonly originIsLocal?: boolean | undefined;
+  readonly base: string | undefined;
+  readonly censusRev: string | undefined;
+  readonly originHead: string | undefined;
+  readonly current: string;
+  readonly originIsLocal: boolean;
   readonly branches: readonly string[];
-  readonly originBranchNames?: readonly string[] | undefined;
+  readonly originBranchNames: readonly string[];
 }
 
 export function resolveBase(facts: BaseFacts): string {
   const originOnly = (name: string): boolean =>
-    !facts.branches.includes(name) && (facts.originBranchNames ?? []).includes(name);
+    !facts.branches.includes(name) && facts.originBranchNames.includes(name);
   const ref = (name: string): string => (originOnly(name) ? `origin/${name}` : name);
-  // A clone of a local path takes its origin/HEAD from whatever the source has checked out.
-  const remoteDefault =
-    facts.originIsLocal === true && facts.originHead === facts.current ? undefined : facts.originHead;
-  const fallback = facts.branches.includes('main') || originOnly('main') ? 'main' : 'master';
 
-  return facts.base === undefined ? (facts.censusRev ?? ref(remoteDefault ?? fallback)) : ref(facts.base);
+  if (facts.base !== undefined) {
+    return ref(facts.base);
+  }
+
+  if (facts.censusRev !== undefined) {
+    return facts.censusRev;
+  }
+
+  // A clone of a local path takes its origin/HEAD from whatever the source has checked out.
+  const followsLocalCheckout = facts.originIsLocal && facts.originHead === facts.current;
+
+  if (facts.originHead !== undefined && !followsLocalCheckout) {
+    return ref(facts.originHead);
+  }
+
+  return ref(facts.branches.includes('main') || originOnly('main') ? 'main' : 'master');
 }
 
 function repositoryIdentity(top: string): readonly (readonly [string, string])[] {
