@@ -99,6 +99,21 @@ test('the plugin ships the same license as the repository', () => {
   );
 });
 
+test('CI tests the Node.js version package.json names as its floor', () => {
+  const engine = /"node":\s*">=([\d.]+)"/.exec(readFileSync(join(root, 'package.json'), 'utf8'))?.[1];
+  const matrix = /^\s*node: \[(.*)\]$/m.exec(readFileSync(join(root, '.github/workflows/check.yml'), 'utf8'))?.[1];
+
+  assert.ok(engine !== undefined, 'package.json names no ">=" floor in engines.node');
+  assert.ok(matrix !== undefined, 'check.yml has no node matrix');
+  assert.ok(
+    matrix
+      .split(',')
+      .map((entry) => entry.trim().replaceAll("'", ''))
+      .includes(engine),
+    matrix,
+  );
+});
+
 test('the own-tools scan finds a named tool', () => {
   assert.ok(ownTools.some((needle) => needle.test('run `/correct` after a fix')));
 });
