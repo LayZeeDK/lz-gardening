@@ -155,3 +155,15 @@ test('the CLI exits 2 on a malformed queue instead of treating it as empty', (t)
   assert.equal(result.code, 2);
   assert.match(result.stderr, /weeds:/);
 });
+
+test('a mistyped flag is a usage error, not ignored', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
+  t.after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const result = cli(dir, ['list', '--clas', 'hollow-assertion']);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /--clas/);
+});

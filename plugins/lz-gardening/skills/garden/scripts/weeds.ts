@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 export interface AddRow {
   readonly op: 'add';
@@ -222,15 +223,26 @@ function append(file: string, rows: readonly Row[]): void {
   appendFileSync(file, rows.map((row) => `${JSON.stringify(row)}\n`).join(''));
 }
 
-function argValue(argv: readonly string[], name: string): string | undefined {
-  const index = argv.indexOf(name);
-
-  return index === -1 ? undefined : argv[index + 1];
-}
-
 function main(argv: readonly string[], now: Date): number {
-  const [command] = argv;
-  const file = argValue(argv, '--file') ?? '.garden/weeds.jsonl';
+  const { positionals, values } = parseArgs({
+    args: [...argv],
+    allowPositionals: true,
+    strict: true,
+    options: {
+      file: { type: 'string', default: '.garden/weeds.jsonl' },
+      class: { type: 'string' },
+      where: { type: 'string' },
+      source: { type: 'string' },
+      note: { type: 'string' },
+      layer: { type: 'string' },
+      id: { type: 'string' },
+      by: { type: 'string' },
+      keep: { type: 'boolean', default: false },
+      min: { type: 'string', default: '1' },
+    },
+  });
+  const [command] = positionals;
+  const { file } = values;
   const rows = readQueue(file);
   const write = (line: string): void => {
     process.stdout.write(`${line}\n`);
@@ -238,13 +250,12 @@ function main(argv: readonly string[], now: Date): number {
 
   switch (command) {
     case 'add': {
-      const layerText = argValue(argv, '--layer');
       const input: AddInput = {
-        class: argValue(argv, '--class') ?? '',
-        where: argValue(argv, '--where') ?? '',
-        source: argValue(argv, '--source') ?? '',
-        note: argValue(argv, '--note') ?? '',
-        layer: layerText === undefined ? null : Number(layerText),
+        class: values.class ?? '',
+        where: values.where ?? '',
+        source: values.source ?? '',
+        note: values.note ?? '',
+        layer: values.layer === undefined ? null : Number(values.layer),
       };
       const problem = validateAdd(input);
 
@@ -266,8 +277,8 @@ function main(argv: readonly string[], now: Date): number {
     }
     case 'close':
     case 'close-class': {
-      const by = argValue(argv, '--by');
-      const target = command === 'close' ? argValue(argv, '--id') : argValue(argv, '--class');
+      const { by } = values;
+      const target = command === 'close' ? values.id : values.class;
 
       if (by === undefined || by.trim() === '' || target === undefined) {
         process.stderr.write(`weeds ${command}: needs ${command === 'close' ? '--id' : '--class'} and --by\n`);
@@ -283,7 +294,7 @@ function main(argv: readonly string[], now: Date): number {
         return 1;
       }
 
-      const keep = argv.includes('--keep');
+      const { keep } = values;
       append(
         file,
         closing.map((weed): CloseRow => ({ op: 'close', id: weed.id, at: now.toISOString(), by, keep })),
@@ -293,7 +304,7 @@ function main(argv: readonly string[], now: Date): number {
       return 0;
     }
     case 'groups': {
-      const min = Number(argValue(argv, '--min') ?? '1');
+      const min = Number(values.min);
       const groups = groupWeeds(openWeeds(rows)).filter((group) => group.open >= min);
       write(`${'class'.padEnd(36)} open places regrown layer first-seen`);
 
@@ -306,7 +317,7 @@ function main(argv: readonly string[], now: Date): number {
       return 0;
     }
     case 'list': {
-      const only = argValue(argv, '--class');
+      const only = values.class;
 
       for (const weed of openWeeds(rows).filter((item) => only === undefined || item.class === only)) {
         write(`${weed.id} ${weed.class} ${weed.where} [${weed.source}] ${weed.note}`);
