@@ -179,10 +179,12 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
 test('groups refuses a --min that is not a positive whole number, rather than hiding every class', (t) => {
   const dir = queue(t);
 
-  const result = cli(dir, ['groups', '--min', 'two']);
+  for (const min of ['two', '0']) {
+    const result = cli(dir, ['groups', '--min', min]);
 
-  assert.equal(result.code, 2);
-  assert.match(result.stderr, /--min/);
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /--min/);
+  }
 });
 
 test('validation takes layers 1 and 6, refuses 0 and 1.5, and matches the whole class and source', () => {
@@ -324,7 +326,7 @@ test('groups prints a header, then a row per class with its layer or a dash and 
   assert.match(lines[2] ?? '', /^todo-marker +1 +1 +0 +- \d{4}-\d{2}-\d{2}$/);
 });
 
-test('groups --min leaves out classes with fewer open weeds, and refuses a minimum below 1', (t) => {
+test('groups --min leaves out classes with fewer open weeds', (t) => {
   const dir = queue(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
@@ -336,7 +338,6 @@ test('groups --min leaves out classes with fewer open weeds, and refuses a minim
     rows.map((row) => row.split(' ')[0]),
     ['any-type'],
   );
-  assert.equal(cli(dir, ['groups', '--min', '0']).code, 2);
 });
 
 test('close takes one weed by id and leaves the rest of its class open', (t) => {
