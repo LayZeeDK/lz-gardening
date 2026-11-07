@@ -216,6 +216,36 @@ test('--seed prints the seed list: files per pattern by hit count, and every dup
   ]);
 });
 
+test('--seed adds exactly the seed list to the output', (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n',
+    'src/x.ts': 'export const toKey = (x) => x;\n',
+    'src/y.ts': 'export const toKey = (x) => x;\n',
+  });
+
+  const plain = census(dir, ['--rev', 'HEAD']);
+  const seeded = census(dir, ['--rev', 'HEAD', '--seed']);
+
+  assert.equal(seeded.status, 0, seeded.stderr);
+  const lines = seeded.stdout.split('\n');
+  assert.ok(lines.some((line) => line.startsWith('= ')));
+  assert.deepEqual(
+    lines.filter((line) => !line.startsWith('= ')),
+    plain.stdout.split('\n'),
+  );
+});
+
+test('a census with no --rev is a usage error that names the flags', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+
+  const result = census(dir, ['--seed']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /^usage: census\.ts --rev <rev>/);
+});
+
 test('the seed list keeps a colon inside a file path', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
