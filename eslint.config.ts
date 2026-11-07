@@ -1,7 +1,7 @@
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['node_modules/**'] },
+  { ignores: ['node_modules/**', '.stryker-tmp/**', 'reports/**'] },
   {
     files: ['plugins/lz-gardening/skills/*/scripts/**/*.ts', 'tools/**/*.ts'],
     extends: [tseslint.configs.strictTypeChecked],

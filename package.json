@@ -11,9 +11,12 @@
     "lint": "eslint --flag unstable_native_nodejs_ts_config .",
     "format:check": "prettier --check .",
     "test": "node --test \"plugins/lz-gardening/skills/*/scripts/*.test.ts\" \"tools/**/*.test.ts\"",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "test:mutation": "stryker run"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/typescript-checker": "10.1.1",
     "@types/node": "24.19.2",
     "eslint": "10.13.0",
     "prettier": "3.9.10",
