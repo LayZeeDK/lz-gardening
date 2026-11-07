@@ -202,6 +202,18 @@ test('open with a base that names no branch is an error that names it', (t) => {
   assert.match(result.stderr, /relase/);
 });
 
+test('open refuses a base whose name the agent could not pass to a shell as it is', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['branch', 'x$(id)']);
+
+  const result = site(dir, ['open', '--base', 'x$(id)']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /x\$\(id\)/);
+  assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
+});
+
 test('commit without a message is a usage error and stages nothing', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

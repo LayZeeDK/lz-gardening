@@ -97,8 +97,14 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
   };
 }
 
+const shellSafeRef = /^[\w.+@][\w./+@-]*$/;
+
 function openSite(top: string, site: string, requested: string | undefined): object {
   const base = resolveBase(baseFacts(top, site, requested));
+
+  if (!shellSafeRef.test(base)) {
+    throw new Error(`the base ${base} has characters a shell would expand; pass --base <branch>`);
+  }
 
   if (!gitSucceeds(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`])) {
     throw new Error(`the base ${base} names no branch or commit in the repository; pass --base <branch>`);

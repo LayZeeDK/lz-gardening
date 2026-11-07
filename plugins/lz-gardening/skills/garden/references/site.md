@@ -47,7 +47,8 @@ the source's checkout.
 
 A branch that only `origin` has (a clone whose checkout is a milestone branch often has `main` only as
 `origin/main`) is reported as `origin/<name>`, and every later command reads that ref. A base that resolves to no
-commit stops `open` with exit 2 before it plants anything.
+commit, or whose name holds a character a shell would expand (anything but letters, digits and `._/+@-`), stops
+`open` with exit 2 before it plants anything.
 
 The base names a ref in the repository, not in the site: a tick reads it in the repository's checkout, and a tend
 pass fetches it into the site by that name (below).
