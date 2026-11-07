@@ -35,5 +35,5 @@ site by path. Two consequences above change:
   fetch. A tend pass fetches the base into the site when it makes a bed.
 - The base comes from the repository's own refs: an explicit `--base`, the base the last census recorded, the
   repository's `origin/HEAD`, then `main` or `master`, as `origin/<name>` when only the remote has it. In a clone
-  of a local path, `origin/HEAD` follows the source's checkout, so there it is passed over when it names the
-  branch checked out.
+  of a local path, `origin/HEAD` only records what the source had checked out at clone time, so there it is passed
+  over.

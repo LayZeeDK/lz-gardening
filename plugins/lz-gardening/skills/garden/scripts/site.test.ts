@@ -31,7 +31,6 @@ function facts(known: Partial<BaseFacts>): BaseFacts {
     base: undefined,
     censusRev: undefined,
     originHead: undefined,
-    current: 'feature/x',
     originIsLocal: false,
     branches: ['feature/x', 'main'],
     originBranchNames: [],
@@ -74,15 +73,17 @@ test('with no census yet, the remote default branch is the base', () => {
   assert.equal(resolveBase(facts({ originHead: 'trunk', branches: ['feature/x', 'main', 'trunk'] })), 'trunk');
 });
 
-test('a remote default that is only the branch checked out in a local source is passed over for main', () => {
-  assert.equal(resolveBase(facts({ originHead: 'feature/x', originIsLocal: true })), 'main');
+test('a remote default from a local source, which is only what the source had checked out, is passed over', () => {
+  assert.equal(
+    resolveBase(
+      facts({ originHead: 'milestone-3', originIsLocal: true, branches: ['feature/x', 'main', 'milestone-3'] }),
+    ),
+    'main',
+  );
 });
 
 test('a remote default of a hosted origin is the base even while it is checked out', () => {
-  assert.equal(
-    resolveBase(facts({ originHead: 'develop', current: 'develop', branches: ['develop', 'main'] })),
-    'develop',
-  );
+  assert.equal(resolveBase(facts({ originHead: 'develop', branches: ['develop', 'main'] })), 'develop');
 });
 
 test('a branch only origin has is read as origin/<name>', () => {
@@ -101,12 +102,13 @@ test('open without a base reports main while a feature branch is checked out', (
   assert.equal(result.summary.get('base'), 'main');
 });
 
-test('open in a clone reports the remote default branch while a feature branch is checked out', (t) => {
+test('open in a clone of a hosted repository reports its default branch while a feature branch is checked out', (t) => {
   const source = repo(t);
   commit(source, { 'src/a.ts': 'export const a = 1;\n' });
   git(source, ['switch', '-q', '-c', 'trunk']);
   const clone = join(dirname(source), 'clone');
   git(dirname(source), ['clone', '-q', source, clone]);
+  git(clone, ['remote', 'set-url', 'origin', 'https://example.invalid/repo.git']);
   git(clone, ['config', 'user.name', 'test']);
   git(clone, ['config', 'user.email', 'test@example.com']);
   git(clone, ['switch', '-q', '-c', 'feature/x']);

@@ -39,7 +39,6 @@ export interface BaseFacts {
   readonly base: string | undefined;
   readonly censusRev: string | undefined;
   readonly originHead: string | undefined;
-  readonly current: string;
   readonly originIsLocal: boolean;
   readonly branches: readonly string[];
   readonly originBranchNames: readonly string[];
@@ -58,10 +57,8 @@ export function resolveBase(facts: BaseFacts): string {
     return facts.censusRev;
   }
 
-  // A clone of a local path takes its origin/HEAD from whatever the source has checked out.
-  const followsLocalCheckout = facts.originIsLocal && facts.originHead === facts.current;
-
-  if (facts.originHead !== undefined && !followsLocalCheckout) {
+  // A clone of a local path takes its origin/HEAD from whatever the source had checked out.
+  if (facts.originHead !== undefined && !facts.originIsLocal) {
     return ref(facts.originHead);
   }
 
@@ -132,7 +129,6 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
       /^origin\//,
       '',
     ),
-    current: git(top, ['branch', '--show-current']),
     branches: git(top, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n'),
     originBranchNames: git(top, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'])
       .split('\n')
