@@ -1,9 +1,10 @@
 // The garden site: a clone beside the repository whose `garden` branch holds the queue and the census.
 // Usage, from the repository: node site.ts open [--base <branch>]
 import { spawnSync } from 'node:child_process';
-import { existsSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseCensus } from './census.ts';
 
 function git(cwd: string, args: readonly string[]): string {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -58,9 +59,16 @@ function plant(top: string, site: string): void {
   git(site, ['commit', '-q', '-m', 'garden: plant']);
 }
 
-function baseFacts(top: string, argv: readonly string[]): BaseFacts {
+function recordedRev(site: string): string | undefined {
+  const census = join(site, '.garden', 'census.json');
+
+  return existsSync(census) ? parseCensus(JSON.parse(readFileSync(census, 'utf8')))?.rev : undefined;
+}
+
+function baseFacts(top: string, site: string, argv: readonly string[]): BaseFacts {
   return {
     base: argValue(argv, '--base'),
+    censusRev: recordedRev(site),
     originHead: optionalGit(top, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])?.replace(
       /^origin\//,
       '',
@@ -81,7 +89,7 @@ function main(argv: readonly string[], cwd: string): number {
     git(site, ['fetch', '-q', '--prune', 'origin']);
   }
 
-  const base = resolveBase(baseFacts(top, argv));
+  const base = resolveBase(baseFacts(top, site, argv));
   process.stdout.write(`${JSON.stringify({ site, created, base })}\n`);
 
   return 0;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -87,6 +87,24 @@ test('open in a clone reports the remote default branch while a feature branch i
   assert.equal(result.status, 0, String(result.summary));
   assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
   assert.equal(result.summary.base, 'trunk');
+});
+
+test('open without a base reports the base the last census recorded', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['branch', 'release']);
+  git(dir, ['switch', '-q', '-c', 'feature/x']);
+  site(dir, ['open']);
+  const records = join(dirname(dir), 'repo.garden', '.garden');
+  mkdirSync(records, { recursive: true });
+  const census = { rev: 'release', sha: 'abc', takenAt: '2026-11-07T00:00:00.000Z', counts: {}, hits: {} };
+  writeFileSync(join(records, 'census.json'), JSON.stringify(census));
+
+  const result = site(dir, ['open']);
+
+  assert.equal(result.status, 0, String(result.summary));
+  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
+  assert.equal(result.summary.base, 'release');
 });
 
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
