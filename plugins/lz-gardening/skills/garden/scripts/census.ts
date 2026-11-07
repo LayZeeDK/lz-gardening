@@ -337,7 +337,7 @@ const seedDuplicateNames = 30;
 
 function seedList(census: Census): string[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
-    [...Map.groupBy(hits, (hit) => hit.slice(0, hit.indexOf(':')))]
+    [...Map.groupBy(hits, (hit) => splitHit(hit)?.path ?? hit)]
       .map(([path, items]) => ({ path, count: items.length }))
       .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
       .slice(0, seedFilesPerPattern)

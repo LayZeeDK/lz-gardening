@@ -215,6 +215,26 @@ test('a first census prints the seed list: files per pattern by hit count, and e
   ]);
 });
 
+test('the seed list keeps a colon inside a file path', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  const blob = spawnSync('git', ['hash-object', '-w', '--stdin'], {
+    cwd: dir,
+    input: '// eslint-disable-next-line\n',
+    encoding: 'utf8',
+  });
+  git(dir, ['update-index', '--add', '--cacheinfo', `100644,${blob.stdout.trim()},src/a:b.ts`]);
+  git(dir, ['commit', '-q', '-m', 'colon']);
+
+  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dirname(dir), 'census.json')], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^= \[eslint-disable\] src\/a:b\.ts 1$/m);
+});
+
 test('the seed list names at most 20 files per pattern, keeping those with the most hits', (t) => {
   const dir = repo(t);
   const files = Object.fromEntries(
