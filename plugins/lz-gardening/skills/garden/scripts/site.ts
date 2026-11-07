@@ -12,7 +12,10 @@ import { parseArgs } from 'node:util';
 import { parseCensus } from './census.ts';
 
 // Without the variables that point git at a repository (GIT_DIR from a hook, say), each command acts on its cwd.
-const localVariables = spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' }).stdout.split('\n');
+// Settings passed in the environment (GIT_CONFIG_COUNT and the rest) stay.
+const localVariables = spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' })
+  .stdout.split('\n')
+  .filter((name) => !name.startsWith('GIT_CONFIG'));
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name)));
 
 function git(cwd: string, args: readonly string[]): string {

@@ -397,6 +397,23 @@ test('open run with GIT_DIR set, as from a git hook, plants the site and leaves 
   assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%s', 'garden']), 'garden: plant');
 });
 
+test('open keeps git settings passed in the environment, such as an identity for a container', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['config', '--unset', 'user.email']);
+  const env = {
+    ...process.env,
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'user.email',
+    GIT_CONFIG_VALUE_0: 'env@example.com',
+  };
+
+  const result = site(dir, ['open', '--base', 'main'], env);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%ae', 'garden']), 'env@example.com');
+});
+
 test('open in a checkout whose git folder lives elsewhere plants the site beside the checkout', (t) => {
   const parent = dirname(repo(t));
   const checkout = join(parent, 'separate');
