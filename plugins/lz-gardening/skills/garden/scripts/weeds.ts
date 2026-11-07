@@ -161,6 +161,7 @@ export function groupWeeds(weeds: readonly Weed[]): Group[] {
         open: members.length,
         places: new Set(members.map((weed) => weed.where.replace(/:\d+$/, ''))).size,
         regrown: members.reduce((sum, weed) => sum + weed.regrown, 0),
+        // Stryker disable next-line StringLiteral: a group always has a member, so times[0] is never missing
         firstAt: times[0] ?? '',
         layer: layers.length === 0 ? null : Math.min(...layers),
       };
@@ -230,6 +231,7 @@ function main(argv: readonly string[], now: Date): number {
       file: { type: 'string', default: '.garden/weeds.jsonl' },
       class: { type: 'string' },
       where: { type: 'string', default: '' },
+      // Stryker disable next-line StringLiteral: an add without --source fails validation, and so does the mutant's text
       source: { type: 'string', default: '' },
       note: { type: 'string', default: '' },
       layer: { type: 'string' },
@@ -249,6 +251,7 @@ function main(argv: readonly string[], now: Date): number {
   switch (command) {
     case 'add': {
       const input: AddInput = {
+        // Stryker disable next-line StringLiteral: an add without --class fails validation, and so does the mutant's text
         class: values.class ?? '',
         where: values.where,
         source: values.source,
