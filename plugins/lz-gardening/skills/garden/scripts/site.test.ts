@@ -267,6 +267,15 @@ test('a rename held up as busy or access denied is waited out like any file lock
   assert.deepEqual(standIn.calls, ['a->b', 'wait', 'a->b', 'wait', 'a->b']);
 });
 
+test('a file lock is waited out for real time when no wait is given', () => {
+  const { rename } = renameFailing('EPERM');
+  const started = performance.now();
+
+  renameRetrying('a', 'b', { rename });
+
+  assert.ok(performance.now() - started >= 200);
+});
+
 test('a file lock that never lets go is thrown after a bounded number of tries', () => {
   const standIn = renameFailing(...Array.from({ length: 100 }, () => 'EPERM'));
 
