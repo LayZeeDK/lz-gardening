@@ -14,8 +14,8 @@ First release.
   markers at the base branch, reads what landed since the last tick, and queues each weed with its evidence. The
   first tick seeds the queue from the census's seed list, the repository's records and its history. Carries its own
   permission rules: they allow reading its own files and running its own scripts and read-only git commands;
-  anything else falls back to your own settings. The site's own commits run none of your git hooks and are not
-  signed.
+  anything else falls back to your own settings. The site's own git commands run none of your git hooks and
+  sign nothing.
 - `tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land.
 - `lz-gardener` agent: the fork the `garden` skill runs in. Reads the repository and writes only through the

@@ -392,13 +392,17 @@ test('a corrupt census does not stop an explicit base, and is named when it is r
   assert.match(recorded.stderr, /census\.json/);
 });
 
-test('the site commits run none of the user hooks and sign nothing, whatever the user set globally', (t) => {
+test('the site runs none of the user hooks and signs nothing, whatever the user set globally', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
   const hooks = join(dirname(dir), 'hooks');
+  const ran = join(dirname(dir), 'hooks-ran.log');
   mkdirSync(hooks);
-  for (const hook of ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-checkout']) {
-    writeFileSync(join(hooks, hook), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const commitHooks = ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-commit'];
+
+  for (const hook of [...commitHooks, 'post-checkout', 'reference-transaction', 'post-index-change']) {
+    const body = `#!/bin/sh\necho ${hook} >> "${ran.replaceAll('\\', '/')}"\nexit 1\n`;
+    writeFileSync(join(hooks, hook), body, { mode: 0o755 });
   }
 
   const env = {
@@ -418,6 +422,7 @@ test('the site commits run none of the user hooks and sign nothing, whatever the
   const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
 
   assert.equal(recorded.status, 0, recorded.stderr);
+  assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
 });
 
 test('open without git on the PATH is an error that names git, not a crash', (t) => {

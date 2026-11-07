@@ -28,8 +28,17 @@ function gitEnv(): NodeJS.ProcessEnv {
   return gitEnvironment;
 }
 
+// site.ts runs git only for the garden's own bookkeeping. The user's hooks and commit signing are for their own work,
+// and a hook or a signing passphrase would stop a tick that runs unattended. The hooks folder named here does not exist.
+const bookkeeping = [
+  '-c',
+  `core.hooksPath=${join(dirname(fileURLToPath(import.meta.url)), 'no-hooks')}`,
+  '-c',
+  'commit.gpgsign=false',
+];
+
 function runGit(cwd: string, args: readonly string[]): SpawnSyncReturns<string> {
-  return spawnGit(cwd, args, gitEnv());
+  return spawnGit(cwd, [...bookkeeping, ...args], gitEnv());
 }
 
 function spawnGit(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
@@ -103,12 +112,6 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
   return identity;
 }
 
-// The site is the plugin's own clone. The user's hooks and commit signing are for their own commits, and a hook or a
-// signing passphrase would stop a tick that runs unattended. The hooks folder named here does not exist.
-function siteGit(dir: string, args: readonly string[]): void {
-  git(dir, ['-c', `core.hooksPath=${join(dir, '.git', 'no-hooks')}`, '-c', 'commit.gpgsign=false', ...args]);
-}
-
 function plant(top: string, site: string): void {
   if (existsSync(site)) {
     throw new Error(`${site} is not a garden site; move it away, and the next tick plants the site there`);
@@ -123,10 +126,10 @@ function plant(top: string, site: string): void {
     git(planting, ['config', key, value]);
   }
 
-  siteGit(planting, ['switch', '-q', '--orphan', 'garden']);
+  git(planting, ['switch', '-q', '--orphan', 'garden']);
   writeFileSync(join(planting, '.gitignore'), '/beds/\n');
   git(planting, ['add', '.gitignore']);
-  siteGit(planting, ['commit', '-q', '-m', 'garden: plant']);
+  git(planting, ['commit', '-q', '-m', 'garden: plant']);
   renameSync(planting, site);
 }
 
@@ -191,7 +194,7 @@ function commitSite(site: string, message: string): object {
     return { committed: false };
   }
 
-  siteGit(site, ['commit', '-q', '-m', message]);
+  git(site, ['commit', '-q', '-m', message]);
 
   return { committed: true };
 }
