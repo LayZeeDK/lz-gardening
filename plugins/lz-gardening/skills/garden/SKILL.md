@@ -37,7 +37,7 @@ and stop. Then:
 node "${CLAUDE_SKILL_DIR}/scripts/site.ts" open $ARGUMENTS
 ```
 
-It creates the site on the first tick and fetches into it on later ones. The last line is JSON: `site` (the site's
+It creates the site on the first tick and picks the base on every tick. The last line is JSON: `site` (the site's
 path, written `<site>` below), `created`, and `base` (the branch to watch, such as `main` or `origin/main`, written
 `<base>`). Done when it exits 0.
 

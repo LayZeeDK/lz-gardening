@@ -58,7 +58,7 @@ Done when you can name the check, where it lives, and the message it prints.
 ## 4. Make the bed
 
 Create the bed worktree and its dependencies as `${CLAUDE_PLUGIN_ROOT}/skills/garden/references/site.md` describes
-under "Beds". Done when the repository's own
+under "Beds", and keep the `<start>` commit it names. Done when the repository's own
 lint, type-check and test commands run in the bed (read them from `package.json`, `nx.json` and CI config); note
 any that fail before your change, so they are not blamed on it.
 
@@ -91,8 +91,8 @@ one commit per check, holding the check and its clean-up together. Then, from th
 
 - The class, its root cause, and the decision.
 - The check: layer, file, message, and the quoted output that proved it rejects a real weed.
-- Instances fixed, instances baselined, code deleted, and the bed's net line count (`git diff --shortstat
-origin/<base>`); a tend pass usually leaves the codebase shorter.
+- Instances fixed, instances baselined, code deleted, and the bed's net line count (`git diff --shortstat <start>`
+  in the bed); a tend pass usually leaves the codebase shorter.
 - The checks run in the bed, with their summary lines.
 - A layer 3 proposal, if one would help, described but not built.
 - How to land it, from the repository: `git fetch ../<repo>.garden garden/<class>`, then review and merge the

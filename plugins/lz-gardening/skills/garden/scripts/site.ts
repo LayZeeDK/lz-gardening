@@ -1,6 +1,6 @@
 // The garden site: a clone beside the repository whose `garden` branch holds the queue and the census.
 // Usage, from the repository:
-//   node site.ts open [--base <branch>]     create or fetch the site; prints {site, created, base}
+//   node site.ts open [--base <branch>]     create the site if missing, resolve the base; prints {site, created, base}
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -109,8 +109,6 @@ function openSite(top: string, site: string, requested: string | undefined): obj
 
   if (created) {
     plant(top, site);
-  } else {
-    git(site, ['fetch', '-q', '--prune', 'origin']);
   }
 
   return { site, created, base };

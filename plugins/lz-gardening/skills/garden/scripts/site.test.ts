@@ -200,21 +200,19 @@ test('open with a base that names no branch is an error that names it', (t) => {
   assert.match(String(result.summary), /relase/);
 });
 
-test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
+test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
   const first = site(dir, ['open', '--base', 'main']);
   assert.equal(first.status, 0, String(first.summary));
-  const landed = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
 
   const second = site(dir, ['open', '--base', 'main']);
 
   assert.equal(second.status, 0, String(second.summary));
   assert.ok(typeof second.summary === 'object' && second.summary !== null && 'created' in second.summary);
   assert.equal(second.summary.created, false);
-  const garden = join(dirname(dir), 'repo.garden');
-  assert.equal(git(garden, ['rev-list', '--count', 'garden']), '1');
-  assert.equal(git(garden, ['rev-parse', 'origin/main']), landed);
+  assert.equal(git(join(dirname(dir), 'repo.garden'), ['rev-list', '--count', 'garden']), '1');
 });
 
 test('open creates the site beside the repository, holding only the plant commit on an orphan garden branch', (t) => {

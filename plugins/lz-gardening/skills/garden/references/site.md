@@ -28,7 +28,7 @@ be fetched the same way to keep the queue in the repository's history.
 
 - `site.ts open [--base <branch>]` creates the site on first use: a clone with no checkout, the repository's
   `user.name` and `user.email` copied in, and the orphan `garden` branch with one plant commit holding
-  `.gitignore`. On later runs it fetches what landed since. It prints JSON with `site`, `created` and `base`. It
+  `.gitignore`. On later runs it leaves the site as it is. It prints JSON with `site`, `created` and `base`. It
   exits 2 when the repository has no `user.name` or `user.email`, so the gardener never commits under a default
   identity.
 - `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
@@ -47,15 +47,24 @@ the source's checkout.
 
 A branch that only `origin` has (a clone whose checkout is a milestone branch often has `main` only as
 `origin/main`) is reported as `origin/<name>`, and every later command reads that ref. A base that resolves to no
-commit stops `open` with exit 2 before it plants or fetches anything.
+commit stops `open` with exit 2 before it plants anything.
+
+The base names a ref in the repository, not in the site: a tick reads it in the repository's checkout, and a tend
+pass fetches it into the site by that name (below).
 
 ## Beds (tend passes only)
 
-A garden tick never runs anything in this section or the next. A tend pass runs these from the site:
+A garden tick never runs anything in this section or the next. A tend pass runs these from the site. The fetch
+takes the base by the name `site.ts open` reported (`main`, or `origin/main` when only the repository's remote has
+it), and the bed starts from the commit it fetched:
 
 ```bash
-git worktree add -b garden/<class> beds/<class> origin/<base>
+git fetch -q origin <base>
+git rev-parse FETCH_HEAD
+git worktree add -b garden/<class> beds/<class> FETCH_HEAD
 ```
+
+The commit `git rev-parse` printed is the bed's start, written `<start>` below.
 
 Dependencies for a bed, Node.js repositories:
 
@@ -72,8 +81,9 @@ Dependencies for a bed, Node.js repositories:
 
 A bed stays until its branch is merged into the base or a human drops it. Remove one with: unlink `node_modules`
 first (`rm <bed>/node_modules`, no `-r`; on Windows `cmd //c rmdir "<bed>\node_modules"`), then
-`git worktree remove beds/<class>`, then `git branch -D garden/<class>` only once `git branch -r --contains
-garden/<class>` or a merged commit in `origin/<base>` shows the change landed. Deleting the whole site loses the
+`git worktree remove beds/<class>`, then `git branch -D garden/<class>` only once the change has landed: after
+`git fetch -q origin <base>`, `git merge-base --is-ancestor garden/<class> FETCH_HEAD` exits 0, or the base holds
+a commit that carries the same change. Deleting the whole site loses the
 queue unless the `garden` branch was fetched into the repository.
 
 One gardener per site: two sessions looping on one repository append to the same queue and race on its commits.
