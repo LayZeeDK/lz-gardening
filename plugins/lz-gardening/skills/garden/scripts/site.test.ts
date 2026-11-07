@@ -242,6 +242,21 @@ test('commit in a site that is not on the garden branch is an error and commits 
   assert.equal(git(garden, ['rev-list', '--count', 'main']), '1');
 });
 
+test('open from inside a bed is an error and plants no site there', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  site(dir, ['open', '--base', 'main']);
+  const garden = join(dirname(dir), 'repo.garden');
+  const bed = join(garden, 'beds', 'any-type');
+  git(garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'main']);
+
+  const result = site(bed, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /checkout/);
+  assert.equal(existsSync(join(garden, 'beds', 'any-type.garden')), false);
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
