@@ -229,9 +229,9 @@ function main(argv: readonly string[], now: Date): number {
     options: {
       file: { type: 'string', default: '.garden/weeds.jsonl' },
       class: { type: 'string' },
-      where: { type: 'string' },
-      source: { type: 'string' },
-      note: { type: 'string' },
+      where: { type: 'string', default: '' },
+      source: { type: 'string', default: '' },
+      note: { type: 'string', default: '' },
       layer: { type: 'string' },
       id: { type: 'string' },
       by: { type: 'string' },
@@ -250,9 +250,9 @@ function main(argv: readonly string[], now: Date): number {
     case 'add': {
       const input: AddInput = {
         class: values.class ?? '',
-        where: values.where ?? '',
-        source: values.source ?? '',
-        note: values.note ?? '',
+        where: values.where,
+        source: values.source,
+        note: values.note,
         layer: values.layer === undefined ? null : Number(values.layer),
       };
       const problem = validateAdd(input);

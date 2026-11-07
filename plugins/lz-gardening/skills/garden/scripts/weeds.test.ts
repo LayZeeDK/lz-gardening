@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { addWeed, groupWeeds, openWeeds, parseRow, validateAdd, weedId } from './weeds.ts';
@@ -21,6 +22,15 @@ function input(overrides: Partial<AddInput> = {}): AddInput {
     layer: 2,
     ...overrides,
   };
+}
+
+function queue(t: TestContext): string {
+  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
+  t.after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  return dir;
 }
 
 function cli(dir: string, args: readonly string[]): { code: number | null; stdout: string; stderr: string } {
@@ -111,10 +121,7 @@ test('ids depend on class, place and source', () => {
 });
 
 test('the CLI appends, dedupes, closes a class and refuses an empty close', (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
-  t.after(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
+  const dir = queue(t);
   const add = [
     'add',
     '--class',
@@ -145,10 +152,7 @@ test('the CLI appends, dedupes, closes a class and refuses an empty close', (t) 
 });
 
 test('the CLI exits 2 on a malformed queue instead of treating it as empty', (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
-  t.after(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
+  const dir = queue(t);
   writeFileSync(join(dir, 'weeds.jsonl'), 'not json\n');
 
   const result = cli(dir, ['list']);
@@ -157,10 +161,7 @@ test('the CLI exits 2 on a malformed queue instead of treating it as empty', (t)
 });
 
 test('a mistyped flag is a usage error, not ignored', (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
-  t.after(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
+  const dir = queue(t);
 
   const result = cli(dir, ['list', '--clas', 'hollow-assertion']);
 
@@ -169,10 +170,7 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
 });
 
 test('groups refuses a --min that is not a positive whole number, rather than hiding every class', (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
-  t.after(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
+  const dir = queue(t);
 
   const result = cli(dir, ['groups', '--min', 'two']);
 
