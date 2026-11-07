@@ -119,6 +119,23 @@ test('open refuses a repository with no user.email and plants no site', (t) => {
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
+test('commit records the .garden folder on the garden branch with the given message', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  site(dir, ['open']);
+  const garden = join(dirname(dir), 'repo.garden');
+  mkdirSync(join(garden, '.garden'));
+  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+
+  const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
+
+  assert.equal(result.status, 0, String(result.summary));
+  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'committed' in result.summary);
+  assert.equal(result.summary.committed, true);
+  assert.equal(git(garden, ['log', '-1', '--format=%s']), 'garden: watch abc1234');
+  assert.equal(git(garden, ['ls-tree', '-r', '--name-only', 'garden']), '.garden/weeds.jsonl\n.gitignore');
+});
+
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

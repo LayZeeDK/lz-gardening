@@ -90,9 +90,7 @@ function baseFacts(top: string, site: string, argv: readonly string[]): BaseFact
   };
 }
 
-function main(argv: readonly string[], cwd: string): number {
-  const top = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
-  const site = join(dirname(top), `${basename(top)}.garden`);
+function openSite(top: string, site: string, argv: readonly string[]): object {
   const created = !existsSync(join(site, '.git'));
 
   if (created) {
@@ -101,8 +99,21 @@ function main(argv: readonly string[], cwd: string): number {
     git(site, ['fetch', '-q', '--prune', 'origin']);
   }
 
-  const base = resolveBase(baseFacts(top, site, argv));
-  process.stdout.write(`${JSON.stringify({ site, created, base })}\n`);
+  return { site, created, base: resolveBase(baseFacts(top, site, argv)) };
+}
+
+function commitSite(site: string, argv: readonly string[]): object {
+  git(site, ['add', '.garden']);
+  git(site, ['commit', '-q', '-m', argValue(argv, '--message') ?? '']);
+
+  return { committed: true };
+}
+
+function main(argv: readonly string[], cwd: string): number {
+  const top = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
+  const site = join(dirname(top), `${basename(top)}.garden`);
+  const summary = argv[0] === 'commit' ? commitSite(site, argv) : openSite(top, site, argv);
+  process.stdout.write(`${JSON.stringify(summary)}\n`);
 
   return 0;
 }
