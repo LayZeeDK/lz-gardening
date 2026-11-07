@@ -114,9 +114,11 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
 
 // The codes Windows gives a rename while another program, such as a virus scanner, holds a file in the folder.
 const lockCodes: readonly unknown[] = ['EPERM', 'EBUSY', 'EACCES'];
+const lockTries = 20;
+const lockPauseMs = 250;
 
 function pause(): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, lockPauseMs);
 }
 
 export function renameRetrying(
@@ -141,7 +143,7 @@ export function renameRetrying(
       const locked =
         platform === 'win32' && error instanceof Error && 'code' in error && lockCodes.includes(error.code);
 
-      if (!locked || tries === 20) {
+      if (!locked || tries === lockTries) {
         throw error;
       }
 
