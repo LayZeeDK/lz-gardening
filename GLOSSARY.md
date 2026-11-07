@@ -93,7 +93,8 @@ _Avoid_: allowlist, exceptions file
 ## Places
 
 **Garden site**:
-A clone of the repository beside it, where all gardening happens, so the repository's own checkout is never touched.
+A clone of the repository beside it that holds the queue, the census and the beds, so the repository's own checkout
+is only ever read.
 _Avoid_: garden clone, workspace
 
 **Garden branch**:

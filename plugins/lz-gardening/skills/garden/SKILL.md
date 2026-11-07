@@ -4,7 +4,16 @@ description: Watch a repository for weeds (copied shortcuts, creeping suppressio
 argument-hint: '[--base <branch>]'
 context: fork
 agent: lz-gardening:lz-gardener
-background: false
+allowed-tools:
+  - Read(${CLAUDE_SKILL_DIR}/**)
+  - Bash(node --version)
+  - Bash(node "${CLAUDE_SKILL_DIR}/scripts/site.ts" *)
+  - Bash(node "${CLAUDE_SKILL_DIR}/scripts/census.ts" *)
+  - Bash(node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" *)
+  - Bash(git log *)
+  - Bash(git show *)
+  - Bash(git ls-tree *)
+  - Bash(git rev-parse *)
 ---
 
 Run one garden tick on the repository in the current working directory. Arguments: $ARGUMENTS
@@ -13,56 +22,69 @@ A tick watches what landed on the base branch since the last tick and queues eac
 fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:tend`). Every step below ends on a check;
 when a check fails, report the command and its output and stop.
 
+Stay in the repository's working directory for the whole tick and run every command as written below, quotes
+included. Read the repository with the git commands below and the Read, Grep and Glob tools; write only through the
+three scripts, which keep the queue and the census in the garden site beside the repository. Any other command,
+`cd`, file write or redirect is refused in an unattended tick, and a refusal stops it.
+
 ## 1. Open the site
 
 Check `node --version` is 22.18 or newer (the scripts are TypeScript that Node.js runs directly); if not, report it
-and stop. Then open or create the garden site and pick the base branch as
-`${CLAUDE_SKILL_DIR}/references/site.md` describes (sections "Open or create" and "The base branch"). Run every
-later command from the site. Done when `git rev-parse --verify origin/<base>` prints a commit in the site.
+and stop. Then:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/site.ts" open $ARGUMENTS
+```
+
+It creates the site on the first tick and fetches into it on later ones. The last line is JSON: `site` (the site's
+path, written `<site>` below), `created`, and `base` (the branch to watch, such as `main` or `origin/main`, written
+`<base>`). Done when it exits 0.
 
 ## 2. Take the census
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev origin/<base> --out .garden/census.json --patterns .garden/patterns.json
+node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base> --out "<site>/.garden/census.json" --patterns "<site>/.garden/patterns.json"
 ```
 
 The last line of output is a JSON summary: `sha`, `previousSha`, `grew`, `newHits`, `newDuplicates`. Lines above it
 starting `+ [<pattern>]` are new hits and lines starting `+ duplicate` are names newly defined in a second file.
+Below, `<short sha>` is `sha` shortened with `git rev-parse --short <sha>`.
 
 - `previousSha` is `null`: this is the first tick. Run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md`
   in place of steps 3 to 5; it ends with its own commit and report.
-- `sha` equals `previousSha`: nothing landed. Run `git restore .garden/census.json`, reply with the one line
-  `garden: nothing new on <base> since <short sha>`, and stop.
+- `sha` equals `previousSha`: nothing landed. Reply with the one line
+  `garden: nothing new on <base> since <short sha>`, and stop without committing.
 
 ## 3. Read what landed
 
 ```bash
-git log --no-merges --reverse --format='%h %an %s' <previousSha>..<sha>
+git log --no-merges --format='%h %an %s' <previousSha>..<sha>
 ```
 
-Read the diff of each commit (`git show <commit>`), newest 30 at most; when more landed, say how many you skipped.
-Look for the weeds catalogued in `${CLAUDE_SKILL_DIR}/references/weeds.md`: the census finds the textual ones, and
-reading finds the rest (a hollow test, a copied workaround, a second way to do what the codebase already does, a
-lesson the records hold twice). Read the catalogue before the first diff. A weed is something an agent will copy;
-a one-off with no sign of spreading is not one.
+The output lists the newest commit first. Read the diff (`git show <commit>`) of each commit it lists, the first 30
+at most; when more landed, say how many you skipped. Look for the weeds catalogued in
+`${CLAUDE_SKILL_DIR}/references/weeds.md`: the census finds the textual ones, and reading finds the rest (a hollow
+test, a copied workaround, a second way to do what the codebase already does, a lesson the records hold twice).
+Read the catalogue before the first diff. A weed is something an agent will copy; a one-off with no sign of
+spreading is not one.
 
 Done when every commit in the range is read or counted as skipped.
 
 ## 4. Queue
 
-Queue each weed with `weeds.ts`; the queue lives in `.garden/weeds.jsonl` and the script dedupes, so queueing the
-same weed twice is safe:
+Queue each weed with `weeds.ts`. The script dedupes, so queueing the same weed twice is safe:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>]
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --file "<site>/.garden/weeds.jsonl" --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>]
 ```
 
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`
   with one weed per file the name is defined in.
-- `--source`: `commit:<short sha>` of the commit that planted it (`git log -n 1 --format=%h <previousSha>..<sha> --
-<path>` for a census hit), or `lesson:<path>:<line>` for a record.
+- `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record, or
+  `census:seed` in the seed pass. For a census hit, the planting commit is
+  `git log -n 1 --format=%h -S'<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`.
 - `--note`: the root cause in one sentence (what the agent was trying to do and which shortcut it took), not the
-  symptom.
+  symptom. Plain words only: no backticks, `$` or double quotes inside the note, which the shell would run or end.
 - `--layer`: the strongest layer that could stop it growing back, from the catalogue's layer list, when the evidence
   shows it.
 
@@ -72,9 +94,8 @@ report, because the fix did not hold. Done when every weed from steps 2 and 3 pr
 ## 5. Group, commit, report
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --min 2
-git add .garden
-git commit -q -m "garden: watch <short sha>"
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --file "<site>/.garden/weeds.jsonl" --min 2
+node "${CLAUDE_SKILL_DIR}/scripts/site.ts" commit --message "garden: watch <short sha>"
 ```
 
 A class with two or more open weeds is ready to tend: several agents took the same shortcut. Report in this shape,
@@ -86,5 +107,5 @@ queued <n> (<class> x<n>, ...); regrown: <class or none>
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:tend <class>
 ```
 
-Leave out the `ready to tend` line when no class has two open weeds. Done when `git status --short` in the site is
-empty and the commit exists (`git log --oneline -1`).
+Leave out the `ready to tend` line when no class has two open weeds. Done when `site.ts commit` exits 0 and its
+JSON line shows `"committed": true`.

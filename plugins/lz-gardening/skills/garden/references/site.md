@@ -2,9 +2,9 @@
 
 Read when opening, creating or cleaning up the garden site, or when making a bed for a tend pass.
 
-The gardener never works in the repository's checkout. Other agents may be writing there around the clock, and a
-gardener branch, worktree or stash in that checkout is one more thing for them to trip over. It works in a **site**:
-a local clone beside the repository.
+The gardener never writes to the repository's checkout. Other agents may be writing there around the clock, and a
+gardener branch, worktree or stash in that checkout is one more thing for them to trip over. Its scripts, run from
+the checkout, write into a **site** instead: a local clone beside the repository.
 
 ```text
 <parent>/<repo>/                 the repository (read only, through the clone's `origin`)
@@ -22,46 +22,36 @@ proposed bed change each. Nothing in the site is pushed. A human brings a bed ho
 `git fetch ../<repo>.garden garden/<class>` and merges it the way the repository lands work; the `garden` branch can
 be fetched the same way to keep the queue in the repository's history.
 
-## Open or create
+## Open, commit
 
-Run from the repository's checkout (the session's working directory). Bash:
+`scripts/site.ts` does all of the site's git work, run from the repository's checkout:
 
-```bash
-repo=$(git rev-parse --show-toplevel)
-site="$(dirname "$repo")/$(basename "$repo").garden"
-```
+- `site.ts open [--base <branch>]` creates the site on first use: a clone with no checkout, the repository's
+  `user.name` and `user.email` copied in, and the orphan `garden` branch with one plant commit holding
+  `.gitignore`. On later runs it fetches what landed since. It prints JSON with `site`, `created` and `base`. It
+  exits 2 when the repository has no `user.name` or `user.email`, so the gardener never commits under a default
+  identity.
+- `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
+  `committed`, false when nothing changed.
 
-When `$site/.garden` exists, the site is open: `cd "$site"`, run `git fetch --prune origin`, and confirm the branch
-is `garden` (`git branch --show-current`). Done when `git rev-parse --verify origin/<base>` prints a commit.
-
-Otherwise create it:
-
-```bash
-git clone --no-checkout "$repo" "$site"
-cd "$site"
-git config user.name "$(cd "$repo" && git config user.name)"
-git config user.email "$(cd "$repo" && git config user.email)"
-git switch --orphan garden
-mkdir .garden
-printf '/beds/\n' > .gitignore
-git add .gitignore
-git commit -m "garden: plant"
-```
-
-The identity comes from the repository so the gardener commits as the repository's owner commits; if either value
-is empty, stop and report it rather than commit under a default identity.
+The census and the queue are written by their own scripts, through `--out` and `--file` paths into the site.
 
 ## The base branch
 
-The base is the branch work lands on, read through `origin/` in the site. Take, in order: the `--base` argument; the
-`rev` recorded in `.garden/census.json` (strip `origin/`); the repository's default branch (`git symbolic-ref
---short refs/remotes/origin/HEAD` run in the repository, minus `origin/`), unless it names the branch checked out
-in the repository (`git branch --show-current` there); `main` if `origin/main` exists in the site; else `master`.
-Never take the repository's currently checked-out branch: in a repository that agents are working in, that is a
-feature or milestone branch in flight. A repository cloned from a local path reports that very branch as its
-default, because its `origin/HEAD` follows the source's checkout.
+The base is the branch work lands on. `site.ts open` takes, in order: the `--base` argument; the `rev` recorded
+in the site's `.garden/census.json`; the repository's default branch (`origin/HEAD`), unless it names the branch
+checked out in the repository; `main` when that branch exists; else `master`. It never takes the repository's
+checked-out branch: in a repository that agents are working in, that is a feature or milestone branch in flight. A
+repository cloned from a local path reports that very branch as its default, because its `origin/HEAD` follows
+the source's checkout.
+
+A branch that only `origin` has (a clone whose checkout is a milestone branch often has `main` only as
+`origin/main`) is reported as `origin/<name>`, and every later command reads that ref. A base that resolves to no
+commit stops `open` with exit 2 before it plants or fetches anything.
 
 ## Beds (tend passes only)
+
+A garden tick never runs anything in this section or the next. A tend pass runs these from the site:
 
 ```bash
 git worktree add -b garden/<class> beds/<class> origin/<base>

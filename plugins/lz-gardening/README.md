@@ -58,9 +58,25 @@ work:
 git fetch ../<repo>.garden garden/<class>
 ```
 
-The watch runs in the `lz-gardener` agent. It may write only to the site's `.garden/` folder and `garden` branch.
-It never edits planning records, agent instructions, hooks or settings. Tend passes propose hooks and permission
-rules in their report; they never build them.
+The watch runs in the `lz-gardener` agent. It reads the repository with read-only git commands and writes only
+through its three scripts, which keep the queue and the census in the site and commit them on `garden`. It never
+edits planning records, agent instructions, hooks or settings. Tend passes propose hooks and permission rules in
+their report; they never build them.
+
+## Permissions
+
+The garden skill carries its own permission rules. They pre-approve what a tick needs: reading the skill's own
+files, running its own scripts, and `git log`, `git show`, `git ls-tree` and `git rev-parse`. They grant nothing
+more; any other command falls back to your own permission settings, so a tick never needs a broad rule such as
+`Bash(git *)`, which would also allow a push. Claude Code asks before it runs a skill with its own rules. Allow it
+once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` tick never waits on a prompt:
+
+```json
+{ "permissions": { "allow": ["Skill(lz-gardening:garden)"] } }
+```
+
+A tend pass runs in your session under your own permissions, and asks for what it needs: it creates a worktree in
+the site and edits files there.
 
 ## Where a fix goes
 

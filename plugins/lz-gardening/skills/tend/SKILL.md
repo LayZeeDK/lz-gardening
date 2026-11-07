@@ -11,18 +11,23 @@ weed, then clears the bed. It works in a bed: a worktree of the garden site on b
 writes to the repository's checkout, never pushes and never merges; a human brings the bed home. Each step ends on
 a check; when one fails, report the command and its output and stop.
 
-The weeds script is `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts"` (below: `weeds`), run from the site
-root.
+Two scripts of the garden skill do the site's bookkeeping, run from the repository's checkout: `site` below is
+`node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/site.ts"`, and `weeds` is
+`node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
+call. Commands run from the repository's checkout unless the step names the site (`<site>`) or the bed
+(`<site>/beds/<class>`); give those paths in full rather than changing directory.
 
 ## 1. Pick the class
 
-Open the site as `${CLAUDE_PLUGIN_ROOT}/skills/garden/references/site.md` describes, and pick the base branch the same
-way. With no class argument, run `weeds groups --min 2` and take the first class; say which. Then
+Run `site open`, passing `--base <branch>` when the arguments name one; its JSON line names `<site>` and `<base>`
+(`${CLAUDE_PLUGIN_ROOT}/skills/garden/references/site.md` explains both). With no class argument, run
+`weeds groups --min 2` and take the first class other than `stale-verification` and `repeated-lesson`, which are
+not tended directly (step 2); say which. When it lists no class, report `nothing ready to tend` and stop. Then
 `weeds list --class <class>`. Done when you hold the open weeds of one class.
 
 ## 2. Find the root cause
 
-Read every open weed at the base (`git show origin/<base>:<path>`) and the commit that planted it (`--source`).
+Read every open weed at the base (`git show <base>:<path>`) and the commit that planted it (`--source`).
 Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? A class
 whose weeds were `regrown` had a fix that did not hold: find why (a rule too narrow, a suppression, an exception
 that spread) before writing another.
@@ -30,9 +35,13 @@ that spread) before writing another.
 Then decide, and say which:
 
 - **Keep**: the pattern is deliberate and right here. `weeds close-class --class <class> --by "<reason>" --keep`,
-  commit the queue, report, stop.
-- **One-off**: on reading, the weeds share no cause or sit in one place. Close them with `--by "one-off: <reason>"`,
-  commit, report, stop.
+  `site commit --message "garden: keep <class>"`, report, stop.
+- **One-off**: on reading, the weeds share no cause or sit in one place.
+  `weeds close-class --class <class> --by "one-off: <reason>"`, `site commit --message "garden: one-off <class>"`,
+  report, stop.
+- **Redirect**: a `repeated-lesson` class is tended through the class its lessons are about, and a
+  `stale-verification` class through a refresh of the verification setup, not here. Name that class or job in the
+  report and stop; the weeds stay open as evidence.
 - **Tend**: continue.
 
 ## 3. Choose the layer
@@ -48,7 +57,8 @@ Done when you can name the check, where it lives, and the message it prints.
 
 ## 4. Make the bed
 
-Create the bed worktree and its dependencies as `site.md` describes under "Beds". Done when the repository's own
+Create the bed worktree and its dependencies as `${CLAUDE_PLUGIN_ROOT}/skills/garden/references/site.md` describes
+under "Beds". Done when the repository's own
 lint, type-check and test commands run in the bed (read them from `package.json`, `nx.json` and CI config); note
 any that fail before your change, so they are not blamed on it.
 
@@ -73,13 +83,9 @@ Quote their summary lines.
 ## 7. Commit and close
 
 Commit the bed change in the bed, following the repository's commit message convention (`git log --oneline -20`),
-one commit per check plus its clean-up. Then, in the site root:
-
-```bash
-weeds close-class --class <class> --by "garden/<class>@<short sha>"
-git add .garden
-git commit -q -m "garden: tend <class>"
-```
+one commit per check, holding the check and its clean-up together. Then, from the repository's checkout, close the class and commit the queue:
+`weeds close-class --class <class> --by "garden/<class>@<short sha>"`, then
+`site commit --message "garden: tend <class>"`.
 
 ## 8. Report
 

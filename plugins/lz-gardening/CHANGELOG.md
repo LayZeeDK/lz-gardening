@@ -12,8 +12,9 @@ First release.
 
 - `garden` skill: one watch tick in a garden site beside the repository. Takes a census of weed markers at the base
   branch, reads what landed since the last tick, and queues each weed with its evidence. The first tick seeds the
-  queue from the census baseline, the repository's records and its history.
+  queue from the census baseline, the repository's records and its history. Carries its own permission rules: it
+  reads its own files, runs its own scripts and read-only git commands, and nothing else.
 - `tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land.
-- `lz-gardener` agent: the fork the `garden` skill runs in. Writes only to the site's `.garden/` folder and
-  `garden` branch.
+- `lz-gardener` agent: the fork the `garden` skill runs in. Reads the repository and writes only through the
+  garden scripts, which keep the queue and the census in the site and commit them on `garden`.

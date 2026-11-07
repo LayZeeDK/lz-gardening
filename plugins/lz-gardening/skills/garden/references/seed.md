@@ -2,24 +2,26 @@
 
 Run on the first tick, when the census has no previous run. The census just recorded every current hit as the
 baseline, so nothing in it is "new"; the seed pass queues what the repository already shows instead, so the first
-tend pass has evidence to work from. Read `weeds.md` first. Queue with the same `weeds.ts add` command as a tick.
+tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file, first. Queue with the tick's
+step 4 command, `--file` included, and stay in the repository's working directory throughout.
 
 ## 1. The baseline
 
-Read `.garden/census.json`.
+On a first census, the census output lists the baseline above its JSON line:
 
-- For each pattern with hits: queue one weed per distinct file, at most 20 files per pattern (the files with the
-  most hits first), `--where <path>`, `--source census:seed`, the note naming what the hits have in common.
-- For each name in `duplicates`: queue one `duplicate-helper` weed per file, `--source census:seed`, the note
-  saying whether the definitions do the same job (read them).
+- `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Queue one
+  weed per line, `--where <path>`, `--source census:seed`, the note naming what the hits have in common (read a few).
+- `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file. Queue one `duplicate-helper` weed
+  per file, `--source census:seed`, the note saying whether the definitions do the same job (read them).
 
-Done when every pattern with hits and every duplicate name has its weeds queued.
+Done when every `=` line has its weeds queued. No `=` lines means the census found no hits and no duplicates; say so
+in the report.
 
 ## 2. The records
 
-Read the repository's records listed under "Records" in `weeds.md`, through the site: `git show
-origin/<base>:<path>` for a file, `git ls-tree -r --name-only origin/<base> -- <folder>` for a folder. Skim
-summaries and lessons, not every plan.
+Read the repository's records listed under "Records" in `weeds.md`, as they are on the base: `git show
+<base>:<path>` for a file, `git ls-tree -r --name-only <base> -- <folder>` for a folder. Skim summaries and lessons,
+not every plan.
 
 - A lesson, correction or finding that appears twice or more: `repeated-lesson`, `--where` the code it is about,
   `--source lesson:<path>:<line>` of each record (one weed per record).
@@ -33,14 +35,24 @@ Done when every record folder that exists has been listed and its lesson and sum
 ## 3. History
 
 ```bash
-git log --no-merges --format='%h %s' -n 300 origin/<base>
+git log --no-merges --format='%h %s' -n 300 <base>
 ```
 
 Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up runs. Read the diffs of the commits
-they point at, and of the newest 20 commits, as in a tick's step 3.
+they point at, and of the newest 20 commits, as in a tick's step 3. Done when each of those commits is read and its
+weeds are queued.
 
 ## 4. Commit and report
 
-Commit with `git add .garden` and `git commit -q -m "garden: seed <short sha>"`. Report the census totals per pattern, the classes queued
-with their open counts, and the classes that are ready to tend (`weeds.ts groups --min 2`), most open first. Keep
-the report under 20 lines; the queue holds the detail.
+Run the two commands of the tick's step 5, `groups` and `commit`, with the commit message
+`garden: seed <short sha>`. Done when `commit` prints `"committed": true`. Report in this shape, and nothing else:
+
+```text
+garden: seeded <base> at <short sha>
+census: <pattern> <count>, ... (patterns with hits only)
+queued <n> (<class> x<n>, ...)
+no check behind: <class>, ... (or none)
+ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:tend <class>
+```
+
+Leave out the `ready to tend` line when no class has two open weeds.
