@@ -280,6 +280,20 @@ test('the CLI creates the folder it writes the census into', (t) => {
   assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.sha, git(dir, ['rev-parse', 'HEAD']));
 });
 
+test('a census of the commit already recorded leaves the census file as it was', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  const out = join(dirname(dir), 'census.json');
+  const first = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+  assert.equal(first.status, 0, first.stderr);
+  const recorded = readFileSync(out, 'utf8');
+
+  const second = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(readFileSync(out, 'utf8'), recorded);
+});
+
 test('the CLI writes the census, and a second run reports what grew', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });

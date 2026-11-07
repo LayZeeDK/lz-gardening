@@ -387,7 +387,7 @@ async function main(argv: readonly string[]): Promise<number> {
   const after = await takeCensus(process.cwd(), rev, set, new Date());
   const deltas = diffCensus(before, after);
 
-  if (out !== undefined) {
+  if (out !== undefined && before?.sha !== after.sha) {
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, `${JSON.stringify(after, null, 2)}\n`);
   }
