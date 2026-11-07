@@ -60,6 +60,18 @@ test('a remote default that is only the branch checked out in a local source is 
   assert.equal(resolveBase({ originHead: 'feature/x', current: 'feature/x', branches: ['feature/x', 'main'] }), 'main');
 });
 
+test('open without a base reports main while a feature branch is checked out', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['switch', '-q', '-c', 'feature/x']);
+
+  const result = site(dir, ['open']);
+
+  assert.equal(result.status, 0, String(result.summary));
+  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
+  assert.equal(result.summary.base, 'main');
+});
+
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

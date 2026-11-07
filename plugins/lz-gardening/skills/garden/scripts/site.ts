@@ -16,10 +16,10 @@ function git(cwd: string, args: readonly string[]): string {
 }
 
 export interface BaseFacts {
-  readonly base?: string;
-  readonly censusRev?: string;
-  readonly originHead?: string;
-  readonly current?: string;
+  readonly base?: string | undefined;
+  readonly censusRev?: string | undefined;
+  readonly originHead?: string | undefined;
+  readonly current?: string | undefined;
   readonly branches: readonly string[];
 }
 
@@ -51,6 +51,14 @@ function plant(top: string, site: string): void {
   git(site, ['commit', '-q', '-m', 'garden: plant']);
 }
 
+function baseFacts(top: string, argv: readonly string[]): BaseFacts {
+  return {
+    base: argValue(argv, '--base'),
+    current: git(top, ['branch', '--show-current']),
+    branches: git(top, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n'),
+  };
+}
+
 function main(argv: readonly string[], cwd: string): number {
   const top = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
   const site = join(dirname(top), `${basename(top)}.garden`);
@@ -62,7 +70,8 @@ function main(argv: readonly string[], cwd: string): number {
     git(site, ['fetch', '-q', '--prune', 'origin']);
   }
 
-  process.stdout.write(`${JSON.stringify({ site, created, base: argValue(argv, '--base') })}\n`);
+  const base = resolveBase(baseFacts(top, argv));
+  process.stdout.write(`${JSON.stringify({ site, created, base })}\n`);
 
   return 0;
 }
