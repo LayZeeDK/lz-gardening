@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { resolveBase } from './site.ts';
 import type { BaseFacts } from './site.ts';
@@ -23,6 +24,21 @@ function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = pro
   const summary = new Map(typeof parsed === 'object' && parsed !== null ? Object.entries(parsed) : []);
 
   return { status: result.status, stderr: result.stderr, summary };
+}
+
+// A repository with one commit on main and its site, planted.
+function planted(t: TestContext): { readonly dir: string; readonly garden: string } {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const opened = site(dir, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
+
+  return { dir, garden: join(dirname(dir), 'repo.garden') };
+}
+
+function queueOneWeed(garden: string): void {
+  mkdirSync(join(garden, '.garden'), { recursive: true });
+  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
 }
 
 // A repository with feature/x checked out, no remote default, nothing recorded and nothing asked for.
@@ -120,13 +136,11 @@ test('open in a clone of a hosted repository reports its default branch while a 
 });
 
 test('open without a base reports the base the last census recorded', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const { dir, garden } = planted(t);
   git(dir, ['branch', 'release']);
   git(dir, ['switch', '-q', '-c', 'feature/x']);
-  site(dir, ['open']);
-  const records = join(dirname(dir), 'repo.garden', '.garden');
-  mkdirSync(records, { recursive: true });
+  const records = join(garden, '.garden');
+  mkdirSync(records);
   const census = { rev: 'release', sha: 'abc', takenAt: '2026-11-07T00:00:00.000Z', counts: {}, hits: {} };
   writeFileSync(join(records, 'census.json'), JSON.stringify(census));
 
@@ -149,12 +163,8 @@ test('open refuses a repository with no user.email and plants no site', (t) => {
 });
 
 test('commit records the .garden folder on the garden branch with the given message', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  site(dir, ['open']);
-  const garden = join(dirname(dir), 'repo.garden');
-  mkdirSync(join(garden, '.garden'));
-  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  const { dir, garden } = planted(t);
+  queueOneWeed(garden);
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
@@ -165,13 +175,10 @@ test('commit records the .garden folder on the garden branch with the given mess
 });
 
 test('commit with nothing new in .garden reports committed false and adds no commit', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  site(dir, ['open']);
-  const garden = join(dirname(dir), 'repo.garden');
-  mkdirSync(join(garden, '.garden'));
-  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
-  site(dir, ['commit', '--message', 'garden: watch abc1234']);
+  const { dir, garden } = planted(t);
+  queueOneWeed(garden);
+  const first = site(dir, ['commit', '--message', 'garden: watch abc1234']);
+  assert.equal(first.status, 0, first.stderr);
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
@@ -207,15 +214,15 @@ test('an argument the command does not take is a usage error, not ignored', (t) 
 
   const branchWithoutFlag = site(dir, ['open', 'develop']);
   const messageOnOpen = site(dir, ['open', '--message', 'garden: watch']);
-  const planted = existsSync(join(dirname(dir), 'repo.garden'));
-  site(dir, ['open', '--base', 'main']);
-  mkdirSync(join(dirname(dir), 'repo.garden', '.garden'));
-  writeFileSync(join(dirname(dir), 'repo.garden', '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  const plantedAnyway = existsSync(join(dirname(dir), 'repo.garden'));
+  const opened = site(dir, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
+  queueOneWeed(join(dirname(dir), 'repo.garden'));
   const baseOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--base', 'main']);
 
   assert.deepEqual([branchWithoutFlag.status, messageOnOpen.status, baseOnCommit.status], [2, 2, 2]);
   assert.match(branchWithoutFlag.stderr, /usage/);
-  assert.equal(planted, false);
+  assert.equal(plantedAnyway, false);
 });
 
 test('open in a clone with no local main reports origin/main', (t) => {
@@ -256,12 +263,8 @@ test('open refuses a base whose name the agent could not pass to a shell as it i
 });
 
 test('commit without a message is a usage error and stages nothing', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  site(dir, ['open']);
-  const garden = join(dirname(dir), 'repo.garden');
-  mkdirSync(join(garden, '.garden'));
-  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  const { dir, garden } = planted(t);
+  queueOneWeed(garden);
 
   const result = site(dir, ['commit']);
 
@@ -285,8 +288,7 @@ test('commit in a site that is not on the garden branch is an error and commits 
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
   const garden = join(dirname(dir), 'repo.garden');
   git(dirname(dir), ['clone', '-q', '--no-checkout', dir, garden]);
-  mkdirSync(join(garden, '.garden'));
-  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  queueOneWeed(garden);
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
@@ -296,10 +298,7 @@ test('commit in a site that is not on the garden branch is an error and commits 
 });
 
 test('open from inside a bed is an error and plants no site there', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  site(dir, ['open', '--base', 'main']);
-  const garden = join(dirname(dir), 'repo.garden');
+  const { garden } = planted(t);
   const bed = join(garden, 'beds', 'any-type');
   git(garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'main']);
 
@@ -326,18 +325,16 @@ test('open from a linked worktree uses the site beside the main checkout', (t) =
 });
 
 test('open reports the site seeded once the garden branch holds a commit past the plant', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  const planted = site(dir, ['open', '--base', 'main']);
-  const garden = join(dirname(dir), 'repo.garden');
-  mkdirSync(join(garden, '.garden'));
-  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
-  site(dir, ['commit', '--message', 'garden: seed abc1234']);
+  const { dir, garden } = planted(t);
+  const before = site(dir, ['open', '--base', 'main']);
+  queueOneWeed(garden);
+  const recorded = site(dir, ['commit', '--message', 'garden: seed abc1234']);
+  assert.equal(recorded.status, 0, recorded.stderr);
 
-  const seeded = site(dir, ['open', '--base', 'main']);
+  const after = site(dir, ['open', '--base', 'main']);
 
-  assert.equal(planted.summary.get('seeded'), false);
-  assert.equal(seeded.summary.get('seeded'), true);
+  assert.equal(before.summary.get('seeded'), false);
+  assert.equal(after.summary.get('seeded'), true);
 });
 
 test('open refuses a folder where the site goes that is not a site, before cloning anything', (t) => {
@@ -370,10 +367,8 @@ test('open plants over the leftover of a plant that stopped part way', (t) => {
 });
 
 test('a corrupt census does not stop an explicit base, and is named when it is read', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  site(dir, ['open', '--base', 'main']);
-  const records = join(dirname(dir), 'repo.garden', '.garden');
+  const { dir, garden } = planted(t);
+  const records = join(garden, '.garden');
   mkdirSync(records);
   writeFileSync(join(records, 'census.json'), '{"rev":');
 
@@ -387,11 +382,9 @@ test('a corrupt census does not stop an explicit base, and is named when it is r
 });
 
 test('a census file that is not a census stops open and is named, rather than being passed over', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const { dir, garden } = planted(t);
   git(dir, ['branch', 'release']);
-  site(dir, ['open', '--base', 'main']);
-  const records = join(dirname(dir), 'repo.garden', '.garden');
+  const records = join(garden, '.garden');
   mkdirSync(records);
   writeFileSync(join(records, 'census.json'), '{"rev":"release"}');
 
@@ -418,10 +411,9 @@ test('the site commits run none of the user hooks and sign nothing, whatever the
     GIT_CONFIG_VALUE_2: join(dirname(dir), 'no-gpg'),
   };
 
-  const planted = site(dir, ['open', '--base', 'main'], env);
-  assert.equal(planted.status, 0, planted.stderr);
-  mkdirSync(join(dirname(dir), 'repo.garden', '.garden'));
-  writeFileSync(join(dirname(dir), 'repo.garden', '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  const opened = site(dir, ['open', '--base', 'main'], env);
+  assert.equal(opened.status, 0, opened.stderr);
+  queueOneWeed(join(dirname(dir), 'repo.garden'));
   const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
 
   assert.equal(recorded.status, 0, recorded.stderr);
