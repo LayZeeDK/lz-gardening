@@ -5,8 +5,8 @@
 //   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]
 //     Prints a table of counts with the change since the previous census at --out, then the new hits, then, with
 //     --seed, the seed list (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
-//     its folder, when it differs from the one there in more than the time taken. Exit 0 on success, 2 on a usage
-//     or git error or an --out file that is not a census.
+//     its folder, when it differs from the one there in more than the time taken. --out must end in
+//     .garden/census.json. Exit 0 on success, 2 on a usage or git error or an --out file that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by --patterns.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -44,6 +44,8 @@ export interface PatternDelta {
 
 // Hits are capped per pattern; counts stay exact, and a delta over a capped list can miss new hits.
 const hitCap = 1000;
+// The garden skill allows this script with any arguments, so it writes nowhere but a garden census.
+const censusPattern = /[\\/]\.garden[\\/]census\.json$/;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -405,6 +407,12 @@ async function main(argv: readonly string[]): Promise<number> {
 
   if (rev === undefined) {
     process.stderr.write('usage: census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]\n');
+
+    return 2;
+  }
+
+  if (out !== undefined && !censusPattern.test(resolve(out))) {
+    process.stderr.write(`census: --out must be a .garden/census.json file, got ${out}\n`);
 
     return 2;
   }

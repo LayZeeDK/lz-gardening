@@ -2,7 +2,7 @@
 // Each test builds a throwaway git repository and counts weeds at one of its commits.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -182,7 +182,7 @@ test('the CLI names a helper that became duplicated since the last census, not o
     'src/x.ts': 'export const toKey = (x) => x;\n',
     'src/y.ts': 'export const toKey = (x) => x;\n',
   });
-  const out = join(dir, 'census.json');
+  const out = join(dir, '.garden', 'census.json');
   const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
   commit(dir, { 'src/b.ts': 'function isRecord() {}\n' });
@@ -205,7 +205,7 @@ test('--seed prints the seed list: files per pattern by hit count, and every dup
     'src/y.ts': 'export const toKey = (x) => x;\n',
   });
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, '.garden', 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const seedLines = result.stdout.split('\n').filter((line) => line.startsWith('= '));
@@ -258,7 +258,7 @@ test('the seed list keeps a colon inside a file path', (t) => {
   git(dir, ['update-index', '--add', '--cacheinfo', `100644,${blob.stdout.trim()},src/a:b.ts`]);
   git(dir, ['commit', '-q', '-m', 'colon']);
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dirname(dir), 'census.json'), '--seed']);
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dirname(dir), '.garden', 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^= \[eslint-disable\] src\/a:b\.ts 1$/m);
@@ -271,7 +271,7 @@ test('the seed list names at most 20 files per pattern, keeping those with the m
   );
   commit(dir, { ...files, 'src/f20.ts': '// eslint-disable\n// eslint-disable\n' });
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, '.garden', 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const seedLines = result.stdout.split('\n').filter((line) => line.startsWith('= [eslint-disable]'));
@@ -284,7 +284,7 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
 
-  const result = census(dir, ['--rev', 'HEAD', '--ot', join(dir, 'census.json')]);
+  const result = census(dir, ['--rev', 'HEAD', '--ot', join(dir, '.garden', 'census.json')]);
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /--ot/);
@@ -300,7 +300,7 @@ test('the seed list names at most 30 duplicate names, the most widely defined fi
   );
   commit(dir, { ...files, 'src/c.ts': 'function helper31() {}\n' });
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, '.garden', 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const listed = result.stdout.split('\n').filter((line) => line.startsWith('= duplicate '));
@@ -320,10 +320,35 @@ test('the CLI creates the folder it writes the census into', (t) => {
   assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.sha, git(dir, ['rev-parse', 'HEAD']));
 });
 
+test('the CLI refuses an --out outside a .garden folder and writes nothing', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  const out = join(dirname(dir), 'profile');
+
+  const result = census(dir, ['--rev', 'HEAD', '--out', out]);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /\.garden\/census\.json/);
+  assert.equal(existsSync(out), false);
+});
+
+test('the CLI refuses an --out that only starts with .garden/census.json', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  const out = join(dirname(dir), '.garden', 'census.json.sh');
+
+  const result = census(dir, ['--rev', 'HEAD', '--out', out]);
+
+  assert.equal(result.status, 2);
+  assert.equal(existsSync(out), false);
+});
+
 test('a census file that is not a census is refused by name and left as it was', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), 'census.json');
+  const out = join(dirname(dir), '.garden', 'census.json');
+
+  mkdirSync(dirname(out));
 
   for (const text of ['{', '{"rev": 1}\n']) {
     writeFileSync(out, text);
@@ -339,7 +364,7 @@ test('a census file that is not a census is refused by name and left as it was',
 test('a census of the commit already recorded leaves the census file as it was', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), 'census.json');
+  const out = join(dirname(dir), '.garden', 'census.json');
   const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
   const recorded = readFileSync(out, 'utf8');
@@ -353,7 +378,7 @@ test('a census of the commit already recorded leaves the census file as it was',
 test('--seed prints the seed list even when a census was recorded before, and only then', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n' });
-  const out = join(dirname(dir), 'census.json');
+  const out = join(dirname(dir), '.garden', 'census.json');
   const first = census(dir, ['--rev', 'HEAD', '--out', out]);
 
   const again = census(dir, ['--rev', 'HEAD', '--out', out, '--seed']);
@@ -366,7 +391,7 @@ test('--seed prints the seed list even when a census was recorded before, and on
 test('a census of the recorded commit under another rev records the new rev', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), 'census.json');
+  const out = join(dirname(dir), '.garden', 'census.json');
   const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
 
@@ -379,7 +404,7 @@ test('a census of the recorded commit under another rev records the new rev', (t
 test('the CLI writes the census, and a second run reports what grew', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dir, 'census.json');
+  const out = join(dir, '.garden', 'census.json');
   const first = census(dir, ['--rev', 'HEAD', '--out', out]);
   assert.equal(first.status, 0, first.stderr);
 
