@@ -252,8 +252,10 @@ function mainCheckout(cwd: string): string {
   }
 
   // A linked worktree finds the main checkout first in the worktree list.
+  // Stryker disable next-line StringLiteral: split always returns at least one element, so the default is never read
   const [first = ''] = git(cwd, ['worktree', 'list', '--porcelain']).split('\n', 1);
 
+  // Stryker disable next-line Regex: the porcelain list starts with "worktree ", so the first match is at index 0
   return first.replace(/^worktree /, '');
 }
 
