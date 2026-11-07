@@ -112,6 +112,38 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
   return identity;
 }
 
+// The codes Windows gives a rename while another program, such as a virus scanner, holds a file in the folder.
+const lockCodes: readonly unknown[] = ['EPERM', 'EBUSY', 'EACCES'];
+
+function pause(): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+}
+
+export function renameRetrying(
+  from: string,
+  to: string,
+  {
+    rename = renameSync,
+    wait = pause,
+  }: { readonly rename?: (from: string, to: string) => void; readonly wait?: () => void } = {},
+): void {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      rename(from, to);
+
+      return;
+    } catch (error: unknown) {
+      const locked = error instanceof Error && 'code' in error && lockCodes.includes(error.code);
+
+      if (!locked || tries === 20) {
+        throw error;
+      }
+
+      wait();
+    }
+  }
+}
+
 function plant(top: string, site: string): void {
   if (existsSync(site)) {
     throw new Error(`${site} is not a garden site; move it away, and the next tick plants the site there`);
@@ -130,7 +162,7 @@ function plant(top: string, site: string): void {
   writeFileSync(join(planting, '.gitignore'), '/beds/\n');
   git(planting, ['add', '.gitignore']);
   git(planting, ['commit', '-q', '-m', 'garden: plant']);
-  renameSync(planting, site);
+  renameRetrying(planting, site);
 }
 
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {

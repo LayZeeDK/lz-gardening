@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { resolveBase } from './site.ts';
+import { renameRetrying, resolveBase } from './site.ts';
 import type { BaseFacts } from './site.ts';
 import { commit, git, repo } from './test-repo.ts';
 
@@ -220,6 +220,69 @@ test('an argument the command does not take is a usage error, not ignored', (t) 
   assert.deepEqual([branchWithoutFlag.status, messageOnOpen.status, baseOnCommit.status], [2, 2, 2]);
   assert.match(branchWithoutFlag.stderr, /usage/);
   assert.equal(plantedAnyway, false);
+});
+
+// A rename that fails with each given error code in turn, then goes through. Renames and waits go to one log.
+function renameFailing(...codes: readonly string[]): {
+  readonly calls: string[];
+  readonly rename: (from: string, to: string) => void;
+  readonly wait: () => void;
+} {
+  const calls: string[] = [];
+  let tries = 0;
+  const rename = (from: string, to: string): void => {
+    calls.push(`${from}->${to}`);
+    const code = codes[tries];
+    tries += 1;
+
+    if (code !== undefined) {
+      throw Object.assign(new Error(code), { code });
+    }
+  };
+
+  return { calls, rename, wait: () => calls.push('wait') };
+}
+
+test('a rename that nothing holds up runs once', () => {
+  const standIn = renameFailing();
+
+  renameRetrying('a', 'b', standIn);
+
+  assert.deepEqual(standIn.calls, ['a->b']);
+});
+
+test('a rename held up by a Windows file lock waits and tries again until it goes through', () => {
+  const standIn = renameFailing('EPERM', 'EPERM', 'EPERM');
+
+  renameRetrying('a', 'b', standIn);
+
+  assert.deepEqual(standIn.calls, ['a->b', 'wait', 'a->b', 'wait', 'a->b', 'wait', 'a->b']);
+});
+
+test('a rename held up as busy or access denied is waited out like any file lock', () => {
+  const standIn = renameFailing('EBUSY', 'EACCES');
+
+  renameRetrying('a', 'b', standIn);
+
+  assert.deepEqual(standIn.calls, ['a->b', 'wait', 'a->b', 'wait', 'a->b']);
+});
+
+test('a file lock that never lets go is thrown after a bounded number of tries', () => {
+  const standIn = renameFailing(...Array.from({ length: 100 }, () => 'EPERM'));
+
+  assert.throws(() => {
+    renameRetrying('a', 'b', standIn);
+  }, /EPERM/);
+  assert.equal(standIn.calls.filter((call) => call === 'a->b').length, 20);
+});
+
+test('a rename error that is not a file lock is thrown at once', () => {
+  const standIn = renameFailing('ENOENT');
+
+  assert.throws(() => {
+    renameRetrying('a', 'b', standIn);
+  }, /ENOENT/);
+  assert.deepEqual(standIn.calls, ['a->b']);
 });
 
 test('open in a clone with no local main reports origin/main', (t) => {
