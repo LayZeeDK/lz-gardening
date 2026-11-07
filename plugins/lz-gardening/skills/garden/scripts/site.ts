@@ -46,11 +46,23 @@ function argValue(argv: readonly string[], name: string): string | undefined {
 
 // A clone with no checkout, its own identity copied from the repository, and an orphan branch that will hold only the
 // gardener's record.
+function repositoryIdentity(top: string): readonly (readonly [string, string])[] {
+  const identity = ['user.name', 'user.email'].map((key) => [key, optionalGit(top, ['config', key]) ?? ''] as const);
+  const missing = identity.find(([, value]) => value === '');
+
+  if (missing !== undefined) {
+    throw new Error(`the repository has no ${missing[0]}; set it so the garden commits carry its owner's identity`);
+  }
+
+  return identity;
+}
+
 function plant(top: string, site: string): void {
+  const identity = repositoryIdentity(top);
   git(dirname(top), ['clone', '-q', '--no-checkout', top, site]);
 
-  for (const key of ['user.name', 'user.email']) {
-    git(site, ['config', key, git(top, ['config', key])]);
+  for (const [key, value] of identity) {
+    git(site, ['config', key, value]);
   }
 
   git(site, ['switch', '-q', '--orphan', 'garden']);

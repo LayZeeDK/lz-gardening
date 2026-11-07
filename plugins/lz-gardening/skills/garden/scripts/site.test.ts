@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -105,6 +105,18 @@ test('open without a base reports the base the last census recorded', (t) => {
   assert.equal(result.status, 0, String(result.summary));
   assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
   assert.equal(result.summary.base, 'release');
+});
+
+test('open refuses a repository with no user.email and plants no site', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['config', 'user.email', '']);
+
+  const result = site(dir, ['open']);
+
+  assert.equal(result.status, 2);
+  assert.match(String(result.summary), /user\.email/);
+  assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
