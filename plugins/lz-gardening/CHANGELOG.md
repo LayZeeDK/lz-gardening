@@ -12,7 +12,7 @@ First release.
 
 - `garden` skill: one watch tick in a garden site beside the repository. Takes a census of weed markers at the base
   branch, reads what landed since the last tick, and queues each weed with its evidence. The first tick seeds the
-  queue from the census baseline, the repository's records and its history. Carries its own permission rules: it
+  queue from the census's seed list, the repository's records and its history. Carries its own permission rules: it
   reads its own files, runs its own scripts and read-only git commands, and nothing else.
 - `tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land.

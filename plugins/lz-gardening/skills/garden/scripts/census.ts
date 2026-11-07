@@ -4,7 +4,7 @@
 // Usage:
 //   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>]
 //     Prints a table of counts with the change since the previous census at --out, then the new hits, then, on a
-//     first census, the baseline (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
+//     first census, the seed list (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
 //     its folder. Exit 0 on success, 2 on a usage or git error.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by --patterns.
 import { spawn } from 'node:child_process';
@@ -333,7 +333,7 @@ export function diffCensus(before: Census | null, after: Census): PatternDelta[]
 
 // The seed pass's view of a first census: each pattern's 20 files with the most hits, and the 30 duplicate names
 // defined in the most files.
-function baselineLines(census: Census): string[] {
+function seedList(census: Census): string[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
     [...Map.groupBy(hits, (hit) => hit.slice(0, hit.indexOf(':')))]
       .map(([path, items]) => ({ path, count: items.length }))
@@ -400,10 +400,8 @@ async function main(argv: readonly string[]): Promise<number> {
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
   };
-  const baseline = before === null ? baselineLines(after) : [];
-  process.stdout.write(
-    `${[formatDelta(deltas), ...duplicateLines, ...baseline].join('\n')}\n${JSON.stringify(summary)}\n`,
-  );
+  const seed = before === null ? seedList(after) : [];
+  process.stdout.write(`${[formatDelta(deltas), ...duplicateLines, ...seed].join('\n')}\n${JSON.stringify(summary)}\n`);
 
   return 0;
 }

@@ -192,7 +192,7 @@ test('the CLI names a helper that became duplicated since the last census, not o
   assert.match(second.stdout, /^\+ duplicate isRecord: src\/a\.ts, src\/b\.ts$/m);
 });
 
-test('a first census lists the baseline: files per pattern by hit count, and every duplicate name', (t) => {
+test('a first census prints the seed list: files per pattern by hit count, and every duplicate name', (t) => {
   const dir = repo(t);
   commit(dir, {
     'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n',
@@ -215,7 +215,7 @@ test('a first census lists the baseline: files per pattern by hit count, and eve
   ]);
 });
 
-test('the baseline lists at most 20 files per pattern, keeping those with the most hits', (t) => {
+test('the seed list names at most 20 files per pattern, keeping those with the most hits', (t) => {
   const dir = repo(t);
   const files = Object.fromEntries(
     Array.from({ length: 21 }, (_, index) => [`src/f${String(index).padStart(2, '0')}.ts`, '// eslint-disable\n']),
@@ -247,7 +247,7 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   assert.match(result.stderr, /--ot/);
 });
 
-test('the baseline lists at most 30 duplicate names, the most widely defined first, and counts the rest', (t) => {
+test('the seed list names at most 30 duplicate names, the most widely defined first, and counts the rest', (t) => {
   const dir = repo(t);
   const files = Object.fromEntries(
     Array.from({ length: 32 }, (_, index) => index).flatMap((index) => [

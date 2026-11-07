@@ -50,6 +50,11 @@ _Avoid_: scan, inventory
 **Census pattern**:
 A text pattern that marks a weed class the census can count, such as a lint suppression.
 
+**Seed list**:
+What a first census shows the seed pass: for each census pattern, the files with the most hits, and the names
+defined in the most files.
+_Avoid_: baseline (a baseline is what a check tolerates)
+
 **Queue**:
 The append-only list of weeds, each with its place, its source and the root cause it points to. Weeds leave the
 queue only by being closed, never by being edited.

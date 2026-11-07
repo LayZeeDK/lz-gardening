@@ -1,14 +1,14 @@
 # Seed pass
 
-Run on the first tick, when the census has no previous run. The census just recorded every current hit as the
-baseline, so nothing in it is "new"; the seed pass queues what the repository already shows instead, so the first
+Run on the first tick, when the census has no previous run. The census just recorded every current hit as its
+starting count, so nothing in it is "new"; the seed pass queues what the repository already shows instead, so the first
 tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file, first. Queue with the tick's
 step 4 command, `--file` included, and stay in the repository's working directory throughout. Run all four steps:
-the records and the history find the weeds the census cannot, so a seed that stops after the baseline misses them.
+the records and the history find the weeds the census cannot, so a seed that stops after the seed list misses them.
 
-## 1. The baseline
+## 1. The seed list
 
-On a first census, the census output lists the baseline above its JSON line:
+On a first census, the census output prints the seed list above its JSON line:
 
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Queue one
   weed per line, `--where <path>`, `--source census:seed`, the note naming what the hits have in common (read a few).
@@ -16,7 +16,8 @@ On a first census, the census output lists the baseline above its JSON line:
   in the most files first. Read the definitions; when they do the same job, queue one `duplicate-helper` weed per
   file, `--source census:seed`, the note naming the copy to keep. Names that only share a word (two different
   `parse` functions) are not weeds. A last line `<n> more duplicate names not listed` counts the rest; leave them
-  for later ticks.
+  for later ticks. Files under dot-directories (`.claude/`, `.github/` and other tool folders, often deliberate
+  mirrors of each other) are left out of duplicate names, though their pattern hits count.
 
 Done when every `=` line has its weeds queued. No `=` lines means the census found no hits and no duplicates; say so
 in the report.
