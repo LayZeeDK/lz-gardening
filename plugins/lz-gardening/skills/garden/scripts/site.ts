@@ -188,7 +188,7 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
     originBranchNames: git(top, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'])
       .split('\n')
       .map((ref) => ref.replace('refs/remotes/origin/', ''))
-      .filter((name) => name !== '' && name !== 'HEAD'),
+      .filter((name) => name !== 'HEAD'),
   };
 }
 
