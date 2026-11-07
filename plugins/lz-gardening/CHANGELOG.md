@@ -18,7 +18,7 @@ First release.
   sign nothing.
 - `tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Carries its own
-  permission rules for reading the tend skill and the garden references and running the garden scripts, and asks
-  you to add the site as a working directory.
+  permission rules for reading the tend skill and the garden references, and for running the garden scripts, and
+  asks you to add the site as a working directory.
 - `lz-gardener` agent: the fork the `garden` skill runs in. Reads the repository and writes only through the
   garden scripts, which keep the queue and the census in the site and commit them on `garden`.

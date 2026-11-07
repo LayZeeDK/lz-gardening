@@ -108,7 +108,7 @@ test('CI tests the Node.js version package.json names as its floor', () => {
   assert.ok(
     matrix
       .split(',')
-      .map((entry) => entry.trim().replaceAll("'", ''))
+      .map((entry) => entry.trim().replaceAll(/['"]/g, ''))
       .includes(engine),
     matrix,
   );
