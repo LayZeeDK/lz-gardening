@@ -2,14 +2,13 @@
 // Each test builds a throwaway git repository and counts weeds at one of its commits.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { diffCensus, mergePatternSets, parseCensus, parseGrep, parsePatternSet, takeCensus } from './census.ts';
 import type { PatternSet } from './census.ts';
+import { commit, git, repo } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'census.ts');
 const now = new Date('2026-11-07T12:00:00.000Z');
@@ -21,38 +20,6 @@ const set: PatternSet = {
     { id: 'any-type', regex: '(: any\\b|\\bas any\\b)', paths: ['**/*.ts'], note: '' },
   ],
 };
-
-function git(cwd: string, args: readonly string[]): string {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr);
-
-  return result.stdout.trim();
-}
-
-function repo(t: TestContext): string {
-  const dir = mkdtempSync(join(tmpdir(), 'census-'));
-  t.after(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
-  git(dir, ['init', '-q', '-b', 'main']);
-  git(dir, ['config', 'user.email', 'test@example.com']);
-  git(dir, ['config', 'user.name', 'test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-
-  return dir;
-}
-
-function commit(dir: string, files: Readonly<Record<string, string>>): string {
-  for (const [path, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(dir, path)), { recursive: true });
-    writeFileSync(join(dir, path), content);
-  }
-
-  git(dir, ['add', '-A']);
-  git(dir, ['commit', '-q', '-m', 'x']);
-
-  return git(dir, ['rev-parse', 'HEAD']);
-}
 
 test('counts hits per pattern at a revision, honouring paths and excludes', async (t) => {
   const dir = repo(t);
