@@ -386,6 +386,32 @@ test('a census file that is not a census stops open and is named, rather than be
   assert.match(result.stderr, /census\.json/);
 });
 
+test('the site commits run none of the user hooks and sign nothing, whatever the user set globally', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const hooks = join(dirname(dir), 'hooks');
+  mkdirSync(hooks);
+  writeFileSync(join(hooks, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const env = {
+    ...process.env,
+    GIT_CONFIG_COUNT: '3',
+    GIT_CONFIG_KEY_0: 'core.hooksPath',
+    GIT_CONFIG_VALUE_0: hooks,
+    GIT_CONFIG_KEY_1: 'commit.gpgsign',
+    GIT_CONFIG_VALUE_1: 'true',
+    GIT_CONFIG_KEY_2: 'gpg.program',
+    GIT_CONFIG_VALUE_2: join(dirname(dir), 'no-gpg'),
+  };
+
+  const planted = site(dir, ['open', '--base', 'main'], env);
+  assert.equal(planted.status, 0, planted.stderr);
+  mkdirSync(join(dirname(dir), 'repo.garden', '.garden'));
+  writeFileSync(join(dirname(dir), 'repo.garden', '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
+
+  assert.equal(recorded.status, 0, recorded.stderr);
+});
+
 test('open without git on the PATH is an error that names git, not a crash', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

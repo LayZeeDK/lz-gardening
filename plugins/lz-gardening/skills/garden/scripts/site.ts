@@ -98,6 +98,12 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
   return identity;
 }
 
+// The site is the plugin's own clone. The user's hooks and commit signing are for their own commits, and a signing
+// passphrase would stop a tick that runs unattended.
+function commitGarden(dir: string, message: string): void {
+  git(dir, ['-c', 'commit.gpgsign=false', 'commit', '-q', '--no-verify', '-m', message]);
+}
+
 function plant(top: string, site: string): void {
   const identity = repositoryIdentity(top);
   const planting = `${site}.planting`;
@@ -111,7 +117,7 @@ function plant(top: string, site: string): void {
   git(planting, ['switch', '-q', '--orphan', 'garden']);
   writeFileSync(join(planting, '.gitignore'), '/beds/\n');
   git(planting, ['add', '.gitignore']);
-  git(planting, ['commit', '-q', '-m', 'garden: plant']);
+  commitGarden(planting, 'garden: plant');
   renameSync(planting, site);
 }
 
@@ -201,7 +207,7 @@ function commitSite(site: string, message: string): object {
     return { committed: false };
   }
 
-  git(site, ['commit', '-q', '-m', message]);
+  commitGarden(site, message);
 
   return { committed: true };
 }
