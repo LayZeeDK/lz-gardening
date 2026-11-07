@@ -17,10 +17,11 @@ the checkout, write into a **site** instead: a local clone beside the repository
 ```
 
 `garden` is an orphan branch: it holds only `.garden/` and `.gitignore`, never the repository's code, so its history
-is the gardener's record and nothing else. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>` branch beside `garden`)
-start from the base branch and carry one proposed bed change each. Nothing in the site is pushed. A human brings a bed home from the repository with
-`git fetch ../<repo>.garden bed/<class>` and merges it the way the repository lands work; the `garden` branch can
-be fetched the same way to keep the queue in the repository's history.
+is the gardener's record and nothing else. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
+branch beside `garden`) start from the base branch and carry one proposed bed change each. Nothing in the site is
+pushed. A human brings a bed home from the repository with `git fetch ../<repo>.garden bed/<class>` and merges it
+the way the repository lands work; the `garden` branch can be fetched the same way to keep the queue in the
+repository's history.
 
 ## Open, commit
 
@@ -29,10 +30,9 @@ of the repository, it uses the one site beside the main checkout:
 
 - `site.ts open [--base <branch>]` creates the site on first use: a clone with no checkout, the repository's
   `user.name` and `user.email` copied in, and the orphan `garden` branch with one plant commit holding
-  `.gitignore`. On later runs it leaves the site as it is. It prints JSON with `site`, `created`, `base` and `seeded` (whether the `garden` branch holds a commit
-  past the plant). It
-  exits 2 when the repository has no `user.name` or `user.email`, so the gardener never commits under a default
-  identity.
+  `.gitignore`. On later runs it leaves the site as it is. It prints JSON with `site`, `created`, `base` and
+  `seeded` (whether the `garden` branch holds a commit past the plant). It exits 2 when the repository has no
+  `user.name` or `user.email`, so the gardener never commits under a default identity.
 - `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
   `committed`, false when nothing changed.
 

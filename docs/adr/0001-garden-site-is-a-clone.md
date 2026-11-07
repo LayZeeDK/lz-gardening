@@ -28,11 +28,12 @@ the clone. Nothing is pushed: a human fetches a bed's branch into the repository
 The site is still where every write goes, but a tick no longer reads through it. A garden tick runs as a forked
 subagent under the skill's own permission rules, and a practice run showed that every write or `cd` outside the
 working directory was refused. So a tick stays in the repository's checkout and reads it with read-only git commands
-(`git log`, `git show`, `git ls-tree`, `git rev-parse`) and the Read, Grep and Glob tools; the scripts write into the site
-by path. Two consequences above change:
+(`git log`, `git show`, `git ls-tree`, `git rev-parse`) and the Read, Grep and Glob tools; the scripts write into the
+site by path. Two consequences above change:
 
 - The site's freshness no longer matters to a tick, which reads the repository directly; `site.ts open` does not
   fetch. A tend pass fetches the base into the site when it makes a bed.
 - The base comes from the repository's own refs: an explicit `--base`, the base the last census recorded, the
-  repository's `origin/HEAD` unless that is its checked-out branch, then `main` or `master`, as `origin/<name>`
-  when only the remote has it. It is still never the checked-out branch.
+  repository's `origin/HEAD`, then `main` or `master`, as `origin/<name>` when only the remote has it. In a clone
+  of a local path, `origin/HEAD` follows the source's checkout, so there it is passed over when it names the
+  branch checked out.

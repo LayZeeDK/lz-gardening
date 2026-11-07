@@ -1,8 +1,8 @@
 # Seed pass
 
 Run on every tick until a seed pass has committed (`site.ts open` reports `seeded: false`). The census records every
-current hit as its starting count, so nothing in it is "new"; the seed pass queues what the repository already shows instead, so the first
-tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file, first. Queue with the tick's
+current hit as its starting count, so nothing in it is "new"; the seed pass queues what the repository already
+shows instead, so the first tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file, first. Queue with the tick's
 step 4 command, `--file` included, and stay in the repository's working directory throughout. Run all four steps:
 the records and the history find the weeds the census cannot, so a seed that stops after the seed list misses them.
 
@@ -12,12 +12,15 @@ With `--seed`, the census output prints the seed list above its JSON line:
 
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Queue one
   weed per line, `--where <path>`, `--source census:seed`, the note naming what the hits have in common (read a few).
+  The census keeps at most 1000 hits per pattern, in path order, so for a pattern with more the files are ranked
+  from those 1000; say so in the report when a pattern's count is over 1000.
 - `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
-  in the most files first. Read the definitions; when they do the same job, queue one `duplicate-helper` weed per
-  file, `--source census:seed`, the note naming the copy to keep. Names that only share a word (two different
-  `parse` functions) are not weeds. A last line `<n> more duplicate names not listed` counts the rest; say how many in
-  the report. Later ticks report only what is new, so the seed list is the one time these are listed. Files under dot-directories (`.claude/`, `.github/` and other tool folders, often deliberate
-  mirrors of each other) are left out of duplicate names, though their pattern hits count.
+  in the most files first. Files under dot-directories (`.claude/`, `.github/` and other tool folders, often
+  deliberate mirrors of each other) are left out of duplicate names, though their pattern hits count. Read the
+  definitions; when they do the same job, queue one `duplicate-helper` weed per file, `--source census:seed`, the
+  note naming the copy to keep. Names that only share a word (two different `parse` functions) are not weeds. A last
+  line `<n> more duplicate names not listed` counts the rest; say how many in the report. Later ticks report only
+  what is new, so the seed list is the one time these are listed.
 
 Done when every `=` line has its weeds queued. No `=` lines means the census found no hits and no duplicates; say so
 in the report.
