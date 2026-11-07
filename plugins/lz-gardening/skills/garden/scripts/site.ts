@@ -3,6 +3,7 @@
 //   node site.ts open [--base <branch>]     create the site if missing, resolve the base;
 //                                           prints {site, created, base, seeded}
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
+// Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -98,11 +99,22 @@ function recordedRev(site: string): string | undefined {
     return undefined;
   }
 
+  const unreadable = new Error(`${census} is not a census; pass --base <branch>, or remove it to take a new census`);
+  let json: unknown;
+
   try {
-    return parseCensus(JSON.parse(readFileSync(census, 'utf8')))?.rev;
+    json = JSON.parse(readFileSync(census, 'utf8'));
   } catch {
-    throw new Error(`${census} is not valid JSON; pass --base <branch>, or remove it to take a new census`);
+    throw unreadable;
   }
+
+  const recorded = parseCensus(json);
+
+  if (recorded === null) {
+    throw unreadable;
+  }
+
+  return recorded.rev;
 }
 
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {

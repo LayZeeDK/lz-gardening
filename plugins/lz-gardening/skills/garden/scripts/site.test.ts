@@ -369,6 +369,21 @@ test('a corrupt census does not stop an explicit base, and is named when it is r
   assert.match(recorded.stderr, /census\.json/);
 });
 
+test('a census file that is not a census stops open and is named, rather than being passed over', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['branch', 'release']);
+  site(dir, ['open', '--base', 'main']);
+  const records = join(dirname(dir), 'repo.garden', '.garden');
+  mkdirSync(records);
+  writeFileSync(join(records, 'census.json'), '{"rev":"release"}');
+
+  const result = site(dir, ['open']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /census\.json/);
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
