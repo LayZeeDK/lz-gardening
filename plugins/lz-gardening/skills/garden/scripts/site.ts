@@ -1,5 +1,7 @@
 // The garden site: a clone beside the repository whose `garden` branch holds the queue and the census.
-// Usage, from the repository: node site.ts open [--base <branch>]
+// Usage, from the repository:
+//   node site.ts open [--base <branch>]     create or fetch the site; prints {site, created, base}
+//   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -118,9 +120,17 @@ function main(argv: readonly string[], cwd: string): number {
     strict: true,
     options: { base: { type: 'string' }, message: { type: 'string', default: '' } },
   });
+  const [command] = positionals;
+
+  if (command !== 'open' && command !== 'commit') {
+    process.stderr.write('usage: site.ts open [--base <branch>] | site.ts commit --message <text>\n');
+
+    return 2;
+  }
+
   const top = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
   const site = join(dirname(top), `${basename(top)}.garden`);
-  const summary = positionals[0] === 'commit' ? commitSite(site, values.message) : openSite(top, site, values.base);
+  const summary = command === 'commit' ? commitSite(site, values.message) : openSite(top, site, values.base);
   process.stdout.write(`${JSON.stringify(summary)}\n`);
 
   return 0;

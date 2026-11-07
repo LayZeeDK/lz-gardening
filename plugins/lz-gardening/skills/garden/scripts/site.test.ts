@@ -163,6 +163,17 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   assert.match(String(result.summary), /--bsae/);
 });
 
+test('an unknown command is a usage error and plants no site', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(dir, ['opne']);
+
+  assert.equal(result.status, 2);
+  assert.match(String(result.summary), /usage/);
+  assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
+});
+
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
