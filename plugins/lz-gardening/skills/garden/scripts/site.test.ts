@@ -190,6 +190,16 @@ test('open in a clone with no local main reports origin/main', (t) => {
   assert.equal(result.summary.base, 'origin/main');
 });
 
+test('open with a base that names no branch is an error that names it', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(dir, ['open', '--base', 'relase']);
+
+  assert.equal(result.status, 2);
+  assert.match(String(result.summary), /relase/);
+});
+
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

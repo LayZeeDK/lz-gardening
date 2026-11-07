@@ -98,7 +98,13 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
   };
 }
 
-function openSite(top: string, site: string, base: string | undefined): object {
+function openSite(top: string, site: string, requested: string | undefined): object {
+  const base = resolveBase(baseFacts(top, site, requested));
+
+  if (optionalGit(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`]) === undefined) {
+    throw new Error(`the base ${base} names no branch or commit in the repository; pass --base <branch>`);
+  }
+
   const created = !existsSync(join(site, '.git'));
 
   if (created) {
@@ -107,7 +113,7 @@ function openSite(top: string, site: string, base: string | undefined): object {
     git(site, ['fetch', '-q', '--prune', 'origin']);
   }
 
-  return { site, created, base: resolveBase(baseFacts(top, site, base)) };
+  return { site, created, base };
 }
 
 function commitSite(site: string, message: string): object {
