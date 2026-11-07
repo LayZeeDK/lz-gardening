@@ -16,8 +16,8 @@ interface SiteRun {
   readonly summary: ReadonlyMap<string, unknown>;
 }
 
-function site(cwd: string, args: readonly string[]): SiteRun {
-  const result = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8' });
+function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
+  const result = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env });
   const last = result.stdout.trim().split('\n').at(-1) ?? '';
   const parsed: unknown = last.startsWith('{') ? JSON.parse(last) : {};
   const summary = new Map(typeof parsed === 'object' && parsed !== null ? Object.entries(parsed) : []);
@@ -382,6 +382,17 @@ test('a census file that is not a census stops open and is named, rather than be
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /census\.json/);
+});
+
+test('open run with GIT_DIR set, as from a git hook, plants the site and leaves the repository alone', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(dir, ['open', '--base', 'main'], { ...process.env, GIT_DIR: join(dir, '.git') });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(dir, ['branch', '--show-current']), 'main');
+  assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%s', 'garden']), 'garden: plant');
 });
 
 test('open on an existing site plants nothing new', (t) => {

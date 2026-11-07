@@ -11,8 +11,12 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseCensus } from './census.ts';
 
+// Without the variables that point git at a repository (GIT_DIR from a hook, say), each command acts on its cwd.
+const localVariables = spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' }).stdout.split('\n');
+const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name)));
+
 function git(cwd: string, args: readonly string[]): string {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env });
 
   if (result.status !== 0) {
     throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
@@ -22,13 +26,13 @@ function git(cwd: string, args: readonly string[]): string {
 }
 
 function optionalGit(cwd: string, args: readonly string[]): string | undefined {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env });
 
   return result.status === 0 ? result.stdout.trim() : undefined;
 }
 
 function gitSucceeds(cwd: string, args: readonly string[]): boolean {
-  return spawnSync('git', args, { cwd }).status === 0;
+  return spawnSync('git', args, { cwd, env }).status === 0;
 }
 
 export interface BaseFacts {
