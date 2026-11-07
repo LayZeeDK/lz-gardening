@@ -3,7 +3,8 @@
 Run on the first tick, when the census has no previous run. The census just recorded every current hit as the
 baseline, so nothing in it is "new"; the seed pass queues what the repository already shows instead, so the first
 tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file, first. Queue with the tick's
-step 4 command, `--file` included, and stay in the repository's working directory throughout.
+step 4 command, `--file` included, and stay in the repository's working directory throughout. Run all four steps:
+the records and the history find the weeds the census cannot, so a seed that stops after the baseline misses them.
 
 ## 1. The baseline
 
@@ -11,8 +12,11 @@ On a first census, the census output lists the baseline above its JSON line:
 
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Queue one
   weed per line, `--where <path>`, `--source census:seed`, the note naming what the hits have in common (read a few).
-- `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file. Queue one `duplicate-helper` weed
-  per file, `--source census:seed`, the note saying whether the definitions do the same job (read them).
+- `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
+  in the most files first. Read the definitions; when they do the same job, queue one `duplicate-helper` weed per
+  file, `--source census:seed`, the note naming the copy to keep. Names that only share a word (two different
+  `parse` functions) are not weeds. A last line `<n> more duplicate names not listed` counts the rest; leave them
+  for later ticks.
 
 Done when every `=` line has its weeds queued. No `=` lines means the census found no hits and no duplicates; say so
 in the report.
