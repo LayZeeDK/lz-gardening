@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import { parseCensus } from './census.ts';
 
 function git(cwd: string, args: readonly string[]): string {
@@ -36,12 +37,6 @@ export function resolveBase(facts: BaseFacts): string {
   const remoteDefault = facts.originHead === facts.current ? undefined : facts.originHead;
 
   return facts.base ?? facts.censusRev ?? remoteDefault ?? (facts.branches.includes('main') ? 'main' : 'master');
-}
-
-function argValue(argv: readonly string[], name: string): string | undefined {
-  const index = argv.indexOf(name);
-
-  return index === -1 ? undefined : argv[index + 1];
 }
 
 // A clone with no checkout, its own identity copied from the repository, and an orphan branch that will hold only the
@@ -77,9 +72,9 @@ function recordedRev(site: string): string | undefined {
   return existsSync(census) ? parseCensus(JSON.parse(readFileSync(census, 'utf8')))?.rev : undefined;
 }
 
-function baseFacts(top: string, site: string, argv: readonly string[]): BaseFacts {
+function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {
   return {
-    base: argValue(argv, '--base'),
+    base,
     censusRev: recordedRev(site),
     originHead: optionalGit(top, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])?.replace(
       /^origin\//,
@@ -90,7 +85,7 @@ function baseFacts(top: string, site: string, argv: readonly string[]): BaseFact
   };
 }
 
-function openSite(top: string, site: string, argv: readonly string[]): object {
+function openSite(top: string, site: string, base: string | undefined): object {
   const created = !existsSync(join(site, '.git'));
 
   if (created) {
@@ -99,10 +94,10 @@ function openSite(top: string, site: string, argv: readonly string[]): object {
     git(site, ['fetch', '-q', '--prune', 'origin']);
   }
 
-  return { site, created, base: resolveBase(baseFacts(top, site, argv)) };
+  return { site, created, base: resolveBase(baseFacts(top, site, base)) };
 }
 
-function commitSite(site: string, argv: readonly string[]): object {
+function commitSite(site: string, message: string): object {
   git(site, ['add', '.garden']);
   // `diff --quiet` exits 0 only when nothing differs, which optionalGit reports as a string.
   const nothingStaged = optionalGit(site, ['diff', '--cached', '--quiet']) !== undefined;
@@ -111,15 +106,21 @@ function commitSite(site: string, argv: readonly string[]): object {
     return { committed: false };
   }
 
-  git(site, ['commit', '-q', '-m', argValue(argv, '--message') ?? '']);
+  git(site, ['commit', '-q', '-m', message]);
 
   return { committed: true };
 }
 
 function main(argv: readonly string[], cwd: string): number {
+  const { positionals, values } = parseArgs({
+    args: [...argv],
+    allowPositionals: true,
+    strict: true,
+    options: { base: { type: 'string' }, message: { type: 'string', default: '' } },
+  });
   const top = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
   const site = join(dirname(top), `${basename(top)}.garden`);
-  const summary = argv[0] === 'commit' ? commitSite(site, argv) : openSite(top, site, argv);
+  const summary = positionals[0] === 'commit' ? commitSite(site, values.message) : openSite(top, site, values.base);
   process.stdout.write(`${JSON.stringify(summary)}\n`);
 
   return 0;

@@ -153,6 +153,16 @@ test('commit with nothing new in .garden reports committed false and adds no com
   assert.equal(git(garden, ['rev-list', '--count', 'garden']), '2');
 });
 
+test('a mistyped flag is a usage error, not ignored', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(dir, ['open', '--bsae', 'release']);
+
+  assert.equal(result.status, 2);
+  assert.match(String(result.summary), /--bsae/);
+});
+
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
