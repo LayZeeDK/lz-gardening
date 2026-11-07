@@ -9,11 +9,19 @@ import { commit, git, repo } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
 
-function site(cwd: string, args: readonly string[]): { readonly status: number | null; readonly summary: unknown } {
+interface SiteRun {
+  readonly status: number | null;
+  readonly stderr: string;
+  readonly summary: ReadonlyMap<string, unknown>;
+}
+
+function site(cwd: string, args: readonly string[]): SiteRun {
   const result = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8' });
   const last = result.stdout.trim().split('\n').at(-1) ?? '';
+  const parsed: unknown = last.startsWith('{') ? JSON.parse(last) : {};
+  const summary = new Map(typeof parsed === 'object' && parsed !== null ? Object.entries(parsed) : []);
 
-  return { status: result.status, summary: last.startsWith('{') ? JSON.parse(last) : result.stderr };
+  return { status: result.status, stderr: result.stderr, summary };
 }
 
 test('with nothing recorded and no remote default, the base is main, not the branch checked out', () => {
@@ -67,9 +75,8 @@ test('open without a base reports main while a feature branch is checked out', (
 
   const result = site(dir, ['open']);
 
-  assert.equal(result.status, 0, String(result.summary));
-  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
-  assert.equal(result.summary.base, 'main');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'main');
 });
 
 test('open in a clone reports the remote default branch while a feature branch is checked out', (t) => {
@@ -84,9 +91,8 @@ test('open in a clone reports the remote default branch while a feature branch i
 
   const result = site(clone, ['open']);
 
-  assert.equal(result.status, 0, String(result.summary));
-  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
-  assert.equal(result.summary.base, 'trunk');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'trunk');
 });
 
 test('open without a base reports the base the last census recorded', (t) => {
@@ -102,9 +108,8 @@ test('open without a base reports the base the last census recorded', (t) => {
 
   const result = site(dir, ['open']);
 
-  assert.equal(result.status, 0, String(result.summary));
-  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
-  assert.equal(result.summary.base, 'release');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'release');
 });
 
 test('open refuses a repository with no user.email and plants no site', (t) => {
@@ -115,7 +120,7 @@ test('open refuses a repository with no user.email and plants no site', (t) => {
   const result = site(dir, ['open']);
 
   assert.equal(result.status, 2);
-  assert.match(String(result.summary), /user\.email/);
+  assert.match(result.stderr, /user\.email/);
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
@@ -129,9 +134,8 @@ test('commit records the .garden folder on the garden branch with the given mess
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
-  assert.equal(result.status, 0, String(result.summary));
-  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'committed' in result.summary);
-  assert.equal(result.summary.committed, true);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('committed'), true);
   assert.equal(git(garden, ['log', '-1', '--format=%s']), 'garden: watch abc1234');
   assert.equal(git(garden, ['ls-tree', '-r', '--name-only', 'garden']), '.garden/weeds.jsonl\n.gitignore');
 });
@@ -147,9 +151,8 @@ test('commit with nothing new in .garden reports committed false and adds no com
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
-  assert.equal(result.status, 0, String(result.summary));
-  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'committed' in result.summary);
-  assert.equal(result.summary.committed, false);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('committed'), false);
   assert.equal(git(garden, ['rev-list', '--count', 'garden']), '2');
 });
 
@@ -160,7 +163,7 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   const result = site(dir, ['open', '--bsae', 'release']);
 
   assert.equal(result.status, 2);
-  assert.match(String(result.summary), /--bsae/);
+  assert.match(result.stderr, /--bsae/);
 });
 
 test('an unknown command is a usage error and plants no site', (t) => {
@@ -170,7 +173,7 @@ test('an unknown command is a usage error and plants no site', (t) => {
   const result = site(dir, ['opne']);
 
   assert.equal(result.status, 2);
-  assert.match(String(result.summary), /usage/);
+  assert.match(result.stderr, /usage/);
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
@@ -185,9 +188,8 @@ test('open in a clone with no local main reports origin/main', (t) => {
 
   const result = site(clone, ['open']);
 
-  assert.equal(result.status, 0, String(result.summary));
-  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
-  assert.equal(result.summary.base, 'origin/main');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'origin/main');
 });
 
 test('open with a base that names no branch is an error that names it', (t) => {
@@ -197,7 +199,7 @@ test('open with a base that names no branch is an error that names it', (t) => {
   const result = site(dir, ['open', '--base', 'relase']);
 
   assert.equal(result.status, 2);
-  assert.match(String(result.summary), /relase/);
+  assert.match(result.stderr, /relase/);
 });
 
 test('commit without a message is a usage error and stages nothing', (t) => {
@@ -211,7 +213,7 @@ test('commit without a message is a usage error and stages nothing', (t) => {
   const result = site(dir, ['commit']);
 
   assert.equal(result.status, 2);
-  assert.match(String(result.summary), /--message/);
+  assert.match(result.stderr, /--message/);
   assert.equal(git(garden, ['diff', '--cached', '--name-only']), '');
 });
 
@@ -222,21 +224,20 @@ test('commit before the site exists says to open it first', (t) => {
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
   assert.equal(result.status, 2);
-  assert.match(String(result.summary), /site\.ts open/);
+  assert.match(result.stderr, /site\.ts open/);
 });
 
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
   const first = site(dir, ['open', '--base', 'main']);
-  assert.equal(first.status, 0, String(first.summary));
+  assert.equal(first.status, 0, first.stderr);
   commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
 
   const second = site(dir, ['open', '--base', 'main']);
 
-  assert.equal(second.status, 0, String(second.summary));
-  assert.ok(typeof second.summary === 'object' && second.summary !== null && 'created' in second.summary);
-  assert.equal(second.summary.created, false);
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(second.summary.get('created'), false);
   assert.equal(git(join(dirname(dir), 'repo.garden'), ['rev-list', '--count', 'garden']), '1');
 });
 
@@ -246,14 +247,13 @@ test('open creates the site beside the repository, holding only the plant commit
 
   const result = site(dir, ['open', '--base', 'main']);
 
-  assert.equal(result.status, 0, String(result.summary));
-  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'site' in result.summary);
-  const { summary } = result;
-  assert.ok('created' in summary && 'base' in summary && typeof summary.site === 'string');
+  assert.equal(result.status, 0, result.stderr);
+  const reported = result.summary.get('site');
+  assert.ok(typeof reported === 'string');
   const expected = join(dirname(dir), 'repo.garden');
-  assert.equal(realpathSync.native(summary.site), realpathSync.native(expected));
-  assert.equal(summary.created, true);
-  assert.equal(summary.base, 'main');
+  assert.equal(realpathSync.native(reported), realpathSync.native(expected));
+  assert.equal(result.summary.get('created'), true);
+  assert.equal(result.summary.get('base'), 'main');
   assert.equal(git(expected, ['branch', '--show-current']), 'garden');
   assert.equal(git(expected, ['log', '--format=%s | %an <%ae>']), 'garden: plant | test <test@example.com>');
   assert.equal(git(expected, ['ls-tree', '-r', '--name-only', 'HEAD']), '.gitignore');
