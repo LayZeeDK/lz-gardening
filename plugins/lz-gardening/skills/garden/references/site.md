@@ -54,14 +54,15 @@ pass fetches it into the site by that name (below).
 
 ## Beds (tend passes only)
 
-A garden tick never runs anything in this section or the next. A tend pass runs these from the site. The fetch
-takes the base by the name `site.ts open` reported (`main`, or `origin/main` when only the repository's remote has
-it), and the bed starts from the commit it fetched:
+A garden tick never runs anything in this section or the next. A tend pass runs these against the site from the
+repository's checkout, pointing git at the site with `-C`. Below, `<checkout>` is the repository's checkout and
+`<bed>` is `<site>/beds/<class>`, both full paths. The fetch takes the base by the name `site.ts open` reported
+(`main`, or `origin/main` when only the repository's remote has it), and the bed starts from the commit it fetched:
 
 ```bash
-git fetch -q origin <base>
-git rev-parse FETCH_HEAD
-git worktree add -b garden/<class> beds/<class> FETCH_HEAD
+git -C "<site>" fetch -q origin <base>
+git -C "<site>" rev-parse FETCH_HEAD
+git -C "<site>" worktree add -b garden/<class> "<bed>" FETCH_HEAD
 ```
 
 The commit `git rev-parse` printed is the bed's start, written `<start>` below.
@@ -69,9 +70,9 @@ The commit `git rev-parse` printed is the bed's start, written `<start>` below.
 Dependencies for a bed, Node.js repositories:
 
 - **Link** the repository's `node_modules` when the bed's lockfile is byte-identical to the repository's
-  (`cmp -s "$repo/package-lock.json" beds/<class>/package-lock.json`, or the pnpm or yarn lockfile) and the root
+  (`cmp -s "<checkout>/package-lock.json" "<bed>/package-lock.json"`, or the pnpm or yarn lockfile) and the root
   `package.json` declares no `workspaces` (and there is no `pnpm-workspace.yaml`). On Windows:
-  `cmd //c mklink //J "<bed>\node_modules" "<repo>\node_modules"` with backslash paths; elsewhere `ln -s`.
+  `cmd //c mklink //J "<bed>\node_modules" "<checkout>\node_modules"` with backslash paths; elsewhere `ln -s`.
 - **Install** with the repository's package manager (`npm ci`, `pnpm install --frozen-lockfile`) otherwise, and
   always when the bed changes dependencies. A workspace package resolves through a linked `node_modules` to the
   repository's checkout, so the bed would test the other checkout's code.
@@ -80,9 +81,10 @@ Dependencies for a bed, Node.js repositories:
 ## Cleanup
 
 A bed stays until its branch is merged into the base or a human drops it. Remove one with: unlink `node_modules`
-first (`rm <bed>/node_modules`, no `-r`; on Windows `cmd //c rmdir "<bed>\node_modules"`), then
-`git worktree remove beds/<class>`, then `git branch -D garden/<class>` only once the change has landed: after
-`git fetch -q origin <base>`, `git merge-base --is-ancestor garden/<class> FETCH_HEAD` exits 0, or the base holds
+first (`rm "<bed>/node_modules"`, no `-r`; on Windows `cmd //c rmdir "<bed>\node_modules"`), then
+`git -C "<site>" worktree remove "<bed>"`, then `git -C "<site>" branch -D garden/<class>` only once the change has
+landed: after `git -C "<site>" fetch -q origin <base>`,
+`git -C "<site>" merge-base --is-ancestor garden/<class> FETCH_HEAD` exits 0, or the base holds
 a commit that carries the same change. Deleting the whole site loses the
 queue unless the `garden` branch was fetched into the repository.
 
