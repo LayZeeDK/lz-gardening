@@ -7,7 +7,7 @@
 //     JSON summary line. Writes the new census to --out. Exit 0 on success, 2 on a usage or git error.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by --patterns.
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -365,6 +365,7 @@ async function main(argv: readonly string[]): Promise<number> {
   const deltas = diffCensus(before, after);
 
   if (out !== undefined) {
+    mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, `${JSON.stringify(after, null, 2)}\n`);
   }
 

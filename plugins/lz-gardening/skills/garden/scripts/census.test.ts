@@ -179,6 +179,17 @@ test('the CLI names a helper that became duplicated since the last census, not o
   assert.match(second.stdout, /^\+ duplicate isRecord: src\/a\.ts, src\/b\.ts$/m);
 });
 
+test('the CLI creates the folder it writes the census into', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  const out = join(dirname(dir), 'repo.garden', '.garden', 'census.json');
+
+  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', out], { cwd: dir, encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.sha, git(dir, ['rev-parse', 'HEAD']));
+});
+
 test('the CLI writes the census, and a second run reports what grew', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
