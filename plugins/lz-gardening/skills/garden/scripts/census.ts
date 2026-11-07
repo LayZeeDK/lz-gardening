@@ -226,10 +226,11 @@ const definition =
 const definitionPrefilter =
   '^[[:space:]]*(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
 
+const mirroredToolFolders = '**/.*/**';
+
 /** Top-level function names defined in two or more files, each with its sorted file list. */
 async function findDuplicates(cwd: string, sha: string, exclude: readonly string[]): Promise<Record<string, string[]>> {
-  // Dot-directories hold tool and agent folders (.claude, .github), often byte-copied mirrors of each other on purpose.
-  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', '**/.*/**']);
+  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', mirroredToolFolders]);
   const hits = await grepRevision(cwd, sha, definitionPrefilter, specs, 'definitions');
   const definitions = hits.flatMap((hit) => {
     const parts = splitHit(hit);
@@ -331,20 +332,23 @@ export function diffCensus(before: Census | null, after: Census): PatternDelta[]
   });
 }
 
-// The seed pass's view of a first census: each pattern's 20 files with the most hits, and the 30 duplicate names
-// defined in the most files.
+const seedFilesPerPattern = 20;
+const seedDuplicateNames = 30;
+
 function seedList(census: Census): string[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
     [...Map.groupBy(hits, (hit) => hit.slice(0, hit.indexOf(':')))]
       .map(([path, items]) => ({ path, count: items.length }))
       .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
-      .slice(0, 20)
+      .slice(0, seedFilesPerPattern)
       .map(({ path, count }) => `= [${id}] ${path} ${String(count)}`),
   );
   const duplicates = Object.entries(census.duplicates).sort(
     ([a, aPaths], [b, bPaths]) => bPaths.length - aPaths.length || a.localeCompare(b),
   );
-  const listed = duplicates.slice(0, 30).map(([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`);
+  const listed = duplicates
+    .slice(0, seedDuplicateNames)
+    .map(([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`);
   const rest = duplicates.length - listed.length;
 
   return [...files, ...listed, ...(rest > 0 ? [`${String(rest)} more duplicate names not listed`] : [])];

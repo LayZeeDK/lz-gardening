@@ -1,5 +1,3 @@
-// Throwaway git repositories for the scripts' tests. Each repository sits alone in its own temporary folder, so a
-// test can create siblings beside it.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -15,11 +13,11 @@ export function git(cwd: string, args: readonly string[]): string {
 }
 
 export function repo(t: TestContext): string {
-  const parent = mkdtempSync(join(tmpdir(), 'garden-'));
+  const folderWithRoomForSiblings = mkdtempSync(join(tmpdir(), 'garden-'));
   t.after(() => {
-    rmSync(parent, { recursive: true, force: true });
+    rmSync(folderWithRoomForSiblings, { recursive: true, force: true });
   });
-  const dir = join(parent, 'repo');
+  const dir = join(folderWithRoomForSiblings, 'repo');
   mkdirSync(dir);
   git(dir, ['init', '-q', '-b', 'main']);
   git(dir, ['config', 'user.email', 'test@example.com']);

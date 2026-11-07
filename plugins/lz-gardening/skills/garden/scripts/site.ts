@@ -19,11 +19,14 @@ function git(cwd: string, args: readonly string[]): string {
   return result.stdout.trim();
 }
 
-// For a git command whose failure is an answer rather than an error: a missing ref or config key, or `diff --quiet`.
 function optionalGit(cwd: string, args: readonly string[]): string | undefined {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
 
   return result.status === 0 ? result.stdout.trim() : undefined;
+}
+
+function gitSucceeds(cwd: string, args: readonly string[]): boolean {
+  return spawnSync('git', args, { cwd }).status === 0;
 }
 
 export interface BaseFacts {
@@ -32,18 +35,16 @@ export interface BaseFacts {
   readonly originHead?: string | undefined;
   readonly current?: string | undefined;
   readonly branches: readonly string[];
-  // Branches of origin, without the `origin/` prefix.
-  readonly remoteBranches?: readonly string[] | undefined;
+  readonly originBranchNames?: readonly string[] | undefined;
 }
 
 export function resolveBase(facts: BaseFacts): string {
-  const remote = facts.remoteBranches ?? [];
-  // A branch only origin has is read through its remote-tracking ref.
-  const ref = (name: string): string =>
-    facts.branches.includes(name) || !remote.includes(name) ? name : `origin/${name}`;
+  const originOnly = (name: string): boolean =>
+    !facts.branches.includes(name) && (facts.originBranchNames ?? []).includes(name);
+  const ref = (name: string): string => (originOnly(name) ? `origin/${name}` : name);
   // A clone of a local path takes its origin/HEAD from whatever the source has checked out.
   const remoteDefault = facts.originHead === facts.current ? undefined : facts.originHead;
-  const fallback = facts.branches.includes('main') || remote.includes('main') ? 'main' : 'master';
+  const fallback = facts.branches.includes('main') || originOnly('main') ? 'main' : 'master';
 
   return facts.base === undefined ? (facts.censusRev ?? ref(remoteDefault ?? fallback)) : ref(facts.base);
 }
@@ -59,8 +60,6 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
   return identity;
 }
 
-// A clone with no checkout, its own identity copied from the repository, and an orphan branch that will hold only the
-// gardener's record.
 function plant(top: string, site: string): void {
   const identity = repositoryIdentity(top);
   git(dirname(top), ['clone', '-q', '--no-checkout', top, site]);
@@ -91,7 +90,7 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
     ),
     current: git(top, ['branch', '--show-current']),
     branches: git(top, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n'),
-    remoteBranches: git(top, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'])
+    originBranchNames: git(top, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'])
       .split('\n')
       .map((ref) => ref.replace('refs/remotes/origin/', ''))
       .filter((name) => name !== '' && name !== 'HEAD'),
@@ -101,7 +100,7 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
 function openSite(top: string, site: string, requested: string | undefined): object {
   const base = resolveBase(baseFacts(top, site, requested));
 
-  if (optionalGit(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`]) === undefined) {
+  if (!gitSucceeds(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`])) {
     throw new Error(`the base ${base} names no branch or commit in the repository; pass --base <branch>`);
   }
 
@@ -120,8 +119,7 @@ function commitSite(site: string, message: string): object {
   }
 
   git(site, ['add', '.garden']);
-  // `diff --quiet` exits 0 only when nothing differs, which optionalGit reports as a string.
-  const nothingStaged = optionalGit(site, ['diff', '--cached', '--quiet']) !== undefined;
+  const nothingStaged = gitSucceeds(site, ['diff', '--cached', '--quiet']);
 
   if (nothingStaged) {
     return { committed: false };
