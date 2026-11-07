@@ -202,6 +202,25 @@ test('a first census lists the baseline: files per pattern by hit count, and eve
   ]);
 });
 
+test('the baseline lists at most 20 files per pattern, keeping those with the most hits', (t) => {
+  const dir = repo(t);
+  const files = Object.fromEntries(
+    Array.from({ length: 21 }, (_, index) => [`src/f${String(index).padStart(2, '0')}.ts`, '// eslint-disable\n']),
+  );
+  commit(dir, { ...files, 'src/f20.ts': '// eslint-disable\n// eslint-disable\n' });
+
+  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dir, 'census.json')], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const baseline = result.stdout.split('\n').filter((line) => line.startsWith('= [eslint-disable]'));
+  assert.equal(baseline.length, 20);
+  assert.equal(baseline[0], '= [eslint-disable] src/f20.ts 2');
+  assert.ok(!baseline.includes('= [eslint-disable] src/f19.ts 1'));
+});
+
 test('the CLI creates the folder it writes the census into', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });

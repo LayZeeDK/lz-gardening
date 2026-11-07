@@ -329,12 +329,13 @@ export function diffCensus(before: Census | null, after: Census): PatternDelta[]
   });
 }
 
-// The seed pass's view of a first census: each pattern's files, most hits first, and every duplicate name.
+// The seed pass's view of a first census: each pattern's 20 files with the most hits, and every duplicate name.
 function baselineLines(census: Census): string[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
     [...Map.groupBy(hits, (hit) => hit.slice(0, hit.indexOf(':')))]
       .map(([path, items]) => ({ path, count: items.length }))
       .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
+      .slice(0, 20)
       .map(({ path, count }) => `= [${id}] ${path} ${String(count)}`),
   );
   const duplicates = Object.entries(census.duplicates).map(
