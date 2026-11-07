@@ -24,7 +24,8 @@ be fetched the same way to keep the queue in the repository's history.
 
 ## Open, commit
 
-`scripts/site.ts` does all of the site's git work, run from the repository's checkout:
+`scripts/site.ts` does all of the site's git work, run from the repository's checkout. Run from a linked worktree
+of the repository, it uses the one site beside the main checkout:
 
 - `site.ts open [--base <branch>]` creates the site on first use: a clone with no checkout, the repository's
   `user.name` and `user.email` copied in, and the orphan `garden` branch with one plant commit holding

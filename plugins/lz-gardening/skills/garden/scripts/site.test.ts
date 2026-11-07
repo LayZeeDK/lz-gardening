@@ -281,6 +281,21 @@ test('open from inside a bed is an error and plants no site there', (t) => {
   assert.equal(existsSync(join(garden, 'beds', 'any-type.garden')), false);
 });
 
+test('open from a linked worktree uses the site beside the main checkout', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const worktree = join(dirname(dir), 'agent-x');
+  git(dir, ['worktree', 'add', '-q', '-b', 'agent-x', worktree]);
+
+  const result = site(worktree, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  const reported = result.summary.get('site');
+  assert.ok(typeof reported === 'string');
+  assert.equal(realpathSync.native(reported), realpathSync.native(join(dirname(dir), 'repo.garden')));
+  assert.equal(existsSync(join(dirname(dir), 'agent-x.garden')), false);
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

@@ -164,11 +164,11 @@ function main(argv: readonly string[], cwd: string): number {
     return 2;
   }
 
-  const top = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
-  const sharedGitDir = resolve(top, git(top, ['rev-parse', '--git-common-dir']));
+  const worktree = resolve(git(cwd, ['rev-parse', '--show-toplevel']));
+  const top = dirname(resolve(worktree, git(worktree, ['rev-parse', '--git-common-dir'])));
 
-  if (basename(dirname(sharedGitDir)).endsWith('.garden')) {
-    throw new Error(`${top} is a garden site or bed; run site.ts from the repository's checkout`);
+  if (basename(top).endsWith('.garden')) {
+    throw new Error(`${worktree} is a garden site or bed; run site.ts from the repository's checkout`);
   }
 
   const site = join(dirname(top), `${basename(top)}.garden`);
