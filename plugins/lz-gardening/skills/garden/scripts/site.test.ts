@@ -200,6 +200,21 @@ test('open with a base that names no branch is an error that names it', (t) => {
   assert.match(String(result.summary), /relase/);
 });
 
+test('commit without a message is a usage error and stages nothing', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  site(dir, ['open']);
+  const garden = join(dirname(dir), 'repo.garden');
+  mkdirSync(join(garden, '.garden'));
+  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+
+  const result = site(dir, ['commit']);
+
+  assert.equal(result.status, 2);
+  assert.match(String(result.summary), /--message/);
+  assert.equal(git(garden, ['diff', '--cached', '--name-only']), '');
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

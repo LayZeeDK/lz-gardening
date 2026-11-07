@@ -137,7 +137,9 @@ function main(argv: readonly string[], cwd: string): number {
   });
   const [command] = positionals;
 
-  if (command !== 'open' && command !== 'commit') {
+  const wellFormed = command === 'open' || (command === 'commit' && values.message !== '');
+
+  if (!wellFormed) {
     process.stderr.write('usage: site.ts open [--base <branch>] | site.ts commit --message <text>\n');
 
     return 2;
