@@ -1,0 +1,23 @@
+{
+  "name": "lz-gardening-tooling",
+  "private": true,
+  "type": "module",
+  "description": "Maintainer tooling for the lz-gardening repository: type-check, lint and test the scripts the plugin ships. Not part of the plugin.",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
+    "format:check": "prettier --check .",
+    "test": "node --test \"plugins/lz-gardening/skills/*/scripts/*.test.ts\" \"tools/**/*.test.ts\"",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "eslint": "10.13.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

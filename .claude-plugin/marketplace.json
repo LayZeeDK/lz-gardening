@@ -1,0 +1,14 @@
+{
+  "name": "lz-gardening",
+  "description": "Lars Gyrup Brink Nielsen's gardening plugin for Claude Code.",
+  "owner": {
+    "name": "Lars Gyrup Brink Nielsen"
+  },
+  "plugins": [
+    {
+      "name": "lz-gardening",
+      "source": "./plugins/lz-gardening",
+      "description": "Garden a codebase for agents: watch for weeds, queue them, and turn each recurring weed into a rule so it cannot grow back."
+    }
+  ]
+}

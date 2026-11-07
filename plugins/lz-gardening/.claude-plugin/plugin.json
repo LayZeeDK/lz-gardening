@@ -1,0 +1,13 @@
+{
+  "name": "lz-gardening",
+  "version": "0.1.0",
+  "description": "Garden a codebase for agents: watch for weeds, queue them, and turn each recurring weed into a rule so it cannot grow back.",
+  "author": {
+    "name": "Lars Gyrup Brink Nielsen",
+    "url": "https://github.com/LayZeeDK"
+  },
+  "repository": "https://github.com/LayZeeDK/lz-gardening",
+  "license": "MIT",
+  "icon": "./assets/icon.png",
+  "keywords": ["gardening", "lint", "technical-debt", "agents", "nx", "angular", "typescript", "loop"]
+}
