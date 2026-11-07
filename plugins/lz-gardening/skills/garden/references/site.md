@@ -36,8 +36,8 @@ of the repository, it uses the one site beside the main checkout:
 - `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
   `committed`, false when nothing changed.
 
-The git commands `site.ts` runs (the clone, and every add and commit in the site) run none of the user's git hooks
-and sign nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick
+Every git command `site.ts` runs, from the clone to each commit in the site, runs none of the user's git hooks and
+signs nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick
 that runs unattended.
 
 The census and the queue are written by their own scripts, through `--out` and `--file` paths into the site.

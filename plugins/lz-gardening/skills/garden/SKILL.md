@@ -10,8 +10,6 @@ allowed-tools:
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/site.ts" *)
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/census.ts" *)
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" *)
-  - Bash(git log *)
-  - Bash(git show *)
   - Bash(git ls-tree *)
   - Bash(git rev-parse *)
 ---
@@ -24,8 +22,9 @@ when a check fails, report the command and its output and stop.
 
 Stay in the repository's working directory for the whole tick and run every command as written below, quotes
 included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read
-the repository with the git commands below and the Read, Grep and Glob tools; to search, use the Grep tool
-(`git grep` is not allowed: it can start other programs), and read a file as it is on the base with
+the repository with the git commands below and the Read, Grep and Glob tools. Claude Code runs `git log` and
+`git show` without asking only in read-only forms like the ones below; add no other options to them. To search, use
+the Grep tool (`git grep` is not allowed: it can start other programs), and read a file as it is on the base with
 `git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often another branch than
 `<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through the three
 scripts, which keep the queue and the census in the garden site beside the repository. Anything else (another
@@ -93,7 +92,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --file "<site>/.garden/weeds.jso
   with one weed per file the name is defined in.
 - `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record, or
   `census:seed` in the seed pass. For a census hit, the planting commit is
-  `git log -n 1 --format=%h -S'<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`.
+  `git log -n 1 --format=%h -S '<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`, with a space
+  after `-S`.
 - `--note`: the root cause in one sentence (what the agent was trying to do and which shortcut it took), not the
   symptom. Plain words only: no backticks, `$` or double quotes inside the note, which the shell would run or end.
 - `--layer`: the strongest layer that could stop it growing back, from the catalogue's layer list, when the evidence
