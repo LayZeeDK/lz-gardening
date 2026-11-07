@@ -6,11 +6,11 @@
 // Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { parseCensus } from './census.ts';
+import { readCensus } from './census.ts';
 
 let gitEnvironment: NodeJS.ProcessEnv | undefined;
 
@@ -121,38 +121,13 @@ function plant(top: string, site: string): void {
   renameSync(planting, site);
 }
 
-function recordedRev(site: string): string | undefined {
-  const census = join(site, '.garden', 'census.json');
-
-  if (!existsSync(census)) {
-    return undefined;
-  }
-
-  const unreadable = new Error(`${census} is not a census; remove it, and the next tick records a new one`);
-  let json: unknown;
-
-  try {
-    json = JSON.parse(readFileSync(census, 'utf8'));
-  } catch {
-    throw unreadable;
-  }
-
-  const recorded = parseCensus(json);
-
-  if (recorded === null) {
-    throw unreadable;
-  }
-
-  return recorded.rev;
-}
-
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {
   const originUrl = optionalGit(top, ['remote', 'get-url', 'origin']);
 
   return {
     originIsLocal: originUrl !== undefined && (originUrl.startsWith('file:') || existsSync(resolve(top, originUrl))),
     base,
-    censusRev: base === undefined ? recordedRev(site) : undefined,
+    censusRev: base === undefined ? readCensus(join(site, '.garden', 'census.json'))?.census.rev : undefined,
     originHead: optionalGit(top, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])?.replace(
       /^origin\//,
       '',
@@ -216,6 +191,24 @@ function commitSite(site: string, message: string): object {
   return { committed: true };
 }
 
+function mainCheckout(cwd: string): string {
+  const [gitDir, sharedGitDir] = git(cwd, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--absolute-git-dir',
+    '--git-common-dir',
+  ]).split('\n');
+
+  if (gitDir === sharedGitDir) {
+    return git(cwd, ['rev-parse', '--show-toplevel']);
+  }
+
+  // A linked worktree finds the main checkout first in the worktree list.
+  const [first = ''] = git(cwd, ['worktree', 'list', '--porcelain']).split('\n', 1);
+
+  return first.replace(/^worktree /, '');
+}
+
 function main(argv: readonly string[], cwd: string): number {
   const { positionals, values } = parseArgs({
     args: [...argv],
@@ -236,20 +229,7 @@ function main(argv: readonly string[], cwd: string): number {
     return 2;
   }
 
-  const [gitDir, sharedGitDir] = git(cwd, [
-    'rev-parse',
-    '--path-format=absolute',
-    '--absolute-git-dir',
-    '--git-common-dir',
-  ]).split('\n');
-  // A linked worktree finds the main checkout first in the worktree list.
-  const mainCheckout =
-    gitDir === sharedGitDir
-      ? git(cwd, ['rev-parse', '--show-toplevel'])
-      : git(cwd, ['worktree', 'list', '--porcelain'])
-          .split('\n')[0]
-          ?.replace(/^worktree /, '');
-  const top = resolve(mainCheckout ?? cwd);
+  const top = resolve(mainCheckout(cwd));
 
   if (basename(top).endsWith('.garden')) {
     throw new Error(`${cwd} is in a garden site or bed; run site.ts from the repository's checkout`);
