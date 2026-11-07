@@ -215,6 +215,16 @@ test('commit without a message is a usage error and stages nothing', (t) => {
   assert.equal(git(garden, ['diff', '--cached', '--name-only']), '');
 });
 
+test('commit before the site exists says to open it first', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
+
+  assert.equal(result.status, 2);
+  assert.match(String(result.summary), /site\.ts open/);
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

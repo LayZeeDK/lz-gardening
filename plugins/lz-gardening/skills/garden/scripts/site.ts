@@ -115,6 +115,10 @@ function openSite(top: string, site: string, requested: string | undefined): obj
 }
 
 function commitSite(site: string, message: string): object {
+  if (!existsSync(join(site, '.git'))) {
+    throw new Error(`no garden site at ${site}; run site.ts open first`);
+  }
+
   git(site, ['add', '.garden']);
   // `diff --quiet` exits 0 only when nothing differs, which optionalGit reports as a string.
   const nothingStaged = optionalGit(site, ['diff', '--cached', '--quiet']) !== undefined;
