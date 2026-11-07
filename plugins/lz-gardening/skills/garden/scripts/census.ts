@@ -226,11 +226,11 @@ const definition =
 const definitionPrefilter =
   '^[[:space:]]*(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
 
-const mirroredToolFolders = '**/.*/**';
+const dotDirectories = '**/.*/**';
 
 /** Top-level function names defined in two or more files, each with its sorted file list. */
 async function findDuplicates(cwd: string, sha: string, exclude: readonly string[]): Promise<Record<string, string[]>> {
-  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', mirroredToolFolders]);
+  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', dotDirectories]);
   const hits = await grepRevision(cwd, sha, definitionPrefilter, specs, 'definitions');
   const definitions = hits.flatMap((hit) => {
     const parts = splitHit(hit);

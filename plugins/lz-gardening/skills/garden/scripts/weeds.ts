@@ -311,6 +311,7 @@ function main(argv: readonly string[], now: Date): number {
 
         return 2;
       }
+
       const groups = groupWeeds(openWeeds(rows)).filter((group) => group.open >= min);
       write(`${'class'.padEnd(36)} open places regrown layer first-seen`);
 
