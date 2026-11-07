@@ -11,6 +11,7 @@ const config = {
   checkers: ['typescript'],
   tsconfigFile: 'tsconfig.json',
   reporters: ['clear-text', 'progress', 'html'],
+  thresholds: { high: 100, low: 100, break: 100 },
   mutate: [
     `plugins/lz-gardening/skills/*/scripts/${script}.ts`,
     '!plugins/lz-gardening/skills/*/scripts/*.test.ts',
