@@ -10,9 +10,9 @@ change that makes an existing site, queue or census unreadable is a major change
 
 First release.
 
-- `garden` skill: one watch tick over the repository, recorded in a garden site beside it. Takes a census of weed markers at the base
-  branch, reads what landed since the last tick, and queues each weed with its evidence. The first tick seeds the
-  queue from the census's seed list, the repository's records and its history. Carries its own permission rules: they
+- `garden` skill: one watch tick over the repository, recorded in a garden site beside it. Takes a census of weed
+  markers at the base branch, reads what landed since the last tick, and queues each weed with its evidence. The
+  first tick seeds the queue from the census's seed list, the repository's records and its history. Carries its own permission rules: they
   allow reading its own files and running its own scripts and read-only git commands; anything else falls back to
   your own settings.
 - `tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or

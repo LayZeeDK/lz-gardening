@@ -1,6 +1,7 @@
 // The garden site: a clone beside the repository whose `garden` branch holds the queue and the census.
 // Usage, from the repository:
-//   node site.ts open [--base <branch>]     create the site if missing, resolve the base; prints {site, created, base}
+//   node site.ts open [--base <branch>]     create the site if missing, resolve the base;
+//                                           prints {site, created, base, seeded}
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';

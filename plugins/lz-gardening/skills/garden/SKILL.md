@@ -26,8 +26,9 @@ Stay in the repository's working directory for the whole tick and run every comm
 included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read
 the repository with the git commands below and the Read, Grep and Glob tools; to search, use the Grep tool
 (`git grep` is not allowed: it can start other programs), and read a file as it is on the base with
-`git show <base>:<path>`. Write only through the three scripts, which keep the queue and the census in the garden
-site beside the repository. Anything else (another command, `cd`, a file write, a redirect) falls back to the user's
+`git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often another branch than
+`<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through the three
+scripts, which keep the queue and the census in the garden site beside the repository. Anything else (another command, `cd`, a file write, a redirect) falls back to the user's
 permission settings; a tick cannot stop to ask, so what those settings do not allow is refused, and a refusal stops
 the tick.
 
@@ -59,6 +60,9 @@ Below, `<short sha>` is `sha` shortened with `git rev-parse --short <sha>`.
 - `seeded` was false: run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md` in place of steps 3 to 5,
   whatever the census says; it ends with its own commit and report. A seed pass cut short runs again on the next
   tick.
+- `previousSha` is `null` on a seeded site (its census was removed): there is nothing to compare against. Run
+  `node "${CLAUDE_SKILL_DIR}/scripts/site.ts" commit --message "garden: census <short sha>"`, reply with the one line
+  `garden: census recorded on <base> at <short sha>`, and stop.
 - `sha` equals `previousSha`: nothing landed. Reply with the one line
   `garden: nothing new on <base> since <short sha>`, and stop without committing.
 
@@ -109,7 +113,7 @@ A class with two or more open weeds is ready to tend: several agents took the sa
 and nothing else:
 
 ```text
-garden: <base> <previousSha short>..<sha short>, <n> commits read, <n> skipped
+garden: <base> <short previousSha>..<short sha>, <n> commits read, <n> skipped
 queued <n> (<class> x<n>, ...); regrown: <class or none>
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:tend <class>
 ```

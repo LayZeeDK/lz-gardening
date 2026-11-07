@@ -16,8 +16,8 @@ Two scripts of the garden skill do the site's bookkeeping, run from the reposito
 `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
 call. Commands run from the repository's checkout. Point git at the site or the bed (`<bed>`, the full path
 `<site>/beds/<class>`) with `git -C "<site>"` or `git -C "<bed>"`. Run the repository's own lint, type-check and
-test commands in the bed as one Bash call, `cd "<bed>" && <command>`. `site` and `weeds` find the site from the
-directory they run in, so when the shell is no longer in the checkout, `cd` back to it before calling them.
+test commands in the bed as one Bash call, `cd "<bed>" && <command>`. `site` finds the site from the directory it
+runs in, so when the shell is no longer in the checkout, `cd` back to it before calling `site`.
 
 ## 1. Pick the class
 
@@ -85,8 +85,8 @@ Quote their summary lines.
 ## 7. Commit and close
 
 Commit the bed change with `git -C "<bed>"`, following the repository's commit message convention
-(`git log --oneline -20`),
-one commit per check, holding the check and its clean-up together. Then, from the repository's checkout, close the class and commit the queue:
+(`git log --oneline -20`), one commit per check, holding the check and its clean-up together. Then, from the
+repository's checkout, close the class and commit the queue:
 `weeds close-class --class <class> --by "bed/<class>@<short sha>"`, then
 `site commit --message "garden: tend <class>"`.
 
@@ -94,7 +94,8 @@ one commit per check, holding the check and its clean-up together. Then, from th
 
 - The class, its root cause, and the decision.
 - The check: layer, file, message, and the quoted output that proved it rejects a real weed.
-- Instances fixed, instances baselined, code deleted, and the bed's net line count (`git -C "<bed>" diff --shortstat <start>`); a tend pass usually leaves the codebase shorter.
+- Instances fixed, instances baselined, code deleted, and the bed's net line count
+  (`git -C "<bed>" diff --shortstat <start>`); a tend pass usually leaves the codebase shorter.
 - The checks run in the bed, with their summary lines.
 - A layer 3 proposal, if one would help, described but not built.
 - How to land it, from the repository: `git fetch ../<repo>.garden bed/<class>`, then review and merge the
