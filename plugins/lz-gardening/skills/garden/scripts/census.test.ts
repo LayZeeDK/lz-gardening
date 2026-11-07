@@ -179,6 +179,29 @@ test('the CLI names a helper that became duplicated since the last census, not o
   assert.match(second.stdout, /^\+ duplicate isRecord: src\/a\.ts, src\/b\.ts$/m);
 });
 
+test('a first census lists the baseline: files per pattern by hit count, and every duplicate name', (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n',
+    'src/b.ts': '// eslint-disable-next-line\n// eslint-disable-next-line\nconst b = 1;\n',
+    'src/x.ts': 'export const toKey = (x) => x;\n',
+    'src/y.ts': 'export const toKey = (x) => x;\n',
+  });
+
+  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dir, 'census.json')], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const baseline = result.stdout.split('\n').filter((line) => line.startsWith('= '));
+  assert.deepEqual(baseline, [
+    '= [eslint-disable] src/b.ts 2',
+    '= [eslint-disable] src/a.ts 1',
+    '= duplicate toKey: src/x.ts, src/y.ts',
+  ]);
+});
+
 test('the CLI creates the folder it writes the census into', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });

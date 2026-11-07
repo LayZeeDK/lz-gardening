@@ -3,8 +3,9 @@
 // It reads the revision with `git grep`, so it never checks anything out and works in a clone with no working tree.
 // Usage:
 //   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>]
-//     Prints a table of counts with the change since the previous census at --out, then the new hits, then one
-//     JSON summary line. Writes the new census to --out. Exit 0 on success, 2 on a usage or git error.
+//     Prints a table of counts with the change since the previous census at --out, then the new hits, then, on a
+//     first census, the baseline (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
+//     its folder. Exit 0 on success, 2 on a usage or git error.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by --patterns.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -328,6 +329,21 @@ export function diffCensus(before: Census | null, after: Census): PatternDelta[]
   });
 }
 
+// The seed pass's view of a first census: each pattern's files, most hits first, and every duplicate name.
+function baselineLines(census: Census): string[] {
+  const files = Object.entries(census.hits).flatMap(([id, hits]) =>
+    [...Map.groupBy(hits, (hit) => hit.slice(0, hit.indexOf(':')))]
+      .map(([path, items]) => ({ path, count: items.length }))
+      .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
+      .map(({ path, count }) => `= [${id}] ${path} ${String(count)}`),
+  );
+  const duplicates = Object.entries(census.duplicates).map(
+    ([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`,
+  );
+
+  return [...files, ...duplicates];
+}
+
 function formatDelta(deltas: readonly PatternDelta[]): string {
   const rows = deltas.map((delta) => {
     const change = delta.before === null ? 'new' : String(delta.after - delta.before).replace(/^(?=\d)/, '+');
@@ -381,7 +397,10 @@ async function main(argv: readonly string[]): Promise<number> {
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
   };
-  process.stdout.write(`${[formatDelta(deltas), ...duplicateLines].join('\n')}\n${JSON.stringify(summary)}\n`);
+  const baseline = before === null ? baselineLines(after) : [];
+  process.stdout.write(
+    `${[formatDelta(deltas), ...duplicateLines, ...baseline].join('\n')}\n${JSON.stringify(summary)}\n`,
+  );
 
   return 0;
 }
