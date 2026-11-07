@@ -13,6 +13,10 @@ import { commit, git, repo } from './test-repo.ts';
 const script = join(dirname(fileURLToPath(import.meta.url)), 'census.ts');
 const now = new Date('2026-11-07T12:00:00.000Z');
 
+function census(dir: string, args: readonly string[]): { status: number | null; stdout: string; stderr: string } {
+  return spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: 'utf8' });
+}
+
 const set: PatternSet = {
   exclude: ['**/*.md'],
   patterns: [
@@ -192,7 +196,7 @@ test('the CLI names a helper that became duplicated since the last census, not o
   assert.match(second.stdout, /^\+ duplicate isRecord: src\/a\.ts, src\/b\.ts$/m);
 });
 
-test('a first census prints the seed list: files per pattern by hit count, and every duplicate name', (t) => {
+test('--seed prints the seed list: files per pattern by hit count, and every duplicate name', (t) => {
   const dir = repo(t);
   commit(dir, {
     'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n',
@@ -201,10 +205,7 @@ test('a first census prints the seed list: files per pattern by hit count, and e
     'src/y.ts': 'export const toKey = (x) => x;\n',
   });
 
-  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dir, 'census.json')], {
-    cwd: dir,
-    encoding: 'utf8',
-  });
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const baseline = result.stdout.split('\n').filter((line) => line.startsWith('= '));
@@ -226,10 +227,7 @@ test('the seed list keeps a colon inside a file path', (t) => {
   git(dir, ['update-index', '--add', '--cacheinfo', `100644,${blob.stdout.trim()},src/a:b.ts`]);
   git(dir, ['commit', '-q', '-m', 'colon']);
 
-  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dirname(dir), 'census.json')], {
-    cwd: dir,
-    encoding: 'utf8',
-  });
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dirname(dir), 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^= \[eslint-disable\] src\/a:b\.ts 1$/m);
@@ -242,10 +240,7 @@ test('the seed list names at most 20 files per pattern, keeping those with the m
   );
   commit(dir, { ...files, 'src/f20.ts': '// eslint-disable\n// eslint-disable\n' });
 
-  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dir, 'census.json')], {
-    cwd: dir,
-    encoding: 'utf8',
-  });
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const baseline = result.stdout.split('\n').filter((line) => line.startsWith('= [eslint-disable]'));
@@ -277,10 +272,7 @@ test('the seed list names at most 30 duplicate names, the most widely defined fi
   );
   commit(dir, { ...files, 'src/c.ts': 'function helper31() {}\n' });
 
-  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dir, 'census.json')], {
-    cwd: dir,
-    encoding: 'utf8',
-  });
+  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const listed = result.stdout.split('\n').filter((line) => line.startsWith('= duplicate '));
@@ -312,6 +304,19 @@ test('a census of the commit already recorded leaves the census file as it was',
 
   assert.equal(second.status, 0, second.stderr);
   assert.equal(readFileSync(out, 'utf8'), recorded);
+});
+
+test('--seed prints the seed list even when a census was recorded before, and only then', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n' });
+  const out = join(dirname(dir), 'census.json');
+  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
+
+  const again = census(dir, ['--rev', 'HEAD', '--out', out, '--seed']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.doesNotMatch(first.stdout, /^= /m);
+  assert.match(again.stdout, /^= \[eslint-disable\] src\/a\.ts 1$/m);
 });
 
 test('a census of the recorded commit under another rev records the new rev', (t) => {

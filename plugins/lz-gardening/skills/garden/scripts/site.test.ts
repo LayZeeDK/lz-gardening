@@ -296,6 +296,21 @@ test('open from a linked worktree uses the site beside the main checkout', (t) =
   assert.equal(existsSync(join(dirname(dir), 'agent-x.garden')), false);
 });
 
+test('open reports the site seeded once the garden branch holds a commit past the plant', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const planted = site(dir, ['open', '--base', 'main']);
+  const garden = join(dirname(dir), 'repo.garden');
+  mkdirSync(join(garden, '.garden'));
+  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  site(dir, ['commit', '--message', 'garden: seed abc1234']);
+
+  const seeded = site(dir, ['open', '--base', 'main']);
+
+  assert.equal(planted.summary.get('seeded'), false);
+  assert.equal(seeded.summary.get('seeded'), true);
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

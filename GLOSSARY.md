@@ -51,7 +51,7 @@ _Avoid_: scan, inventory
 A text pattern that marks a weed class the census can count, such as a lint suppression.
 
 **Seed list**:
-What a first census shows the seed pass: for each census pattern, the files with the most hits, and the names
+What the census shows the seed pass: for each census pattern, the files with the most hits, and the names
 defined in the most files.
 _Avoid_: baseline (a baseline is what a check tolerates)
 

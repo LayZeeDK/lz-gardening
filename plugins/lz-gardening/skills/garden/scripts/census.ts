@@ -2,9 +2,9 @@
 // Counts weed markers in the tracked files of one git revision and reports what changed since the last census.
 // It reads the revision with `git grep`, so it never checks anything out and works in a clone with no working tree.
 // Usage:
-//   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>]
-//     Prints a table of counts with the change since the previous census at --out, then the new hits, then, on a
-//     first census, the seed list (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
+//   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]
+//     Prints a table of counts with the change since the previous census at --out, then the new hits, then, with
+//     --seed, the seed list (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
 //     its folder. Exit 0 on success, 2 on a usage or git error.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by --patterns.
 import { spawn } from 'node:child_process';
@@ -369,12 +369,17 @@ async function main(argv: readonly string[]): Promise<number> {
   const { values } = parseArgs({
     args: [...argv],
     strict: true,
-    options: { rev: { type: 'string' }, out: { type: 'string' }, patterns: { type: 'string' } },
+    options: {
+      rev: { type: 'string' },
+      out: { type: 'string' },
+      patterns: { type: 'string' },
+      seed: { type: 'boolean', default: false },
+    },
   });
   const { rev, out, patterns: extraPath } = values;
 
   if (rev === undefined) {
-    process.stderr.write('usage: census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>]\n');
+    process.stderr.write('usage: census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]\n');
 
     return 2;
   }
@@ -406,7 +411,7 @@ async function main(argv: readonly string[]): Promise<number> {
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
   };
-  const seed = before === null ? seedList(after) : [];
+  const seed = values.seed ? seedList(after) : [];
   process.stdout.write(`${[formatDelta(deltas), ...duplicateLines, ...seed].join('\n')}\n${JSON.stringify(summary)}\n`);
 
   return 0;

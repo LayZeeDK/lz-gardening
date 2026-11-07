@@ -1,14 +1,14 @@
 # Seed pass
 
-Run on the first tick, when the census has no previous run. The census just recorded every current hit as its
-starting count, so nothing in it is "new"; the seed pass queues what the repository already shows instead, so the first
+Run on every tick until a seed pass has committed (`site.ts open` reports `seeded: false`). The census records every
+current hit as its starting count, so nothing in it is "new"; the seed pass queues what the repository already shows instead, so the first
 tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file, first. Queue with the tick's
 step 4 command, `--file` included, and stay in the repository's working directory throughout. Run all four steps:
 the records and the history find the weeds the census cannot, so a seed that stops after the seed list misses them.
 
 ## 1. The seed list
 
-On a first census, the census output prints the seed list above its JSON line:
+With `--seed`, the census output prints the seed list above its JSON line:
 
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Queue one
   weed per line, `--where <path>`, `--source census:seed`, the note naming what the hits have in common (read a few).

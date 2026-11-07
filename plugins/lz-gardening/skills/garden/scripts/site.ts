@@ -121,7 +121,9 @@ function openSite(top: string, site: string, requested: string | undefined): obj
     plant(top, site);
   }
 
-  return { site, created, base };
+  const seeded = git(site, ['rev-list', '--count', 'garden']) !== '1';
+
+  return { site, created, base, seeded };
 }
 
 function commitSite(site: string, message: string): object {

@@ -38,8 +38,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/site.ts" open $ARGUMENTS
 ```
 
 It creates the site on the first tick and picks the base on every tick. The last line is JSON: `site` (the site's
-path, written `<site>` below), `created`, and `base` (the branch to watch, such as `main` or `origin/main`, written
-`<base>`). Done when it exits 0.
+path, written `<site>` below), `created`, `base` (the branch to watch, such as `main` or `origin/main`, written
+`<base>`), and `seeded` (false until a seed pass has committed). Done when it exits 0.
 
 ## 2. Take the census
 
@@ -47,12 +47,15 @@ path, written `<site>` below), `created`, and `base` (the branch to watch, such 
 node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base> --out "<site>/.garden/census.json" --patterns "<site>/.garden/patterns.json"
 ```
 
+When `seeded` is false, add `--seed` at the end: the output then holds the seed list.
+
 The last line of output is a JSON summary: `sha`, `previousSha`, `grew`, `newHits`, `newDuplicates`. Lines above it
 starting `+ [<pattern>]` are new hits and lines starting `+ duplicate` are names newly defined in a second file.
 Below, `<short sha>` is `sha` shortened with `git rev-parse --short <sha>`.
 
-- `previousSha` is `null`: this is the first tick. Run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md`
-  in place of steps 3 to 5; it ends with its own commit and report.
+- `seeded` was false: run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md` in place of steps 3 to 5,
+  whatever the census says; it ends with its own commit and report. A seed pass cut short runs again on the next
+  tick.
 - `sha` equals `previousSha`: nothing landed. Reply with the one line
   `garden: nothing new on <base> since <short sha>`, and stop without committing.
 
