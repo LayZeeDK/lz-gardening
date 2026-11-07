@@ -15,6 +15,13 @@ function git(cwd: string, args: readonly string[]): string {
   return result.stdout.trim();
 }
 
+// For a ref that may not exist, such as origin/HEAD in a repository with no remote.
+function optionalGit(cwd: string, args: readonly string[]): string | undefined {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+
+  return result.status === 0 ? result.stdout.trim() : undefined;
+}
+
 export interface BaseFacts {
   readonly base?: string | undefined;
   readonly censusRev?: string | undefined;
@@ -54,6 +61,10 @@ function plant(top: string, site: string): void {
 function baseFacts(top: string, argv: readonly string[]): BaseFacts {
   return {
     base: argValue(argv, '--base'),
+    originHead: optionalGit(top, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])?.replace(
+      /^origin\//,
+      '',
+    ),
     current: git(top, ['branch', '--show-current']),
     branches: git(top, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n'),
   };
