@@ -180,6 +180,10 @@ function openSite(top: string, site: string, requested: string | undefined): obj
 
   const created = !existsSync(join(site, '.git'));
 
+  if (created && existsSync(site)) {
+    throw new Error(`${site} is not a garden site; move it away, and the next tick plants the site there`);
+  }
+
   if (created) {
     plant(top, site);
   }

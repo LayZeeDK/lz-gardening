@@ -340,6 +340,21 @@ test('open reports the site seeded once the garden branch holds a commit past th
   assert.equal(seeded.summary.get('seeded'), true);
 });
 
+test('open refuses a folder where the site goes that is not a site, before cloning anything', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const garden = join(dirname(dir), 'repo.garden');
+  mkdirSync(garden);
+  writeFileSync(join(garden, 'notes.txt'), 'mine\n');
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /repo\.garden is not a garden site/);
+  assert.equal(existsSync(join(dirname(dir), 'repo.garden.planting')), false);
+  assert.equal(readFileSync(join(garden, 'notes.txt'), 'utf8'), 'mine\n');
+});
+
 test('open plants over the leftover of a plant that stopped part way', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
