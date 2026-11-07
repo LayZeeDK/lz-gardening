@@ -5,21 +5,40 @@
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 // Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
 import { spawnSync } from 'node:child_process';
+import type { SpawnSyncReturns } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseCensus } from './census.ts';
 
+let gitEnvironment: NodeJS.ProcessEnv | undefined;
+
 // Without the variables that point git at a repository (GIT_DIR from a hook, say), each command acts on its cwd.
 // Settings passed in the environment (GIT_CONFIG_COUNT and the rest) stay.
-const localVariables = spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' })
-  .stdout.split('\n')
-  .filter((name) => !name.startsWith('GIT_CONFIG'));
-const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name)));
+function gitEnv(): NodeJS.ProcessEnv {
+  if (gitEnvironment === undefined) {
+    const localVariables = runGit(process.cwd(), ['rev-parse', '--local-env-vars'], process.env)
+      .stdout.split('\n')
+      .filter((name) => !name.startsWith('GIT_CONFIG'));
+    gitEnvironment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name)));
+  }
+
+  return gitEnvironment;
+}
+
+function runGit(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = gitEnv()): SpawnSyncReturns<string> {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env });
+
+  if (result.error !== undefined) {
+    throw new Error(`git ${args.join(' ')}: ${result.error.message}`);
+  }
+
+  return result;
+}
 
 function git(cwd: string, args: readonly string[]): string {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env });
+  const result = runGit(cwd, args);
 
   if (result.status !== 0) {
     throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
@@ -29,13 +48,13 @@ function git(cwd: string, args: readonly string[]): string {
 }
 
 function optionalGit(cwd: string, args: readonly string[]): string | undefined {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env });
+  const result = runGit(cwd, args);
 
   return result.status === 0 ? result.stdout.trim() : undefined;
 }
 
 function gitSucceeds(cwd: string, args: readonly string[]): boolean {
-  return spawnSync('git', args, { cwd, env }).status === 0;
+  return runGit(cwd, args).status === 0;
 }
 
 export interface BaseFacts {

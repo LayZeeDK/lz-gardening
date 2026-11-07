@@ -386,6 +386,19 @@ test('a census file that is not a census stops open and is named, rather than be
   assert.match(result.stderr, /census\.json/);
 });
 
+test('open without git on the PATH is an error that names git, not a crash', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const empty = join(dirname(dir), 'empty');
+  mkdirSync(empty);
+  const otherVariables = Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PATH');
+
+  const result = site(dir, ['open', '--base', 'main'], { ...Object.fromEntries(otherVariables), PATH: empty });
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /^site: git /);
+});
+
 test('open run with GIT_DIR set, as from a git hook, plants the site and leaves the repository alone', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
