@@ -174,6 +174,22 @@ test('an unknown command is a usage error and plants no site', (t) => {
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
+test('open in a clone with no local main reports origin/main', (t) => {
+  const source = repo(t);
+  commit(source, { 'src/a.ts': 'export const a = 1;\n' });
+  git(source, ['switch', '-q', '-c', 'milestone/M1']);
+  const clone = join(dirname(source), 'clone');
+  git(dirname(source), ['clone', '-q', source, clone]);
+  git(clone, ['config', 'user.name', 'test']);
+  git(clone, ['config', 'user.email', 'test@example.com']);
+
+  const result = site(clone, ['open']);
+
+  assert.equal(result.status, 0, String(result.summary));
+  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'base' in result.summary);
+  assert.equal(result.summary.base, 'origin/main');
+});
+
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

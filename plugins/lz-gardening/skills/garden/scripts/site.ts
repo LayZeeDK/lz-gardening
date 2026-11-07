@@ -19,7 +19,7 @@ function git(cwd: string, args: readonly string[]): string {
   return result.stdout.trim();
 }
 
-// For a ref that may not exist, such as origin/HEAD in a repository with no remote.
+// For a git command whose failure is an answer rather than an error: a missing ref or config key, or `diff --quiet`.
 function optionalGit(cwd: string, args: readonly string[]): string | undefined {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
 
@@ -32,17 +32,22 @@ export interface BaseFacts {
   readonly originHead?: string | undefined;
   readonly current?: string | undefined;
   readonly branches: readonly string[];
+  // Branches of origin, without the `origin/` prefix.
+  readonly remoteBranches?: readonly string[] | undefined;
 }
 
 export function resolveBase(facts: BaseFacts): string {
+  const remote = facts.remoteBranches ?? [];
+  // A branch only origin has is read through its remote-tracking ref.
+  const ref = (name: string): string =>
+    facts.branches.includes(name) || !remote.includes(name) ? name : `origin/${name}`;
   // A clone of a local path takes its origin/HEAD from whatever the source has checked out.
   const remoteDefault = facts.originHead === facts.current ? undefined : facts.originHead;
+  const fallback = facts.branches.includes('main') || remote.includes('main') ? 'main' : 'master';
 
-  return facts.base ?? facts.censusRev ?? remoteDefault ?? (facts.branches.includes('main') ? 'main' : 'master');
+  return facts.base === undefined ? (facts.censusRev ?? ref(remoteDefault ?? fallback)) : ref(facts.base);
 }
 
-// A clone with no checkout, its own identity copied from the repository, and an orphan branch that will hold only the
-// gardener's record.
 function repositoryIdentity(top: string): readonly (readonly [string, string])[] {
   const identity = ['user.name', 'user.email'].map((key) => [key, optionalGit(top, ['config', key]) ?? ''] as const);
   const missing = identity.find(([, value]) => value === '');
@@ -54,6 +59,8 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
   return identity;
 }
 
+// A clone with no checkout, its own identity copied from the repository, and an orphan branch that will hold only the
+// gardener's record.
 function plant(top: string, site: string): void {
   const identity = repositoryIdentity(top);
   git(dirname(top), ['clone', '-q', '--no-checkout', top, site]);
@@ -84,6 +91,10 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
     ),
     current: git(top, ['branch', '--show-current']),
     branches: git(top, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n'),
+    remoteBranches: git(top, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'])
+      .split('\n')
+      .map((ref) => ref.replace('refs/remotes/origin/', ''))
+      .filter((name) => name !== '' && name !== 'HEAD'),
   };
 }
 
