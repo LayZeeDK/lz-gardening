@@ -15,6 +15,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } fro
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { isRecord } from './census.ts';
 
 export interface AddRow {
   readonly op: 'add';
@@ -52,10 +53,6 @@ export interface Group {
 
 const classPattern = /^[a-z0-9][a-z0-9-]*$/;
 const sourcePattern = /^[a-z][a-z-]*:\S/;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 export function weedId(weedClass: string, where: string, source: string): string {
   return createHash('sha256').update(`${weedClass}\u0000${where}\u0000${source}`).digest('hex').slice(0, 10);

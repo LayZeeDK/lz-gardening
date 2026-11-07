@@ -45,7 +45,7 @@ export interface PatternDelta {
 // Hits are capped per pattern; counts stay exact, and a delta over a capped list can miss new hits.
 const hitCap = 1000;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 

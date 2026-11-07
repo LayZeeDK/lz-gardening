@@ -18,4 +18,18 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['plugins/lz-gardening/skills/*/scripts/**/*.ts', 'tools/**/*.ts'],
+    ignores: ['plugins/lz-gardening/skills/garden/scripts/census.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'FunctionDeclaration[id.name="isRecord"], VariableDeclarator[id.name="isRecord"]',
+          message:
+            'isRecord is defined once, in garden/scripts/census.ts: import { isRecord } from it instead of redefining it.',
+        },
+      ],
+    },
+  },
 );
