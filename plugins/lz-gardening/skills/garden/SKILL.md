@@ -23,8 +23,9 @@ fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:tend`).
 when a check fails, report the command and its output and stop.
 
 Stay in the repository's working directory for the whole tick and run every command as written below, quotes
-included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read the repository with the git commands below and the Read, Grep and Glob tools; write only through the
-three scripts, which keep the queue and the census in the garden site beside the repository. Any other command,
+included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read the repository with the git commands below and the Read, Grep and Glob tools; to search, use the Grep tool
+(`git grep` is not allowed: it can start other programs), and read a file as it is on the base with
+`git show <base>:<path>`. Write only through the three scripts, which keep the queue and the census in the garden site beside the repository. Any other command,
 `cd`, file write or redirect is refused in an unattended tick, and a refusal stops it.
 
 ## 1. Open the site
