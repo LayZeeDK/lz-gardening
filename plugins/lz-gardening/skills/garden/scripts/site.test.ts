@@ -325,6 +325,23 @@ test('open plants over the leftover of a plant that stopped part way', (t) => {
   assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%s']), 'garden: plant');
 });
 
+test('a corrupt census does not stop an explicit base, and is named when it is read', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  site(dir, ['open', '--base', 'main']);
+  const records = join(dirname(dir), 'repo.garden', '.garden');
+  mkdirSync(records);
+  writeFileSync(join(records, 'census.json'), '{"rev":');
+
+  const explicit = site(dir, ['open', '--base', 'main']);
+  const recorded = site(dir, ['open']);
+
+  assert.equal(explicit.status, 0, explicit.stderr);
+  assert.equal(explicit.summary.get('base'), 'main');
+  assert.equal(recorded.status, 2);
+  assert.match(recorded.stderr, /census\.json/);
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

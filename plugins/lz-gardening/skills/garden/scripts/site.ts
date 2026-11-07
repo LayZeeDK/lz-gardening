@@ -82,7 +82,15 @@ function plant(top: string, site: string): void {
 function recordedRev(site: string): string | undefined {
   const census = join(site, '.garden', 'census.json');
 
-  return existsSync(census) ? parseCensus(JSON.parse(readFileSync(census, 'utf8')))?.rev : undefined;
+  if (!existsSync(census)) {
+    return undefined;
+  }
+
+  try {
+    return parseCensus(JSON.parse(readFileSync(census, 'utf8')))?.rev;
+  } catch {
+    throw new Error(`${census} is not valid JSON; pass --base <branch>, or remove it to take a new census`);
+  }
 }
 
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {
@@ -91,7 +99,7 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
   return {
     originIsLocal: originUrl !== undefined && (originUrl.startsWith('file:') || existsSync(resolve(top, originUrl))),
     base,
-    censusRev: recordedRev(site),
+    censusRev: base === undefined ? recordedRev(site) : undefined,
     originHead: optionalGit(top, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])?.replace(
       /^origin\//,
       '',
