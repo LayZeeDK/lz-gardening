@@ -169,7 +169,10 @@ function main(argv: readonly string[], cwd: string): number {
   });
   const [command] = positionals;
 
-  const wellFormed = command === 'open' || (command === 'commit' && values.message !== '');
+  const wellFormed =
+    positionals.length === 1 &&
+    ((command === 'open' && values.message === '') ||
+      (command === 'commit' && values.message !== '' && values.base === undefined));
 
   if (!wellFormed) {
     process.stderr.write('usage: site.ts open [--base <branch>] | site.ts commit --message <text>\n');

@@ -189,6 +189,23 @@ test('an unknown command is a usage error and plants no site', (t) => {
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
+test('an argument the command does not take is a usage error, not ignored', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const branchWithoutFlag = site(dir, ['open', 'develop']);
+  const messageOnOpen = site(dir, ['open', '--message', 'garden: watch']);
+  const planted = existsSync(join(dirname(dir), 'repo.garden'));
+  site(dir, ['open', '--base', 'main']);
+  mkdirSync(join(dirname(dir), 'repo.garden', '.garden'));
+  writeFileSync(join(dirname(dir), 'repo.garden', '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  const baseOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--base', 'main']);
+
+  assert.deepEqual([branchWithoutFlag.status, messageOnOpen.status, baseOnCommit.status], [2, 2, 2]);
+  assert.match(branchWithoutFlag.stderr, /usage/);
+  assert.equal(planted, false);
+});
+
 test('open in a clone with no local main reports origin/main', (t) => {
   const source = repo(t);
   commit(source, { 'src/a.ts': 'export const a = 1;\n' });
