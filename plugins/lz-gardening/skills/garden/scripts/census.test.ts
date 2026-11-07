@@ -290,6 +290,22 @@ test('the CLI creates the folder it writes the census into', (t) => {
   assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.sha, git(dir, ['rev-parse', 'HEAD']));
 });
 
+test('a census file that is not a census is refused by name and left as it was', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  const out = join(dirname(dir), 'census.json');
+
+  for (const text of ['{', '{"rev": 1}\n']) {
+    writeFileSync(out, text);
+
+    const result = census(dir, ['--rev', 'HEAD', '--out', out]);
+
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /census\.json is not a census; remove it/);
+    assert.equal(readFileSync(out, 'utf8'), text);
+  }
+});
+
 test('a census of the commit already recorded leaves the census file as it was', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });

@@ -5,7 +5,8 @@
 //   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]
 //     Prints a table of counts with the change since the previous census at --out, then the new hits, then, with
 //     --seed, the seed list (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
-//     its folder. Exit 0 on success, 2 on a usage or git error.
+//     its folder, when it differs from the one there in more than the time taken. Exit 0 on success, 2 on a usage
+//     or git error or an --out file that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by --patterns.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -278,6 +279,30 @@ export function parseCensus(json: unknown): Census | null {
   };
 }
 
+export function readCensus(path: string): { readonly census: Census; readonly text: string } | null {
+  if (!existsSync(path)) {
+    return null;
+  }
+
+  const text = readFileSync(path, 'utf8');
+  const unreadable = new Error(`${path} is not a census; remove it, and the next tick records a new one`);
+  let json: unknown;
+
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw unreadable;
+  }
+
+  const census = parseCensus(json);
+
+  if (census === null) {
+    throw unreadable;
+  }
+
+  return { census, text };
+}
+
 function stringLists(value: unknown): Record<string, string[]> {
   if (!isRecord(value)) {
     return {};
@@ -388,12 +413,12 @@ async function main(argv: readonly string[]): Promise<number> {
   const extra =
     extraPath !== undefined && existsSync(extraPath) ? parsePatternSet(readJson(extraPath), extraPath) : null;
   const set = mergePatternSets(parsePatternSet(readJson(join(here, 'patterns.json')), 'patterns.json'), extra);
-  const recorded = out !== undefined && existsSync(out) ? readFileSync(out, 'utf8') : null;
-  const before = recorded === null ? null : parseCensus(JSON.parse(recorded));
+  const recorded = out === undefined ? null : readCensus(out);
+  const before = recorded?.census ?? null;
   const after = await takeCensus(process.cwd(), rev, set, new Date());
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
-  const changed = before === null || serialize({ ...after, takenAt: before.takenAt }) !== recorded;
+  const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
 
   if (out !== undefined && changed) {
     mkdirSync(dirname(out), { recursive: true });
