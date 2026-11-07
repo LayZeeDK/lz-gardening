@@ -13,13 +13,13 @@ the checkout, write into a **site** instead: a local clone beside the repository
   .garden/census.json            the last census (scripts/census.ts)
   .garden/patterns.json          optional: this repository's own census patterns
   .gitignore                     ignores /beds/
-  beds/<class>/                  a tend pass's worktree on branch garden/<class>
+  beds/<class>/                  a tend pass's worktree on branch bed/<class>
 ```
 
 `garden` is an orphan branch: it holds only `.garden/` and `.gitignore`, never the repository's code, so its history
-is the gardener's record and nothing else. Bed branches (`garden/<class>`) start from the base branch and carry one
-proposed bed change each. Nothing in the site is pushed. A human brings a bed home from the repository with
-`git fetch ../<repo>.garden garden/<class>` and merges it the way the repository lands work; the `garden` branch can
+is the gardener's record and nothing else. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>` branch beside `garden`)
+start from the base branch and carry one proposed bed change each. Nothing in the site is pushed. A human brings a bed home from the repository with
+`git fetch ../<repo>.garden bed/<class>` and merges it the way the repository lands work; the `garden` branch can
 be fetched the same way to keep the queue in the repository's history.
 
 ## Open, commit
@@ -62,7 +62,7 @@ repository's checkout, pointing git at the site with `-C`. Below, `<checkout>` i
 ```bash
 git -C "<site>" fetch -q origin <base>
 git -C "<site>" rev-parse FETCH_HEAD
-git -C "<site>" worktree add -b garden/<class> "<bed>" FETCH_HEAD
+git -C "<site>" worktree add -b bed/<class> "<bed>" FETCH_HEAD
 ```
 
 The commit `git rev-parse` printed is the bed's start, written `<start>` below.
@@ -82,9 +82,9 @@ Dependencies for a bed, Node.js repositories:
 
 A bed stays until its branch is merged into the base or a human drops it. Remove one with: unlink `node_modules`
 first (`rm "<bed>/node_modules"`, no `-r`; on Windows `cmd //c rmdir "<bed>\node_modules"`), then
-`git -C "<site>" worktree remove "<bed>"`, then `git -C "<site>" branch -D garden/<class>` only once the change has
+`git -C "<site>" worktree remove "<bed>"`, then `git -C "<site>" branch -D bed/<class>` only once the change has
 landed: after `git -C "<site>" fetch -q origin <base>`,
-`git -C "<site>" merge-base --is-ancestor garden/<class> FETCH_HEAD` exits 0, or the base holds
+`git -C "<site>" merge-base --is-ancestor bed/<class> FETCH_HEAD` exits 0, or the base holds
 a commit that carries the same change. Deleting the whole site loses the
 queue unless the `garden` branch was fetched into the repository.
 

@@ -48,14 +48,14 @@ the queue and the census.
   .garden/weeds.jsonl     the queue, append-only
   .garden/census.json     the last census
   .garden/patterns.json   optional extra census patterns for this repository
-  beds/<class>/           a tend pass's worktree, on branch garden/<class>
+  beds/<class>/           a tend pass's worktree, on branch bed/<class>
 ```
 
 Nothing is pushed. To take a tend pass's change, fetch it from the repository and merge it the way you land any
 work:
 
 ```bash
-git fetch ../<repo>.garden garden/<class>
+git fetch ../<repo>.garden bed/<class>
 ```
 
 The watch runs in the `lz-gardener` agent. It reads the repository with read-only git commands and writes only

@@ -2,7 +2,7 @@
 
 This plugin uses [Semantic Versioning](https://semver.org/). Its public interface is: the plugin name; the skill
 names and their slash commands; the agent name; who may invoke each skill; the arguments each skill takes; the
-garden site layout (the `garden` branch, `.garden/` files, `garden/<class>` bed branches); the formats of
+garden site layout (the `garden` branch, `.garden/` files, `bed/<class>` bed branches); the formats of
 `.garden/weeds.jsonl`, `.garden/census.json` and `.garden/patterns.json`; and the class ids a queue may hold. A
 change that makes an existing site, queue or census unreadable is a major change.
 

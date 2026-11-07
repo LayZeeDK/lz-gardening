@@ -7,7 +7,7 @@ argument-hint: '[<class>] [--base <branch>]'
 Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
 
 Every weed pulled becomes a rule, so it cannot grow back. A tend pass writes the rule first, proves it rejects the
-weed, then clears the bed. It works in a bed: a worktree of the garden site on branch `garden/<class>`. It never
+weed, then clears the bed. It works in a bed: a worktree of the garden site on branch `bed/<class>`. It never
 writes to the repository's checkout, never pushes and never merges; a human brings the bed home. Each step ends on
 a check; when one fails, report the command and its output and stop.
 
@@ -87,7 +87,7 @@ Quote their summary lines.
 Commit the bed change with `git -C "<bed>"`, following the repository's commit message convention
 (`git log --oneline -20`),
 one commit per check, holding the check and its clean-up together. Then, from the repository's checkout, close the class and commit the queue:
-`weeds close-class --class <class> --by "garden/<class>@<short sha>"`, then
+`weeds close-class --class <class> --by "bed/<class>@<short sha>"`, then
 `site commit --message "garden: tend <class>"`.
 
 ## 8. Report
@@ -97,5 +97,5 @@ one commit per check, holding the check and its clean-up together. Then, from th
 - Instances fixed, instances baselined, code deleted, and the bed's net line count (`git -C "<bed>" diff --shortstat <start>`); a tend pass usually leaves the codebase shorter.
 - The checks run in the bed, with their summary lines.
 - A layer 3 proposal, if one would help, described but not built.
-- How to land it, from the repository: `git fetch ../<repo>.garden garden/<class>`, then review and merge the
+- How to land it, from the repository: `git fetch ../<repo>.garden bed/<class>`, then review and merge the
   fetched branch the way the repository lands work.
