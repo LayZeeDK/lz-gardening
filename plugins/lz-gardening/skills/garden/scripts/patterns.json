@@ -1,0 +1,88 @@
+{
+  "exclude": [
+    ".garden",
+    ".planning",
+    ".project",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/vendor/**",
+    "**/coverage/**",
+    "**/*.md",
+    "**/*.snap",
+    "**/*.min.js",
+    "**/package-lock.json",
+    "**/pnpm-lock.yaml",
+    "**/yarn.lock"
+  ],
+  "patterns": [
+    {
+      "id": "eslint-disable",
+      "regex": "eslint-disable",
+      "note": "Lint suppression. Rising counts are the ivy; each one needs a reason or a fix."
+    },
+    {
+      "id": "ts-suppress",
+      "regex": "@ts-(ignore|expect-error|nocheck)",
+      "note": "Compiler suppression."
+    },
+    {
+      "id": "any-type",
+      "regex": "(: any\\b|\\bas any\\b|<any>)",
+      "paths": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      "note": "Explicit any."
+    },
+    {
+      "id": "double-cast",
+      "regex": "\\bas unknown as\\b",
+      "paths": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      "note": "A cast through unknown: a type the code could not prove."
+    },
+    {
+      "id": "coverage-ignore",
+      "regex": "(istanbul|c8|v8) ignore",
+      "note": "Coverage suppression."
+    },
+    {
+      "id": "stryker-disable",
+      "regex": "Stryker disable",
+      "note": "Mutation-testing suppression."
+    },
+    {
+      "id": "prettier-ignore",
+      "regex": "prettier-ignore",
+      "note": "Formatter suppression."
+    },
+    {
+      "id": "focused-or-skipped-test",
+      "regex": "\\b(it|test|describe|suite)\\.(only|skip)\\(|\\b(xit|xdescribe|fit|fdescribe)\\(",
+      "note": "A focused or skipped test: it hides failures."
+    },
+    {
+      "id": "hollow-assertion",
+      "regex": "(assert\\.ok\\(true\\)|expect\\(true\\)\\.(toBe|toEqual)\\(true\\)|expect\\(1\\)\\.toBe\\(1\\))",
+      "note": "An assertion that cannot fail."
+    },
+    {
+      "id": "todo-marker",
+      "regex": "\\b(TODO|FIXME|HACK|XXX)\\b",
+      "note": "Deferred work left in code."
+    },
+    {
+      "id": "angular-decorator-io",
+      "regex": "@(Input|Output|ViewChild|ViewChildren|ContentChild|ContentChildren)\\(",
+      "paths": ["**/*.ts"],
+      "note": "Decorator inputs, outputs or queries where signal APIs exist."
+    },
+    {
+      "id": "angular-structural-directive",
+      "regex": "\\*ng(If|For|Switch)\\b",
+      "note": "Structural directives where built-in control flow exists."
+    },
+    {
+      "id": "angular-ngmodule",
+      "regex": "@NgModule\\(",
+      "paths": ["**/*.ts"],
+      "note": "NgModule where standalone APIs exist."
+    }
+  ]
+}
