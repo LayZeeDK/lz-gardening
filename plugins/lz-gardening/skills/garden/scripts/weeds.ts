@@ -305,6 +305,12 @@ function main(argv: readonly string[], now: Date): number {
     }
     case 'groups': {
       const min = Number(values.min);
+
+      if (!Number.isInteger(min) || min < 1) {
+        process.stderr.write(`weeds groups: --min must be a whole number of at least 1, got ${values.min}\n`);
+
+        return 2;
+      }
       const groups = groupWeeds(openWeeds(rows)).filter((group) => group.open >= min);
       write(`${'class'.padEnd(36)} open places regrown layer first-seen`);
 

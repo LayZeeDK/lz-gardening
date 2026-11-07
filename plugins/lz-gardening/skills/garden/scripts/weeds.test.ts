@@ -167,3 +167,15 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   assert.equal(result.code, 2);
   assert.match(result.stderr, /--clas/);
 });
+
+test('groups refuses a --min that is not a positive whole number, rather than hiding every class', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
+  t.after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const result = cli(dir, ['groups', '--min', 'two']);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /--min/);
+});
