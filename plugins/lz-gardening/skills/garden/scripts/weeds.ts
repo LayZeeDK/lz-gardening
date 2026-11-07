@@ -47,7 +47,6 @@ export interface Group {
   readonly places: number;
   readonly regrown: number;
   readonly firstAt: string;
-  readonly lastAt: string;
   readonly layer: number | null;
 }
 
@@ -163,7 +162,6 @@ export function groupWeeds(weeds: readonly Weed[]): Group[] {
         places: new Set(members.map((weed) => weed.where.replace(/:\d+$/, ''))).size,
         regrown: members.reduce((sum, weed) => sum + weed.regrown, 0),
         firstAt: times[0] ?? '',
-        lastAt: times[times.length - 1] ?? '',
         layer: layers.length === 0 ? null : Math.min(...layers),
       };
     })
