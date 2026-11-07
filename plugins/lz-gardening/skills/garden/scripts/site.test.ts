@@ -136,6 +136,23 @@ test('commit records the .garden folder on the garden branch with the given mess
   assert.equal(git(garden, ['ls-tree', '-r', '--name-only', 'garden']), '.garden/weeds.jsonl\n.gitignore');
 });
 
+test('commit with nothing new in .garden reports committed false and adds no commit', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  site(dir, ['open']);
+  const garden = join(dirname(dir), 'repo.garden');
+  mkdirSync(join(garden, '.garden'));
+  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  site(dir, ['commit', '--message', 'garden: watch abc1234']);
+
+  const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
+
+  assert.equal(result.status, 0, String(result.summary));
+  assert.ok(typeof result.summary === 'object' && result.summary !== null && 'committed' in result.summary);
+  assert.equal(result.summary.committed, false);
+  assert.equal(git(garden, ['rev-list', '--count', 'garden']), '2');
+});
+
 test('open on an existing site plants nothing new and fetches what landed in the repository since', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

@@ -104,6 +104,13 @@ function openSite(top: string, site: string, argv: readonly string[]): object {
 
 function commitSite(site: string, argv: readonly string[]): object {
   git(site, ['add', '.garden']);
+  // `diff --quiet` exits 0 only when nothing differs, which optionalGit reports as a string.
+  const nothingStaged = optionalGit(site, ['diff', '--cached', '--quiet']) !== undefined;
+
+  if (nothingStaged) {
+    return { committed: false };
+  }
+
   git(site, ['commit', '-q', '-m', argValue(argv, '--message') ?? '']);
 
   return { committed: true };
