@@ -65,7 +65,19 @@ test('with no census yet, the remote default branch is the base', () => {
 });
 
 test('a remote default that is only the branch checked out in a local source is passed over for main', () => {
-  assert.equal(resolveBase({ originHead: 'feature/x', current: 'feature/x', branches: ['feature/x', 'main'] }), 'main');
+  assert.equal(
+    resolveBase({
+      originHead: 'feature/x',
+      current: 'feature/x',
+      originIsLocal: true,
+      branches: ['feature/x', 'main'],
+    }),
+    'main',
+  );
+});
+
+test('a remote default of a hosted origin is the base even while it is checked out', () => {
+  assert.equal(resolveBase({ originHead: 'develop', current: 'develop', branches: ['develop', 'main'] }), 'develop');
 });
 
 test('open without a base reports main while a feature branch is checked out', (t) => {

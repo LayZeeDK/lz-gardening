@@ -34,6 +34,7 @@ export interface BaseFacts {
   readonly censusRev?: string | undefined;
   readonly originHead?: string | undefined;
   readonly current?: string | undefined;
+  readonly originIsLocal?: boolean | undefined;
   readonly branches: readonly string[];
   readonly originBranchNames?: readonly string[] | undefined;
 }
@@ -43,7 +44,8 @@ export function resolveBase(facts: BaseFacts): string {
     !facts.branches.includes(name) && (facts.originBranchNames ?? []).includes(name);
   const ref = (name: string): string => (originOnly(name) ? `origin/${name}` : name);
   // A clone of a local path takes its origin/HEAD from whatever the source has checked out.
-  const remoteDefault = facts.originHead === facts.current ? undefined : facts.originHead;
+  const remoteDefault =
+    facts.originIsLocal === true && facts.originHead === facts.current ? undefined : facts.originHead;
   const fallback = facts.branches.includes('main') || originOnly('main') ? 'main' : 'master';
 
   return facts.base === undefined ? (facts.censusRev ?? ref(remoteDefault ?? fallback)) : ref(facts.base);
@@ -81,7 +83,10 @@ function recordedRev(site: string): string | undefined {
 }
 
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {
+  const originUrl = optionalGit(top, ['remote', 'get-url', 'origin']);
+
   return {
+    originIsLocal: originUrl !== undefined && (originUrl.startsWith('file:') || existsSync(resolve(top, originUrl))),
     base,
     censusRev: recordedRev(site),
     originHead: optionalGit(top, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])?.replace(

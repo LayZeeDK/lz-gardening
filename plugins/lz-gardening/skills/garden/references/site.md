@@ -39,11 +39,10 @@ The census and the queue are written by their own scripts, through `--out` and `
 ## The base branch
 
 The base is the branch work lands on. `site.ts open` takes, in order: the `--base` argument; the `rev` recorded
-in the site's `.garden/census.json`; the repository's default branch (`origin/HEAD`), unless it names the branch
-checked out in the repository; `main` when that branch exists; else `master`. It never takes the repository's
-checked-out branch: in a repository that agents are working in, that is a feature or milestone branch in flight. A
-repository cloned from a local path reports that very branch as its default, because its `origin/HEAD` follows
-the source's checkout.
+in the site's `.garden/census.json`; the repository's default branch (`origin/HEAD`); `main` when that branch
+exists; else `master`. A repository cloned from a local path is the exception: its `origin/HEAD` follows whatever
+the source had checked out, often a feature or milestone branch in flight, so when it names the branch checked out
+in the repository, `open` passes over it for `main` or `master`.
 
 A branch that only `origin` has (a clone whose checkout is a milestone branch often has `main` only as
 `origin/main`) is reported as `origin/<name>`, and every later command reads that ref. A base that resolves to no
