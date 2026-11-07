@@ -3,7 +3,7 @@
 //   node site.ts open [--base <branch>]     create the site if missing, resolve the base; prints {site, created, base}
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -64,16 +64,19 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
 
 function plant(top: string, site: string): void {
   const identity = repositoryIdentity(top);
-  git(dirname(top), ['clone', '-q', '--no-checkout', top, site]);
+  const planting = `${site}.planting`;
+  rmSync(planting, { recursive: true, force: true });
+  git(dirname(top), ['clone', '-q', '--no-checkout', top, planting]);
 
   for (const [key, value] of identity) {
-    git(site, ['config', key, value]);
+    git(planting, ['config', key, value]);
   }
 
-  git(site, ['switch', '-q', '--orphan', 'garden']);
-  writeFileSync(join(site, '.gitignore'), '/beds/\n');
-  git(site, ['add', '.gitignore']);
-  git(site, ['commit', '-q', '-m', 'garden: plant']);
+  git(planting, ['switch', '-q', '--orphan', 'garden']);
+  writeFileSync(join(planting, '.gitignore'), '/beds/\n');
+  git(planting, ['add', '.gitignore']);
+  git(planting, ['commit', '-q', '-m', 'garden: plant']);
+  renameSync(planting, site);
 }
 
 function recordedRev(site: string): string | undefined {

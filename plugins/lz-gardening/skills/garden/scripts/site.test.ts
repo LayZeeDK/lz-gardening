@@ -311,6 +311,20 @@ test('open reports the site seeded once the garden branch holds a commit past th
   assert.equal(seeded.summary.get('seeded'), true);
 });
 
+test('open plants over the leftover of a plant that stopped part way', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const leftover = join(dirname(dir), 'repo.garden.planting');
+  git(dirname(dir), ['clone', '-q', '--no-checkout', dir, leftover]);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('created'), true);
+  assert.equal(existsSync(leftover), false);
+  assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%s']), 'garden: plant');
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
