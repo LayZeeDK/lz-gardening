@@ -237,6 +237,20 @@ test('open in a clone with no local main reports origin/main', (t) => {
   assert.equal(result.summary.get('base'), 'origin/main');
 });
 
+test('open in a clone takes --base HEAD as the commit checked out, not origin/HEAD', (t) => {
+  const source = repo(t);
+  commit(source, { 'src/a.ts': 'export const a = 1;\n' });
+  const clone = join(dirname(source), 'clone');
+  git(dirname(source), ['clone', '-q', source, clone]);
+  git(clone, ['config', 'user.name', 'test']);
+  git(clone, ['config', 'user.email', 'test@example.com']);
+
+  const result = site(clone, ['open', '--base', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'HEAD');
+});
+
 test('open with a base that names no branch is an error that names it', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
