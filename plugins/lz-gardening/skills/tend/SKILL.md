@@ -17,7 +17,9 @@ Two scripts of the garden skill do the site's bookkeeping, run from the reposito
 call. Point git at the site or the bed (`<bed>`, the full path
 `<site>/beds/<class>`) with `git -C "<site>"` or `git -C "<bed>"`. Run the repository's own lint, type-check and
 test commands in the bed as one Bash call, `cd "<bed>" && <command>`. `site` finds the site from the directory it
-runs in, so when the shell is no longer in the checkout, `cd` back to it before calling `site`.
+runs in, so when the shell is no longer in the checkout, `cd` back to it before calling `site`. Write each command
+out in full, with no shell variables, loops or pipes around it: a tend pass runs under the user's own permission
+rules, and a command they cannot match against those rules asks them every time.
 
 ## 1. Pick the class
 
