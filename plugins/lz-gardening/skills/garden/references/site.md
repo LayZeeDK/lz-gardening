@@ -76,10 +76,9 @@ The commit `git rev-parse` printed is the bed's start, written `<start>` below.
 Dependencies for a bed, Node.js repositories:
 
 - **Link** the repository's `node_modules` when the checkout has one installed, the bed's lockfile is
-  byte-identical to the repository's
-  (`git diff --no-index --stat "<checkout>/package-lock.json" "<bed>/package-lock.json"` prints nothing, or the same
-  for the pnpm or yarn lockfile) and the root
-  `package.json` declares no `workspaces` (and there is no `pnpm-workspace.yaml`). On Windows:
+  byte-identical to the repository's, and the root `package.json` declares no `workspaces` (and there is no
+  `pnpm-workspace.yaml`). The lockfile is identical when this prints nothing (the same for the pnpm or yarn
+  lockfile): `git diff --no-index --stat "<checkout>/package-lock.json" "<bed>/package-lock.json"`. On Windows:
   `cmd //c mklink //J "<bed>\node_modules" "<checkout>\node_modules"` with backslash paths; elsewhere `ln -s`.
 - **Install** with the repository's package manager, pointed at the bed (`npm --prefix "<bed>" ci`,
   `pnpm -C "<bed>" install --frozen-lockfile`) otherwise, and

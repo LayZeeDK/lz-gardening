@@ -19,21 +19,22 @@ a check; when one fails, report the command and its output and stop.
 Two scripts of the garden skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/site.ts"`, and `weeds` is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
-call. Both run without asking.
+call. Both run without asking when the Bash call holds that command alone, as written. `<checkout>` below is the
+repository's checkout, the directory the session started in.
 
 A tend pass runs under the user's own permission rules, and the site lies beside the repository, outside the
 session's working directory. Until it is added as one, Claude Code asks before every read or edit of a bed file and
-refuses `cd`, `cat`, `cmp` and git's file arguments there. So after `site open` (step 1), unless the site is already a
-working directory, ask the user to run `/add-dir <site>` (or to start the session with `--add-dir <site>`) and wait.
-Then:
+refuses `cd`, `cat`, `cmp` and git's file arguments there. So after `site open` (step 1), unless `<site>` is among
+the session's working directories (the session's environment lists any added ones), ask the user to run
+`/add-dir <site>` (or to start the session with `--add-dir <site>`) and wait. Then:
 
 - Stay in the repository's checkout and point each command at the site or the bed (`<bed>`, the full path
   `<site>/beds/<class>`) with its own directory flag: `git -C "<site>"`, `git -C "<bed>"`, and the repository's
   package scripts with `npm --prefix "<bed>" run <script>` (`pnpm -C "<bed>" <script>`,
   `yarn --cwd "<bed>" <script>`). The shell keeps the directory a `cd` leaves it in, and `site` finds the site from
   the checkout.
-- Run a check that takes no directory flag as `cd "<bed>" && <command>`, and the next `site` or `weeds` call as
-  `cd "<checkout>" && <command>`.
+- Run a check that takes no directory flag as `cd "<bed>" && <command>`. Before the next `site` or `weeds` call,
+  run `cd "<checkout>"` as a call of its own.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.
