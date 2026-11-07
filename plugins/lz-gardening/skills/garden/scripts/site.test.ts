@@ -227,6 +227,21 @@ test('commit before the site exists says to open it first', (t) => {
   assert.match(result.stderr, /site\.ts open/);
 });
 
+test('commit in a site that is not on the garden branch is an error and commits nothing', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const garden = join(dirname(dir), 'repo.garden');
+  git(dirname(dir), ['clone', '-q', '--no-checkout', dir, garden]);
+  mkdirSync(join(garden, '.garden'));
+  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+
+  const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /garden branch/);
+  assert.equal(git(garden, ['rev-list', '--count', 'main']), '1');
+});
+
 test('open on an existing site plants nothing new', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });

@@ -118,6 +118,12 @@ function commitSite(site: string, message: string): object {
     throw new Error(`no garden site at ${site}; run site.ts open first`);
   }
 
+  if (git(site, ['branch', '--show-current']) !== 'garden') {
+    throw new Error(
+      `the site at ${site} is not on the garden branch; it was not planted fully, so remove it and run site.ts open`,
+    );
+  }
+
   git(site, ['add', '.garden']);
   const nothingStaged = gitSucceeds(site, ['diff', '--cached', '--quiet']);
 
