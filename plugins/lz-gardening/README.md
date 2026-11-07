@@ -76,7 +76,9 @@ once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` 
 ```
 
 A tend pass runs in your session under your own permissions, and asks for what it needs: it creates a worktree in
-the site and edits files there.
+the site and edits files there. The tend skill's own rules pre-approve only reading the plugin's files and running
+the garden scripts. Because the site lies beside your checkout, a tend pass first asks you to add it as a working
+directory (`/add-dir <site>`); without that, Claude Code asks before every read or edit of a file in the bed.
 
 ## Where a fix goes
 

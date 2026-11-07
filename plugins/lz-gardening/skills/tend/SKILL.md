@@ -2,6 +2,11 @@
 name: tend
 description: Tend one class of queued weeds - find the root cause, add the strongest check that rejects the class, prove it fails on a real weed, then fix or baseline every instance, in a bed branch beside the repository for a human to land. Use for "tend <class>", "pull these weeds", "make this mistake impossible", or a `ready to tend` line from a garden tick.
 argument-hint: '[<class>] [--base <branch>]'
+allowed-tools:
+  - Read(${CLAUDE_SKILL_DIR}/**)
+  - Read(${CLAUDE_PLUGIN_ROOT}/skills/garden/references/**)
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/site.ts" *)
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts" *)
 ---
 
 Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
@@ -11,15 +16,27 @@ weed, then clears the bed. It works in a bed: a worktree of the garden site on b
 writes to the repository's checkout, never pushes and never merges; a human brings the bed home. Each step ends on
 a check; when one fails, report the command and its output and stop.
 
-Two scripts of the garden skill do the site's bookkeeping, run from the repository's checkout: `site` below is
+Two scripts of the garden skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/site.ts"`, and `weeds` is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
-call. Point git at the site or the bed (`<bed>`, the full path
-`<site>/beds/<class>`) with `git -C "<site>"` or `git -C "<bed>"`. Run the repository's own lint, type-check and
-test commands in the bed as one Bash call, `cd "<bed>" && <command>`. `site` finds the site from the directory it
-runs in, so when the shell is no longer in the checkout, `cd` back to it before calling `site`. Write each command
-out in full, with no shell variables, loops or pipes around it: a tend pass runs under the user's own permission
-rules, and a command they cannot match against those rules asks them every time.
+call. Both run without asking.
+
+A tend pass runs under the user's own permission rules, and the site lies beside the repository, outside the
+session's working directory. Until it is added as one, Claude Code asks before every read or edit of a bed file and
+refuses `cd`, `cat`, `cmp` and git's file arguments there. So after `site open` (step 1), unless the site is already a
+working directory, ask the user to run `/add-dir <site>` (or to start the session with `--add-dir <site>`) and wait.
+Then:
+
+- Stay in the repository's checkout and point each command at the site or the bed (`<bed>`, the full path
+  `<site>/beds/<class>`) with its own directory flag: `git -C "<site>"`, `git -C "<bed>"`, and the repository's
+  package scripts with `npm --prefix "<bed>" run <script>` (`pnpm -C "<bed>" <script>`,
+  `yarn --cwd "<bed>" <script>`). The shell keeps the directory a `cd` leaves it in, and `site` finds the site from
+  the checkout.
+- Run a check that takes no directory flag as `cd "<bed>" && <command>`, and the next `site` or `weeds` call as
+  `cd "<checkout>" && <command>`.
+- Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
+- Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
+  so they ask every time.
 
 ## 1. Pick the class
 
