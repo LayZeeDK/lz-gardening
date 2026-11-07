@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 export interface Pattern {
   readonly id: string;
@@ -356,14 +357,13 @@ function formatDelta(deltas: readonly PatternDelta[]): string {
   return [`${'pattern'.padEnd(30)} ${'count'.padStart(6)}  change`, ...rows, '', ...added].join('\n');
 }
 
-function argValue(argv: readonly string[], name: string): string | undefined {
-  const index = argv.indexOf(name);
-
-  return index === -1 ? undefined : argv[index + 1];
-}
-
 async function main(argv: readonly string[]): Promise<number> {
-  const rev = argValue(argv, '--rev');
+  const { values } = parseArgs({
+    args: [...argv],
+    strict: true,
+    options: { rev: { type: 'string' }, out: { type: 'string' }, patterns: { type: 'string' } },
+  });
+  const { rev, out, patterns: extraPath } = values;
 
   if (rev === undefined) {
     process.stderr.write('usage: census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>]\n');
@@ -372,11 +372,9 @@ async function main(argv: readonly string[]): Promise<number> {
   }
 
   const here = dirname(fileURLToPath(import.meta.url));
-  const extraPath = argValue(argv, '--patterns');
   const extra =
     extraPath !== undefined && existsSync(extraPath) ? parsePatternSet(readJson(extraPath), extraPath) : null;
   const set = mergePatternSets(parsePatternSet(readJson(join(here, 'patterns.json')), 'patterns.json'), extra);
-  const out = argValue(argv, '--out');
   const before = out !== undefined && existsSync(out) ? parseCensus(readJson(out)) : null;
   const after = await takeCensus(process.cwd(), rev, set, new Date());
   const deltas = diffCensus(before, after);

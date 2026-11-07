@@ -221,6 +221,19 @@ test('the baseline lists at most 20 files per pattern, keeping those with the mo
   assert.ok(!baseline.includes('= [eslint-disable] src/f19.ts 1'));
 });
 
+test('a mistyped flag is a usage error, not ignored', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+
+  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--ot', join(dir, 'census.json')], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--ot/);
+});
+
 test('the CLI creates the folder it writes the census into', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
