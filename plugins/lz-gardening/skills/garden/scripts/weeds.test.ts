@@ -429,6 +429,16 @@ test('list prints each open weed as id, class, place, source and note, and --cla
   assert.match(all[1] ?? '', / todo-marker src\/b\.ts:2 \[commit:abc1234\] later$/);
 });
 
+test('a word after the command is a usage error and queues nothing', (t) => {
+  const dir = queue(t);
+
+  const result = cli(dir, ['add', 'any-type', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /^usage: weeds\.ts/);
+  assert.equal(readQueue(join(dir, 'weeds.jsonl')).length, 0);
+});
+
 test('an unknown command prints the usage line', (t) => {
   const result = cli(queue(t), ['prune']);
 

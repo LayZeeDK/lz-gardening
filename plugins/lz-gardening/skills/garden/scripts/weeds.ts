@@ -241,7 +241,7 @@ function main(argv: readonly string[], now: Date): number {
       min: { type: 'string', default: '1' },
     },
   });
-  const [command] = positionals;
+  const command = positionals.length === 1 ? positionals[0] : undefined;
   const { file } = values;
   const rows = readQueue(file);
   const write = (line: string): void => {
