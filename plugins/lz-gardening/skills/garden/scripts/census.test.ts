@@ -208,8 +208,8 @@ test('--seed prints the seed list: files per pattern by hit count, and every dup
   const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
-  const baseline = result.stdout.split('\n').filter((line) => line.startsWith('= '));
-  assert.deepEqual(baseline, [
+  const seedLines = result.stdout.split('\n').filter((line) => line.startsWith('= '));
+  assert.deepEqual(seedLines, [
     '= [eslint-disable] src/b.ts 2',
     '= [eslint-disable] src/a.ts 1',
     '= duplicate toKey: src/x.ts, src/y.ts',
@@ -244,10 +244,10 @@ test('the seed list names at most 20 files per pattern, keeping those with the m
   const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, 'census.json'), '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
-  const baseline = result.stdout.split('\n').filter((line) => line.startsWith('= [eslint-disable]'));
-  assert.equal(baseline.length, 20);
-  assert.equal(baseline[0], '= [eslint-disable] src/f20.ts 2');
-  assert.ok(!baseline.includes('= [eslint-disable] src/f19.ts 1'));
+  const seedLines = result.stdout.split('\n').filter((line) => line.startsWith('= [eslint-disable]'));
+  assert.equal(seedLines.length, 20);
+  assert.equal(seedLines[0], '= [eslint-disable] src/f20.ts 2');
+  assert.ok(!seedLines.includes('= [eslint-disable] src/f19.ts 1'));
 });
 
 test('a mistyped flag is a usage error, not ignored', (t) => {

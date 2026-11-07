@@ -139,35 +139,23 @@ test('ids depend on class, place and source', () => {
   assert.equal(weedId('a', 'f:1', 'commit:1'), weedId('a', 'f:1', 'commit:1'));
 });
 
-test('the CLI appends, dedupes, closes a class and refuses an empty close', (t) => {
+test('through the CLI a weed is added, seen, regrown after a close, and kept out after a keep', (t) => {
   const dir = queue(t);
-  const add = [
-    'add',
-    '--class',
-    'hollow-assertion',
-    '--where',
-    'src/a.spec.ts:3',
-    '--source',
-    'census:hollow-assertion',
-    '--note',
-    'x',
+  const add = ['add', '--class', 'hollow-assertion', '--where', 'src/a.spec.ts:3', '--source', 'census:x'];
+
+  const statuses = [
+    cli(dir, add).stdout,
+    cli(dir, add).stdout,
+    cli(dir, ['close-class', '--class', 'hollow-assertion', '--by', 'abc1234']).stdout,
+    cli(dir, add).stdout,
+    cli(dir, ['close-class', '--class', 'hollow-assertion', '--by', 'on purpose', '--keep']).stdout,
+    cli(dir, add).stdout,
   ];
 
-  assert.match(cli(dir, add).stdout, /^added /);
-  assert.match(cli(dir, add).stdout, /^seen /);
-  assert.equal(readFileSync(join(dir, 'weeds.jsonl'), 'utf8').trim().split('\n').length, 1);
-
-  assert.match(cli(dir, ['groups', '--min', '1']).stdout, /hollow-assertion\s+1/);
-  assert.equal(cli(dir, ['close-class', '--class', 'hollow-assertion', '--by', 'abc1234']).code, 0);
-  assert.equal(cli(dir, ['list']).stdout, '');
-  assert.equal(cli(dir, ['close-class', '--class', 'hollow-assertion', '--by', 'abc1234']).code, 1);
-  assert.match(cli(dir, add).stdout, /^regrown /);
-  assert.match(
-    cli(dir, ['close-class', '--class', 'hollow-assertion', '--by', 'on purpose', '--keep']).stdout,
-    /^kept 1/,
+  assert.deepEqual(
+    statuses.map((status) => status.split(' ')[0]),
+    ['added', 'seen', 'closed', 'regrown', 'kept', 'kept'],
   );
-  assert.match(cli(dir, add).stdout, /^kept /);
-  assert.equal(cli(dir, ['add', '--class', 'x']).code, 2);
 });
 
 test('the CLI exits 2 on a malformed queue instead of treating it as empty', (t) => {

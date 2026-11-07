@@ -26,7 +26,6 @@ export function repo(t: TestContext): string {
   git(dir, ['init', '-q', '-b', 'main']);
   git(dir, ['config', 'user.email', 'test@example.com']);
   git(dir, ['config', 'user.name', 'test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
 
   return dir;
 }
