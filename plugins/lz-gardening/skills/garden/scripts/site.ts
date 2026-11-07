@@ -13,21 +13,26 @@ import { parseArgs } from 'node:util';
 import { readCensus } from './census.ts';
 
 let gitEnvironment: NodeJS.ProcessEnv | undefined;
+const settingsInEnvironment = ['GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
 
 // Without the variables that point git at a repository (GIT_DIR from a hook, say), each command acts on its cwd.
-// Settings passed in the environment (GIT_CONFIG_COUNT and the rest) stay.
+// Settings passed in the environment stay.
 function gitEnv(): NodeJS.ProcessEnv {
   if (gitEnvironment === undefined) {
-    const localVariables = runGit(process.cwd(), ['rev-parse', '--local-env-vars'], process.env)
+    const localVariables = spawnGit(process.cwd(), ['rev-parse', '--local-env-vars'], process.env)
       .stdout.split('\n')
-      .filter((name) => !name.startsWith('GIT_CONFIG'));
+      .filter((name) => !settingsInEnvironment.includes(name));
     gitEnvironment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name)));
   }
 
   return gitEnvironment;
 }
 
-function runGit(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = gitEnv()): SpawnSyncReturns<string> {
+function runGit(cwd: string, args: readonly string[]): SpawnSyncReturns<string> {
+  return spawnGit(cwd, args, gitEnv());
+}
+
+function spawnGit(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8', env });
 
   if (result.error !== undefined) {
@@ -98,13 +103,17 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
   return identity;
 }
 
-// The site is the plugin's own clone. The user's hooks and commit signing are for their own commits, and a signing
-// passphrase would stop a tick that runs unattended.
-function commitGarden(dir: string, message: string): void {
-  git(dir, ['-c', 'commit.gpgsign=false', 'commit', '-q', '--no-verify', '-m', message]);
+// The site is the plugin's own clone. The user's hooks and commit signing are for their own commits, and a hook or a
+// signing passphrase would stop a tick that runs unattended. The hooks folder named here does not exist.
+function siteGit(dir: string, args: readonly string[]): void {
+  git(dir, ['-c', `core.hooksPath=${join(dir, '.git', 'no-hooks')}`, '-c', 'commit.gpgsign=false', ...args]);
 }
 
 function plant(top: string, site: string): void {
+  if (existsSync(site)) {
+    throw new Error(`${site} is not a garden site; move it away, and the next tick plants the site there`);
+  }
+
   const identity = repositoryIdentity(top);
   const planting = `${site}.planting`;
   rmSync(planting, { recursive: true, force: true });
@@ -114,10 +123,10 @@ function plant(top: string, site: string): void {
     git(planting, ['config', key, value]);
   }
 
-  git(planting, ['switch', '-q', '--orphan', 'garden']);
+  siteGit(planting, ['switch', '-q', '--orphan', 'garden']);
   writeFileSync(join(planting, '.gitignore'), '/beds/\n');
   git(planting, ['add', '.gitignore']);
-  commitGarden(planting, 'garden: plant');
+  siteGit(planting, ['commit', '-q', '-m', 'garden: plant']);
   renameSync(planting, site);
 }
 
@@ -155,10 +164,6 @@ function openSite(top: string, site: string, requested: string | undefined): obj
 
   const created = !existsSync(join(site, '.git'));
 
-  if (created && existsSync(site)) {
-    throw new Error(`${site} is not a garden site; move it away, and the next tick plants the site there`);
-  }
-
   if (created) {
     plant(top, site);
   }
@@ -186,7 +191,7 @@ function commitSite(site: string, message: string): object {
     return { committed: false };
   }
 
-  commitGarden(site, message);
+  siteGit(site, ['commit', '-q', '-m', message]);
 
   return { committed: true };
 }

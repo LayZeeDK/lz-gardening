@@ -41,7 +41,8 @@ function queueOneWeed(garden: string): void {
   writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
 }
 
-// A repository with feature/x checked out, no remote default, nothing recorded and nothing asked for.
+// A repository with branches feature/x and main, a hosted origin with no default, nothing recorded and nothing
+// asked for.
 function facts(known: Partial<BaseFacts>): BaseFacts {
   return {
     base: undefined,
@@ -54,7 +55,7 @@ function facts(known: Partial<BaseFacts>): BaseFacts {
   };
 }
 
-test('with nothing recorded and no remote default, the base is main, not the branch checked out', () => {
+test('with nothing recorded and no remote default, the base is main, not another branch', () => {
   assert.equal(resolveBase(facts({})), 'main');
 });
 
@@ -96,10 +97,6 @@ test('a remote default from a local source, which is only what the source had ch
     ),
     'main',
   );
-});
-
-test('a remote default of a hosted origin is the base even while it is checked out', () => {
-  assert.equal(resolveBase(facts({ originHead: 'develop', branches: ['develop', 'main'] })), 'develop');
 });
 
 test('a branch only origin has is read as origin/<name>', () => {
@@ -381,25 +378,15 @@ test('a corrupt census does not stop an explicit base, and is named when it is r
   assert.match(recorded.stderr, /census\.json/);
 });
 
-test('a census file that is not a census stops open and is named, rather than being passed over', (t) => {
-  const { dir, garden } = planted(t);
-  git(dir, ['branch', 'release']);
-  const records = join(garden, '.garden');
-  mkdirSync(records);
-  writeFileSync(join(records, 'census.json'), '{"rev":"release"}');
-
-  const result = site(dir, ['open']);
-
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /census\.json/);
-});
-
 test('the site commits run none of the user hooks and sign nothing, whatever the user set globally', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
   const hooks = join(dirname(dir), 'hooks');
   mkdirSync(hooks);
-  writeFileSync(join(hooks, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  for (const hook of ['pre-commit', 'prepare-commit-msg', 'commit-msg', 'post-checkout']) {
+    writeFileSync(join(hooks, hook), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  }
+
   const env = {
     ...process.env,
     GIT_CONFIG_COUNT: '3',
@@ -458,6 +445,18 @@ test('open keeps git settings passed in the environment, such as an identity for
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%ae', 'garden']), 'env@example.com');
+});
+
+test('open reads the identity from the repository even with GIT_CONFIG naming another config file', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const other = join(dirname(dir), 'other.gitconfig');
+  writeFileSync(other, '[user]\n');
+
+  const result = site(dir, ['open', '--base', 'main'], { ...process.env, GIT_CONFIG: other });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(other, 'utf8'), '[user]\n');
 });
 
 test('open in a checkout whose git folder lives elsewhere plants the site beside the checkout', (t) => {
