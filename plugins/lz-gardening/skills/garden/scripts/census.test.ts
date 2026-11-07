@@ -247,6 +247,28 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   assert.match(result.stderr, /--ot/);
 });
 
+test('the baseline lists at most 30 duplicate names, the most widely defined first, and counts the rest', (t) => {
+  const dir = repo(t);
+  const files = Object.fromEntries(
+    Array.from({ length: 32 }, (_, index) => index).flatMap((index) => [
+      [`src/a${String(index)}.ts`, `function helper${String(index)}() {}\n`] as const,
+      [`src/b${String(index)}.ts`, `function helper${String(index)}() {}\n`] as const,
+    ]),
+  );
+  commit(dir, { ...files, 'src/c.ts': 'function helper31() {}\n' });
+
+  const result = spawnSync(process.execPath, [script, '--rev', 'HEAD', '--out', join(dir, 'census.json')], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const listed = result.stdout.split('\n').filter((line) => line.startsWith('= duplicate '));
+  assert.equal(listed.length, 30);
+  assert.equal(listed[0], '= duplicate helper31: src/a31.ts, src/b31.ts, src/c.ts');
+  assert.match(result.stdout, /^2 more duplicate names not listed$/m);
+});
+
 test('the CLI creates the folder it writes the census into', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });

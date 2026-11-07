@@ -331,7 +331,8 @@ export function diffCensus(before: Census | null, after: Census): PatternDelta[]
   });
 }
 
-// The seed pass's view of a first census: each pattern's 20 files with the most hits, and every duplicate name.
+// The seed pass's view of a first census: each pattern's 20 files with the most hits, and the 30 duplicate names
+// defined in the most files.
 function baselineLines(census: Census): string[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
     [...Map.groupBy(hits, (hit) => hit.slice(0, hit.indexOf(':')))]
@@ -340,11 +341,13 @@ function baselineLines(census: Census): string[] {
       .slice(0, 20)
       .map(({ path, count }) => `= [${id}] ${path} ${String(count)}`),
   );
-  const duplicates = Object.entries(census.duplicates).map(
-    ([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`,
+  const duplicates = Object.entries(census.duplicates).sort(
+    ([a, aPaths], [b, bPaths]) => bPaths.length - aPaths.length || a.localeCompare(b),
   );
+  const listed = duplicates.slice(0, 30).map(([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`);
+  const rest = duplicates.length - listed.length;
 
-  return [...files, ...duplicates];
+  return [...files, ...listed, ...(rest > 0 ? [`${String(rest)} more duplicate names not listed`] : [])];
 }
 
 function formatDelta(deltas: readonly PatternDelta[]): string {
