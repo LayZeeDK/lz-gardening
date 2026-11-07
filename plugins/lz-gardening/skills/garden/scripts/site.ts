@@ -125,7 +125,12 @@ export function renameRetrying(
   {
     rename = renameSync,
     wait = pause,
-  }: { readonly rename?: (from: string, to: string) => void; readonly wait?: () => void } = {},
+    platform = process.platform,
+  }: {
+    readonly rename?: (from: string, to: string) => void;
+    readonly wait?: () => void;
+    readonly platform?: NodeJS.Platform;
+  } = {},
 ): void {
   for (let tries = 1; ; tries += 1) {
     try {
@@ -133,7 +138,8 @@ export function renameRetrying(
 
       return;
     } catch (error: unknown) {
-      const locked = error instanceof Error && 'code' in error && lockCodes.includes(error.code);
+      const locked =
+        platform === 'win32' && error instanceof Error && 'code' in error && lockCodes.includes(error.code);
 
       if (!locked || tries === 20) {
         throw error;

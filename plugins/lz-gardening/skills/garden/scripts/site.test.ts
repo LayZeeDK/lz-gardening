@@ -222,11 +222,13 @@ test('an argument the command does not take is a usage error, not ignored', (t) 
   assert.equal(plantedAnyway, false);
 });
 
-// A rename that fails with each given error code in turn, then goes through. Renames and waits go to one log.
+// A rename on Windows that fails with each given error code in turn, then goes through. Renames and waits go to
+// one log.
 function renameFailing(...codes: readonly string[]): {
   readonly calls: string[];
   readonly rename: (from: string, to: string) => void;
   readonly wait: () => void;
+  readonly platform: NodeJS.Platform;
 } {
   const calls: string[] = [];
   let tries = 0;
@@ -240,7 +242,7 @@ function renameFailing(...codes: readonly string[]): {
     }
   };
 
-  return { calls, rename, wait: () => calls.push('wait') };
+  return { calls, rename, wait: () => calls.push('wait'), platform: 'win32' };
 }
 
 test('a rename that nothing holds up runs once', () => {
@@ -268,10 +270,10 @@ test('a rename held up as busy or access denied is waited out like any file lock
 });
 
 test('a file lock is waited out for real time when no wait is given', () => {
-  const { rename } = renameFailing('EPERM');
+  const { rename, platform } = renameFailing('EPERM');
   const started = performance.now();
 
-  renameRetrying('a', 'b', { rename });
+  renameRetrying('a', 'b', { rename, platform });
 
   assert.ok(performance.now() - started >= 200);
 });
@@ -291,6 +293,15 @@ test('a rename error that is not a file lock is thrown at once', () => {
   assert.throws(() => {
     renameRetrying('a', 'b', standIn);
   }, /ENOENT/);
+  assert.deepEqual(standIn.calls, ['a->b']);
+});
+
+test('on Linux and macOS a permission error from a rename is thrown at once, not waited out', () => {
+  const standIn = renameFailing('EPERM');
+
+  assert.throws(() => {
+    renameRetrying('a', 'b', { ...standIn, platform: 'linux' });
+  }, /EPERM/);
   assert.deepEqual(standIn.calls, ['a->b']);
 });
 
