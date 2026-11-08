@@ -20,7 +20,7 @@ export default tseslint.config(
   },
   {
     files: ['plugins/lz-gardening/skills/*/scripts/**/*.ts', 'tools/**/*.ts'],
-    ignores: ['plugins/lz-gardening/skills/garden/scripts/census.ts'],
+    ignores: ['plugins/lz-gardening/skills/lz-garden/scripts/census.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

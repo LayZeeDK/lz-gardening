@@ -1,12 +1,12 @@
 ---
-name: tend
+name: lz-tend
 description: Tend one class of queued weeds - find the root cause, add the strongest check that rejects the class, prove it fails on a real weed, then fix or baseline every instance, in a bed branch beside the repository for a human to land. Use for "tend <class>", "pull these weeds", "make this mistake impossible", or a `ready to tend` line from a garden tick.
 argument-hint: '[<class>] [--base <branch>]'
 allowed-tools:
   - Read(${CLAUDE_SKILL_DIR}/**)
-  - Read(${CLAUDE_PLUGIN_ROOT}/skills/garden/references/**)
-  - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/site.ts" *)
-  - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts" *)
+  - Read(${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/**)
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts" *)
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/weeds.ts" *)
 ---
 
 Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
@@ -16,9 +16,9 @@ weed, then clears the bed. It works in a bed: a worktree of the garden site on b
 writes to the repository's checkout, never pushes and never merges; a human brings the bed home. Each step ends on
 a check; when one fails, report the command and its output and stop.
 
-Two scripts of the garden skill do the site's bookkeeping: `site` below is
-`node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/site.ts"`, and `weeds` is
-`node "${CLAUDE_PLUGIN_ROOT}/skills/garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
+Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
+`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
+`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
 call. Both run without asking when the Bash call holds that command alone, as written. `<checkout>` below is the
 repository's checkout, the directory the session started in.
 
@@ -42,7 +42,7 @@ the session's working directories (the session's environment lists any added one
 ## 1. Pick the class
 
 Run `site open`, passing `--base <branch>` when the arguments name one; its JSON line names `<site>` and `<base>`
-(`${CLAUDE_PLUGIN_ROOT}/skills/garden/references/site.md` explains both). With no class argument, run
+(`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` explains both). With no class argument, run
 `weeds groups --min 2` and take the first class other than `stale-verification` and `repeated-lesson`, which are
 not tended directly (step 2); say which. When it lists no class, report `nothing ready to tend` and stop. Then
 `weeds list --class <class>`. Done when you hold the open weeds of one class.
@@ -69,7 +69,7 @@ Then decide, and say which:
 ## 3. Choose the layer
 
 Take the strongest layer that can hold the class, from the layer list in
-`${CLAUDE_PLUGIN_ROOT}/skills/garden/references/weeds.md`. `${CLAUDE_SKILL_DIR}/references/checks.md` lists, per stack,
+`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/weeds.md`. `${CLAUDE_SKILL_DIR}/references/checks.md` lists, per stack,
 the checks that hold common classes; read the rows for the repository's stack. Prefer, in order: change the code so
 the weed cannot be written (one helper, one paved road, delete the bad examples); a type or compiler flag; a lint
 rule whose message names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
@@ -79,7 +79,7 @@ Done when you can name the check, where it lives, and the message it prints.
 
 ## 4. Make the bed
 
-Create the bed worktree and its dependencies as `${CLAUDE_PLUGIN_ROOT}/skills/garden/references/site.md` describes
+Create the bed worktree and its dependencies as `${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes
 under "Beds", and keep the `<start>` commit it names. Done when the repository's own
 lint, type-check and test commands run in the bed (read them from `package.json`, `nx.json` and CI config); note
 any that fail before your change, so they are not blamed on it.

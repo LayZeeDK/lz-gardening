@@ -44,7 +44,7 @@ export interface PatternDelta {
 
 // Hits are capped per pattern; counts stay exact, and a delta over a capped list can miss new hits.
 const hitCap = 1000;
-// The garden skill allows this script with any arguments, so it writes nowhere but a garden census.
+// The lz-garden skill allows this script with any arguments, so it writes nowhere but a garden census.
 const censusPattern = /[\\/]\.garden[\\/]census\.json$/;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

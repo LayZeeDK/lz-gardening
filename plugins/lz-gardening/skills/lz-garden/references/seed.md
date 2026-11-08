@@ -61,7 +61,7 @@ garden: seeded <base> at <short sha>
 census: <pattern> <count>, ... (patterns with hits only)
 queued <n> (<class> x<n>, ...)
 no check behind: <class>, ... (or none)
-ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:tend <class>
+ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 ```
 
 Leave out the `ready to tend` line when no class has two open weeds.

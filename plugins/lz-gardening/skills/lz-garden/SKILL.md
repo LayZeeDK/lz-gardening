@@ -1,6 +1,6 @@
 ---
-name: garden
-description: Watch a repository for weeds (copied shortcuts, creeping suppressions, duplicate helpers, hollow tests, lessons written down twice) and queue them with evidence, changing no code. Use for a garden tick, "watch this repo for weeds", "check the garden", or `/loop /lz-gardening:garden`. The first tick seeds the queue from the repository's history.
+name: lz-garden
+description: Watch a repository for weeds (copied shortcuts, creeping suppressions, duplicate helpers, hollow tests, lessons written down twice) and queue them with evidence, changing no code. Use for a garden tick, "watch this repo for weeds", "check the garden", or `/loop /lz-gardening:lz-garden`. The first tick seeds the queue from the repository's history.
 argument-hint: '[--base <branch>]'
 context: fork
 agent: lz-gardening:lz-gardener
@@ -17,7 +17,7 @@ allowed-tools:
 Run one garden tick on the repository in the current working directory. Arguments: $ARGUMENTS
 
 A tick watches what landed on the base branch since the last tick and queues each weed with its evidence. It
-fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:tend`). Every step below ends on a check;
+fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:lz-tend`). Every step below ends on a check;
 when a check fails, report the command and its output and stop.
 
 Stay in the repository's working directory for the whole tick and run every command as written below, quotes
@@ -115,7 +115,7 @@ and nothing else:
 ```text
 garden: <base> <short previousSha>..<short sha>, <n> commits read, <n> skipped
 queued <n> (<class> x<n>, ...); regrown: <class or none>
-ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:tend <class>
+ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 ```
 
 Leave out the `ready to tend` line when no class has two open weeds. Done when `site.ts commit` exits 0 and its

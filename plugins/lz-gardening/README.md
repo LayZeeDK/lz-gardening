@@ -22,15 +22,15 @@ no dependencies).
 
 ## Use
 
-| Command                                          | What it does                                                                                                                                                                                                                |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/lz-gardening:garden [--base <branch>]`         | One watch tick: census the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the census, the repository's records and its history. |
-| `/lz-gardening:tend [<class>] [--base <branch>]` | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                                       |
+| Command                                             | What it does                                                                                                                                                                                                                |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/lz-gardening:lz-garden [--base <branch>]`         | One watch tick: census the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the census, the repository's records and its history. |
+| `/lz-gardening:lz-tend [<class>] [--base <branch>]` | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                                       |
 
 Run the watch on a loop and tend by hand:
 
 ```text
-/loop 2h /lz-gardening:garden
+/loop 2h /lz-gardening:lz-garden
 ```
 
 A tick that finds nothing replies with one line. A tick that finds a class with two or more open weeds ends with
@@ -65,19 +65,19 @@ their report; they never build them.
 
 ## Permissions
 
-The garden skill carries its own permission rules. They pre-approve what a tick needs: reading the skill's own
+The `lz-garden` skill carries its own permission rules. They pre-approve what a tick needs: reading the skill's own
 files, running its own scripts, and `git log`, `git show`, `git ls-tree` and `git rev-parse`. They grant nothing
 more; any other command falls back to your own permission settings, so a tick never needs a broad rule such as
 `Bash(git *)`, which would also allow a push. Claude Code asks before it runs a skill with its own rules. Allow it
 once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` tick never waits on a prompt:
 
 ```json
-{ "permissions": { "allow": ["Skill(lz-gardening:garden)"] } }
+{ "permissions": { "allow": ["Skill(lz-gardening:lz-garden)"] } }
 ```
 
 A tend pass runs in your session under your own permissions, and asks for what it needs: it creates a worktree in
-the site and edits files there. The tend skill's own rules pre-approve only reading the tend skill and the garden
-references, and running the garden scripts. Because the site lies beside your checkout, a tend pass first asks you
+the site and edits files there. The `lz-tend` skill's own rules pre-approve only reading the `lz-tend` skill and the
+`lz-garden` references, and running the garden scripts. Because the site lies beside your checkout, a tend pass first asks you
 to add it as a working directory (`/add-dir <site>`); without that, Claude Code asks before every read or edit of a
 file in the bed.
 
