@@ -302,6 +302,10 @@ function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 
     return entry.isSymbolicLink() ? 'linked' : 'installed';
   }
 
+  if (existsSync(join(bed, '.pnp.cjs'))) {
+    return 'installed';
+  }
+
   if (!existsSync(join(bed, 'package.json'))) {
     return 'none';
   }

@@ -775,6 +775,19 @@ test('bed on an existing bed with its own install reports it installed, not link
   assert.equal(again.summary.get('deps'), 'installed');
 });
 
+test('bed on an existing bed with a Plug and Play install reports it installed', (t) => {
+  const dir = installed(t, 'yarn.lock');
+  writeFileSync(join(dir, 'yarn.lock'), '__metadata:\n  version: 8\n');
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'install');
+  writeFileSync(join(dirname(dir), 'repo.garden', 'beds', 'any-type', '.pnp.cjs'), '');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('deps'), 'installed');
+});
+
 test('bed asks for an install, and links nothing, when the checkout installed from another lockfile', (t) => {
   const dir = installed(t);
   writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
