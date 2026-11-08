@@ -51,7 +51,7 @@ export interface Group {
   readonly layer: number | null;
 }
 
-const classPattern = /^[a-z0-9][a-z0-9-]*$/;
+export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
 const sourcePattern = /^[a-z][a-z-]*:\S/;
 // The skills allow this script with any arguments, so it writes nowhere but a garden queue.
 const queuePattern = /[\\/]\.garden[\\/]weeds\.jsonl$/;

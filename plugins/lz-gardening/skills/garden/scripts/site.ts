@@ -3,14 +3,28 @@
 //   node site.ts open [--base <branch>]     create the site if missing, resolve the base;
 //                                           prints {site, created, base, seeded}
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
+//   node site.ts bed --class <kebab> --base <base>
+//                                           fetch the base into the site and make or reuse the bed beds/<class> on
+//                                           bed/<class>; prints {bed, branch, start, created, deps}, deps being
+//                                           none, linked (to the checkout's node_modules), installed or install
 // Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
-import { existsSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { readCensus } from './census.ts';
+import { isRecord, readCensus } from './census.ts';
+import { classPattern } from './weeds.ts';
 
 let gitEnvironment: NodeJS.ProcessEnv | undefined;
 const settingsInEnvironment = ['GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
@@ -216,10 +230,26 @@ function openSite(top: string, site: string, requested: string | undefined): obj
   return { site, created, base, seeded };
 }
 
-function commitSite(site: string, message: string): object {
+const lockfiles = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'];
+
+function sameBytes(a: string, b: string): boolean {
+  return existsSync(a) && existsSync(b) && readFileSync(a).equals(readFileSync(b));
+}
+
+function declaresWorkspaces(dir: string): boolean {
+  const manifest: unknown = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+
+  return (isRecord(manifest) && 'workspaces' in manifest) || existsSync(join(dir, 'pnpm-workspace.yaml'));
+}
+
+function requireSite(site: string): void {
   if (!existsSync(join(site, '.git'))) {
     throw new Error(`no garden site at ${site}; run site.ts open first`);
   }
+}
+
+function commitSite(site: string, message: string): object {
+  requireSite(site);
 
   if (git(site, ['branch', '--show-current']) !== 'garden') {
     throw new Error(
@@ -237,6 +267,57 @@ function commitSite(site: string, message: string): object {
   git(site, ['commit', '-q', '-m', message]);
 
   return { committed: true };
+}
+
+function makeBed(top: string, site: string, bedClass: string, base: string): object {
+  if (!classPattern.test(bedClass)) {
+    throw new Error(`--class must be a kebab-case class id, got ${bedClass}`);
+  }
+
+  if (!shellSafeRef.test(base)) {
+    throw new Error(`the base ${base} is not a branch name; pass the base site.ts open reported`);
+  }
+
+  requireSite(site);
+  git(site, ['fetch', '-q', 'origin', base]);
+  const branch = `bed/${bedClass}`;
+  const bed = join(site, 'beds', bedClass);
+
+  if (gitSucceeds(site, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])) {
+    const start = git(site, ['merge-base', branch, 'FETCH_HEAD']);
+
+    return { bed, branch, start, created: false, deps: plantDeps(top, bed) };
+  }
+
+  const start = git(site, ['rev-parse', 'FETCH_HEAD']);
+  git(site, ['worktree', 'add', '-q', '-b', branch, bed, start]);
+
+  return { bed, branch, start, created: true, deps: plantDeps(top, bed) };
+}
+
+function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 'install' {
+  const entry = lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false });
+
+  if (entry !== undefined) {
+    return entry.isSymbolicLink() ? 'linked' : 'installed';
+  }
+
+  if (!existsSync(join(bed, 'package.json'))) {
+    return 'none';
+  }
+
+  const linkable =
+    existsSync(join(top, 'node_modules')) &&
+    lockfiles.some((name) => sameBytes(join(top, name), join(bed, name))) &&
+    !declaresWorkspaces(bed);
+
+  if (!linkable) {
+    return 'install';
+  }
+
+  symlinkSync(join(top, 'node_modules'), join(bed, 'node_modules'), 'junction');
+
+  return 'linked';
 }
 
 function mainCheckout(cwd: string): string {
@@ -264,17 +345,20 @@ function main(argv: readonly string[], cwd: string): number {
     args: [...argv],
     allowPositionals: true,
     strict: true,
-    options: { base: { type: 'string' }, message: { type: 'string', default: '' } },
+    options: { base: { type: 'string' }, class: { type: 'string' }, message: { type: 'string', default: '' } },
   });
   const [command] = positionals;
 
   const wellFormed =
     positionals.length === 1 &&
-    ((command === 'open' && values.message === '') ||
-      (command === 'commit' && values.message !== '' && values.base === undefined));
+    ((command === 'open' && values.message === '' && values.class === undefined) ||
+      (command === 'commit' && values.message !== '' && values.base === undefined && values.class === undefined) ||
+      (command === 'bed' && values.class !== undefined && values.base !== undefined && values.message === ''));
 
   if (!wellFormed) {
-    process.stderr.write('usage: site.ts open [--base <branch>] | site.ts commit --message <text>\n');
+    process.stderr.write(
+      'usage: site.ts open [--base <branch>] | site.ts commit --message <text> | site.ts bed --class <kebab> --base <base>\n',
+    );
 
     return 2;
   }
@@ -286,7 +370,12 @@ function main(argv: readonly string[], cwd: string): number {
   }
 
   const site = join(dirname(top), `${basename(top)}.garden`);
-  const summary = command === 'commit' ? commitSite(site, values.message) : openSite(top, site, values.base);
+  const summary =
+    command === 'bed' && values.class !== undefined && values.base !== undefined
+      ? makeBed(top, site, values.class, values.base)
+      : command === 'commit'
+        ? commitSite(site, values.message)
+        : openSite(top, site, values.base);
   process.stdout.write(`${JSON.stringify(summary)}\n`);
 
   return 0;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
@@ -220,6 +220,18 @@ test('an argument the command does not take is a usage error, not ignored', (t) 
   assert.deepEqual([branchWithoutFlag.status, messageOnOpen.status, baseOnCommit.status], [2, 2, 2]);
   assert.match(branchWithoutFlag.stderr, /usage/);
   assert.equal(plantedAnyway, false);
+});
+
+test('--class belongs to bed alone, and --message to commit alone', (t) => {
+  const { dir, garden } = planted(t);
+  queueOneWeed(garden);
+
+  const classOnOpen = site(dir, ['open', '--class', 'any-type']);
+  const classOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--class', 'any-type']);
+  const messageOnBed = site(dir, ['bed', '--class', 'any-type', '--base', 'main', '--message', 'garden: watch']);
+
+  assert.deepEqual([classOnOpen.status, classOnCommit.status, messageOnBed.status], [2, 2, 2]);
+  assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
 });
 
 // A rename on Windows that fails with each given error code in turn, then goes through. Renames and waits go to
@@ -606,4 +618,219 @@ test('open creates the site beside the repository, holding only the plant commit
   assert.equal(git(expected, ['log', '--format=%s | %an <%ae>']), 'garden: plant | test <test@example.com>');
   assert.equal(git(expected, ['ls-tree', '-r', '--name-only', 'HEAD']), '.gitignore');
   assert.equal(readFileSync(join(expected, '.gitignore'), 'utf8'), '/beds/\n');
+});
+
+test('bed makes a worktree on bed/<class> from the base as the repository has it now', (t) => {
+  const { dir, garden } = planted(t);
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  const main = git(dir, ['rev-parse', 'main']);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  const reported = result.summary.get('bed');
+  assert.ok(typeof reported === 'string');
+  const expected = join(garden, 'beds', 'any-type');
+  assert.equal(realpathSync.native(reported), realpathSync.native(expected));
+  assert.equal(result.summary.get('branch'), 'bed/any-type');
+  assert.equal(result.summary.get('start'), main);
+  assert.equal(result.summary.get('created'), true);
+  assert.equal(git(expected, ['branch', '--show-current']), 'bed/any-type');
+  assert.equal(git(expected, ['rev-parse', 'HEAD']), main);
+});
+
+test('bed on an existing bed keeps its work and reports where it started, after the base moved on', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  const work = commit(bed, { 'src/a.ts': 'export const a: number = 1;\n' });
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('created'), false);
+  assert.equal(again.summary.get('bed'), first.summary.get('bed'));
+  assert.equal(again.summary.get('start'), first.summary.get('start'));
+  assert.equal(git(bed, ['rev-parse', 'HEAD']), work);
+});
+
+test('bed refuses a class that is not a kebab-case class id and makes no bed', (t) => {
+  const { dir, garden } = planted(t);
+
+  const result = site(dir, ['bed', '--class', 'nested/any-type', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--class/);
+  assert.equal(existsSync(join(garden, 'beds', 'nested')), false);
+  assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
+});
+
+test('bed needs no dependencies when the base has no package.json', (t) => {
+  const { dir, garden } = planted(t);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'none');
+  assert.throws(() => lstatSync(join(garden, 'beds', 'any-type', 'node_modules')), { code: 'ENOENT' });
+});
+
+// A planted repository whose checkout has installed its committed lockfile.
+function installed(t: TestContext, lockfile = 'package-lock.json'): string {
+  const dir = repo(t);
+  commit(dir, {
+    '.gitignore': 'node_modules/\n',
+    'package.json': '{ "name": "x" }\n',
+    [lockfile]: 'lockfileVersion: 3\n',
+  });
+  mkdirSync(join(dir, 'node_modules'));
+  const opened = site(dir, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
+
+  return dir;
+}
+
+test('bed links the checkout node_modules when the bed has the same lockfile', (t) => {
+  const dir = installed(t);
+  writeFileSync(join(dir, 'node_modules', 'marker.txt'), 'installed\n');
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'linked');
+  const linked = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules');
+  assert.equal(realpathSync.native(linked), realpathSync.native(join(dir, 'node_modules')));
+  assert.equal(readFileSync(join(linked, 'marker.txt'), 'utf8'), 'installed\n');
+});
+
+test('bed links the checkout node_modules when the bed has the same pnpm lockfile', (t) => {
+  const dir = installed(t, 'pnpm-lock.yaml');
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'linked');
+  const linked = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules');
+  assert.equal(realpathSync.native(linked), realpathSync.native(join(dir, 'node_modules')));
+});
+
+test('bed links the checkout node_modules when the bed has the same yarn lockfile', (t) => {
+  const dir = installed(t, 'yarn.lock');
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'linked');
+  const linked = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules');
+  assert.equal(realpathSync.native(linked), realpathSync.native(join(dir, 'node_modules')));
+});
+
+test('bed on an existing linked bed reports it linked', (t) => {
+  const dir = installed(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'linked');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('created'), false);
+  assert.equal(again.summary.get('deps'), 'linked');
+});
+
+test('bed on an existing bed that was never installed asks for the install again', (t) => {
+  const dir = installed(t);
+  writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'install');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('created'), false);
+  assert.equal(again.summary.get('deps'), 'install');
+});
+
+test('bed on an existing bed with its own install reports it installed, not linked', (t) => {
+  const dir = installed(t);
+  writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'install');
+  mkdirSync(join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules'));
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('deps'), 'installed');
+});
+
+test('bed asks for an install, and links nothing, when the checkout installed from another lockfile', (t) => {
+  const dir = installed(t);
+  writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'install');
+  assert.equal(existsSync(join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules')), false);
+});
+
+test('bed asks for an install, and links nothing, when the checkout has no node_modules', (t) => {
+  const dir = installed(t);
+  rmSync(join(dir, 'node_modules'), { recursive: true });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'install');
+  const linked = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules');
+  assert.throws(() => lstatSync(linked), { code: 'ENOENT' });
+});
+
+test('bed asks for an install, and links nothing, when package.json declares workspaces', (t) => {
+  const dir = installed(t);
+  commit(dir, { 'package.json': '{ "name": "x", "workspaces": ["packages/*"] }\n' });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'install');
+  const linked = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules');
+  assert.throws(() => lstatSync(linked), { code: 'ENOENT' });
+});
+
+test('bed asks for an install, and links nothing, in a pnpm workspace', (t) => {
+  const dir = installed(t, 'pnpm-lock.yaml');
+  commit(dir, { 'pnpm-workspace.yaml': 'packages:\n  - packages/*\n' });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'install');
+  const linked = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules');
+  assert.throws(() => lstatSync(linked), { code: 'ENOENT' });
+});
+
+test('bed before the site exists says to open it first and makes nothing', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /site\.ts open/);
+  assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
+});
+
+test('bed refuses a base that git would read as an option and runs nothing it names', (t) => {
+  const { dir, garden } = planted(t);
+  const marker = join(dirname(dir), 'injected').replaceAll('\\', '/');
+
+  const result = site(dir, ['bed', '--class', 'any-type', `--base=--upload-pack=touch '${marker}'`]);
+
+  assert.equal(existsSync(marker), false);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /upload-pack/);
+  assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
 });
