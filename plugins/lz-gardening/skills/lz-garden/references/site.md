@@ -80,8 +80,9 @@ the site.
   `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to the repository's checkout,
   so the bed would test the other checkout's code.
 - `install`: install with the repository's package manager, pointed at the bed: `npm --prefix "<bed>" ci`,
-  `pnpm -C "<bed>" install --frozen-lockfile` or `yarn --cwd "<bed>" install --frozen-lockfile`.
-- `installed`: the bed already has its own install.
+  `pnpm -C "<bed>" install --frozen-lockfile` or, for Yarn 4 or later, `yarn --cwd "<bed>" install --immutable`.
+- `installed`: the bed already has its own install, a `node_modules` folder or the `.pnp.cjs` file of a Yarn
+  Plug'n'Play install.
 - `none`: the bed has no `package.json`.
 
 When a linked bed changes its dependencies, remove the link first (as under Cleanup), then install. Never run an
