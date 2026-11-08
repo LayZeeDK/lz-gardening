@@ -371,6 +371,7 @@ function main(argv: readonly string[], cwd: string): number {
 
   const site = join(dirname(top), `${basename(top)}.garden`);
   const summary =
+    // Stryker disable next-line ConditionalExpression: wellFormed lets --class and --base through together only for bed
     command === 'bed' && values.class !== undefined && values.base !== undefined
       ? makeBed(top, site, values.class, values.base)
       : command === 'commit'

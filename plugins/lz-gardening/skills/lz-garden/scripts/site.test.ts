@@ -226,11 +226,22 @@ test('--class belongs to bed alone, and --message to commit alone', (t) => {
   const { dir, garden } = planted(t);
   queueOneWeed(garden);
 
-  const classOnOpen = site(dir, ['open', '--class', 'any-type']);
+  const classOnOpen = site(dir, ['open', '--class', 'any-type', '--base', 'main']);
   const classOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--class', 'any-type']);
   const messageOnBed = site(dir, ['bed', '--class', 'any-type', '--base', 'main', '--message', 'garden: watch']);
 
   assert.deepEqual([classOnOpen.status, classOnCommit.status, messageOnBed.status], [2, 2, 2]);
+  assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
+});
+
+test('bed without --class or without --base is a usage error, not an open', (t) => {
+  const { dir, garden } = planted(t);
+
+  const withoutBase = site(dir, ['bed', '--class', 'any-type']);
+  const withoutClass = site(dir, ['bed', '--base', 'main']);
+
+  assert.deepEqual([withoutBase.status, withoutClass.status], [2, 2]);
+  assert.match(withoutClass.stderr, /usage/);
   assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
 });
 
@@ -677,7 +688,6 @@ test('bed needs no dependencies when the base has no package.json', (t) => {
   assert.throws(() => lstatSync(join(garden, 'beds', 'any-type', 'node_modules')), { code: 'ENOENT' });
 });
 
-// A planted repository whose checkout has installed its committed lockfile.
 function installed(t: TestContext, lockfile = 'package-lock.json'): string {
   const dir = repo(t);
   commit(dir, {
@@ -821,6 +831,31 @@ test('bed before the site exists says to open it first and makes nothing', (t) =
   assert.equal(result.status, 2);
   assert.match(result.stderr, /site\.ts open/);
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
+});
+
+test('bed with a folder at the site path that is no site says to open it first', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  mkdirSync(join(dirname(dir), 'repo.garden'));
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /site\.ts open/);
+});
+
+test('bed asks for an install when only the checkout has a lockfile', (t) => {
+  const dir = repo(t);
+  commit(dir, { '.gitignore': 'node_modules/\npackage-lock.json\n', 'package.json': '{ "name": "x" }\n' });
+  writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3 }\n');
+  mkdirSync(join(dir, 'node_modules'));
+  const opened = site(dir, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'install');
 });
 
 test('bed refuses a base that git would read as an option and runs nothing it names', (t) => {
