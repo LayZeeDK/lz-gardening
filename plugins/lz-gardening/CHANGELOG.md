@@ -18,8 +18,10 @@ First release.
   `.garden/weeds.jsonl` and `.garden/census.json` and refuse any other output path. The site's own git commands run none of your git
   hooks and sign nothing.
 - `lz-tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
-  baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Carries its own
-  permission rules for reading the `lz-tend` skill and the `lz-garden` references, and for running the garden scripts, and
-  asks you to add the site as a working directory.
+  baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Makes the bed with the
+  garden's site script, which its permission rules allow. The script links the checkout's Node.js dependencies into
+  the bed, or says to install them.
+  Carries its own permission rules for reading the `lz-tend` skill and the `lz-garden` references, and for running
+  the garden scripts, and asks you to add the site as a working directory.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the
   garden scripts, which keep the queue and the census in the site and commit them on `garden`.

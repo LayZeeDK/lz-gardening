@@ -55,36 +55,37 @@ A branch that only `origin` has (a clone whose checkout is a milestone branch of
 commit, or whose name holds a character a shell would expand (anything but letters, digits and `._/+@-`), stops
 `open` with exit 2 before it plants anything.
 
-The base names a ref in the repository, not in the site: a tick reads it in the repository's checkout, and a tend
-pass fetches it into the site by that name (below).
+The base names a ref in the repository, not in the site: a tick reads it in the repository's checkout, and
+`site.ts bed` fetches it into the site by that name (below).
 
 ## Beds (tend passes only)
 
-A garden tick never runs anything in this section or the next. A tend pass runs these against the site from the
-repository's checkout, pointing git at the site with `-C`. Below, `<checkout>` is the repository's checkout and
-`<bed>` is `<site>/beds/<class>`, both full paths. The fetch takes the base by the name `site.ts open` reported
-(`main`, or `origin/main` when only the repository's remote has it), and the bed starts from the commit it fetched:
+A garden tick never runs anything in this section or the next. A tend pass makes its bed with `site.ts`, run from
+the repository's checkout, and runs no git command against the site itself. Below, `<checkout>` is the repository's
+checkout and `<bed>` is `<site>/beds/<class>`, both full paths.
 
-```bash
-git -C "<site>" fetch -q origin <base>
-git -C "<site>" rev-parse FETCH_HEAD
-git -C "<site>" worktree add -b bed/<class> "<bed>" FETCH_HEAD
-```
+`site.ts bed --class <class> --base <base>` takes the base by the name `site.ts open` reported (`main`, or
+`origin/main` when only the repository's remote has it). It fetches the base into the site and adds the worktree
+`<bed>` on branch `bed/<class>` at the commit it fetched. Run again on a bed that exists, it keeps the bed's work.
+It prints JSON with `bed`, `branch`, `start`, `created` and `deps`. `start` is the commit the bed started from,
+written `<start>` below; for a bed that exists, it is where the bed's branch left the base. `bed` exits 2 on a class
+that is not a kebab-case class id, on a base that git could read as an option, and when `site.ts open` has not made
+the site.
 
-The commit `git rev-parse` printed is the bed's start, written `<start>` below.
+`deps` says how the bed gets its Node.js dependencies:
 
-Dependencies for a bed, Node.js repositories:
+- `linked`: the bed's `node_modules` is a link to the checkout's. `bed` makes the link when the checkout has a
+  `node_modules`, the bed's `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` is byte-identical to the
+  checkout's, and the bed is not a workspace: its `package.json` declares no `workspaces` and it has no
+  `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to the repository's checkout,
+  so the bed would test the other checkout's code.
+- `install`: install with the repository's package manager, pointed at the bed: `npm --prefix "<bed>" ci`,
+  `pnpm -C "<bed>" install --frozen-lockfile` or `yarn --cwd "<bed>" install --frozen-lockfile`.
+- `installed`: the bed already has its own install.
+- `none`: the bed has no `package.json`.
 
-- **Link** the repository's `node_modules` when the checkout has one installed, the bed's lockfile is
-  byte-identical to the repository's, and the root `package.json` declares no `workspaces` (and there is no
-  `pnpm-workspace.yaml`). The lockfiles are byte-identical when this prints nothing (the same for the pnpm or yarn
-  lockfile): `git diff --no-index --stat "<checkout>/package-lock.json" "<bed>/package-lock.json"`. On Windows:
-  `cmd //c mklink //J "<bed>\node_modules" "<checkout>\node_modules"` with backslash paths; elsewhere `ln -s`.
-- **Install** with the repository's package manager, pointed at the bed (`npm --prefix "<bed>" ci`,
-  `pnpm -C "<bed>" install --frozen-lockfile`) otherwise, and
-  always when the bed changes dependencies. A workspace package resolves through a linked `node_modules` to the
-  repository's checkout, so the bed would test the other checkout's code.
-- Never run an install through a link: it rewrites the repository's own `node_modules`.
+When a linked bed changes its dependencies, remove the link first (as under Cleanup), then install. Never run an
+install through a link: it rewrites the repository's own `node_modules`.
 
 ## Cleanup
 

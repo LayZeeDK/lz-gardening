@@ -28,11 +28,10 @@ refuses `cd`, `cat`, `cmp` and git's file arguments there. So after `site open` 
 the session's working directories (the session's environment lists any added ones), ask the user to run
 `/add-dir <site>` (or to start the session with `--add-dir <site>`) and wait. Then:
 
-- Stay in the repository's checkout and point each command at the site or the bed (`<bed>`, the full path
-  `<site>/beds/<class>`) with its own directory flag: `git -C "<site>"`, `git -C "<bed>"`, and the repository's
-  package scripts with `npm --prefix "<bed>" run <script>` (`pnpm -C "<bed>" <script>`,
-  `yarn --cwd "<bed>" <script>`). The shell keeps the directory a `cd` leaves it in, and `site` finds the site from
-  the checkout.
+- Stay in the repository's checkout and point each command at the bed (`<bed>`, the full path
+  `<site>/beds/<class>`) with its own directory flag: `git -C "<bed>"`, and the repository's package scripts with
+  `npm --prefix "<bed>" run <script>` (`pnpm -C "<bed>" <script>`, `yarn --cwd "<bed>" <script>`). The shell keeps
+  the directory a `cd` leaves it in, and `site` finds the site from the checkout.
 - Run a check that takes no directory flag as `cd "<bed>" && <command>`. Before the next `site` or `weeds` call,
   run `cd "<checkout>"` as a call of its own.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
@@ -79,8 +78,9 @@ Done when you can name the check, where it lives, and the message it prints.
 
 ## 4. Make the bed
 
-Create the bed worktree and its dependencies as `${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes
-under "Beds", and keep the `<start>` commit it names. Done when the repository's own
+Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and the `<start>` commit, which you keep.
+When its `deps` is `install`, install the bed's dependencies as
+`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes under "Beds". Done when the repository's own
 lint, type-check and test commands run in the bed (read them from `package.json`, `nx.json` and CI config); note
 any that fail before your change, so they are not blamed on it.
 
