@@ -28,6 +28,7 @@ import { classPattern } from './weeds.ts';
 
 let gitEnvironment: NodeJS.ProcessEnv | undefined;
 const settingsInEnvironment = ['GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
+const hookOffVariable = 'LZ_GARDEN_HOOK_OFF';
 
 // Without the variables that point git at a repository (GIT_DIR from a hook, say), each command acts on its cwd.
 // Settings passed in the environment stay.
@@ -36,7 +37,10 @@ function gitEnv(): NodeJS.ProcessEnv {
     const localVariables = spawnGit(process.cwd(), ['rev-parse', '--local-env-vars'], process.env)
       .stdout.split('\n')
       .filter((name) => !settingsInEnvironment.includes(name));
-    gitEnvironment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name)));
+    gitEnvironment = {
+      ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name))),
+      [hookOffVariable]: 'false',
+    };
   }
 
   return gitEnvironment;
@@ -52,11 +56,12 @@ const bookkeeping = [
 ];
 
 // A hook set up by name in the git config (hook.<name>.command) ignores core.hooksPath, so each is turned off by name.
+// --config-env splits at the last '=', where -c splits at the first, so a name may hold '='.
 export function namedHooksOff(cwd: string): string[] {
   const keys = spawnGit(cwd, ['config', '--list', '--name-only'], gitEnv()).stdout;
   const names = new Set([...keys.matchAll(/^hook\.(.+)\.(?:command|event)$/gm)].flatMap((match) => match.slice(1)));
 
-  return [...names].flatMap((name) => ['-c', `hook.${name}.enabled=false`]);
+  return [...names].map((name) => `--config-env=hook.${name}.enabled=${hookOffVariable}`);
 }
 
 function runGit(cwd: string, args: readonly string[]): SpawnSyncReturns<string> {

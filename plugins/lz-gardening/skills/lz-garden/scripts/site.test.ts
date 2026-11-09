@@ -571,6 +571,28 @@ test('the site runs none of the hooks the user set up by name in their git confi
   assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
 });
 
+test('the site runs no hook set up by name whose name holds an equals sign', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const ran = join(dirname(dir), 'hooks-ran.log').replaceAll('\\', '/');
+  const env = {
+    ...process.env,
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'hook.a=b.event',
+    GIT_CONFIG_VALUE_0: 'pre-commit',
+    GIT_CONFIG_KEY_1: 'hook.a=b.command',
+    GIT_CONFIG_VALUE_1: `echo a=b >> "${ran}"`,
+  };
+
+  const opened = site(dir, ['open', '--base', 'main'], env);
+  assert.equal(opened.status, 0, opened.stderr);
+  queueOneWeed(join(dirname(dir), 'repo.garden'));
+  const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
+
+  assert.equal(recorded.status, 0, recorded.stderr);
+  assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
+});
+
 test('the hooks turned off are those the config names, by their whole name, and no other key', (t) => {
   const dir = repo(t);
   git(dir, ['config', 'hook.team.lint.event', 'pre-commit']);
@@ -578,13 +600,7 @@ test('the hooks turned off are those the config names, by their whole name, and 
   git(dir, ['config', 'alias.hook.x.command', 'log']);
   git(dir, ['config', 'hook.other.commandeer', 'x']);
 
-  const flags = namedHooksOff(dir);
-
-  assert.ok(flags.includes('hook.team.lint.enabled=false'), flags.join(' '));
-  assert.deepEqual(
-    flags.filter((flag) => /^hook\.(x|other)\.|\.(command|event)\./.test(flag)),
-    [],
-  );
+  assert.deepEqual(namedHooksOff(dir), ['--config-env=hook.team.lint.enabled=LZ_GARDEN_HOOK_OFF']);
 });
 
 test('open without git on the PATH is an error that names git, not a crash', (t) => {
