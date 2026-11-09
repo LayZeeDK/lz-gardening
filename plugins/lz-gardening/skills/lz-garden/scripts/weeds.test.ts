@@ -249,6 +249,19 @@ test('validation also refuses line and paragraph separators and bidirectional co
   );
 });
 
+test('validation takes the joiners that words and emoji need in paths and notes', () => {
+  const nonJoiner = String.fromCodePoint(0x200c);
+  const joiner = String.fromCodePoint(0x200d);
+
+  assert.deepEqual(
+    [
+      validateAdd(input({ where: `src/mi${nonJoiner}khaham.ts:1` })),
+      validateAdd(input({ note: `copied from the ${joiner} sequence` })),
+    ],
+    [null, null],
+  );
+});
+
 test('a malformed queue line fails loudly with its line number', () => {
   assert.throws(() => parseRow('{"op":"add","id":"x","at":"t"}', 4), /line 4/);
   assert.throws(() => parseRow('{"op":"prune","id":"x","at":"t"}', 2), /unknown op/);

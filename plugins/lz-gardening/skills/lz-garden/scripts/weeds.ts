@@ -63,8 +63,9 @@ const sourcePattern = /^[a-z][a-z-]*:\S/;
 // The skills allow this script with any arguments, so it writes nowhere but a garden queue.
 const queuePattern = /[\\/]\.garden[\\/]weeds\.jsonl$/;
 
-// list and the add status print flag values raw, so a value that breaks or hides a line is refused.
-const unprintablePattern = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+// list and the add status print flag values raw, so a value that breaks a line or reorders it (the bidirectional
+// controls) is refused; the joiners that words and emoji need pass.
+const unprintablePattern = /[\p{Cc}\p{Zl}\p{Zp}\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}]/u;
 
 function firstUnprintable(values: Readonly<Record<string, string | undefined>>): string | null {
   const flag = Object.entries(values).find(([, value]) => unprintablePattern.test(value ?? ''))?.[0];
