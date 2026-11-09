@@ -11,8 +11,12 @@ _Avoid_: smell, finding, issue, slop
 
 **Weed class**:
 The named kind a weed belongs to, such as a duplicate helper or a hollow test; weeds are grouped, counted and
-tended by class.
+tended by class. Each class has a kebab-case class id, and is found either by a census pattern or only by reading
+what landed.
 _Avoid_: category, kind, type
+
+**Planting commit**:
+The commit that introduced a weed; a weed found by reading what landed names it as its source.
 
 **Duplicate helper**:
 A function name defined in two or more files of the codebase.
@@ -49,6 +53,10 @@ _Avoid_: scan, inventory
 
 **Census pattern**:
 A text pattern that marks a weed class the census can count, such as a lint suppression.
+
+**Hit**:
+One place on the base branch where a census pattern matches.
+_Avoid_: weed marker, match
 
 **Seed list**:
 What the census shows the seed pass: for each census pattern, the files with the most hits, and the names
@@ -92,19 +100,24 @@ The one sanctioned way to do a thing in the codebase, made easier to follow than
 _Avoid_: golden path, happy path
 
 **Baseline**:
-The recorded set of weed instances a check tolerates for now. It may only shrink.
+The recorded weed instances, or their count, that a check tolerates for now. It may only shrink.
 _Avoid_: allowlist, exceptions file
 
 ## Places
 
+**Base branch**:
+The branch work lands on, which a tick watches and a bed starts from. Short form: base.
+_Avoid_: target branch
+
 **Garden site**:
-A clone of the repository beside it that holds the queue, the census and the beds, so the repository's own checkout
-is only ever read.
+A clone of the repository beside it that holds the queue, the census and the beds, so the gardener's own work stays
+out of the repository's checkout.
 _Avoid_: garden clone, workspace
 
 **Garden branch**:
-The site's branch that holds only the queue and the census, never the repository's code.
+The site's branch that holds only the garden's records, never the repository's code.
 
 **Bed**:
-A tend pass's working copy and branch in the garden site, holding one proposed change for a human to land.
+A tend pass's working copy and branch in the garden site, holding one proposed change for a human to land. Its
+branch is the bed branch, `bed/<class>`.
 _Avoid_: patch, fix branch

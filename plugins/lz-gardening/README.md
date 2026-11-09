@@ -66,8 +66,8 @@ their report; they never build them.
 ## Permissions
 
 The `lz-garden` skill carries its own permission rules. They pre-approve what a tick needs: reading the skill's own
-files, running its own scripts, and `git log`, `git show`, `git ls-tree` and `git rev-parse`. They grant nothing
-more; any other command falls back to your own permission settings, so a tick never needs a broad rule such as
+files, running its own scripts and `node --version`, and `git ls-tree` and `git rev-parse`; Claude Code runs the
+read-only `git log` and `git show` a tick also uses without asking anyway. They grant nothing more; any other command falls back to your own permission settings, so a tick never needs a broad rule such as
 `Bash(git *)`, which would also allow a push. Claude Code asks before it runs a skill with its own rules. Allow it
 once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` tick never waits on a prompt:
 

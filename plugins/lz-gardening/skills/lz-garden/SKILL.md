@@ -17,8 +17,8 @@ allowed-tools:
 Run one garden tick on the repository in the current working directory. Arguments: $ARGUMENTS
 
 A tick watches what landed on the base branch since the last tick and queues each weed with its evidence. It
-fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:lz-tend`). Every step below ends on a check;
-when a check fails, report the command and its output and stop.
+fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:lz-tend`). Every step below ends on a done
+condition; when one is not met, report the command and its output and stop.
 
 Stay in the repository's working directory for the whole tick and run every command as written below, quotes
 included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read

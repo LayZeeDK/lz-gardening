@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The weeds queue: an append-only JSONL log of findings, one event per line. Rows are never edited; a close is a new
+// The weeds queue: an append-only JSONL log of weeds, one event per line. Rows are never edited; a close is a new
 // row. The same class, place and source is one weed, so a loop that finds it again adds nothing.
 // Usage (--file defaults to .garden/weeds.jsonl, and any other path must also end in .garden/weeds.jsonl):
 //   node weeds.ts add --class <kebab> --where <path[:line]> --source <kind:ref> --note <text> [--layer <1-6>]

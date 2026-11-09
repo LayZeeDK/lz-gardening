@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Counts weed markers in the tracked files of one git revision and reports what changed since the last census.
+// Counts census-pattern hits in the tracked files of one git revision and reports what changed since the last census.
 // It reads the revision with `git grep`, so it never checks anything out and works in a clone with no working tree.
 // Usage:
 //   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]
