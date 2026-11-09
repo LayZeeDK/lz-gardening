@@ -36,6 +36,8 @@ the session's working directories (the session's environment lists any added one
   run `cd "<checkout>"` as a call of its own.
 - Run each check in the foreground and read its output in the tool result. A background run writes its output to
   a file outside the session's working directories, so reading it asks.
+- When a command is refused, report it and stop that step; never reach the same result with another command (`rm`
+  for a refused `git rm`, say). The refusal is the user's answer.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.
