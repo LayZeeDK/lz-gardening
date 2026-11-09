@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
@@ -853,6 +862,21 @@ test('bed on an existing bed that was never installed asks for the install again
 
   assert.equal(again.status, 0, again.stderr);
   assert.equal(again.summary.get('created'), false);
+  assert.equal(again.summary.get('deps'), 'install');
+});
+
+test('bed asks for an install, and links nothing, when the bed lockfile is a link to the checkout lockfile', (t) => {
+  const dir = installed(t);
+  writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'install');
+  const bedLockfile = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'package-lock.json');
+  rmSync(bedLockfile);
+  symlinkSync(join(dir, 'package-lock.json'), bedLockfile, 'file');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
   assert.equal(again.summary.get('deps'), 'install');
 });
 

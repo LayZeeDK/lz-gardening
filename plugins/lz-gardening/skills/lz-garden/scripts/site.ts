@@ -246,8 +246,13 @@ function openSite(top: string, site: string, requested: string | undefined): obj
 
 const lockfiles = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'];
 
-function sameBytes(a: string, b: string): boolean {
-  return existsSync(a) && existsSync(b) && readFileSync(a).equals(readFileSync(b));
+// The bed's lockfile comes from the base, so only a plain file is read: a link or a FIFO there could point anywhere.
+function sameBytes(checkout: string, bed: string): boolean {
+  return (
+    existsSync(checkout) &&
+    lstatSync(bed, { throwIfNoEntry: false })?.isFile() === true &&
+    readFileSync(checkout).equals(readFileSync(bed))
+  );
 }
 
 function declaresWorkspaces(dir: string): boolean {
