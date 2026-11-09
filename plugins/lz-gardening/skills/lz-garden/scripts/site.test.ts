@@ -807,6 +807,20 @@ test('bed refuses a folder at the bed path that is no longer the worktree of its
   assert.match(again.stderr, /beds[\\/]any-type/);
 });
 
+test('bed refuses a file at the path of an existing bed, and names it', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  git(garden, ['worktree', 'remove', '--force', bed]);
+  writeFileSync(bed, 'not a folder\n');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 2);
+  assert.match(again.stderr, /beds[\\/]any-type is not the worktree/);
+});
+
 test('bed refuses a folder at the bed path before it makes the branch, and names the folder', (t) => {
   const { dir, garden } = planted(t);
   const bed = join(garden, 'beds', 'any-type');

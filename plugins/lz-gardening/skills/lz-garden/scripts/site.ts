@@ -316,7 +316,7 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
     if (!existsSync(bed)) {
       git(site, ['worktree', 'prune']);
       git(site, ['worktree', 'add', '-q', bed, branch]);
-    } else if (optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== branchRef) {
+    } else if (!lstatSync(bed).isDirectory() || optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== branchRef) {
       throw notTheBed;
     }
 
