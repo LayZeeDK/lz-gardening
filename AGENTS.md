@@ -25,7 +25,8 @@ The scripts under `plugins/lz-gardening/skills/*/scripts/` are TypeScript in era
 runs directly, with Node.js built-ins only. Develop them test-first, one `node:test` test per red-green-refactor
 cycle. Give each test its own state from a setup function it calls (a throwaway git repository for census tests),
 not shared `before` hooks. Mutation-test changes with StrykerJS: the command runner over `node --test`, or, on a
-machine with an `@layzee/stryker-node-test-runner` checkout, that runner (`stryker.config.mjs` says how).
+machine with an `@layzee/stryker-node-test-runner` checkout, that runner and the checkout's mutators
+(`stryker.config.mjs` says how).
 
 Keep `npm run check` passing: type-check, lint, Prettier and every test, the hygiene checks included.
 
