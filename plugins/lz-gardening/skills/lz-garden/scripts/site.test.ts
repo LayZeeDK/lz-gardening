@@ -807,6 +807,22 @@ test('bed refuses a folder at the bed path that is no longer the worktree of its
   assert.match(again.stderr, /beds[\\/]any-type/);
 });
 
+test('bed refuses a folder at the bed path before it makes the branch, and names the folder', (t) => {
+  const { dir, garden } = planted(t);
+  const bed = join(garden, 'beds', 'any-type');
+  mkdirSync(bed, { recursive: true });
+  writeFileSync(join(bed, 'notes.txt'), 'left here\n');
+
+  const made = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(made.status, 2);
+  assert.match(made.stderr, /beds[\\/]any-type/);
+  assert.equal(
+    spawnSync('git', ['rev-parse', '--verify', '--quiet', 'refs/heads/bed/any-type'], { cwd: garden }).status,
+    1,
+  );
+});
+
 test('bed refuses a class that is not a kebab-case class id and makes no bed', (t) => {
   const { dir, garden } = planted(t);
 

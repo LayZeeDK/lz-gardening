@@ -308,6 +308,7 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
   const branch = `bed/${bedClass}`;
   const branchRef = `refs/heads/${branch}`;
   const bed = join(site, 'beds', bedClass);
+  const notTheBed = new Error(`${bed} is not the worktree of ${branch}; move it aside, then run bed again`);
 
   if (gitSucceeds(site, ['rev-parse', '--verify', '--quiet', branchRef])) {
     const start = git(site, ['merge-base', branchRef, 'FETCH_HEAD']);
@@ -316,10 +317,14 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
       git(site, ['worktree', 'prune']);
       git(site, ['worktree', 'add', '-q', bed, branch]);
     } else if (optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== branchRef) {
-      throw new Error(`${bed} is not the worktree of ${branch}; move it aside, then run bed again`);
+      throw notTheBed;
     }
 
     return { bed, branch, start, created: false, deps: plantDeps(top, bed) };
+  }
+
+  if (existsSync(bed)) {
+    throw notTheBed;
   }
 
   const start = git(site, ['rev-parse', 'FETCH_HEAD']);
