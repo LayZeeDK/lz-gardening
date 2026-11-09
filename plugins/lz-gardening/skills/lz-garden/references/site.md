@@ -94,9 +94,10 @@ write those caches through the link into the checkout's folder.
 
 ## Cleanup
 
-A bed stays until its branch is merged into the base or a human drops it. Remove one with: unlink `node_modules`
-first (`rm "<bed>/node_modules"`, no `-r`; on Windows `cmd //c rmdir "<bed>\node_modules"`), then
-`git -C "<site>" worktree remove "<bed>"`, then `git -C "<site>" branch -D bed/<class>` only once the change has
+A bed stays until its branch is merged into the base or a human drops it. Stop any process a check left running in
+the bed, such as Nx's daemon: on Windows git cannot move or remove a folder a process holds open. Remove the bed
+with: unlink `node_modules` first (`rm "<bed>/node_modules"`, no `-r`; on Windows
+`cmd //c rmdir "<bed>\node_modules"`), then `git -C "<site>" worktree remove "<bed>"`, then `git -C "<site>" branch -D bed/<class>` only once the change has
 landed: after `git -C "<site>" fetch -q origin <base>`,
 `git -C "<site>" merge-base --is-ancestor bed/<class> FETCH_HEAD` exits 0, or the base holds
 a commit that carries the same change. Deleting the whole site loses the
