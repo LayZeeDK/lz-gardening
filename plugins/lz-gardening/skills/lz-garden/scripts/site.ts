@@ -237,7 +237,14 @@ function sameBytes(a: string, b: string): boolean {
 }
 
 function declaresWorkspaces(dir: string): boolean {
-  const manifest: unknown = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  const file = join(dir, 'package.json');
+  let manifest: unknown;
+
+  try {
+    manifest = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error: unknown) {
+    throw new Error(`${file} is not valid JSON`, { cause: error });
+  }
 
   return (isRecord(manifest) && 'workspaces' in manifest) || existsSync(join(dir, 'pnpm-workspace.yaml'));
 }

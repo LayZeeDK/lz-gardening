@@ -752,6 +752,23 @@ test('bed links the checkout node_modules when the bed has the same yarn lockfil
   assert.equal(realpathSync.native(linked), realpathSync.native(join(dir, 'node_modules')));
 });
 
+test('bed names the package.json that is not valid JSON, with its bed path', (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    '.gitignore': 'node_modules/\n',
+    'package.json': '{ "name": \n',
+    'package-lock.json': 'lockfileVersion: 3\n',
+  });
+  mkdirSync(join(dir, 'node_modules'));
+  const opened = site(dir, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /beds[\\/]any-type[\\/]package\.json/);
+});
+
 test('bed on an existing linked bed reports it linked', (t) => {
   const dir = installed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
