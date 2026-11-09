@@ -39,6 +39,7 @@ function gitEnv(): NodeJS.ProcessEnv {
       .filter((name) => !settingsInEnvironment.includes(name));
     gitEnvironment = {
       ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name))),
+      // Stryker disable next-line StringLiteral: git reads an empty boolean as false, so '' turns the hooks off too
       [hookOffVariable]: 'false',
     };
   }
