@@ -698,6 +698,23 @@ test('bed on an existing bed keeps its work and reports where it started, after 
   assert.equal(git(bed, ['rev-parse', 'HEAD']), work);
 });
 
+test('bed on an existing bed reports where its branch started, not where a tag of the same name points', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['branch', 'old']);
+  const later = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  git(dir, ['tag', 'bed/any-type', later]);
+  const opened = site(dir, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'old']);
+  assert.equal(first.status, 0, first.stderr);
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('start'), first.summary.get('start'));
+});
+
 test('bed on a bed whose folder is gone brings the folder back with the branch work', (t) => {
   const { dir, garden } = planted(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);

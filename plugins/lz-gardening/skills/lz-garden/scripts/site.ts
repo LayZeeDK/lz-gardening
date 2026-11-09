@@ -301,7 +301,7 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
   const bed = join(site, 'beds', bedClass);
 
   if (gitSucceeds(site, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])) {
-    const start = git(site, ['merge-base', branch, 'FETCH_HEAD']);
+    const start = git(site, ['merge-base', `refs/heads/${branch}`, 'FETCH_HEAD']);
 
     if (!existsSync(bed)) {
       git(site, ['worktree', 'prune']);
