@@ -242,8 +242,8 @@ function declaresWorkspaces(dir: string): boolean {
 
   try {
     manifest = JSON.parse(readFileSync(file, 'utf8'));
-  } catch (error: unknown) {
-    throw new Error(`${file} is not valid JSON`, { cause: error });
+  } catch {
+    throw new Error(`${file} is not valid JSON`);
   }
 
   return (isRecord(manifest) && 'workspaces' in manifest) || existsSync(join(dir, 'pnpm-workspace.yaml'));
