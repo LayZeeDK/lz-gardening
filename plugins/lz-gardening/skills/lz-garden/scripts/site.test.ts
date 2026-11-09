@@ -531,6 +531,37 @@ test('the site runs none of the user hooks and signs nothing, whatever the user 
   assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
 });
 
+test('the site runs none of the hooks the user set up by name in their git config', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const ran = join(dirname(dir), 'hooks-ran.log').replaceAll('\\', '/');
+  const events = ['pre-commit', 'commit-msg', 'post-commit', 'post-checkout', 'post-index-change'];
+  const settings = events.flatMap((event) => [
+    [`hook.user-${event}.event`, event],
+    [`hook.user-${event}.command`, `echo ${event} >> "${ran}"`],
+  ]);
+  const env = {
+    ...process.env,
+    GIT_CONFIG_COUNT: String(settings.length),
+    ...Object.fromEntries(
+      settings.flatMap(([key, value], index) => [
+        [`GIT_CONFIG_KEY_${index}`, key],
+        [`GIT_CONFIG_VALUE_${index}`, value],
+      ]),
+    ),
+  };
+
+  const opened = site(dir, ['open', '--base', 'main'], env);
+  assert.equal(opened.status, 0, opened.stderr);
+  queueOneWeed(join(dirname(dir), 'repo.garden'));
+  const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
+  assert.equal(recorded.status, 0, recorded.stderr);
+  const bed = site(dir, ['bed', '--class', 'probe', '--base', 'main'], env);
+
+  assert.equal(bed.status, 0, bed.stderr);
+  assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
+});
+
 test('open without git on the PATH is an error that names git, not a crash', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
