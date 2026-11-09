@@ -225,6 +225,30 @@ test('validation refuses a bad class, an empty place, a source without a kind, a
   assert.match(validateAdd(input({ layer: 7 })) ?? '', /layer/);
 });
 
+test('validation refuses a place, source or note holding a control character, which list would print raw', () => {
+  assert.deepEqual(
+    [
+      validateAdd(input({ where: 'src/a.ts:1\nadded deadbeef00' })),
+      validateAdd(input({ source: 'commit:abc1234\r' })),
+      validateAdd(input({ note: 'cast\tto any' })),
+    ],
+    [
+      '--where must be one line of text without control characters',
+      '--source must be one line of text without control characters',
+      '--note must be one line of text without control characters',
+    ],
+  );
+});
+
+test('validation also refuses line and paragraph separators and bidirectional controls', () => {
+  assert.deepEqual(
+    [0x2028, 0x2029, 0x202e].map((codePoint) =>
+      validateAdd(input({ note: `cast${String.fromCodePoint(codePoint)}to any` })),
+    ),
+    Array.from({ length: 3 }, () => '--note must be one line of text without control characters'),
+  );
+});
+
 test('a malformed queue line fails loudly with its line number', () => {
   assert.throws(() => parseRow('{"op":"add","id":"x","at":"t"}', 4), /line 4/);
   assert.throws(() => parseRow('{"op":"prune","id":"x","at":"t"}', 2), /unknown op/);

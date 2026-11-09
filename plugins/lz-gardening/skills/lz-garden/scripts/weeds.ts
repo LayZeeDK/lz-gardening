@@ -63,6 +63,15 @@ const sourcePattern = /^[a-z][a-z-]*:\S/;
 // The skills allow this script with any arguments, so it writes nowhere but a garden queue.
 const queuePattern = /[\\/]\.garden[\\/]weeds\.jsonl$/;
 
+// list and the add status print flag values raw, so a value that breaks or hides a line is refused.
+const unprintablePattern = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+
+function firstUnprintable(values: Readonly<Record<string, string | undefined>>): string | null {
+  const flag = Object.entries(values).find(([, value]) => unprintablePattern.test(value ?? ''))?.[0];
+
+  return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
+}
+
 // The bed a tend close names: bed/<class>@<commit>.
 const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@[0-9a-f]{4,40}$/;
 
@@ -222,6 +231,12 @@ export function validateAdd(input: AddInput): string | null {
     return '--where must not be empty';
   }
 
+  const unprintable = firstUnprintable({ where: input.where, source: input.source, note: input.note });
+
+  if (unprintable !== null) {
+    return unprintable;
+  }
+
   if (!sourcePattern.test(input.source)) {
     return '--source must look like <kind>:<ref>, for example commit:1a2b3c4 or census:eslint-disable';
   }
@@ -265,12 +280,15 @@ export function parseClose(command: 'close' | 'close-class', flags: CloseFlags):
     return `needs ${command === 'close' ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep`;
   }
 
-  const unprintable = (['tended', 'one-off', 'keep', 'check'] as const).find((flag) =>
-    /\p{Cc}/u.test(flags[flag] ?? ''),
-  );
+  const unprintable = firstUnprintable({
+    tended: flags.tended,
+    'one-off': flags['one-off'],
+    keep: flags.keep,
+    check: flags.check,
+  });
 
-  if (unprintable !== undefined) {
-    return `--${unprintable} must be one line of text without control characters`;
+  if (unprintable !== null) {
+    return unprintable;
   }
 
   const { kind, by } = chosen;
