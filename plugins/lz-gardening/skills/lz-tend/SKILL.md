@@ -13,8 +13,8 @@ Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
 
 Every weed pulled becomes a rule, so it cannot grow back. A tend pass writes the rule first, proves it rejects the
 weed, then clears the bed. It works in a bed: a worktree of the garden site on branch `bed/<class>`. It never
-writes to the repository's checkout, never pushes and never merges; a human brings the bed home. Each step ends on
-a check; when one fails, report the command and its output and stop.
+writes to the repository's checkout (tool caches in a linked `node_modules` aside), never pushes and never merges; a
+human brings the bed home. Each step ends on a check; when one fails, report the command and its output and stop.
 
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
@@ -30,7 +30,7 @@ the session's working directories (the session's environment lists any added one
 
 - Stay in the repository's checkout and point each command at the bed (`<bed>`, the full path
   `<site>/beds/<class>`) with its own directory flag: `git -C "<bed>"`, and the repository's package scripts with
-  `npm --prefix "<bed>" run <script>` (`pnpm -C "<bed>" <script>`, `yarn --cwd "<bed>" <script>`). The shell keeps
+  `npm --prefix "<bed>" run <script>` (`pnpm -C "<bed>" run <script>`, `yarn --cwd "<bed>" <script>`). The shell keeps
   the directory a `cd` leaves it in, and `site` finds the site from the checkout.
 - Run a check that takes no directory flag as `cd "<bed>" && <command>`. Before the next `site` or `weeds` call,
   run `cd "<checkout>"` as a call of its own.
@@ -80,9 +80,11 @@ Done when you can name the check, where it lives, and the message it prints.
 
 Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and the `<start>` commit, which you keep.
 When its `deps` is `install`, install the bed's dependencies as
-`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes under "Beds". Done when the repository's own
-lint, type-check and test commands run in the bed (read them from `package.json`, `nx.json` and CI config); note
-any that fail before your change, so they are not blamed on it.
+`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes under "Beds". When it is `linked` and a later
+step changes the bed's dependencies (a new lint plugin, say), remove the link and install first, as the same
+section says; never install through the link, which would write into the checkout's `node_modules`. Done when the
+repository's own lint, type-check and test commands run in the bed (read them from `package.json`, `nx.json` and CI
+config); note any that fail before your change, so they are not blamed on it.
 
 ## 5. Rule first, proved on a real weed
 

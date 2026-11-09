@@ -75,11 +75,11 @@ once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` 
 { "permissions": { "allow": ["Skill(lz-gardening:lz-garden)"] } }
 ```
 
-A tend pass runs in your session under your own permissions, and asks for what it needs: it creates a worktree in
-the site and edits files there. The `lz-tend` skill's own rules pre-approve only reading the `lz-tend` skill and the
-`lz-garden` references, and running the garden scripts. Because the site lies beside your checkout, a tend pass first asks you
-to add it as a working directory (`/add-dir <site>`); without that, Claude Code asks before every read or edit of a
-file in the bed.
+A tend pass runs in your session under your own permissions. The `lz-tend` skill's own rules pre-approve only
+reading the `lz-tend` skill and the `lz-garden` references, and running the garden scripts, which make the bed (a
+worktree in the site); it asks for the rest, such as edits in the bed and the repository's checks. Because the site
+lies beside your checkout, a tend pass first asks you to add it as a working directory (`/add-dir <site>`); without
+that, Claude Code asks before every read or edit of a file in the bed.
 
 ## Where a fix goes
 
