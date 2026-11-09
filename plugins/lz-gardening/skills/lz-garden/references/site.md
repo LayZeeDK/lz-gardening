@@ -81,8 +81,8 @@ left from an earlier bed (the message names it; move it aside and run `bed` agai
 - `linked`: the bed's `node_modules` is a link to the checkout's. `bed` makes the link when three things hold: the
   checkout has a `node_modules`; the bed's `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` is a plain file, not
   a link, with the same bytes as the checkout's; and the bed is not a workspace, so its `package.json` declares no
-  `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to the repository's checkout,
-  so the bed would test the other checkout's code.
+  `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to
+  the repository's checkout, so the bed would test the other checkout's code.
 - `install`: install with the repository's package manager, pointed at the bed: `npm --prefix "<bed>" ci`,
   `pnpm -C "<bed>" install --frozen-lockfile` or, for Yarn 4 or later, `yarn --cwd "<bed>" install --immutable`.
 - `installed`: the bed already has its own install, a `node_modules` folder or the `.pnp.cjs` file of a Yarn

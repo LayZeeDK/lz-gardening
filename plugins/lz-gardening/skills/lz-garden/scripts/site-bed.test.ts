@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   lstatSync,
@@ -95,7 +94,7 @@ test('bed refuses a folder at the bed path that is no longer the worktree of its
   const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(again.status, 2);
-  assert.match(again.stderr, /beds[\\/]any-type/);
+  assert.match(again.stderr, /beds[\\/]any-type is not the worktree/);
 });
 
 test('bed refuses a file at the path of an existing bed, and names it', (t) => {
@@ -148,11 +147,8 @@ test('bed refuses a folder at the bed path before it makes the branch, and names
   const made = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(made.status, 2);
-  assert.match(made.stderr, /beds[\\/]any-type/);
-  assert.equal(
-    spawnSync('git', ['rev-parse', '--verify', '--quiet', 'refs/heads/bed/any-type'], { cwd: garden }).status,
-    1,
-  );
+  assert.match(made.stderr, /beds[\\/]any-type is not the worktree/);
+  assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
 });
 
 test('bed refuses a class that is not a kebab-case class id and makes no bed', (t) => {
