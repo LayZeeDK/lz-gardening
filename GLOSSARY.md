@@ -28,7 +28,7 @@ check was written), or kept.
 
 **Regrown**:
 Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
-A weed that comes back after a one-off close is new, not regrown: no check was written to hold it.
+A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it.
 
 **Kept**:
 Said of a weed a human or a tend pass judged deliberate; it is never queued again.

@@ -100,7 +100,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --file "<site>/.garden/weeds.jso
   shows it.
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
-the line names that bed and its check: say so in the report, because the check did not hold. Done when every weed from steps 2 and 3 printed one of those words.
+the line names that bed and its check: say so in the report, because the check did not hold. Done when every weed
+from steps 2 and 3 printed one of those words.
 
 ## 5. Group, commit, report
 

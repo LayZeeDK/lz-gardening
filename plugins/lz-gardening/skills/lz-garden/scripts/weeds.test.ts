@@ -8,7 +8,7 @@ import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { addWeed, groupWeeds, openWeeds, parseRow, readQueue, validateAdd, weedId } from './weeds.ts';
-import type { AddInput, CloseKind, Row, Weed } from './weeds.ts';
+import type { AddInput, CloseKind, CloseRow, Row, Weed } from './weeds.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'weeds.ts');
 const now = new Date('2026-11-07T12:00:00.000Z');
@@ -34,10 +34,19 @@ function weed(fields: Partial<Weed>): Weed {
     source: 'census:any-type',
     note: '',
     layer: null,
-    regrown: false,
+    regrownAfter: null,
     ...fields,
   };
 }
+
+const tendClose: CloseRow = {
+  op: 'close',
+  id: 'x',
+  at: now.toISOString(),
+  by: 'bed/any-type@1a2b3c4',
+  kind: 'tended',
+  check: null,
+};
 
 function idOf(status: string): string {
   return status.trim().split(' ')[1] ?? '';
@@ -84,7 +93,7 @@ test('a weed closed as a one-off comes back added, not regrown: no check was wri
 
   const weeds = openWeeds([...rows, back.row]);
   assert.equal(weeds.length, 1);
-  assert.equal(weeds[0]?.regrown, false);
+  assert.equal(weeds[0]?.regrownAfter, null);
 });
 
 test('a weed of a class a tend pass closed is regrown wherever it comes back, naming the bed and its check', () => {
@@ -126,6 +135,27 @@ test('a weed of a class tended twice is judged against the latest tend pass', ()
   assert.equal(back.status, `regrown ${back.row?.id ?? ''} after bed/any-type@bbb2222`);
 });
 
+test('a one-off close after a tend pass leaves the class tended: the check it added still stands', () => {
+  const close = (id: string, kind: CloseKind, by: string, check: string | null): Row => ({
+    op: 'close',
+    id,
+    at: now.toISOString(),
+    by,
+    kind,
+    check,
+  });
+  const rows: Row[] = [
+    weed({ id: 'first' }),
+    close('first', 'tended', 'bed/any-type@aaa1111', 'tsconfig.json'),
+    weed({ id: 'back', where: 'src/b.ts:2' }),
+    close('back', 'one-off', 'generated code', null),
+  ];
+
+  const again = addWeed(rows, input({ class: 'any-type', where: 'src/c.ts:3', source: 'commit:ccc3333' }), now);
+
+  assert.equal(again.status, `regrown ${again.row?.id ?? ''} after bed/any-type@aaa1111 (check: tsconfig.json)`);
+});
+
 test('the replayed queue marks a weed regrown when a tend pass closed its class before it was added', () => {
   const tendedWeed = weed({ id: 'tended', class: 'any-type', where: 'src/a.ts:1' });
   const rows: Row[] = [
@@ -136,7 +166,7 @@ test('the replayed queue marks a weed regrown when a tend pass closed its class 
   ];
 
   assert.deepEqual(
-    openWeeds(rows).map((item) => [item.id, item.regrown]),
+    openWeeds(rows).map((item) => [item.id, item.regrownAfter !== null]),
     [
       ['back', true],
       ['other', false],
@@ -284,6 +314,21 @@ test('through the CLI a one-off close and a keep each record their reason and ki
   );
 });
 
+test('list shows a regrown weed with the bed and check it came back after', (t) => {
+  const dir = queue(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
+  cli(dir, ['close-class', '--class', 'any-type', '--tended', 'bed/any-type@bbb2222', '--check', 'eslint.config.mjs']);
+  const id = idOf(
+    cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:4', '--source', 'commit:ccc3333', '--note', 'cast'])
+      .stdout,
+  );
+
+  assert.equal(
+    cli(dir, ['list', '--class', 'any-type']).stdout,
+    `${id} any-type src/b.ts:4 [commit:ccc3333] [regrown after bed/any-type@bbb2222 (check: eslint.config.mjs)] cast\n`,
+  );
+});
+
 test('the CLI exits 2 on a malformed queue instead of treating it as empty', (t) => {
   const dir = queue(t);
   mkdirSync(join(dir, '.garden'));
@@ -397,8 +442,8 @@ test('a weed added twice while open keeps its first sighting', () => {
 
 test('a group counts a file once with or without a line, counts regrown weeds, and takes the lowest layer and first sighting', () => {
   const [group] = groupWeeds([
-    weed({ where: 'src/a.ts:12', at: '2026-11-07T10:00:00.000Z', layer: 3, regrown: true }),
-    weed({ where: 'src/a.ts:34', at: '2026-11-06T09:00:00.000Z', layer: 1, regrown: true }),
+    weed({ where: 'src/a.ts:12', at: '2026-11-07T10:00:00.000Z', layer: 3, regrownAfter: tendClose }),
+    weed({ where: 'src/a.ts:34', at: '2026-11-06T09:00:00.000Z', layer: 1, regrownAfter: tendClose }),
     weed({ where: 'src/a.ts', at: '2026-11-08T00:00:00.000Z' }),
     weed({ where: 'src/x:1.ts:4' }),
     weed({ where: 'src/x:1.ts:9' }),
@@ -422,7 +467,7 @@ test('groups sort by open weeds, then by regrowth, then by name', () => {
   const groups = groupWeeds([
     weed({ class: 'b-one', where: 'b' }),
     weed({ class: 'a-one', where: 'a' }),
-    weed({ class: 'c-regrown', where: 'c', regrown: true }),
+    weed({ class: 'c-regrown', where: 'c', regrownAfter: tendClose }),
     weed({ class: 'd-three', where: 'd1' }),
     weed({ class: 'd-three', where: 'd2' }),
     weed({ class: 'd-three', where: 'd3' }),
@@ -506,11 +551,16 @@ test('groups prints a header, then a row per class with its layer or a dash and 
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type', '--layer', '3']);
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/b.ts:1', '--source', 'census:todo-marker']);
 
-  const lines = cli(dir, ['groups']).stdout.trimEnd().split('\n');
+  const result = cli(dir, ['groups']);
+  const lines = result.stdout.trimEnd().split('\n');
 
+  assert.equal(result.code, 0);
   assert.equal(lines[0], `${'class'.padEnd(36)} open places regrown layer first-seen`);
-  assert.match(lines[1] ?? '', /^any-type +1 +1 +0 +3 \d{4}-\d{2}-\d{2}$/);
-  assert.match(lines[2] ?? '', /^todo-marker +1 +1 +0 +- \d{4}-\d{2}-\d{2}$/);
+  assert.match(lines[1] ?? '', new RegExp(`^${'any-type'.padEnd(36)}    1      1       0     3 \\d{4}-\\d{2}-\\d{2}$`));
+  assert.match(
+    lines[2] ?? '',
+    new RegExp(`^${'todo-marker'.padEnd(36)}    1      1       0     - \\d{4}-\\d{2}-\\d{2}$`),
+  );
 });
 
 test('groups --min leaves out classes with fewer open weeds', (t) => {
@@ -536,6 +586,7 @@ test('close takes one weed by id and leaves the rest of its class open', (t) => 
 
   const result = cli(dir, ['close', '--id', target, '--one-off', 'generated code']);
 
+  assert.equal(result.code, 0);
   assert.equal(result.stdout, 'closed 1\n');
   assert.deepEqual(
     cli(dir, ['list'])
@@ -577,16 +628,14 @@ test('a close needs its target and exactly one non-blank kind of close, and writ
 test('a tend close needs a bed of the class it closes and a check, and a check goes with a tend close only', (t) => {
   const dir = queue(t);
   const file = join(dir, '.garden', 'weeds.jsonl');
-  const target = idOf(
-    cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']).stdout,
-  );
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   const closeClass = ['close-class', '--class', 'any-type'];
 
   const results = [
     cli(dir, [...closeClass, '--tended', 'bed/any-type@1a2b3c4']),
     cli(dir, [...closeClass, '--one-off', 'generated code', '--check', 'eslint.config.mjs']),
     cli(dir, [...closeClass, '--tended', 'bed/todo-marker@1a2b3c4', '--check', 'eslint.config.mjs']),
-    cli(dir, ['close', '--id', target, '--tended', 'any-type@1a2b3c4', '--check', 'eslint.config.mjs']),
+    cli(dir, [...closeClass, '--tended', 'any-type@1a2b3c4', '--check', 'eslint.config.mjs']),
   ];
 
   assert.deepEqual(
@@ -595,7 +644,44 @@ test('a tend close needs a bed of the class it closes and a check, and a check g
       [2, 'weeds close-class: --tended needs --check <where the check lives>\n'],
       [2, 'weeds close-class: --check goes with --tended only\n'],
       [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got bed/todo-marker@1a2b3c4\n'],
-      [2, 'weeds close: --tended must be bed/any-type@<commit>, got any-type@1a2b3c4\n'],
+      [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got any-type@1a2b3c4\n'],
+    ],
+  );
+  assert.equal(readQueue(file).length, 1);
+});
+
+test('a tend close takes a whole class: close by id refuses --tended and leaves the class untended', (t) => {
+  const dir = queue(t);
+  const target = idOf(
+    cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']).stdout,
+  );
+
+  const result = cli(dir, ['close', '--id', target, '--tended', 'bed/any-type@1a2b3c4', '--check', 'tsconfig.json']);
+  const next = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
+
+  assert.deepEqual(
+    [result.code, result.stderr],
+    [2, 'weeds close: --tended closes a whole class; use close-class --class <class>\n'],
+  );
+  assert.match(next.stdout, /^added /);
+});
+
+test('a close refuses a reason or check holding a control character, which later output would print raw', (t) => {
+  const dir = queue(t);
+  const file = join(dir, '.garden', 'weeds.jsonl');
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  const closeClass = ['close-class', '--class', 'any-type'];
+
+  const results = [
+    cli(dir, [...closeClass, '--tended', 'bed/any-type@1a2b3c4', '--check', 'eslint.config.mjs\nadded deadbeef00']),
+    cli(dir, [...closeClass, '--one-off', 'generated\tcode']),
+  ];
+
+  assert.deepEqual(
+    results.map((result) => [result.code, result.stderr]),
+    [
+      [2, 'weeds close-class: --check must be one line of text without control characters\n'],
+      [2, 'weeds close-class: --one-off must be one line of text without control characters\n'],
     ],
   );
   assert.equal(readQueue(file).length, 1);
@@ -637,10 +723,11 @@ test('list prints each open weed as id, class, place, source and note, and --cla
   );
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/b.ts:2', '--source', 'commit:abc1234', '--note', 'later']);
 
-  const one = cli(dir, ['list', '--class', 'any-type']).stdout;
+  const listed = cli(dir, ['list', '--class', 'any-type']);
   const all = cli(dir, ['list']).stdout.trimEnd().split('\n');
 
-  assert.equal(one, `${id} any-type src/a.ts:1 [census:any-type] \n`);
+  assert.equal(listed.code, 0);
+  assert.equal(listed.stdout, `${id} any-type src/a.ts:1 [census:any-type] \n`);
   assert.equal(all.length, 2);
   assert.match(all[1] ?? '', / todo-marker src\/b\.ts:2 \[commit:abc1234\] later$/);
 });

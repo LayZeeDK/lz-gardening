@@ -9,9 +9,10 @@
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
-//     pass added a check), --one-off <reason> (no check written), --keep <reason> (the weed is deliberate).
+//     pass added a check; close-class only), --one-off <reason> (no check written), --keep <reason> (the weed is
+//     deliberate). Values are one line of text without control characters.
 //   node weeds.ts groups [--min <n>]     open weeds per class, most first; --min defaults to 1
-//   node weeds.ts list [--class <kebab>] open weeds, one per line
+//   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check
 // Exit 0 on success, 1 when a close finds nothing open, 2 on a usage error or a malformed queue.
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
@@ -45,7 +46,7 @@ export interface CloseRow {
 export type Row = AddRow | CloseRow;
 
 export interface Weed extends AddRow {
-  readonly regrown: boolean;
+  readonly regrownAfter: CloseRow | null;
 }
 
 export interface Group {
@@ -151,11 +152,11 @@ export function readQueue(file: string): Row[] {
     .flatMap((line, index) => (line.trim() === '' ? [] : [parseRow(line, index + 1)]));
 }
 
-/** Replays the log: the open weeds, each marked when it came back after a tend pass closed its class. */
+/** Replays the log: the open weeds, each with the latest tend close of its class before it, if any. */
 export function openWeeds(rows: readonly Row[]): Weed[] {
   const open = new Map<string, Weed>();
   const classOf = new Map<string, string>();
-  const tended = new Set<string>();
+  const lastTended = new Map<string, CloseRow>();
 
   for (const row of rows) {
     if (row.op === 'close') {
@@ -163,7 +164,7 @@ export function openWeeds(rows: readonly Row[]): Weed[] {
       const weedClass = classOf.get(row.id);
 
       if (row.kind === 'tended' && weedClass !== undefined) {
-        tended.add(weedClass);
+        lastTended.set(weedClass, row);
       }
 
       continue;
@@ -172,7 +173,7 @@ export function openWeeds(rows: readonly Row[]): Weed[] {
     classOf.set(row.id, row.class);
 
     if (!open.has(row.id)) {
-      open.set(row.id, { ...row, regrown: tended.has(row.class) });
+      open.set(row.id, { ...row, regrownAfter: lastTended.get(row.class) ?? null });
     }
   }
 
@@ -195,7 +196,7 @@ export function groupWeeds(weeds: readonly Weed[]): Group[] {
         class: weedClass,
         open: members.length,
         places: new Set(members.map((weed) => weed.where.replace(/:\d+$/, ''))).size,
-        regrown: members.filter((weed) => weed.regrown).length,
+        regrown: members.filter((weed) => weed.regrownAfter !== null).length,
         // Stryker disable next-line StringLiteral: a group always has a member, so times[0] is never missing
         firstAt: times[0] ?? '',
         layer: layers.length === 0 ? null : Math.min(...layers),
@@ -232,12 +233,68 @@ export function validateAdd(input: AddInput): string | null {
   return null;
 }
 
-function lastTendedClose(rows: readonly Row[], weedClass: string): CloseRow | undefined {
-  const classOf = new Map(rows.flatMap((row) => (row.op === 'add' ? [[row.id, row.class] as const] : [])));
+export interface CloseFlags {
+  readonly id?: string | undefined;
+  readonly class?: string | undefined;
+  readonly tended?: string | undefined;
+  readonly 'one-off'?: string | undefined;
+  readonly keep?: string | undefined;
+  readonly check?: string | undefined;
+}
 
-  return rows.findLast(
-    (row): row is CloseRow => row.op === 'close' && row.kind === 'tended' && classOf.get(row.id) === weedClass,
+export interface CloseRequest {
+  readonly target: string;
+  readonly kind: CloseKind;
+  readonly by: string;
+  readonly check: string | null;
+}
+
+/** The close a command's flags ask for, or what is wrong with them. */
+export function parseClose(command: 'close' | 'close-class', flags: CloseFlags): CloseRequest | string {
+  const kinds = (
+    [
+      ['tended', flags.tended],
+      ['one-off', flags['one-off']],
+      ['kept', flags.keep],
+    ] as const
+  ).flatMap(([kind, by]) => (by === undefined ? [] : [{ kind, by }]));
+  const chosen = kinds.length === 1 ? kinds[0] : undefined;
+  const target = command === 'close' ? flags.id : flags.class;
+
+  if (chosen === undefined || chosen.by.trim() === '' || target === undefined) {
+    return `needs ${command === 'close' ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep`;
+  }
+
+  const unprintable = (['tended', 'one-off', 'keep', 'check'] as const).find((flag) =>
+    /\p{Cc}/u.test(flags[flag] ?? ''),
   );
+
+  if (unprintable !== undefined) {
+    return `--${unprintable} must be one line of text without control characters`;
+  }
+
+  const { kind, by } = chosen;
+  const { check } = flags;
+
+  if (kind !== 'tended') {
+    return check === undefined ? { target, kind, by, check: null } : '--check goes with --tended only';
+  }
+
+  if (command === 'close') {
+    return '--tended closes a whole class; use close-class --class <class>';
+  }
+
+  if (check === undefined || check.trim() === '') {
+    return '--tended needs --check <where the check lives>';
+  }
+
+  return bedPattern.exec(by)?.[1] === target
+    ? { target, kind, by, check }
+    : `--tended must be bed/${target}@<commit>, got ${by}`;
+}
+
+function after(tended: CloseRow): string {
+  return `after ${tended.by}${tended.check === null ? '' : ` (check: ${tended.check})`}`;
 }
 
 export function addWeed(rows: readonly Row[], input: AddInput, now: Date): { status: string; row: AddRow | null } {
@@ -253,16 +310,9 @@ export function addWeed(rows: readonly Row[], input: AddInput, now: Date): { sta
   }
 
   const row: AddRow = { op: 'add', id, at: now.toISOString(), ...input };
-  const tended = lastTendedClose(rows, input.class);
+  const tended = openWeeds([...rows, row]).find((weed) => weed.id === id)?.regrownAfter ?? null;
 
-  if (tended !== undefined) {
-    return {
-      status: `regrown ${id} after ${tended.by}${tended.check === null ? '' : ` (check: ${tended.check})`}`,
-      row,
-    };
-  }
-
-  return { status: `added ${id}`, row };
+  return { status: tended === null ? `added ${id}` : `regrown ${id} ${after(tended)}`, row };
 }
 
 function append(file: string, rows: readonly Row[]): void {
@@ -335,39 +385,15 @@ function main(argv: readonly string[], now: Date): number {
     }
     case 'close':
     case 'close-class': {
-      const kinds = (
-        [
-          ['tended', values.tended],
-          ['one-off', values['one-off']],
-          ['kept', values.keep],
-        ] as const
-      ).flatMap(([kind, by]) => (by === undefined ? [] : [{ kind, by }]));
-      const chosen = kinds.length === 1 ? kinds[0] : undefined;
-      const target = command === 'close' ? values.id : values.class;
+      const request = parseClose(command, values);
 
-      if (chosen === undefined || chosen.by.trim() === '' || target === undefined) {
-        process.stderr.write(
-          `weeds ${command}: needs ${command === 'close' ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep\n`,
-        );
+      if (typeof request === 'string') {
+        process.stderr.write(`weeds ${command}: ${request}\n`);
 
         return 2;
       }
 
-      const { kind, by } = chosen;
-      const { check } = values;
-
-      if (kind === 'tended' && (check === undefined || check.trim() === '')) {
-        process.stderr.write(`weeds ${command}: --tended needs --check <where the check lives>\n`);
-
-        return 2;
-      }
-
-      if (kind !== 'tended' && check !== undefined) {
-        process.stderr.write(`weeds ${command}: --check goes with --tended only\n`);
-
-        return 2;
-      }
-
+      const { kind, by, check, target } = request;
       const closing = openWeeds(rows).filter((weed) => (command === 'close' ? weed.id : weed.class) === target);
 
       if (closing.length === 0) {
@@ -376,24 +402,9 @@ function main(argv: readonly string[], now: Date): number {
         return 1;
       }
 
-      const misnamed = closing.find((weed) => bedPattern.exec(by)?.[1] !== weed.class);
-
-      if (kind === 'tended' && misnamed !== undefined) {
-        process.stderr.write(`weeds ${command}: --tended must be bed/${misnamed.class}@<commit>, got ${by}\n`);
-
-        return 2;
-      }
-
       append(
         file,
-        closing.map((weed): CloseRow => ({
-          op: 'close',
-          id: weed.id,
-          at: now.toISOString(),
-          by,
-          kind,
-          check: check ?? null,
-        })),
+        closing.map((weed): CloseRow => ({ op: 'close', id: weed.id, at: now.toISOString(), by, kind, check })),
       );
       write(`${kind === 'kept' ? 'kept' : 'closed'} ${String(closing.length)}`);
 
@@ -423,7 +434,8 @@ function main(argv: readonly string[], now: Date): number {
       const only = values.class;
 
       for (const weed of openWeeds(rows).filter((item) => only === undefined || item.class === only)) {
-        write(`${weed.id} ${weed.class} ${weed.where} [${weed.source}] ${weed.note}`);
+        const regrown = weed.regrownAfter === null ? '' : ` [regrown ${after(weed.regrownAfter)}]`;
+        write(`${weed.id} ${weed.class} ${weed.where} [${weed.source}]${regrown} ${weed.note}`);
       }
 
       return 0;

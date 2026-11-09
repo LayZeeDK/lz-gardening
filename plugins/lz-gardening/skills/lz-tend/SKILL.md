@@ -56,9 +56,9 @@ not tended directly (step 2); say which. When it lists no class, report `nothing
 
 Read every open weed at the base (`git show <base>:<path>`) and the commit that planted it (`--source`).
 Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? A class
-whose weeds were `regrown` had a check that did not hold: start from the check its last tend pass recorded (the
-`"kind":"tended"` rows of `<site>/.garden/weeds.jsonl` name the bed and the check), and find why (a rule too
-narrow, a suppression, an exception that spread, a bed not landed yet) before writing another.
+whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
+each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule too narrow, a
+suppression, an exception that spread, a bed not landed yet) before writing another.
 
 Then decide, and say which:
 

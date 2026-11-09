@@ -14,7 +14,7 @@ First release.
   of each census pattern on the base branch, reads what landed since the last tick, and queues each weed with its
   evidence. The first tick seeds the queue from the census's seed list, the repository's records and its history.
   A weed of a class a tend pass closed is queued as `regrown` wherever it comes back, naming the bed and the check
-  that should have held it; a weed that comes back after a one-off close is queued as new.
+  that should have held it; a weed of a class only ever closed as a one-off is queued as new.
   Carries its own permission rules: they allow reading its own files and running its own scripts and read-only git commands;
   anything else falls back to your own settings. The queue and census scripts write only to `.garden/weeds.jsonl`
   and `.garden/census.json` and refuse any other output path. The site's own git commands run none of your git hooks
