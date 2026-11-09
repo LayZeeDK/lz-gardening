@@ -667,6 +667,21 @@ test('bed on an existing bed keeps its work and reports where it started, after 
   assert.equal(git(bed, ['rev-parse', 'HEAD']), work);
 });
 
+test('bed on a bed whose folder is gone brings the folder back with the branch work', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  commit(bed, { 'src/kept.ts': 'export const kept = 1;\n' });
+  rmSync(bed, { recursive: true, force: true });
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('created'), false);
+  assert.equal(existsSync(join(bed, 'src', 'kept.ts')), true);
+});
+
 test('bed refuses a class that is not a kebab-case class id and makes no bed', (t) => {
   const { dir, garden } = planted(t);
 

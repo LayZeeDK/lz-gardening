@@ -286,6 +286,11 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
   if (gitSucceeds(site, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])) {
     const start = git(site, ['merge-base', branch, 'FETCH_HEAD']);
 
+    if (!existsSync(bed)) {
+      git(site, ['worktree', 'prune']);
+      git(site, ['worktree', 'add', '-q', bed, branch]);
+    }
+
     return { bed, branch, start, created: false, deps: plantDeps(top, bed) };
   }
 
