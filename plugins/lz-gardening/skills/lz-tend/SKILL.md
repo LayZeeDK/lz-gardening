@@ -14,7 +14,8 @@ Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
 Every weed pulled becomes a rule, so it cannot grow back. A tend pass writes the rule first, proves it rejects the
 weed, then clears the bed. It works in a bed: a worktree of the garden site on branch `bed/<class>`. It never
 writes to the repository's checkout (tool caches in a linked `node_modules` aside), never pushes and never merges; a
-human brings the bed home. Each step ends on a check; when one fails, report the command and its output and stop.
+human lands the bed. Each step ends on a done condition; when one is not met, report the command and its output and
+stop.
 
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
@@ -32,12 +33,13 @@ the session's working directories (the session's environment lists any added one
   `<site>/beds/<class>`) with its own directory flag: `git -C "<bed>"`, and the repository's package scripts with
   `npm --prefix "<bed>" run <script>` (`pnpm -C "<bed>" run <script>`, `yarn --cwd "<bed>" <script>`). The shell keeps
   the directory a `cd` leaves it in, and `site` finds the site from the checkout.
-- Run a check that takes no directory flag as `cd "<bed>" && <command>`. Before the next `site` or `weeds` call,
+- Run a command that takes no directory flag as `cd "<bed>" && <command>`. Before the next `site` or `weeds` call,
   run `cd "<checkout>"` as a call of its own.
-- Run each check in the foreground and read its output in the tool result. A background run writes its output to
-  a file outside the session's working directories, so reading it asks.
-- When a command is refused, report it and stop that step; never reach the same result with another command (`rm`
-  for a refused `git rm`, say). The refusal is the user's answer.
+- Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
+  timeout, up to its limit of 10 minutes. A background run writes its output to a file outside the session's working
+  directories, so reading it asks.
+- When a command is refused, report it and stop the tend pass, as when a step's done condition is not met; never
+  reach the same result with another command (`rm` for a refused `git rm`, say). The refusal is the user's answer.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.
@@ -122,7 +124,7 @@ repository's checkout, close the class and commit the queue:
 - The check: layer, file, message, and the quoted output that proved it rejects a real weed.
 - Instances fixed, instances baselined, code deleted, and the bed's net line count
   (`git -C "<bed>" diff --shortstat <start>`); a tend pass usually leaves the codebase shorter.
-- The checks run in the bed, with their summary lines.
+- The lint, type-check and test commands run in the bed, with their summary lines.
 - A layer 3 proposal, if one would help, described but not built.
 - How to land it, from the repository: `git fetch ../<repo>.garden bed/<class>`, then review and merge the
   fetched branch the way the repository lands work.

@@ -19,8 +19,8 @@ the checkout, write into a **site** instead: a local clone beside the repository
 `garden` is an orphan branch: it holds only `.garden/` and `.gitignore`, never the repository's code, so its history
 is the gardener's record and nothing else. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
 branch beside `garden`) start from the base branch and carry one proposed bed change each. Nothing in the site is
-pushed. A human brings a bed home from the repository with `git fetch ../<repo>.garden bed/<class>` and merges it
-the way the repository lands work; the `garden` branch can be fetched the same way to keep the queue in the
+pushed. A human lands a bed by fetching it into the repository with `git fetch ../<repo>.garden bed/<class>` and
+merging it the way the repository lands work; the `garden` branch can be fetched the same way to keep the queue in the
 repository's history.
 
 ## Open, commit
@@ -29,9 +29,9 @@ repository's history.
 of the repository, it uses the one site beside the main checkout:
 
 - `site.ts open [--base <branch>]` creates the site on first use: a clone with no checkout, the repository's
-  `user.name` and `user.email` copied in, and the orphan `garden` branch with one plant commit holding
+  `user.name` and `user.email` copied in, and the orphan `garden` branch with one first commit holding
   `.gitignore`. On later runs it leaves the site as it is. It prints JSON with `site`, `created`, `base` and
-  `seeded` (whether the `garden` branch holds a commit past the plant). It exits 2 when the repository has no
+  `seeded` (whether the `garden` branch holds a commit past the first one). It exits 2 when the repository has no
   `user.name` or `user.email`, so the gardener never commits under a default identity.
 - `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
   `committed`, false when nothing changed.
@@ -53,7 +53,7 @@ it for `main` or `master`.
 A branch that only `origin` has (a clone whose checkout is a milestone branch often has `main` only as
 `origin/main`) is reported as `origin/<name>`, and every later command reads that ref. A base that resolves to no
 commit, or whose name holds a character a shell would expand (anything but letters, digits and `._/+@-`), stops
-`open` with exit 2 before it plants anything.
+`open` with exit 2 before it creates anything.
 
 The base names a ref in the repository, not in the site: a tick reads it in the repository's checkout, and
 `site.ts bed` fetches it into the site by that name (below).
@@ -72,16 +72,16 @@ committed there. It prints JSON with `bed`, `branch`, `start`, `created` and `de
 started from, written `<start>` below; for a bed that exists, it is where the bed's branch left the base. `bed` exits
 2 on a class that is not a kebab-case class id; on a base that is not a plain branch name or commit (one that starts
 with `-`, or holds characters such as `~`, `^` or `:`); on a base the site cannot fetch; when `site.ts open` has not
-made the site; when the folder `<bed>` exists but is not the worktree of `bed/<class>` (the message names it; move
-it aside and run `bed` again); and when it must read a bed `package.json` that is not valid JSON (the message names
-the file).
+made the site; when something other than the worktree of `bed/<class>` is at `<bed>`, such as a file or a folder
+left from an earlier bed (the message names it; move it aside and run `bed` again); and when it must read a bed
+`package.json` that is not valid JSON (the message names the file).
 
 `deps` says how the bed gets its Node.js dependencies:
 
-- `linked`: the bed's `node_modules` is a link to the checkout's. `bed` makes the link when the checkout has a
-  `node_modules`, the bed's `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` is a plain file (not a link)
-  byte-identical to the checkout's, and the bed is not a workspace: its `package.json` declares no `workspaces` and it has no
-  `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to the repository's checkout,
+- `linked`: the bed's `node_modules` is a link to the checkout's. `bed` makes the link when three things hold: the
+  checkout has a `node_modules`; the bed's `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` is a plain file, not
+  a link, with the same bytes as the checkout's; and the bed is not a workspace, so its `package.json` declares no
+  `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to the repository's checkout,
   so the bed would test the other checkout's code.
 - `install`: install with the repository's package manager, pointed at the bed: `npm --prefix "<bed>" ci`,
   `pnpm -C "<bed>" install --frozen-lockfile` or, for Yarn 4 or later, `yarn --cwd "<bed>" install --immutable`.
@@ -89,8 +89,9 @@ the file).
   Plug'n'Play install.
 - `none`: the bed has no `package.json`.
 
-When a linked bed changes its dependencies, remove the link first (the unlink command that opens Cleanup; the rest
-of Cleanup is for the human who lands or drops the bed), then install. Never run an install through a link: it
+When a linked bed changes its dependencies, stop any process a check left running in the bed (`npx nx daemon --stop`
+for Nx), remove the link (`rm "<bed>/node_modules"`, no `-r`; on Windows `cmd //c rmdir "<bed>\node_modules"`), then
+install. Cleanup below is for the human who lands or drops the bed. Never run an install through a link: it
 rewrites the repository's own `node_modules`. Tools that cache under `node_modules`, such as `node_modules/.cache`,
 write those caches through the link into the checkout's folder.
 
@@ -99,10 +100,10 @@ write those caches through the link into the checkout's folder.
 A bed stays until its branch is merged into the base or a human drops it. Stop any process a check left running in
 the bed, such as Nx's daemon: on Windows git cannot move or remove a folder a process holds open. Remove the bed
 with: unlink `node_modules` first (`rm "<bed>/node_modules"`, no `-r`; on Windows
-`cmd //c rmdir "<bed>\node_modules"`), then `git -C "<site>" worktree remove "<bed>"`, then `git -C "<site>" branch -D bed/<class>` only once the change has
-landed: after `git -C "<site>" fetch -q origin <base>`,
-`git -C "<site>" merge-base --is-ancestor bed/<class> FETCH_HEAD` exits 0, or the base holds
-a commit that carries the same change. Deleting the whole site loses the
-queue unless the `garden` branch was fetched into the repository.
+`cmd //c rmdir "<bed>\node_modules"`), then `git -C "<site>" worktree remove "<bed>"`, then
+`git -C "<site>" branch -D bed/<class>` only once the change has landed: after
+`git -C "<site>" fetch -q origin <base>`, `git -C "<site>" merge-base --is-ancestor bed/<class> FETCH_HEAD` exits 0,
+or the base holds a commit that carries the same change. Deleting the whole site loses the queue unless the
+`garden` branch was fetched into the repository.
 
 One gardener per site: two sessions looping on one repository append to the same queue and race on its commits.
