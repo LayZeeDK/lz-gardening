@@ -246,7 +246,7 @@ function openSite(top: string, site: string, requested: string | undefined): obj
 
 const lockfiles = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'];
 
-// The bed's lockfile comes from the base, so only a plain file is read: a link or a FIFO there could point anywhere.
+// The bed's lockfile comes from the base, so only a plain file is read: a link can name any file, a FIFO hangs.
 function sameBytes(checkout: string, bed: string): boolean {
   return (
     existsSync(checkout) &&
@@ -307,15 +307,16 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
   requireSite(site);
   git(site, ['fetch', '-q', 'origin', base]);
   const branch = `bed/${bedClass}`;
+  const branchRef = `refs/heads/${branch}`;
   const bed = join(site, 'beds', bedClass);
 
-  if (gitSucceeds(site, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])) {
-    const start = git(site, ['merge-base', `refs/heads/${branch}`, 'FETCH_HEAD']);
+  if (gitSucceeds(site, ['rev-parse', '--verify', '--quiet', branchRef])) {
+    const start = git(site, ['merge-base', branchRef, 'FETCH_HEAD']);
 
     if (!existsSync(bed)) {
       git(site, ['worktree', 'prune']);
       git(site, ['worktree', 'add', '-q', bed, branch]);
-    } else if (optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== `refs/heads/${branch}`) {
+    } else if (optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== branchRef) {
       throw new Error(`${bed} is not the worktree of ${branch}; move it aside, then run bed again`);
     }
 
