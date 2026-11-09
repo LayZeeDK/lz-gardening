@@ -24,7 +24,8 @@ rejects. Describe an idea in its own words instead of pointing at another tool. 
 The scripts under `plugins/lz-gardening/skills/*/scripts/` are TypeScript in erasable syntax that Node.js 22.18+
 runs directly, with Node.js built-ins only. Develop them test-first, one `node:test` test per red-green-refactor
 cycle. Give each test its own state from a setup function it calls (a throwaway git repository for census tests),
-not shared `before` hooks. Mutation-test changes with stock StrykerJS (the command runner over `node --test`).
+not shared `before` hooks. Mutation-test changes with StrykerJS: the command runner over `node --test`, or, on a
+machine with an `@layzee/stryker-node-test-runner` checkout, that runner (`stryker.config.mjs` says how).
 
 Keep `npm run check` passing: type-check, lint, Prettier and every test, the hygiene checks included.
 
