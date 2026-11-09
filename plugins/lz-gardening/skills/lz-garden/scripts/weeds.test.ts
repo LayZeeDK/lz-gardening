@@ -536,6 +536,24 @@ test('a different weed is added beside open, closed and kept weeds', () => {
   assert.match(addWeed(rows, input({ where: 'src/new.ts:1' }), now).status, /^added /);
 });
 
+test('a new weed of an untended class is added even when an open weed of another class is regrown', () => {
+  const first = addWeed([], input({ where: 'src/a.spec.ts:3', source: 'commit:aaa1111' }), now);
+  assert.ok(first.row);
+  const tended: Row = { ...tendClose, id: first.row.id, by: 'bed/hollow-assertion@bbb2222' };
+  const back = addWeed([first.row, tended], input({ where: 'src/b.spec.ts:8', source: 'commit:ccc3333' }), now);
+  assert.ok(back.row);
+  assert.match(back.status, /^regrown /);
+
+  const other = addWeed(
+    [first.row, tended, back.row],
+    input({ class: 'todo-marker', where: 'src/c.ts:1', source: 'census:todo-marker' }),
+    now,
+  );
+
+  assert.ok(other.row);
+  assert.equal(other.status, `added ${other.row.id}`);
+});
+
 test('the CLI refuses a --file outside a .garden folder and writes nothing', (t) => {
   const dir = queue(t);
   const target = join(dir, 'profile');
@@ -683,6 +701,64 @@ test('a tend close needs a bed of the class it closes and a check, and a check g
       [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got bed/todo-marker@1a2b3c4\n'],
       [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got any-type@1a2b3c4\n'],
     ],
+  );
+  assert.equal(readQueue(file).length, 1);
+});
+
+test('a tend close refuses a bed with anything in front of bed/<class>@<commit>', (t) => {
+  const dir = queue(t);
+  const file = join(dir, '.garden', 'weeds.jsonl');
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+
+  const result = cli(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    'xbed/any-type@1a2b3c4',
+    '--check',
+    'eslint.config.mjs',
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr],
+    [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got xbed/any-type@1a2b3c4\n'],
+  );
+  assert.equal(readQueue(file).length, 1);
+});
+
+test('a tend close refuses a bed with anything after bed/<class>@<commit>', (t) => {
+  const dir = queue(t);
+  const file = join(dir, '.garden', 'weeds.jsonl');
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+
+  const result = cli(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    'bed/any-type@1a2b3c4-extra',
+    '--check',
+    'eslint.config.mjs',
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr],
+    [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got bed/any-type@1a2b3c4-extra\n'],
+  );
+  assert.equal(readQueue(file).length, 1);
+});
+
+test('a tend close refuses a check of only spaces, which names no place', (t) => {
+  const dir = queue(t);
+  const file = join(dir, '.garden', 'weeds.jsonl');
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+
+  const result = cli(dir, ['close-class', '--class', 'any-type', '--tended', 'bed/any-type@1a2b3c4', '--check', '   ']);
+
+  assert.deepEqual(
+    [result.code, result.stderr],
+    [2, 'weeds close-class: --tended needs --check <where the check lives>\n'],
   );
   assert.equal(readQueue(file).length, 1);
 });

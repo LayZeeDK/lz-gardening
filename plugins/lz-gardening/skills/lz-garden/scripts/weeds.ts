@@ -68,6 +68,7 @@ const queuePattern = /[\\/]\.garden[\\/]weeds\.jsonl$/;
 const unprintablePattern = /[\p{Cc}\p{Zl}\p{Zp}\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}]/u;
 
 function firstUnprintable(values: Readonly<Record<string, string | undefined>>): string | null {
+  // Stryker disable next-line StringLiteral: an absent flag has no text, and the mutant's text has no control character either
   const flag = Object.entries(values).find(([, value]) => unprintablePattern.test(value ?? ''))?.[0];
 
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
