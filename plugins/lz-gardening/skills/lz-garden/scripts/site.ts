@@ -56,10 +56,10 @@ const bookkeeping = [
 ];
 
 // A hook set up by name in the git config (hook.<name>.command) ignores core.hooksPath, so each is turned off by name.
-// --config-env splits at the last '=', where -c splits at the first, so a name may hold '='.
+// A name may hold any character but NUL: keys are read NUL-separated, and --config-env splits at the last '='.
 export function namedHooksOff(cwd: string): string[] {
-  const keys = spawnGit(cwd, ['config', '--list', '--name-only'], gitEnv()).stdout;
-  const names = new Set([...keys.matchAll(/^hook\.(.+)\.(?:command|event)$/gm)].flatMap((match) => match.slice(1)));
+  const keys = spawnGit(cwd, ['config', '--list', '--name-only', '-z'], gitEnv()).stdout.split('\0');
+  const names = new Set(keys.flatMap((key) => /^hook\.(.+)\.(?:command|event)$/s.exec(key)?.slice(1) ?? []));
 
   return [...names].map((name) => `--config-env=hook.${name}.enabled=${hookOffVariable}`);
 }

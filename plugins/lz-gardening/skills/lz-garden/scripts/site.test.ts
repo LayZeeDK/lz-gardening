@@ -593,6 +593,28 @@ test('the site runs no hook set up by name whose name holds an equals sign', (t)
   assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
 });
 
+test('the site runs no hook set up by name whose name holds a line separator', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const ran = join(dirname(dir), 'hooks-ran.log').replaceAll('\\', '/');
+  const env = {
+    ...process.env,
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'hook.line sep.event',
+    GIT_CONFIG_VALUE_0: 'pre-commit',
+    GIT_CONFIG_KEY_1: 'hook.line sep.command',
+    GIT_CONFIG_VALUE_1: `echo line-sep >> "${ran}"`,
+  };
+
+  const opened = site(dir, ['open', '--base', 'main'], env);
+  assert.equal(opened.status, 0, opened.stderr);
+  queueOneWeed(join(dirname(dir), 'repo.garden'));
+  const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
+
+  assert.equal(recorded.status, 0, recorded.stderr);
+  assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
+});
+
 test('the hooks turned off are those the config names, by their whole name, and no other key', (t) => {
   const dir = repo(t);
   git(dir, ['config', 'hook.team.lint.event', 'pre-commit']);
