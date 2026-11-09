@@ -356,6 +356,36 @@ function mainCheckout(cwd: string): string {
   return first.replace(/^worktree /, '');
 }
 
+type Command =
+  | { command: 'open'; base: string | undefined }
+  | { command: 'commit'; message: string }
+  | { command: 'bed'; bedClass: string; base: string };
+
+function parseCommand(
+  positionals: readonly string[],
+  values: { base?: string | undefined; class?: string | undefined; message: string },
+): Command | undefined {
+  const [command] = positionals;
+
+  if (positionals.length !== 1) {
+    return undefined;
+  }
+
+  if (command === 'open' && values.message === '' && values.class === undefined) {
+    return { command, base: values.base };
+  }
+
+  if (command === 'commit' && values.message !== '' && values.base === undefined && values.class === undefined) {
+    return { command, message: values.message };
+  }
+
+  if (command === 'bed' && values.class !== undefined && values.base !== undefined && values.message === '') {
+    return { command, bedClass: values.class, base: values.base };
+  }
+
+  return undefined;
+}
+
 function main(argv: readonly string[], cwd: string): number {
   const { positionals, values } = parseArgs({
     args: [...argv],
@@ -363,15 +393,9 @@ function main(argv: readonly string[], cwd: string): number {
     strict: true,
     options: { base: { type: 'string' }, class: { type: 'string' }, message: { type: 'string', default: '' } },
   });
-  const [command] = positionals;
+  const parsed = parseCommand(positionals, values);
 
-  const wellFormed =
-    positionals.length === 1 &&
-    ((command === 'open' && values.message === '' && values.class === undefined) ||
-      (command === 'commit' && values.message !== '' && values.base === undefined && values.class === undefined) ||
-      (command === 'bed' && values.class !== undefined && values.base !== undefined && values.message === ''));
-
-  if (!wellFormed) {
+  if (parsed === undefined) {
     process.stderr.write(
       'usage: site.ts open [--base <branch>] | site.ts commit --message <text> | site.ts bed --class <kebab> --base <base>\n',
     );
@@ -386,13 +410,23 @@ function main(argv: readonly string[], cwd: string): number {
   }
 
   const site = join(dirname(top), `${basename(top)}.garden`);
-  const summary =
-    // Stryker disable next-line ConditionalExpression: wellFormed lets --class and --base through together only for bed
-    command === 'bed' && values.class !== undefined && values.base !== undefined
-      ? makeBed(top, site, values.class, values.base)
-      : command === 'commit'
-        ? commitSite(site, values.message)
-        : openSite(top, site, values.base);
+  let summary: object;
+
+  switch (parsed.command) {
+    case 'open': {
+      summary = openSite(top, site, parsed.base);
+      break;
+    }
+    case 'commit': {
+      summary = commitSite(site, parsed.message);
+      break;
+    }
+    case 'bed': {
+      summary = makeBed(top, site, parsed.bedClass, parsed.base);
+      break;
+    }
+  }
+
   process.stdout.write(`${JSON.stringify(summary)}\n`);
 
   return 0;
