@@ -72,7 +72,9 @@ committed there. It prints JSON with `bed`, `branch`, `start`, `created` and `de
 started from, written `<start>` below; for a bed that exists, it is where the bed's branch left the base. `bed` exits
 2 on a class that is not a kebab-case class id; on a base that is not a plain branch name or commit (one that starts
 with `-`, or holds characters such as `~`, `^` or `:`); on a base the site cannot fetch; when `site.ts open` has not
-made the site; and when it must read a bed `package.json` that is not valid JSON (the message names the file).
+made the site; when the folder `<bed>` exists but is not the worktree of `bed/<class>` (the message names it; move
+it aside and run `bed` again); and when it must read a bed `package.json` that is not valid JSON (the message names
+the file).
 
 `deps` says how the bed gets its Node.js dependencies:
 

@@ -730,6 +730,20 @@ test('bed on a bed whose folder is gone brings the folder back with the branch w
   assert.equal(existsSync(join(bed, 'src', 'kept.ts')), true);
 });
 
+test('bed refuses a folder at the bed path that is no longer the worktree of its branch, and names it', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  git(garden, ['worktree', 'remove', '--force', bed]);
+  mkdirSync(bed);
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 2);
+  assert.match(again.stderr, /beds[\\/]any-type/);
+});
+
 test('bed refuses a class that is not a kebab-case class id and makes no bed', (t) => {
   const { dir, garden } = planted(t);
 

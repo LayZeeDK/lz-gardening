@@ -306,6 +306,8 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
     if (!existsSync(bed)) {
       git(site, ['worktree', 'prune']);
       git(site, ['worktree', 'add', '-q', bed, branch]);
+    } else if (optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== `refs/heads/${branch}`) {
+      throw new Error(`${bed} is not the worktree of ${branch}; move it aside, then run bed again`);
     }
 
     return { bed, branch, start, created: false, deps: plantDeps(top, bed) };
