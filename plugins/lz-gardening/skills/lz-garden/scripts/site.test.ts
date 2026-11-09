@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { renameRetrying, resolveBase } from './site.ts';
+import { namedHooksOff, renameRetrying, resolveBase } from './site.ts';
 import type { BaseFacts } from './site.ts';
 import { commit, git, repo } from './test-repo.ts';
 
@@ -569,6 +569,22 @@ test('the site runs none of the hooks the user set up by name in their git confi
 
   assert.equal(bed.status, 0, bed.stderr);
   assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
+});
+
+test('the hooks turned off are those the config names, by their whole name, and no other key', (t) => {
+  const dir = repo(t);
+  git(dir, ['config', 'hook.team.lint.event', 'pre-commit']);
+  git(dir, ['config', 'hook.team.lint.command', 'npm run lint']);
+  git(dir, ['config', 'alias.hook.x.command', 'log']);
+  git(dir, ['config', 'hook.other.commandeer', 'x']);
+
+  const flags = namedHooksOff(dir);
+
+  assert.ok(flags.includes('hook.team.lint.enabled=false'), flags.join(' '));
+  assert.deepEqual(
+    flags.filter((flag) => /^hook\.(x|other)\.|\.(command|event)\./.test(flag)),
+    [],
+  );
 });
 
 test('open without git on the PATH is an error that names git, not a crash', (t) => {

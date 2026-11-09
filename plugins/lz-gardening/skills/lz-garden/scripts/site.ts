@@ -52,7 +52,7 @@ const bookkeeping = [
 ];
 
 // A hook set up by name in the git config (hook.<name>.command) ignores core.hooksPath, so each is turned off by name.
-function namedHooksOff(cwd: string): string[] {
+export function namedHooksOff(cwd: string): string[] {
   const keys = spawnGit(cwd, ['config', '--list', '--name-only'], gitEnv()).stdout;
   const names = new Set([...keys.matchAll(/^hook\.(.+)\.(?:command|event)$/gm)].flatMap((match) => match.slice(1)));
 
