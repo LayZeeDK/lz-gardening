@@ -56,15 +56,16 @@ not tended directly (step 2); say which. When it lists no class, report `nothing
 
 Read every open weed at the base (`git show <base>:<path>`) and the commit that planted it (`--source`).
 Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? A class
-whose weeds were `regrown` had a fix that did not hold: find why (a rule too narrow, a suppression, an exception
-that spread) before writing another.
+whose weeds were `regrown` had a check that did not hold: start from the check its last tend pass recorded (the
+`"kind":"tended"` rows of `<site>/.garden/weeds.jsonl` name the bed and the check), and find why (a rule too
+narrow, a suppression, an exception that spread, a bed not landed yet) before writing another.
 
 Then decide, and say which:
 
-- **Keep**: the pattern is deliberate and right here. `weeds close-class --class <class> --by "<reason>" --keep`,
+- **Keep**: the pattern is deliberate and right here. `weeds close-class --class <class> --keep "<reason>"`,
   `site commit --message "garden: keep <class>"`, report, stop.
 - **One-off**: on reading, the weeds share no cause or sit in one place.
-  `weeds close-class --class <class> --by "one-off: <reason>"`, `site commit --message "garden: one-off <class>"`,
+  `weeds close-class --class <class> --one-off "<reason>"`, `site commit --message "garden: one-off <class>"`,
   report, stop.
 - **Redirect**: a `repeated-lesson` class is tended through the class its lessons are about, and a
   `stale-verification` class through a refresh of the verification setup, not here. Name that class or job in the
@@ -115,8 +116,9 @@ Quote their summary lines.
 Commit the bed change with `git -C "<bed>"`, following the repository's commit message convention
 (`git log --oneline -20`), one commit per check, holding the check and its clean-up together. Then, from the
 repository's checkout, close the class and commit the queue:
-`weeds close-class --class <class> --by "bed/<class>@<short sha>"`, then
-`site commit --message "garden: tend <class>"`.
+`weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
+check's file from step 3, then `site commit --message "garden: tend <class>"`. A later weed of the class, anywhere,
+is then queued as `regrown` and names this bed and check.
 
 ## 8. Report
 

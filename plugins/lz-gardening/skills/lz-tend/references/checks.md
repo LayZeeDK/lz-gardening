@@ -71,7 +71,7 @@ story a test that can fail.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `claim-as-evidence`  | A verification step that runs the check and records its output, so "done" carries evidence. When the repository's workflow framework has a verification gate, use it; otherwise propose one in the report. |
 | `rule-in-prose`      | Move the rule to the check that enforces it, then cut the prose to one line naming the check, or delete it.                                                                                                |
-| `stale-verification` | Not tended here: refreshing a verification skill or feature map is its own job. Close with `--by "verification refresh"` once someone has done it.                                                         |
+| `stale-verification` | Not tended here: refreshing a verification skill or feature map is its own job. Close with `--one-off "verification refresh"` once someone has done it.                                                    |
 
 ## Layer 3 (propose only)
 

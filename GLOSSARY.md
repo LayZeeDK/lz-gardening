@@ -22,8 +22,13 @@ The commit that introduced a weed; a weed found by reading what landed names it 
 A function name defined in two or more files of the codebase.
 _Avoid_: copy, clone
 
+**Close**:
+Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
+check was written), or kept.
+
 **Regrown**:
-Said of a weed that came back after a tend pass closed it; the check that was meant to hold it did not.
+Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
+A weed that comes back after a one-off close is new, not regrown: no check was written to hold it.
 
 **Kept**:
 Said of a weed a human or a tend pass judged deliberate; it is never queued again.

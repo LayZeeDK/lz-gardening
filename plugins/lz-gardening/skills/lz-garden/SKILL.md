@@ -99,8 +99,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --file "<site>/.garden/weeds.jso
 - `--layer`: the strongest layer that could stop it growing back, from the catalogue's layer list, when the evidence
   shows it.
 
-The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed came back after a fix: say so in the
-report, because the fix did not hold. Done when every weed from steps 2 and 3 printed one of those words.
+The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
+the line names that bed and its check: say so in the report, because the check did not hold. Done when every weed from steps 2 and 3 printed one of those words.
 
 ## 5. Group, commit, report
 
@@ -114,7 +114,7 @@ and nothing else:
 
 ```text
 garden: <base> <short previousSha>..<short sha>, <n> commits read, <n> skipped
-queued <n> (<class> x<n>, ...); regrown: <class or none>
+queued <n> (<class> x<n>, ...); regrown: <class> (check: <where>), ... or none
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 ```
 
