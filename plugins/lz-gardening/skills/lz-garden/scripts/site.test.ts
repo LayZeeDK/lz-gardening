@@ -554,8 +554,8 @@ test('the site runs none of the hooks the user set up by name in their git confi
     GIT_CONFIG_COUNT: String(settings.length),
     ...Object.fromEntries(
       settings.flatMap(([key, value], index) => [
-        [`GIT_CONFIG_KEY_${index}`, key],
-        [`GIT_CONFIG_VALUE_${index}`, value],
+        [`GIT_CONFIG_KEY_${String(index)}`, key],
+        [`GIT_CONFIG_VALUE_${String(index)}`, value],
       ]),
     ),
   };
