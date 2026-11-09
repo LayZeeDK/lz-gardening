@@ -7,7 +7,7 @@ const { MUTATE: script = '*' } = process.env;
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 const config = {
   testRunner: 'command',
-  commandRunner: { command: `node --test "plugins/lz-gardening/skills/*/scripts/${script}.test.ts"` },
+  commandRunner: { command: `node --test "plugins/lz-gardening/skills/*/scripts/${script}*.test.ts"` },
   checkers: ['typescript'],
   tsconfigFile: 'tsconfig.json',
   reporters: ['clear-text', 'progress', 'html'],
@@ -15,7 +15,7 @@ const config = {
   mutate: [
     `plugins/lz-gardening/skills/*/scripts/${script}.ts`,
     '!plugins/lz-gardening/skills/*/scripts/*.test.ts',
-    '!plugins/lz-gardening/skills/*/scripts/test-repo.ts',
+    '!plugins/lz-gardening/skills/*/scripts/test-*.ts',
   ],
 };
 
