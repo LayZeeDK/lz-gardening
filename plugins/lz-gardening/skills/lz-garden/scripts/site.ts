@@ -59,7 +59,7 @@ const bookkeeping = [
 // A name may hold any character but NUL: keys are read NUL-separated, and --config-env splits at the last '='.
 export function namedHooksOff(cwd: string): string[] {
   const keys = spawnGit(cwd, ['config', '--list', '--name-only', '-z'], gitEnv()).stdout.split('\0');
-  const names = new Set(keys.flatMap((key) => /^hook\.(.+)\.(?:command|event)$/s.exec(key)?.slice(1) ?? []));
+  const names = new Set(keys.flatMap((key) => /^hook\.(.*)\.(?:command|event)$/s.exec(key)?.slice(1) ?? []));
 
   return [...names].map((name) => `--config-env=hook.${name}.enabled=${hookOffVariable}`);
 }

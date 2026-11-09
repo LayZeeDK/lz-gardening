@@ -517,6 +517,7 @@ test('the site runs none of the hooks the user set up by name in their git confi
 for (const [holds, name] of [
   ['an equals sign', 'a=b'],
   ['a line separator', `line${String.fromCodePoint(0x2028)}sep`],
+  ['nothing at all', ''],
 ] as const) {
   test(`the site runs no hook set up by name whose name holds ${holds}`, (t) => {
     const dir = repo(t);
