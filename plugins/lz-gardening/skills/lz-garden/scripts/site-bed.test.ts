@@ -112,6 +112,33 @@ test('bed refuses a file at the path of an existing bed, and names it', (t) => {
   assert.match(again.stderr, /beds[\\/]any-type is not the worktree/);
 });
 
+test('bed refuses a link whose target is gone at the path of an existing bed, and names it', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  git(garden, ['worktree', 'remove', '--force', bed]);
+  symlinkSync(join(garden, 'gone'), bed, 'junction');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 2);
+  assert.match(again.stderr, /beds[\\/]any-type is not the worktree/);
+});
+
+test('bed refuses a link at the bed path whose target is gone, before it makes the branch', (t) => {
+  const { dir, garden } = planted(t);
+  const bed = join(garden, 'beds', 'any-type');
+  mkdirSync(dirname(bed), { recursive: true });
+  symlinkSync(join(garden, 'gone'), bed, 'junction');
+
+  const made = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(made.status, 2);
+  assert.match(made.stderr, /beds[\\/]any-type is not the worktree/);
+  assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
+});
+
 test('bed refuses a folder at the bed path before it makes the branch, and names the folder', (t) => {
   const { dir, garden } = planted(t);
   const bed = join(garden, 'beds', 'any-type');

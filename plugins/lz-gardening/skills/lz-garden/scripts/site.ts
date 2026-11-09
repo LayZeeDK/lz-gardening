@@ -308,23 +308,25 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
   const branch = `bed/${bedClass}`;
   const branchRef = `refs/heads/${branch}`;
   const bed = join(site, 'beds', bedClass);
-  const notTheBed = new Error(`${bed} is not the worktree of ${branch}; move it aside, then run bed again`);
+  const hasBranch = gitSucceeds(site, ['rev-parse', '--verify', '--quiet', branchRef]);
+  const entry = lstatSync(bed, { throwIfNoEntry: false });
 
-  if (gitSucceeds(site, ['rev-parse', '--verify', '--quiet', branchRef])) {
+  if (
+    entry !== undefined &&
+    (!hasBranch || !entry.isDirectory() || optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== branchRef)
+  ) {
+    throw new Error(`${bed} is not the worktree of ${branch}; move it aside, then run bed again`);
+  }
+
+  if (hasBranch) {
     const start = git(site, ['merge-base', branchRef, 'FETCH_HEAD']);
 
-    if (!existsSync(bed)) {
+    if (entry === undefined) {
       git(site, ['worktree', 'prune']);
       git(site, ['worktree', 'add', '-q', bed, branch]);
-    } else if (!lstatSync(bed).isDirectory() || optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== branchRef) {
-      throw notTheBed;
     }
 
     return { bed, branch, start, created: false, deps: plantDeps(top, bed) };
-  }
-
-  if (existsSync(bed)) {
-    throw notTheBed;
   }
 
   const start = git(site, ['rev-parse', 'FETCH_HEAD']);
