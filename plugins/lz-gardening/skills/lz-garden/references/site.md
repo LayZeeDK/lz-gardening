@@ -66,11 +66,12 @@ checkout and `<bed>` is `<site>/beds/<class>`, both full paths.
 
 `site.ts bed --class <class> --base <base>` takes the base by the name `site.ts open` reported (`main`, or
 `origin/main` when only the repository's remote has it). It fetches the base into the site and adds the worktree
-`<bed>` on branch `bed/<class>` at the commit it fetched. Run again on a bed that exists, it keeps the bed's work.
-It prints JSON with `bed`, `branch`, `start`, `created` and `deps`. `start` is the commit the bed started from,
+`<bed>` on branch `bed/<class>` at the commit it fetched. Run again on a bed that exists, it keeps the bed's work;
+when the bed's folder is gone but its branch is not, it adds the folder again from the branch, with the work
+committed there. It prints JSON with `bed`, `branch`, `start`, `created` and `deps`. `start` is the commit the bed started from,
 written `<start>` below; for a bed that exists, it is where the bed's branch left the base. `bed` exits 2 on a class
-that is not a kebab-case class id, on a base that git could read as an option, and when `site.ts open` has not made
-the site.
+that is not a kebab-case class id, on a base that git could read as an option, when `site.ts open` has not made
+the site, and when it must read a bed `package.json` that is not valid JSON (the message names the file).
 
 `deps` says how the bed gets its Node.js dependencies:
 
