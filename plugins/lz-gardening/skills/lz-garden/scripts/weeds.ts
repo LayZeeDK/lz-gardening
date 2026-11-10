@@ -342,6 +342,10 @@ function checkOffBase(garden: string, tended: CloseRow): boolean {
     return false;
   }
 
+  if (where.trim() === '' || unprintablePattern.test(where)) {
+    return false;
+  }
+
   const siteObjects = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
     cwd: dirname(garden),
     encoding: 'utf8',

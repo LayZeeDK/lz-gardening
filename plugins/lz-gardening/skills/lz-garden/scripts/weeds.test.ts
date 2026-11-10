@@ -522,6 +522,39 @@ test('a census the label cannot read leaves a regrown weed queued and listed, wi
   );
 });
 
+function editCheckByHand(garden: string, check: string): void {
+  const queueFile = join(garden, '.garden', 'weeds.jsonl');
+  const checkField = `"check":${JSON.stringify(check)}`;
+  writeFileSync(queueFile, readFileSync(queueFile, 'utf8').replace('"check":"checks/any-type.test.mjs"', checkField));
+}
+
+test('a check emptied by hand in the queue gets no label, since it names no file', (t) => {
+  const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  editCheckByHand(garden, '');
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: )\n`,
+  );
+});
+
+test('a check given a control character by hand in the queue gets no label, rather than failing the add', (t) => {
+  const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  editCheckByHand(garden, 'checks/any\u0000type.test.mjs');
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+
+  assert.deepEqual(
+    [back.code, back.stdout],
+    [
+      0,
+      `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any\u0000type.test.mjs)\n`,
+    ],
+  );
+});
+
 test('a check that names no file at the bed commit gets no label, since nothing says where it lives', (t) => {
   const { dir, garden, tip } = tendedBed(
     t,
