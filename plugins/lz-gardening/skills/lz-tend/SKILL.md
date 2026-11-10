@@ -89,9 +89,11 @@ Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and th
 When its `deps` is `install`, install the bed's dependencies as
 `${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes under "Beds". When it is `linked` and a later
 step changes the bed's dependencies (a new lint plugin, say), remove the link and install first, as the same
-section says; never install through the link, which would write into the checkout's `node_modules`. Done when the
-repository's own lint, type-check and test commands run in the bed (read them from `package.json`, `nx.json` and CI
-config); note any that fail before your change, so they are not blamed on it.
+section says; never install through the link, which would write into the checkout's `node_modules`. Then, before
+your first edit to the bed's files, run the repository's own lint, type-check and test commands there (read them
+from `package.json`, `nx.json` and CI config) and keep their summary lines as the starting results, so a failure
+that predates your change is not blamed on it. Done when each command has run before any edit and its summary is
+kept.
 
 ## 5. Rule first, proved on a real weed
 
@@ -108,7 +110,8 @@ risky for one pass, record the rest in a baseline that can only shrink (the tool
 file, or a count the check enforces as a maximum) and never raise one. Every exception left in the code names its
 rule and a reason.
 
-Done when the repository's lint, type-check and test commands pass in the bed, apart from failures noted in step 4.
+Done when the repository's lint, type-check and test commands pass in the bed, apart from the same failures in
+step 4's starting results.
 Quote their summary lines.
 
 ## 7. Commit and close
@@ -126,7 +129,8 @@ is then queued as `regrown` and names this bed and check.
 - The check: layer, file, message, and the quoted output that proved it rejects a real weed.
 - Instances fixed, instances baselined, code deleted, and the bed's net line count
   (`git -C "<bed>" diff --shortstat <start>`); a tend pass usually leaves the codebase shorter.
-- The lint, type-check and test commands run in the bed, with their summary lines.
+- The lint, type-check and test commands run in the bed, with their summary lines from step 4's starting results
+  and from after the change.
 - A layer 3 proposal, if one would help, described but not built.
 - How to land it, from the repository: `git fetch ../<repo>.garden bed/<class>`, then review and merge the
   fetched branch the way the repository lands work.

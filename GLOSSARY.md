@@ -108,6 +108,11 @@ _Avoid_: golden path, happy path
 The recorded weed instances, or their count, that a check tolerates for now. It may only shrink.
 _Avoid_: allowlist, exceptions file
 
+**Starting results**:
+The summary lines of the repository's lint, type-check and test commands, run in a bed before its first edit, so a
+failure that predates a tend pass is not blamed on it.
+_Avoid_: baseline (a baseline is what a check tolerates)
+
 ## Places
 
 **Base branch**:
