@@ -34,38 +34,70 @@ test('bed makes a worktree on bed/<class> from the base as the repository has it
   assert.equal(git(expected, ['rev-parse', 'HEAD']), main);
 });
 
-test('bed on an existing bed keeps its work and reports where it started, after the base moved on', (t) => {
+test('bed on an existing bed takes what the base gained since, keeps its work, and starts from the base', (t) => {
   const { dir, garden } = planted(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
   const work = commit(bed, { 'src/a.ts': 'export const a: number = 1;\n' });
-  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  const gained = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
 
   const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(again.status, 0, again.stderr);
   assert.equal(again.summary.get('created'), false);
   assert.equal(again.summary.get('bed'), first.summary.get('bed'));
-  assert.equal(again.summary.get('start'), first.summary.get('start'));
-  assert.equal(git(bed, ['rev-parse', 'HEAD']), work);
+  assert.equal(again.summary.get('start'), gained);
+  assert.equal(readFileSync(join(bed, 'src', 'b.ts'), 'utf8'), 'export const b = 2;\n');
+  assert.equal(git(bed, ['merge-base', '--is-ancestor', work, 'HEAD']), '');
 });
 
-test('bed on an existing bed reports where its branch started, not where a tag of the same name points', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  git(dir, ['branch', 'old']);
-  const later = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
-  git(dir, ['tag', 'bed/any-type', later]);
-  const opened = site(dir, ['open', '--base', 'main']);
-  assert.equal(opened.status, 0, opened.stderr);
-  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'old']);
+test('bed refuses a base that conflicts with the bed, names the bed, and leaves the bed as it was', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  const work = commit(bed, { 'src/a.ts': 'export const a: number = 1;\n' });
+  commit(dir, { 'src/a.ts': 'export const a: string = "1";\n' });
 
   const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
-  assert.equal(again.status, 0, again.stderr);
-  assert.equal(again.summary.get('start'), first.summary.get('start'));
+  assert.equal(again.status, 2);
+  assert.match(again.stderr, /beds[\\/]any-type/);
+  assert.equal(git(bed, ['rev-parse', 'HEAD']), work);
+  assert.equal(git(bed, ['status', '--porcelain', '--untracked-files=no']), '');
+});
+
+test('bed refuses a base that would overwrite uncommitted work in the bed, names the bed, and keeps the work', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  writeFileSync(join(bed, 'src', 'a.ts'), 'export const a: number = 1;\n');
+  commit(dir, { 'src/a.ts': 'export const a: string = "1";\n' });
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 2);
+  assert.match(again.stderr, /beds[\\/]any-type/);
+  assert.equal(readFileSync(join(bed, 'src', 'a.ts'), 'utf8'), 'export const a: number = 1;\n');
+});
+
+test('bed leaves a merge someone started in the bed alone, and names the bed', (t) => {
+  const { dir, garden } = planted(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  commit(bed, { 'src/a.ts': 'export const a: number = 1;\n' });
+  const gained = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  git(garden, ['fetch', '-q', 'origin', 'main']);
+  git(bed, ['merge', '--no-commit', '--no-ff', gained]);
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 2);
+  assert.match(again.stderr, /beds[\\/]any-type/);
+  assert.equal(git(bed, ['rev-parse', 'MERGE_HEAD']), gained);
 });
 
 test('bed on a bed whose folder is gone brings the folder back with the branch work', (t) => {
@@ -248,6 +280,22 @@ test('bed on an existing linked bed reports it linked', (t) => {
   assert.equal(again.status, 0, again.stderr);
   assert.equal(again.summary.get('created'), false);
   assert.equal(again.summary.get('deps'), 'linked');
+});
+
+test('bed unlinks a linked bed whose lockfile the base changed, asks for an install, and keeps the checkout install', (t) => {
+  const dir = installed(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'linked');
+  commit(dir, { 'package-lock.json': 'lockfileVersion: 3\n# a new dependency\n' });
+  git(dir, ['checkout', '-q', 'HEAD~1']);
+  const bed = join(dirname(dir), 'repo.garden', 'beds', 'any-type');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('deps'), 'install');
+  assert.equal(lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false }), undefined);
+  assert.equal(existsSync(join(dir, 'node_modules')), true);
 });
 
 test('bed on an existing bed that was never installed asks for the install again', (t) => {

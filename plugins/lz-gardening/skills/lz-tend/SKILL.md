@@ -58,7 +58,9 @@ Read every open weed at the base (`git show <base>:<path>`) and the commit that 
 Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? A class
 whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
 each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule too narrow, a
-suppression, an exception that spread, a bed not landed yet) before writing another.
+suppression, an exception that spread, a bed not landed yet) before writing another. When the bed has not landed
+yet, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to the base, and
+change the check only if it misses the new weeds.
 
 Then decide, and say which:
 
@@ -86,6 +88,7 @@ Done when you can name the check, where it lives, and the message it prints.
 ## 4. Make the bed
 
 Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and the `<start>` commit, which you keep.
+On a bed that exists it merges the base in first, keeping the bed's work.
 When its `deps` is `install`, install the bed's dependencies as
 `${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes under "Beds". When it is `linked` and a later
 step changes the bed's dependencies (a new lint plugin, say), remove the link and install first, as the same

@@ -4,8 +4,9 @@
 //                                           prints {site, created, base, seeded}
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 //   node site.ts bed --class <kebab> --base <base>
-//                                           fetch the base into the site and make or reuse the bed beds/<class> on
-//                                           bed/<class>; prints {bed, branch, start, created, deps}, deps being
+//                                           fetch the base into the site and make the bed beds/<class> on
+//                                           bed/<class>, or merge the base into the bed that exists; start is the
+//                                           base commit fetched; prints {bed, branch, start, created, deps}, deps being
 //                                           none, linked (to the checkout's node_modules), installed or install
 // Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
 import { spawnSync } from 'node:child_process';
@@ -306,6 +307,7 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
 
   requireSite(site);
   git(site, ['fetch', '-q', 'origin', base]);
+  const start = git(site, ['rev-parse', 'FETCH_HEAD']);
   const branch = `bed/${bedClass}`;
   const branchRef = `refs/heads/${branch}`;
   const bed = join(site, 'beds', bedClass);
@@ -320,27 +322,47 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
   }
 
   if (hasBranch) {
-    const start = git(site, ['merge-base', branchRef, 'FETCH_HEAD']);
-
     if (entry === undefined) {
       git(site, ['worktree', 'prune']);
       git(site, ['worktree', 'add', '-q', bed, branch]);
     }
 
+    if (gitSucceeds(bed, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])) {
+      throw new Error(`a merge is in progress in ${bed}; finish or abort it, then run bed again`);
+    }
+
+    if (!gitSucceeds(bed, ['merge', '-q', '--no-edit', start])) {
+      gitSucceeds(bed, ['merge', '--abort']);
+      throw new Error(`${base} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
+    }
+
     return { bed, branch, start, created: false, deps: plantDeps(top, bed) };
   }
 
-  const start = git(site, ['rev-parse', 'FETCH_HEAD']);
   git(site, ['worktree', 'add', '-q', '-b', branch, bed, start]);
 
   return { bed, branch, start, created: true, deps: plantDeps(top, bed) };
+}
+
+function sharesLockfile(top: string, bed: string): boolean {
+  return lockfiles.some((name) => sameBytes(join(top, name), join(bed, name)));
 }
 
 function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 'install' {
   const entry = lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false });
 
   if (entry !== undefined) {
-    return entry.isSymbolicLink() ? 'linked' : 'installed';
+    if (!entry.isSymbolicLink()) {
+      return 'installed';
+    }
+
+    if (sharesLockfile(top, bed)) {
+      return 'linked';
+    }
+
+    rmSync(join(bed, 'node_modules'));
+
+    return 'install';
   }
 
   if (existsSync(join(bed, '.pnp.cjs'))) {
@@ -351,10 +373,7 @@ function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 
     return 'none';
   }
 
-  const linkable =
-    existsSync(join(top, 'node_modules')) &&
-    lockfiles.some((name) => sameBytes(join(top, name), join(bed, name))) &&
-    !declaresWorkspaces(bed);
+  const linkable = existsSync(join(top, 'node_modules')) && sharesLockfile(top, bed) && !declaresWorkspaces(bed);
 
   if (!linkable) {
     return 'install';

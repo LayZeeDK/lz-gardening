@@ -66,11 +66,16 @@ checkout and `<bed>` is `<site>/beds/<class>`, both full paths.
 
 `site.ts bed --class <class> --base <base>` takes the base by the name `site.ts open` reported (`main`, or
 `origin/main` when only the repository's remote has it). It fetches the base into the site and adds the worktree
-`<bed>` on branch `bed/<class>` at the commit it fetched. Run again on a bed that exists, it keeps the bed's work;
+`<bed>` on branch `bed/<class>` at the commit it fetched. Run again on a bed that exists, it keeps the bed's work
+and merges the fetched base into it, so weeds that landed on the base since the bed was made are in the bed too;
 when the bed's folder is gone but its branch is not, it adds the folder again from the branch, with the work
-committed there. It prints JSON with `bed`, `branch`, `start`, `created` and `deps`. `start` is the commit the bed
-started from, written `<start>` below; for a bed that exists, it is where the bed's branch left the base. `bed` exits
-2 on a class that is not a kebab-case class id; on a base that is not a plain branch name or commit (one that starts
+committed there, before the merge. The merge commit, like every git command of the site, runs no git hooks and is
+not signed. It prints JSON with `bed`, `branch`, `start`, `created` and `deps`. `start` is the base commit it
+fetched, written `<start>` below, so `git diff <start>` shows the bed's own change. `bed` exits 2 on a class that is
+not a kebab-case class id; when a merge is already in progress in a bed that exists (it is left alone; finish or
+abort it, then run `bed` again); when the base does not merge into a bed that exists cleanly (a conflict with the
+bed's commits, or a change to a file the bed holds uncommitted work in; the bed is left as it was and the message
+names it); on a base that is not a plain branch name or commit (one that starts
 with `-`, or holds characters such as `~`, `^` or `:`); on a base the site cannot fetch; when `site.ts open` has not
 made the site; when something other than the worktree of `bed/<class>` is at `<bed>`, such as a file or a folder
 left from an earlier bed (the message names it; move it aside and run `bed` again); and when it must read a bed
@@ -82,7 +87,9 @@ left from an earlier bed (the message names it; move it aside and run `bed` agai
   checkout has a `node_modules`; the bed's `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` is a plain file, not
   a link, with the same bytes as the checkout's; and the bed is not a workspace, so its `package.json` declares no
   `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to
-  the repository's checkout, so the bed would test the other checkout's code.
+  the repository's checkout, so the bed would test the other checkout's code. On a bed that exists, the link stays
+  only while a lockfile still has the same bytes as the checkout's; when the merged base changed it, `bed` removes
+  the link (never the checkout's folder) and reports `install`.
 - `install`: install with the repository's package manager, pointed at the bed: `npm --prefix "<bed>" ci`,
   `pnpm -C "<bed>" install --frozen-lockfile` or, for Yarn 4 or later, `yarn --cwd "<bed>" install --immutable`.
 - `installed`: the bed already has its own install, a `node_modules` folder or the `.pnp.cjs` file of a Yarn
