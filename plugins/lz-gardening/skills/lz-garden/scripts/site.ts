@@ -7,7 +7,8 @@
 //                                           fetch the base into the site and make the bed beds/<class> on
 //                                           bed/<class>, or merge the base into the bed that exists; start is the
 //                                           base commit fetched; prints {bed, branch, start, created, deps}, deps being
-//                                           none, linked (to the checkout's node_modules), installed or install
+//                                           none, linked (to the checkout's node_modules), installed or install,
+//                                           and with install the command that installs the bed's dependencies
 // Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
@@ -245,7 +246,18 @@ function openSite(top: string, site: string, requested: string | undefined): obj
   return { site, created, base, seeded };
 }
 
-const lockfiles = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'];
+const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
+  ['pnpm-lock.yaml', (bed) => `pnpm -C "${bed}" install --frozen-lockfile`],
+  ['yarn.lock', (bed) => `yarn --cwd "${bed}" install --immutable`],
+  ['package-lock.json', (bed) => `npm --prefix "${bed}" ci`],
+];
+const lockfiles = installs.map(([lockfile]) => lockfile);
+
+function installCommand(bed: string): string {
+  const found = installs.find(([lockfile]) => existsSync(join(bed, lockfile)));
+
+  return found === undefined ? `npm --prefix "${bed}" install` : found[1](bed);
+}
 
 // The bed's lockfile comes from the base, so only a plain file is read: a link can name any file, a FIFO hangs.
 function sameBytes(checkout: string, bed: string): boolean {
@@ -335,13 +347,20 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
       gitSucceeds(bed, ['merge', '--abort']);
       throw new Error(`${base} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
     }
-
-    return { bed, branch, start, created: false, deps: plantDeps(top, bed) };
+  } else {
+    git(site, ['worktree', 'add', '-q', '-b', branch, bed, start]);
   }
 
-  git(site, ['worktree', 'add', '-q', '-b', branch, bed, start]);
+  const deps = plantDeps(top, bed);
 
-  return { bed, branch, start, created: true, deps: plantDeps(top, bed) };
+  return {
+    bed,
+    branch,
+    start,
+    created: !hasBranch,
+    deps,
+    install: deps === 'install' ? installCommand(bed) : undefined,
+  };
 }
 
 function sharesLockfile(top: string, bed: string): boolean {

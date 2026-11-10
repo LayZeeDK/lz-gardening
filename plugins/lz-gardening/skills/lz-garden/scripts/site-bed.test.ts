@@ -218,6 +218,13 @@ function installed(t: TestContext, lockfile = 'package-lock.json'): string {
   return dir;
 }
 
+function bedOf(summary: ReadonlyMap<string, unknown>): string {
+  const bed = summary.get('bed');
+  assert.ok(typeof bed === 'string');
+
+  return bed;
+}
+
 test('bed links the checkout node_modules when the bed has the same lockfile', (t) => {
   const dir = installed(t);
   writeFileSync(join(dir, 'node_modules', 'marker.txt'), 'installed\n');
@@ -229,6 +236,16 @@ test('bed links the checkout node_modules when the bed has the same lockfile', (
   const linked = join(dirname(dir), 'repo.garden', 'beds', 'any-type', 'node_modules');
   assert.equal(realpathSync.native(linked), realpathSync.native(join(dir, 'node_modules')));
   assert.equal(readFileSync(join(linked, 'marker.txt'), 'utf8'), 'installed\n');
+});
+
+test('bed names no install command for a bed linked to the checkout install', (t) => {
+  const dir = installed(t);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'linked');
+  assert.equal(result.summary.has('install'), false);
 });
 
 test('bed links the checkout node_modules when the bed has the same pnpm lockfile', (t) => {
@@ -311,6 +328,18 @@ test('bed on an existing bed that was never installed asks for the install again
   assert.equal(again.summary.get('deps'), 'install');
 });
 
+test('bed on an existing bed that was never installed names the install command again', (t) => {
+  const dir = installed(t);
+  writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
+  site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('created'), false);
+  assert.equal(again.summary.get('install'), `npm --prefix "${bedOf(again.summary)}" ci`);
+});
+
 test('bed asks for an install, and links nothing, when the bed lockfile is a link to the checkout lockfile', (t) => {
   const dir = installed(t);
   writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
@@ -375,6 +404,37 @@ test('bed asks for an install, and links nothing, when the checkout has no node_
   assert.throws(() => lstatSync(linked), { code: 'ENOENT' });
 });
 
+test('bed names the npm command that installs the bed from its npm lockfile', (t) => {
+  const dir = installed(t);
+  rmSync(join(dir, 'node_modules'), { recursive: true });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('deps'), 'install');
+  assert.equal(result.summary.get('install'), `npm --prefix "${bedOf(result.summary)}" ci`);
+});
+
+test('bed names the pnpm command that installs the bed from its pnpm lockfile', (t) => {
+  const dir = installed(t, 'pnpm-lock.yaml');
+  rmSync(join(dir, 'node_modules'), { recursive: true });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('install'), `pnpm -C "${bedOf(result.summary)}" install --frozen-lockfile`);
+});
+
+test('bed names the yarn command that installs the bed from its yarn lockfile', (t) => {
+  const dir = installed(t, 'yarn.lock');
+  rmSync(join(dir, 'node_modules'), { recursive: true });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('install'), `yarn --cwd "${bedOf(result.summary)}" install --immutable`);
+});
+
 test('bed asks for an install, and links nothing, when package.json declares workspaces', (t) => {
   const dir = installed(t);
   commit(dir, { 'package.json': '{ "name": "x", "workspaces": ["packages/*"] }\n' });
@@ -433,6 +493,18 @@ test('bed asks for an install when only the checkout has a lockfile', (t) => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.summary.get('deps'), 'install');
+});
+
+test('bed names npm install, not npm ci, for a bed without a lockfile', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'package.json': '{ "name": "x" }\n' });
+  const opened = site(dir, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('install'), `npm --prefix "${bedOf(result.summary)}" install`);
 });
 
 test('bed refuses a base that git would read as an option and runs nothing it names', (t) => {

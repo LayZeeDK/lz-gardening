@@ -89,10 +89,10 @@ Done when you can name the check, where it lives, and the message it prints.
 
 Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and the `<start>` commit, which you keep.
 On a bed that exists it merges the base in first, keeping the bed's work.
-When its `deps` is `install`, install the bed's dependencies as
-`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` describes under "Beds". When it is `linked` and a later
-step changes the bed's dependencies (a new lint plugin, say), remove the link and install first, as the same
-section says; never install through the link, which would write into the checkout's `node_modules`. Then, before
+When its `deps` is `install`, run the command its `install` field names before anything else in the bed: the bed has
+no dependencies until you do. When it is `linked` and a later step changes the bed's dependencies (a new lint
+plugin, say), remove the link and install first, as `${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` says
+under "Beds"; never install through the link, which would write into the checkout's `node_modules`. Then, before
 your first edit to the bed's files, run the repository's own lint, type-check and test commands there (read them
 from `package.json`, `nx.json` and CI config) and keep their summary lines as the starting results, so a failure
 that predates your change is not blamed on it. Done when each command has run before any edit and its summary is
