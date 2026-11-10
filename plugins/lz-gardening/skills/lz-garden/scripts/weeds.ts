@@ -5,21 +5,24 @@
 //   node weeds.ts add --class <kebab> --where <path[:line]> --source <kind:ref> --note <text> [--layer <1-6>]
 //     Prints `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep: a weed left on purpose is
 //     never queued again) or `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass closed its
-//     class, so the check that was meant to hold it did not; the latest tend pass is named).
+//     class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
+//     `(check: <where> not on the base)` when it is not on the commit of the census beside the queue: the bed has not
+//     landed, or the check's file is gone from the base. Run from the repository's checkout, which holds that commit.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
 //     pass added a check; close-class only), --one-off <reason> (no check written), --keep <reason> (the weed is
 //     deliberate). Values are one line of text without control characters.
 //   node weeds.ts groups [--min <n>]     open weeds per class, most first; --min defaults to 1
-//   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check
+//   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // Exit 0 on success, 1 when a close finds nothing open, 2 on a usage error or a malformed queue.
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { isRecord } from './census.ts';
+import { isRecord, readCensus } from './census.ts';
 
 export interface AddRow {
   readonly op: 'add';
@@ -75,7 +78,7 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
 }
 
 // The bed a tend close names: bed/<class>@<commit>.
-const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@[0-9a-f]{4,40}$/;
+const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,40})$/;
 
 // A close row written before close kinds existed: a tend pass wrote its bed as `by`.
 function kindBefore(by: string, keep: boolean): CloseKind {
@@ -313,11 +316,88 @@ export function parseClose(command: 'close' | 'close-class', flags: CloseFlags):
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
-function after(tended: CloseRow): string {
-  return `after ${tended.by}${tended.check === null ? '' : ` (check: ${tended.check})`}`;
+function after(tended: CloseRow, offBase: boolean): string {
+  return `after ${tended.by}${tended.check === null ? '' : ` (check: ${tended.check}${offBase ? ' not on the base' : ''})`}`;
 }
 
-export function addWeed(rows: readonly Row[], input: AddInput, now: Date): { status: string; row: AddRow | null } {
+const commitIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+function shaOfReadableCensus(garden: string): string | undefined {
+  try {
+    const sha = readCensus(join(garden, 'census.json'))?.census.sha;
+
+    return sha !== undefined && commitIdPattern.test(sha) ? sha : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function checkOffBase(garden: string, tended: CloseRow): boolean {
+  const tip = bedPattern.exec(tended.by)?.[2];
+  const base = shaOfReadableCensus(garden);
+  const where = tended.check;
+
+  // Stryker disable next-line ConditionalExpression: with no check, after() prints no label, whatever this returns
+  if (tip === undefined || base === undefined || where === null) {
+    return false;
+  }
+
+  const siteObjects = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
+    cwd: dirname(garden),
+    encoding: 'utf8',
+  });
+  const env = { ...process.env, GIT_ALTERNATE_OBJECT_DIRECTORIES: siteObjects.stdout.trim(), GIT_NO_LAZY_FETCH: '1' };
+  const gitInCheckoutWithSite = (args: readonly string[]) =>
+    spawnSync('git', args, { cwd: process.cwd(), env, encoding: 'utf8' });
+  const hasCheck = (commit: string): boolean =>
+    gitInCheckoutWithSite(['cat-file', '-e', `${commit}:${where}`]).status === 0;
+  const merged = gitInCheckoutWithSite(['merge-base', tip, base]);
+
+  if (merged.status !== 0 || !hasCheck(tip)) {
+    return false;
+  }
+
+  if (!hasCheck(base)) {
+    return true;
+  }
+
+  const fork = merged.stdout.trim();
+
+  if (!hasCheck(fork)) {
+    return false;
+  }
+
+  const patchIdOf = (from: string, to: string): string | undefined => {
+    const options = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
+    const diff = gitInCheckoutWithSite(['diff', ...options, from, to, '--', `:(top,literal)${where}`]).stdout;
+
+    return diff === ''
+      ? undefined
+      : spawnSync('git', ['patch-id', '--stable'], { input: diff, encoding: 'utf8' }).stdout.split(' ')[0];
+  };
+  const bedChange = patchIdOf(fork, tip);
+  const bedLeftCheckAsItWas = bedChange === undefined;
+
+  if (bedLeftCheckAsItWas) {
+    return false;
+  }
+
+  const patchIdsIn = (range: string): string[] =>
+    gitInCheckoutWithSite(['rev-list', '--no-merges', range, '--', `:(top,literal)${where}`])
+      .stdout.split('\n')
+      .filter((commit) => commit !== '')
+      .flatMap((commit) => patchIdOf(`${commit}^`, commit) ?? []);
+  const onBase = new Set(patchIdsIn(`${fork}..${base}`));
+
+  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
+}
+
+export function addWeed(
+  rows: readonly Row[],
+  input: AddInput,
+  now: Date,
+  offBase: (tended: CloseRow) => boolean = () => false,
+): { status: string; row: AddRow | null } {
   const id = weedId(input.class, input.where, input.source);
   const isOpen = openWeeds(rows).some((weed) => weed.id === id);
 
@@ -332,7 +412,7 @@ export function addWeed(rows: readonly Row[], input: AddInput, now: Date): { sta
   const row: AddRow = { op: 'add', id, at: now.toISOString(), ...input };
   const tended = openWeeds([...rows, row]).find((weed) => weed.id === id)?.regrownAfter ?? null;
 
-  return { status: tended === null ? `added ${id}` : `regrown ${id} ${after(tended)}`, row };
+  return { status: tended === null ? `added ${id}` : `regrown ${id} ${after(tended, offBase(tended))}`, row };
 }
 
 function append(file: string, rows: readonly Row[]): void {
@@ -371,6 +451,13 @@ function main(argv: readonly string[], now: Date): number {
   }
 
   const rows = readQueue(file);
+  const offBaseByClose = new Map<CloseRow, boolean>();
+  const offBase = (tended: CloseRow): boolean => {
+    const known = offBaseByClose.get(tended) ?? checkOffBase(dirname(file), tended);
+    offBaseByClose.set(tended, known);
+
+    return known;
+  };
   const write = (line: string): void => {
     process.stdout.write(`${line}\n`);
   };
@@ -393,7 +480,7 @@ function main(argv: readonly string[], now: Date): number {
         return 2;
       }
 
-      const { status, row } = addWeed(rows, input, now);
+      const { status, row } = addWeed(rows, input, now, offBase);
 
       if (row !== null) {
         append(file, [row]);
@@ -454,7 +541,8 @@ function main(argv: readonly string[], now: Date): number {
       const only = values.class;
 
       for (const weed of openWeeds(rows).filter((item) => only === undefined || item.class === only)) {
-        const regrown = weed.regrownAfter === null ? '' : ` [regrown ${after(weed.regrownAfter)}]`;
+        const regrown =
+          weed.regrownAfter === null ? '' : ` [regrown ${after(weed.regrownAfter, offBase(weed.regrownAfter))}]`;
         write(`${weed.id} ${weed.class} ${weed.where} [${weed.source}]${regrown} ${weed.note}`);
       }
 
