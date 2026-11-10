@@ -696,6 +696,27 @@ test('a census whose commit is not a commit id gets no label, rather than reachi
   );
 });
 
+test('a census commit that is a branch name, even one shaped like a commit id, gets no label', (t) => {
+  const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const branches = [`${'a'.repeat(40)}x`, `x${'a'.repeat(40)}`, 'a', 'z'.repeat(64)];
+
+  const labels = branches.map((branch, line) => {
+    git(dir, ['branch', branch]);
+    recordCensus(garden, branch);
+    const where = `src/b.ts:${String(line + 1)}`;
+
+    return cli(garden, ['add', '--class', 'any-type', '--where', where, '--source', 'commit:ccc3333'], dir).stdout;
+  });
+
+  assert.deepEqual(
+    labels,
+    branches.map(
+      (_, line) =>
+        `regrown ${weedId('any-type', `src/b.ts:${String(line + 1)}`, 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
+    ),
+  );
+});
+
 test('a census commit the checkout does not hold gets no label, since nothing shows the check missing from it', (t) => {
   const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   recordCensus(garden, 'f'.repeat(40));
