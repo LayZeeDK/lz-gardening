@@ -248,7 +248,7 @@ function openSite(top: string, site: string, requested: string | undefined): obj
 
 const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
   ['pnpm-lock.yaml', (bed) => `pnpm -C "${bed}" install --frozen-lockfile`],
-  ['yarn.lock', (bed) => `yarn --cwd "${bed}" install --immutable`],
+  ['yarn.lock', (bed) => `yarn --cwd "${bed}" install --frozen-lockfile`],
   ['package-lock.json', (bed) => `npm --prefix "${bed}" ci`],
 ];
 const lockfiles = installs.map(([lockfile]) => lockfile);

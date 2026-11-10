@@ -425,14 +425,14 @@ test('bed names the pnpm command that installs the bed from its pnpm lockfile', 
   assert.equal(result.summary.get('install'), `pnpm -C "${bedOf(result.summary)}" install --frozen-lockfile`);
 });
 
-test('bed names the yarn command that installs the bed from its yarn lockfile', (t) => {
+test('bed names the yarn command that installs the bed from its yarn lockfile with the flag Yarn 1 honours too', (t) => {
   const dir = installed(t, 'yarn.lock');
   rmSync(join(dir, 'node_modules'), { recursive: true });
 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.summary.get('install'), `yarn --cwd "${bedOf(result.summary)}" install --immutable`);
+  assert.equal(result.summary.get('install'), `yarn --cwd "${bedOf(result.summary)}" install --frozen-lockfile`);
 });
 
 test('bed asks for an install, and links nothing, when package.json declares workspaces', (t) => {

@@ -71,8 +71,8 @@ and merges the fetched base into it, so weeds that landed on the base since the 
 when the bed's folder is gone but its branch is not, it adds the folder again from the branch, with the work
 committed there, before the merge. The merge commit, like every git command of the site, runs no git hooks and is
 not signed. It prints JSON with `bed`, `branch`, `start`, `created` and `deps`, and `install` when `deps` is
-`install`. `start` is the base commit it
-fetched, written `<start>` below, so `git diff <start>` shows the bed's own change. `bed` exits 2 on a class that is
+`install`. `start` is the base commit it fetched, written `<start>` below, so `git diff <start>` shows the bed's own
+change. `bed` exits 2 on a class that is
 not a kebab-case class id; when a merge is already in progress in a bed that exists (it is left alone; finish or
 abort it, then run `bed` again); when the base does not merge into a bed that exists cleanly (a conflict with the
 bed's commits, or a change to a file the bed holds uncommitted work in; the bed is left as it was and the message
@@ -92,16 +92,17 @@ left from an earlier bed (the message names it; move it aside and run `bed` agai
   only while a lockfile still has the same bytes as the checkout's; when the merged base changed it, `bed` removes
   the link (never the checkout's folder) and reports `install`.
 - `install`: run the command `bed` prints as `install`. It installs with the package manager of the bed's lockfile,
-  pointed at the bed: `npm --prefix "<bed>" ci`, `pnpm -C "<bed>" install --frozen-lockfile` or, for Yarn 4 or later,
-  `yarn --cwd "<bed>" install --immutable`; with no lockfile, `npm --prefix "<bed>" install`.
+  pointed at the bed: `npm --prefix "<bed>" ci`, `pnpm -C "<bed>" install --frozen-lockfile` or
+  `yarn --cwd "<bed>" install --frozen-lockfile`; with no lockfile, `npm --prefix "<bed>" install`. Yarn 1 refuses to
+  change the lockfile only under `--frozen-lockfile`, and Yarn 4 still takes that flag, with a deprecation notice.
 - `installed`: the bed already has its own install, a `node_modules` folder or the `.pnp.cjs` file of a Yarn
   Plug'n'Play install.
 - `none`: the bed has no `package.json`.
 
 When a linked bed changes its dependencies, stop any process a check left running in the bed (`npx nx daemon --stop`
 for Nx), remove the link (`rm "<bed>/node_modules"`, no `-r`; on Windows `cmd //c rmdir "<bed>\node_modules"`), then
-install with the command for the bed's lockfile above. Cleanup below is for the human who lands or drops the bed. Never run an install through a link: it
-rewrites the repository's own `node_modules`. Tools that cache under `node_modules`, such as `node_modules/.cache`,
+install with the command for the bed's lockfile above. Cleanup below is for the human who lands or drops the bed.
+Never run an install through a link: it rewrites the repository's own `node_modules`. Tools that cache under `node_modules`, such as `node_modules/.cache`,
 write those caches through the link into the checkout's folder.
 
 ## Cleanup
