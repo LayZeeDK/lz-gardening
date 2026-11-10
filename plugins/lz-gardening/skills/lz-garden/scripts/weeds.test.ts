@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { commit, git } from './test-repo.ts';
+import { commit, git, repo } from './test-repo.ts';
 import { configEnv, planted, site } from './test-site.ts';
 import { addWeed, groupWeeds, openWeeds, parseRow, readQueue, validateAdd, weedId } from './weeds.ts';
 import type { AddInput, CloseKind, CloseRow, Row, Weed } from './weeds.ts';
@@ -624,6 +624,28 @@ test('run from a folder inside the checkout, an unlanded check is still not on t
   assert.equal(
     back.stdout,
     `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: eslint.config.mjs not on the base)\n`,
+  );
+});
+
+test('a check the bed took from an unrelated history it merged is not on the base', (t) => {
+  const { dir, garden, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, 'eslint.config.mjs');
+  const other = repo(t);
+  commit(other, { 'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }") });
+  git(bed, ['fetch', '-q', other, 'main']);
+  git(bed, ['merge', '-q', '--allow-unrelated-histories', '-X', 'theirs', '-m', 'x', 'FETCH_HEAD']);
+  const tip = git(bed, ['rev-parse', 'HEAD']);
+  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  cli(
+    garden,
+    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs'],
+    dir,
+  );
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'], dir);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/c.ts:1', 'commit:ddd4444')} after bed/any-type@${tip} (check: eslint.config.mjs not on the base)\n`,
   );
 });
 

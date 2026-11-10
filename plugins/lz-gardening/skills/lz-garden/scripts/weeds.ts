@@ -382,14 +382,14 @@ function checkOffBase(garden: string, tended: CloseRow): boolean {
     return false;
   }
 
-  const patchIdsIn = (range: string): string[] =>
+  const patchIdsIn = (range: string): (string | undefined)[] =>
     gitInCheckoutWithSite(['rev-list', '--no-merges', range, '--', `:(top,literal)${where}`])
       .stdout.split('\n')
       .filter((commit) => commit !== '')
-      .flatMap((commit) => patchIdOf(`${commit}^`, commit) ?? []);
+      .map((commit) => patchIdOf(`${commit}^`, commit));
   const onBase = new Set(patchIdsIn(`${fork}..${base}`));
 
-  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
+  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => id !== undefined && onBase.has(id));
 }
 
 export function addWeed(
