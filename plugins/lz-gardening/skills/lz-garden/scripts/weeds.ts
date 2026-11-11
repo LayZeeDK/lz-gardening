@@ -77,6 +77,10 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
 }
 
+function isRefusedCheck(check: string): boolean {
+  return check.trim() === '' || unprintablePattern.test(check);
+}
+
 // The bed a tend close names: bed/<class>@<commit>.
 const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,40})$/;
 
@@ -307,7 +311,7 @@ export function parseClose(command: 'close' | 'close-class', flags: CloseFlags):
     return '--tended closes a whole class; use close-class --class <class>';
   }
 
-  if (check === undefined || check.trim() === '') {
+  if (check === undefined || isRefusedCheck(check)) {
     return '--tended needs --check <where the check lives>';
   }
 
@@ -342,7 +346,7 @@ function checkOffBase(garden: string, tended: CloseRow): boolean {
     return false;
   }
 
-  if (where.trim() === '' || unprintablePattern.test(where)) {
+  if (isRefusedCheck(where)) {
     return false;
   }
 
