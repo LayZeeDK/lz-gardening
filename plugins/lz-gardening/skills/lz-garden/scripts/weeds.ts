@@ -463,6 +463,7 @@ function main(argv: readonly string[], now: Date): number {
   const offBaseByClose = new Map<CloseRow, boolean>();
   const offBase = (tended: CloseRow): boolean => {
     const known = offBaseByClose.get(tended) ?? checkOffBase(dirname(file), tended);
+    // Stryker disable next-line CallExpression: without the cache, each weed works out the same label again
     offBaseByClose.set(tended, known);
 
     return known;
