@@ -7,6 +7,9 @@
 // the checkout's Node.js and numeric-literal mutators run beside Stryker's own:
 //   LZ_NODE_TEST_RUNNER=<checkout>/packages/stryker-node-test-runner/src/index.ts MUTATE=weeds \
 //     node --conditions=@layzee/source node_modules/@stryker-mutator/core/bin/stryker.js run
+// While iterating with that runner, add --incremental (and --mutate "<file>:<from>-<to>" for the changed lines) to
+// rerun only the mutants whose code or covering tests changed. Run once without it before calling a change done: an
+// incremental run copies older results into the report, and it misses changes to helpers, fixtures and config.
 import { pathToFileURL } from 'node:url';
 
 const { MUTATE: script = '*', LZ_NODE_TEST_RUNNER: nodeTestRunner } = process.env;
@@ -30,6 +33,7 @@ const runner =
         appendPlugins: [nodeTestRunner],
         lzNodeTest: { testFiles: [testFiles] },
         coverageAnalysis: 'perTest',
+        incrementalFile: `reports/stryker-incremental/${script === '*' ? 'all' : script}.json`,
       };
 
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
