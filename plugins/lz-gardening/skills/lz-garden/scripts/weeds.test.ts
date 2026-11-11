@@ -682,6 +682,38 @@ test('a check the bed took from an unrelated history it merged is not on the bas
   );
 });
 
+test('a check the bed and the base both took from the same older unrelated history is on the base', (t) => {
+  const { dir, garden, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, 'eslint.config.mjs');
+  const other = repo(t);
+  writeFileSync(join(other, 'eslint.config.mjs'), eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"));
+  git(other, ['add', '-A']);
+  const olderThanTheFork = {
+    ...process.env,
+    GIT_AUTHOR_DATE: '2001-01-01T00:00:00Z',
+    GIT_COMMITTER_DATE: '2001-01-01T00:00:00Z',
+  };
+  assert.equal(spawnSync('git', ['commit', '-q', '-m', 'x'], { cwd: other, env: olderThanTheFork }).status, 0);
+  for (const checkout of [bed, dir]) {
+    git(checkout, ['fetch', '-q', other, 'main']);
+    git(checkout, ['merge', '-q', '--allow-unrelated-histories', '-X', 'theirs', '-m', 'x', 'FETCH_HEAD']);
+  }
+  const tip = git(bed, ['rev-parse', 'HEAD']);
+  recordCensus(garden, git(dir, ['rev-parse', 'HEAD']));
+  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  cli(
+    garden,
+    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs'],
+    dir,
+  );
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'], dir);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/c.ts:1', 'commit:ddd4444')} after bed/any-type@${tip} (check: eslint.config.mjs)\n`,
+  );
+});
+
 test('a census whose commit is not a commit id gets no label, rather than reaching git as an option', (t) => {
   const check = { 'checks/any-type.test.mjs': 'export {};\n' };
   const { dir, garden, tip } = tendedBed(t, check);

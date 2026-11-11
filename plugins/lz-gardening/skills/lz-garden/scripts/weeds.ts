@@ -375,15 +375,16 @@ function checkOffBase(garden: string, tended: CloseRow): boolean {
     return false;
   }
 
-  const patchIdOf = (from: string, to: string): string | undefined => {
-    const options = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
-    const diff = gitInCheckoutWithSite(['diff', ...options, from, to, '--', `:(top,literal)${where}`]).stdout;
+  const diffOptions = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
+  const checkPath = ['--', `:(top,literal)${where}`];
+  const patchIdOf = (diffArgs: readonly string[]): string | undefined => {
+    const diff = gitInCheckoutWithSite([...diffArgs, ...checkPath]).stdout;
 
     return diff === ''
       ? undefined
       : spawnSync('git', ['patch-id', '--stable'], { input: diff, encoding: 'utf8' }).stdout.split(' ')[0];
   };
-  const bedChange = patchIdOf(fork, tip);
+  const bedChange = patchIdOf(['diff', ...diffOptions, fork, tip]);
   const bedLeftCheckAsItWas = bedChange === undefined;
 
   if (bedLeftCheckAsItWas) {
@@ -391,13 +392,13 @@ function checkOffBase(garden: string, tended: CloseRow): boolean {
   }
 
   const patchIdsIn = (range: string): (string | undefined)[] =>
-    gitInCheckoutWithSite(['rev-list', '--no-merges', range, '--', `:(top,literal)${where}`])
+    gitInCheckoutWithSite(['rev-list', '--no-merges', range, ...checkPath])
       .stdout.split('\n')
       .filter((commit) => commit !== '')
-      .map((commit) => patchIdOf(`${commit}^`, commit));
+      .map((commit) => patchIdOf(['diff-tree', '-p', '--root', '--no-commit-id', ...diffOptions, commit]));
   const onBase = new Set(patchIdsIn(`${fork}..${base}`));
 
-  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => id !== undefined && onBase.has(id));
+  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
 }
 
 export function addWeed(
