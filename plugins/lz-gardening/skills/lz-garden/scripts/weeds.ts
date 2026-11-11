@@ -391,9 +391,12 @@ function checkOffBase(garden: string, tended: CloseRow): boolean {
     return false;
   }
 
+  // The output's last line is always blank. Kept in, it fails git diff-tree, and both sides gain the same undefined id.
   const patchIdsIn = (range: string): (string | undefined)[] =>
+    // Stryker disable next-line MethodExpression: the blank line matches its twin, see above
     gitInCheckoutWithSite(['rev-list', '--no-merges', range, ...checkPath])
       .stdout.split('\n')
+      // Stryker disable next-line ConditionalExpression,StringLiteral: the blank line matches its twin, see above
       .filter((commit) => commit !== '')
       .map((commit) => patchIdOf(['diff-tree', '-p', '--root', '--no-commit-id', ...diffOptions, commit]));
   const onBase = new Set(patchIdsIn(`${fork}..${base}`));
