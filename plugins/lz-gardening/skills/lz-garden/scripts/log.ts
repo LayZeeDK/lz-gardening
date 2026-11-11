@@ -383,6 +383,7 @@ function isStringArray(value: unknown): value is string[] {
 
 /** The (clock, uuid) order that "earliest" and "latest" mean on every replica. */
 function byClock(a: GardenEvent, b: GardenEvent): number {
+  // Stryker disable next-line EqualityOperator,LzJsNumericLiteral: a uuid is its event's file name, so two events never tie on it, and V8's sort reads only whether the result is below 0, so -2, 2 and 0 sort as -1 and 1 do
   return a.clock - b.clock || (a.uuid < b.uuid ? -1 : 1);
 }
 
@@ -403,6 +404,7 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
     const opened = openById.get(event.id);
 
     if (opened !== undefined) {
+      // Stryker disable next-line EqualityOperator: when the two times are equal, either one is the same string
       openById.set(event.id, { ...opened, firstAt: event.at < opened.firstAt ? event.at : opened.firstAt });
     } else {
       openById.set(event.id, {
@@ -424,6 +426,7 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
 
 /** The claims no release names whose until is later than the reader's clock, in (clock, uuid) order. */
 function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
+  // Stryker disable next-line ArrayDeclaration: the mutant's text only matches a claim whose uuid is that text, and stamp names every event with randomUUID()
   const released = new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
 
   return events

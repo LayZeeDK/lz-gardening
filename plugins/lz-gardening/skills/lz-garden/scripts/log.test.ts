@@ -130,6 +130,15 @@ test('spike 1, scenario 5: a weed added after a tend pass its writer saw is regr
   assert.equal(garden.open[0]?.regrownAfter, tended);
 });
 
+test('a weed whose add names a close that is not a tend pass as its seen tend is added, not regrown', () => {
+  const garden = replay(
+    [add('a1', 1, 'a'), close('a2', 2, ['a'], 'one-off'), add('b3', 3, 'b', { sawTend: 'a2' })],
+    now,
+  );
+
+  assert.deepEqual(statuses(garden, ['b']), { b: 'added' });
+});
+
 test('spike 1, scenario 4: a weed added beside a concurrent tend pass of its class is added, not regrown', () => {
   const writerA = [add('a1', 1, 'a'), tend('a2', 2, ['a'])];
   const writerB = [
@@ -196,10 +205,23 @@ test('a log with a seed event is seeded', () => {
   assert.equal(garden.seeded, true);
 });
 
+test('a log is seeded when a seed event is among its other events, and not seeded without one', () => {
+  const seed = { op: 'seed', uuid: 's2', clock: 2, at, sha: 'a'.repeat(40) } as const;
+
+  assert.deepEqual(
+    [replay([add('a1', 1, 'x')], now).seeded, replay([add('a1', 1, 'x'), seed], now).seeded],
+    [false, true],
+  );
+});
+
 test('the replay names the highest clock in the log, from which the next event counts on', () => {
   const garden = replay([add('a1', 3, 'x'), add('b1', 7, 'y'), close('a2', 2, ['z'], 'one-off')], now);
 
   assert.equal(garden.maxClock, 7);
+});
+
+test('an empty log has clock 0, so the first event stamped on it gets clock 1', () => {
+  assert.equal(replay([], now).maxClock, 0);
 });
 
 test('an active claim makes its writer the owner of the class', () => {
@@ -276,6 +298,17 @@ test('an add of a weed closed before records every close of it its writer saw', 
   assert.deepEqual(outcome.said === 'added' ? outcome.draft.sawCloses : null, ['a2', 'b2']);
 });
 
+test('an add records only the closes that name its weed, so a keep of another weed neither keeps it nor is seen', () => {
+  const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
+  const events = [add('a1', 1, 'other'), close('a2', 2, ['other'], 'kept')];
+
+  assert.deepEqual(planAdd(events, input(), now), {
+    said: 'added',
+    id,
+    draft: { op: 'add', id, ...input(), sawCloses: [], sawTend: null },
+  });
+});
+
 test('an add of a class a tend pass closed is regrown and records the latest tend close of its class it saw', () => {
   const events = [
     tend('t5', 5, ['o1'], 'other'),
@@ -345,6 +378,16 @@ test('a close by the holder also releases every active claim it holds of the cla
   assert.deepEqual(outcome.said === 'closed' ? outcome.drafts.slice(1) : null, [
     { op: 'release', class: 'any-type', claim: 'c1' },
     { op: 'release', class: 'any-type', claim: 'c2' },
+  ]);
+});
+
+test('a close by the holder releases only its own claims, not a later claim of the class by another writer', () => {
+  const events = [add('a1', 1, 'x'), claim('c1', 2, 'writer-a'), claim('c2', 3, 'writer-b')];
+
+  const outcome = planClose(events, { target: { id: 'x' }, ...oneOff }, 'writer-a', now);
+
+  assert.deepEqual(outcome.said === 'closed' ? outcome.drafts.slice(1) : null, [
+    { op: 'release', class: 'any-type', claim: 'c1' },
   ]);
 });
 
@@ -510,6 +553,28 @@ test('a tend close event file that names no bed of its own class is skipped', ()
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'tend close names no bed/<class>@<commit>');
 });
 
+test('a tend close event file whose by holds a bed inside other text is skipped', () => {
+  const parse = (by: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify({ ...tend(uuid, 4, ['x']), by }));
+
+  assert.deepEqual(
+    [parse('xbed/any-type@1a2b3c4'), parse('bed/any-type@1a2b3c4x')],
+    ['tend close names no bed/<class>@<commit>', 'tend close names no bed/<class>@<commit>'],
+  );
+});
+
+test('a kept close event file parses back to the event that was written', () => {
+  const event = close(uuid, 4, ['x'], 'kept');
+
+  assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
+});
+
+test('an add event file with no layer and no tend seen parses back to the event that was written', () => {
+  const event = add(uuid, 3, 'x', { layer: null, sawTend: null });
+
+  assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
+});
+
 test('a claim event file parses back to the event that was written', () => {
   const event = claim(uuid, 5, 'writer-a');
 
@@ -549,6 +614,8 @@ test('each malformed event file says what is wrong with it', () => {
       parse([]),
       parse({ op: 'seed', uuid, at }),
       parse({ ...add(uuid, 1, 'x'), sawCloses: [1] }),
+      parse({ ...add(uuid, 1, 'x'), sawCloses: ['c1', 1] }),
+      parse({ ...close(uuid, 1, ['x'], 'one-off'), ids: 'x' }),
       parse({ ...close(uuid, 1, ['x'], 'one-off'), check: 'eslint.config.mjs' }),
       parse({ ...claim(uuid, 1, 'writer-a'), until: 1 }),
       parse({ ...base, op: 'release', class: 'any-type' }),
@@ -558,6 +625,8 @@ test('each malformed event file says what is wrong with it', () => {
       'not an object',
       'missing uuid, clock or at',
       'malformed add',
+      'malformed add',
+      'malformed close',
       'malformed close',
       'malformed claim',
       'malformed release',
