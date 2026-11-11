@@ -382,7 +382,7 @@ function checkOffBase(garden: string, tended: CloseRow): boolean {
 
     return diff === ''
       ? undefined
-      : spawnSync('git', ['patch-id', '--stable'], { input: diff, encoding: 'utf8' }).stdout.split(' ')[0];
+      : spawnSync('git', ['patch-id'], { input: diff, encoding: 'utf8' }).stdout.split(' ')[0];
   };
   const bedChange = patchIdOf(['diff', ...diffOptions, fork, tip]);
   const bedLeftCheckAsItWas = bedChange === undefined;
