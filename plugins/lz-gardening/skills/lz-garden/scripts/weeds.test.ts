@@ -714,6 +714,76 @@ test('a check the bed and the base both took from the same older unrelated histo
   );
 });
 
+test('a new check file the base created with content of its own is on the base', (t) => {
+  const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  recordCensus(garden, commit(dir, { 'checks/any-type.test.mjs': 'export const other = 1;\n' }));
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
+  );
+});
+
+test('a check the bed changed and then changed back is on the base', (t) => {
+  const { dir, garden, bed } = tendedBed(t, {
+    'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"),
+  });
+  const tip = commit(bed, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}') });
+  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  cli(
+    garden,
+    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs'],
+    dir,
+  );
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'], dir);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/c.ts:1', 'commit:ddd4444')} after bed/any-type@${tip} (check: eslint.config.mjs)\n`,
+  );
+});
+
+test('a bed that changed its check in two commits is not on the base while only the first has landed', (t) => {
+  const first = { 'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }") };
+  const second = {
+    'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error', 'no-unsafe-cast': 'error' }"),
+  };
+  const { dir, garden, bed } = tendedBed(t, first);
+  const tip = commit(bed, second);
+  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  cli(
+    garden,
+    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs'],
+    dir,
+  );
+  recordCensus(garden, commit(dir, first));
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'], dir);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/c.ts:1', 'commit:ddd4444')} after bed/any-type@${tip} (check: eslint.config.mjs not on the base)\n`,
+  );
+});
+
+test('a check the base changed in another way than the bed did is not on the base', (t) => {
+  // These two changes have patch ids that start with the same character.
+  const { dir, garden, tip } = tendedBed(t, {
+    'eslint.config.mjs': eslintConfig("['src/**']", "{ 'curly': 'error' }"),
+  });
+  recordCensus(garden, commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-debugger': 'error' }") }));
+
+  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: eslint.config.mjs not on the base)\n`,
+  );
+});
+
 test('a census whose commit is not a commit id gets no label, rather than reaching git as an option', (t) => {
   const check = { 'checks/any-type.test.mjs': 'export {};\n' };
   const { dir, garden, tip } = tendedBed(t, check);
