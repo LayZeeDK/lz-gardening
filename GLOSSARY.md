@@ -37,7 +37,11 @@ Said of a weed a human or a tend pass judged deliberate; it is never queued agai
 
 **Ready to tend**:
 Said of a weed class with two or more open weeds: several agents took the same shortcut. A class with one open weed
-is a one-off and waits.
+waits for a second.
+
+**One-off**:
+Weeds judged an isolated occurrence rather than a pattern agents copy: they share no cause, or sit in one place. A
+one-off is closed with no check written.
 
 ## Watching
 
