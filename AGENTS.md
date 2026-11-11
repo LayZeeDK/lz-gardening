@@ -8,6 +8,16 @@ everything else (`tools/`, `package.json`, the lint and type configs) is maintai
 Shipped files name none of the maintainer's own plugins or skills; `tools/hygiene.test.ts` lists the names it
 rejects. Describe an idea in its own words instead of pointing at another tool. Credit people, not tools.
 
+## Words and decisions
+
+- `GLOSSARY.md` defines the plugin's words (weed, bed, regrown, one-off and the rest). Use them in code, docs, tests
+  and commit messages, and not the words a term lists under _Avoid_. Change a term in the same commit as the change
+  that needs it. The glossary defines words only; behaviour belongs in the skills' docs and the CHANGELOG.
+- `docs/adr/` records the decisions that are hard to reverse, surprising without context and the result of a real
+  trade-off, one numbered file each. Read the ADRs that cover what you change; when a change reverses one, add an
+  update to it or a new ADR that supersedes it.
+- `references/glossary-and-adrs.md` says when each of them changes and how to write the change.
+
 ## Skills and agents
 
 - No skill sets `disable-model-invocation: true`. In Claude Code it also makes the Skill tool refuse the skill,
