@@ -489,6 +489,18 @@ test('open refuses a base whose name the agent could not pass to a shell as it i
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
+test('open refuses a base whose first character a shell would expand', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['branch', '$HOME']);
+
+  const result = site(dir, ['open', '--base', '$HOME']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /\$HOME has characters a shell would expand/);
+  assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
+});
+
 test('commit without a message is a usage error and stages nothing', (t) => {
   const { dir, garden } = planted(t);
   writeCensus(garden);
@@ -770,6 +782,7 @@ test('open creates the site beside the repository, holding only the plant commit
   const expected = join(dirname(dir), 'repo.garden');
   assert.equal(realpathSync.native(reported), realpathSync.native(expected));
   assert.equal(result.summary.get('created'), true);
+  assert.equal(result.summary.get('seeded'), false);
   assert.equal(result.summary.get('base'), 'main');
   assert.equal(git(expected, ['branch', '--show-current']), 'garden');
   assert.equal(git(expected, ['log', '--format=%s | %an <%ae>']), 'garden: plant | test <test@example.com>');
