@@ -1,36 +1,33 @@
-/**
- * This file sets you up with structure needed for an ESLint rule.
- *
- * It leverages utilities from @typescript-eslint to allow TypeScript to
- * provide autocompletions etc for the configuration.
- *
- * Your rule's custom logic will live within the create() method below
- * and you can learn more about writing ESLint rules on the official guide:
- *
- * https://eslint.org/docs/developer-guide/working-with-rules
- *
- * You can also view many examples of existing rules here:
- *
- * https://github.com/typescript-eslint/typescript-eslint/tree/master/packages/eslint-plugin/src/rules
- */
-
 import { ESLintUtils } from '@typescript-eslint/utils';
 
-// NOTE: The rule will be available in ESLint configs as "@nx/workspace-shared-console-spawn"
+// Stryker disable next-line StringLiteral: eslint.config.ts enables the rule by this name, so any other name fails every lint run
 export const RULE_NAME = 'shared-console-spawn';
 
+// Stryker disable next-line ArrowFunction: the docs URL only links the rule's file in an editor
 export const rule = ESLintUtils.RuleCreator(() => import.meta.filename)({
   name: RULE_NAME,
   meta: {
     type: 'problem',
     docs: {
-      description: ``,
+      description: 'Child processes share the console of the process that starts them.',
     },
     schema: [],
-    messages: {},
+    messages: {
+      windowsHide:
+        'windowsHide gives a child with piped stdio a hidden console of its own, an extra conhost.exe per spawn, and hides nothing where the parent has a console. Remove it.',
+      detached:
+        'A detached child has no console, so every console program it starts without windowsHide opens a window. Keep the child attached; if it must run detached, disable this rule here with the reason and give the spawns in that program windowsHide: true.',
+    },
     defaultOptions: [],
   },
-  create() {
-    return {};
+  create(context) {
+    return {
+      'CallExpression > ObjectExpression.arguments > Property[key.name="windowsHide"]'(node) {
+        context.report({ node, messageId: 'windowsHide' });
+      },
+      'CallExpression > ObjectExpression.arguments > Property[key.name="detached"]:not([value.value=false])'(node) {
+        context.report({ node, messageId: 'detached' });
+      },
+    };
   },
 });
