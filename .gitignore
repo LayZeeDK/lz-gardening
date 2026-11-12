@@ -1,5 +1,6 @@
 node_modules/
 .scratch/
+.claude/worktrees/
 .stryker-tmp/
 reports/mutation/
 reports/stryker-incremental/
