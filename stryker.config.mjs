@@ -40,7 +40,7 @@ const runner =
 const config = {
   ...runner,
   checkers: ['typescript'],
-  tsconfigFile: 'tsconfig.json',
+  tsconfigFile: 'plugins/lz-gardening/tsconfig.json',
   reporters: ['clear-text', 'progress', 'html'],
   thresholds: { high: 100, low: 100, break: 100 },
   mutate: [

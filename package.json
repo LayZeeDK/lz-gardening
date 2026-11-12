@@ -7,19 +7,21 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
-    "lint": "eslint .",
-    "format:check": "prettier --check .",
-    "test": "node --test \"plugins/lz-gardening/skills/*/scripts/*.test.ts\" \"tools/**/*.test.ts\"",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "check": "nx run-many -t lint typecheck test && node --test \"plugins/lz-gardening/skills/*/scripts/*.test.ts\" && prettier --check --cache .",
     "test:mutation": "stryker run"
   },
   "devDependencies": {
+    "@nx/devkit": "24.0.6",
+    "@nx/eslint": "24.0.6",
+    "@nx/eslint-plugin": "24.0.6",
+    "@nx/js": "24.0.6",
     "@stryker-mutator/core": "10.1.1",
     "@stryker-mutator/typescript-checker": "10.1.1",
     "@types/node": "24.19.2",
     "eslint": "10.13.0",
     "jiti": "2.6.1",
+    "jsonc-eslint-parser": "3.3.0",
+    "nx": "24.0.6",
     "prettier": "3.9.10",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1"

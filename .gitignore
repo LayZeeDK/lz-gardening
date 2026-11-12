@@ -4,3 +4,5 @@ node_modules/
 .stryker-tmp/
 reports/mutation/
 reports/stryker-incremental/
+.nx/
+.env.local

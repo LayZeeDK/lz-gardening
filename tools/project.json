@@ -1,0 +1,8 @@
+{
+  "name": "tools",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "namedInputs": { "default": ["{projectRoot}/**/*", "sharedGlobals", "{workspaceRoot}/eslint.config.ts"] },
+  "targets": {
+    "test": { "command": "node --test \"**/*.test.ts\"", "options": { "cwd": "{projectRoot}" }, "cache": false }
+  }
+}
