@@ -23,7 +23,8 @@
             "@nx/eslint-plugin",
             "jsonc-eslint-parser"
           ]
-        }
+        },
+        "{workspaceRoot}/tools/eslint-rules/**/*"
       ]
     },
     "typecheck": { "inputs": ["default", "^default", { "externalDependencies": ["typescript", "@types/node"] }] }

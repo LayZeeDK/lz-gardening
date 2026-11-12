@@ -18,6 +18,8 @@
     "@stryker-mutator/core": "10.1.1",
     "@stryker-mutator/typescript-checker": "10.1.1",
     "@types/node": "24.19.2",
+    "@typescript-eslint/rule-tester": "8.72.1",
+    "@typescript-eslint/utils": "8.72.1",
     "eslint": "10.13.0",
     "jiti": "2.6.1",
     "jsonc-eslint-parser": "3.3.0",

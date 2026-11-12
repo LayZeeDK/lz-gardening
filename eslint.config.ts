@@ -1,3 +1,4 @@
+import nx from '@nx/eslint-plugin';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -31,5 +32,10 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    files: ['plugins/lz-gardening/skills/*/scripts/**/*.ts', 'tools/**/*.ts'],
+    plugins: { '@nx': nx },
+    rules: { '@nx/workspace-shared-console-spawn': 'error' },
   },
 );
