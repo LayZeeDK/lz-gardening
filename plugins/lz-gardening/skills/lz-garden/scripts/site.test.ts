@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { renameRetrying, resolveBase } from './site.ts';
@@ -400,6 +402,55 @@ test('open in a clone with no local main reports origin/main', (t) => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.summary.get('base'), 'origin/main');
+});
+
+test('open in a clone of a file: URL passes over the branch the source had checked out', (t) => {
+  const source = repo(t);
+  commit(source, { 'src/a.ts': 'export const a = 1;\n' });
+  git(source, ['switch', '-q', '-c', 'milestone/M1']);
+  const clone = join(dirname(source), 'clone');
+  git(dirname(source), ['clone', '-q', `file://${source.replaceAll('\\', '/')}`, clone]);
+  git(clone, ['config', 'user.name', 'test']);
+  git(clone, ['config', 'user.email', 'test@example.com']);
+
+  const result = site(clone, ['open']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'origin/main');
+});
+
+test('open in a repository with master and a branch features/main uses master, not an origin/main', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  git(dir, ['branch', '-q', '-m', 'master']);
+  git(dir, ['branch', '-q', 'features/main']);
+
+  const result = site(dir, ['open']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'master');
+});
+
+test('open on a planted site reads the base without reading the repository config first', (t) => {
+  const { dir } = planted(t);
+  const spawned = t.mock.method(childProcess, 'spawnSync');
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    spawned.mock.calls.map(({ arguments: [, args] }) =>
+      Array.isArray(args)
+        ? args.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
+        : undefined,
+    ),
+    ['rev-parse', 'rev-parse', 'remote', 'for-each-ref', 'rev-parse', 'cat-file', 'config'],
+  );
 });
 
 test('open in a clone takes --base HEAD as the commit checked out, not origin/HEAD', (t) => {
