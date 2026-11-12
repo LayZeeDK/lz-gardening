@@ -1,9 +1,22 @@
 // The garden log: a grow-only set of immutable events, and the pure replay that turns any set into the queue's
 // statuses. Every clone holds a replica; replicas merge by union, so the replay must not depend on the order the
 // events arrive in. No I/O here: the store reads and writes the events.
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isRecord } from './census.ts';
-import { classPattern, weedId } from './weeds.ts';
+
+export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
+
+export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,40})$/;
+
+const controlsAndLineBreaks = String.raw`\p{Cc}\p{Zl}\p{Zp}`;
+const bidiControls = String.raw`\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}`;
+export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiControls}]`, 'u');
+
+const printedFields: readonly string[] = ['id', 'where', 'source', 'note', 'check', 'by', 'holder'];
+
+export function weedId(weedClass: string, where: string, source: string): string {
+  return createHash('sha256').update(`${weedClass}\u0000${where}\u0000${source}`).digest('hex').slice(0, 10);
+}
 
 export type CloseKind = 'tended' | 'one-off' | 'kept';
 
@@ -42,6 +55,10 @@ export type CloseEvent =
   | (CloseBase & { readonly kind: 'one-off' | 'kept'; readonly by: string; readonly check: null });
 
 export type TendedClose = Extract<CloseEvent, { kind: 'tended' }>;
+
+export function bedCommit(tended: TendedClose): string {
+  return tended.by.slice(tended.by.indexOf('@') + 1);
+}
 
 export interface ClaimEvent extends EventBase {
   readonly op: 'claim';
@@ -104,7 +121,13 @@ export interface AddInput {
 
 export type AddOutcome =
   | { readonly said: 'seen' | 'kept'; readonly id: string }
-  | { readonly said: 'added' | 'regrown'; readonly id: string; readonly draft: EventDraft<AddEvent> };
+  | { readonly said: 'added'; readonly id: string; readonly draft: EventDraft<AddEvent> }
+  | {
+      readonly said: 'regrown';
+      readonly id: string;
+      readonly draft: EventDraft<AddEvent>;
+      readonly after: TendedClose;
+    };
 
 /** Today's writer rules over the replica: no add of a weed seen open or kept; records what the writer saw. */
 export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Date): AddOutcome {
@@ -122,13 +145,18 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
     return { said: 'kept', id };
   }
 
-  const sawTend = closes.findLast((close) => close.kind === 'tended' && close.class === input.class)?.uuid ?? null;
-
-  return {
-    said: sawTend === null ? 'added' : 'regrown',
+  const tend = closes.findLast((close): close is TendedClose => close.kind === 'tended' && close.class === input.class);
+  const draft = (sawTend: string | null): EventDraft<AddEvent> => ({
+    op: 'add',
     id,
-    draft: { op: 'add', id, ...input, sawCloses: closesOfId.map((close) => close.uuid), sawTend },
-  };
+    ...input,
+    sawCloses: closesOfId.map((close) => close.uuid),
+    sawTend,
+  });
+
+  return tend === undefined
+    ? { said: 'added', id, draft: draft(null) }
+    : { said: 'regrown', id, draft: draft(tend.uuid), after: tend };
 }
 
 /** The kind and its data travel together, as in a close event. */
@@ -140,7 +168,7 @@ export type CloseRequest = { readonly target: { readonly id: string } | { readon
 export type CloseOutcome =
   | { readonly said: 'nothing open' }
   | { readonly said: 'claimed by another'; readonly claim: ClaimEvent }
-  | { readonly said: 'closed' | 'kept'; readonly drafts: readonly EventDraft[] };
+  | { readonly said: 'closed' | 'kept'; readonly closed: readonly string[]; readonly drafts: readonly EventDraft[] };
 
 /**
  * close / close-class: one close event for every weed the writer sees open, plus a release when this writer holds
@@ -167,10 +195,13 @@ export function planClose(
     return { said: 'claimed by another', claim: held };
   }
 
+  const closed = closing.map((weed) => weed.id);
+
   return {
     said: close.kind === 'kept' ? 'kept' : 'closed',
+    closed,
     drafts: [
-      { op: 'close', ids: closing.map((weed) => weed.id), class: first.class, ...close },
+      { op: 'close', ids: closed, class: first.class, ...close },
       ...liveClaims(events, now)
         .filter((claim) => claim.writer === writer && claim.class === first.class)
         .map((claim): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid })),
@@ -256,6 +287,14 @@ export function eventPath(uuid: string): string {
   return `events/${uuid.slice(0, 2)}/${uuid}.json`;
 }
 
+function isStampedTime(text: string): boolean {
+  const time = Date.parse(text);
+
+  return /^\d{4}-/.test(text) && !Number.isNaN(time) && new Date(time).toISOString() === text;
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 /** Parses one event file at the trust boundary; anything malformed is a reason string, never a throw. */
 export function parseEvent(path: string, text: string): GardenEvent | string {
   let json: unknown;
@@ -276,6 +315,18 @@ export function parseEvent(path: string, text: string): GardenEvent | string {
     return 'missing uuid, clock or at';
   }
 
+  if (!Number.isSafeInteger(clock) || clock < 0) {
+    return 'clock is not a whole number from 0';
+  }
+
+  if (!isStampedTime(at)) {
+    return 'at is not a date';
+  }
+
+  if (!uuidPattern.test(uuid)) {
+    return 'uuid is not a UUID';
+  }
+
   if (eventPath(uuid) !== path) {
     return 'uuid is not its file name';
   }
@@ -284,6 +335,16 @@ export function parseEvent(path: string, text: string): GardenEvent | string {
 
   if (typeof weedClass === 'string' && !classPattern.test(weedClass)) {
     return `class ${JSON.stringify(weedClass)} is not a kebab-case class id`;
+  }
+
+  const unprintable = printedFields.find((field) => {
+    const value = json[field];
+
+    return typeof value === 'string' && unprintablePattern.test(value);
+  });
+
+  if (unprintable !== undefined) {
+    return `${unprintable} holds a line break or control character`;
   }
 
   const base = { uuid, clock, at };
@@ -296,7 +357,6 @@ export function parseEvent(path: string, text: string): GardenEvent | string {
       return parseClaim(json, base);
     }
     case 'release': {
-      const weedClass = json['class'];
       const claimed = json['claim'];
 
       return typeof weedClass === 'string' && typeof claimed === 'string'
@@ -330,11 +390,12 @@ function parseClaim(json: Record<string, unknown>, base: EventBase): ClaimEvent 
     return 'malformed claim';
   }
 
+  if (!isStampedTime(until)) {
+    return 'until is not a date';
+  }
+
   return { op: 'claim', ...base, class: weedClass, writer, holder, until };
 }
-
-// The bed a tend close names: bed/<class>@<commit>. weeds.ts keeps the same pattern private.
-const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,40})$/;
 
 function parseClose(json: Record<string, unknown>, base: EventBase): CloseEvent | string {
   const { ids, kind, by, check } = json;
@@ -426,8 +487,7 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
 
 /** The claims no release names whose until is later than the reader's clock, in (clock, uuid) order. */
 function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
-  // Stryker disable next-line ArrayDeclaration: the mutant's text only matches a claim whose uuid is that text, and stamp names every event with randomUUID()
-  const released = new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
+  const released = new Set(events.filter((event) => event.op === 'release').map((release) => release.claim));
 
   return events
     .filter((event) => event.op === 'claim')

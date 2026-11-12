@@ -1,14 +1,17 @@
 // Run: node --test weeds.test.ts
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
+import { planAdd, replay, stamp, weedId } from './log.ts';
+import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent, OpenWeed, TendedClose } from './log.ts';
+import { commit, repo } from './test-repo.ts';
+import { planted } from './test-site.ts';
+import { logFiles, writeToLogByHand } from './test-log.ts';
 import { cli, now, script } from './test-weeds.ts';
-import { addWeed, groupWeeds, openWeeds, parseRow, readQueue, validateAdd, weedId } from './weeds.ts';
-import type { AddInput, CloseKind, CloseRow, Row, Weed } from './weeds.ts';
+import { addStatus, groupWeeds, validateAdd } from './weeds.ts';
 
 function input(overrides: Partial<AddInput> = {}): AddInput {
   return {
@@ -21,11 +24,10 @@ function input(overrides: Partial<AddInput> = {}): AddInput {
   };
 }
 
-function weed(fields: Partial<Weed>): Weed {
+function weed(fields: Partial<OpenWeed>): OpenWeed {
   return {
-    op: 'add',
-    id: `${fields.where ?? 'src/a.ts:1'}@${fields.at ?? now.toISOString()}`,
-    at: now.toISOString(),
+    id: `${fields.where ?? 'src/a.ts:1'}@${fields.firstAt ?? now.toISOString()}`,
+    firstAt: now.toISOString(),
     class: 'any-type',
     where: 'src/a.ts:1',
     source: 'census:any-type',
@@ -36,167 +38,89 @@ function weed(fields: Partial<Weed>): Weed {
   };
 }
 
-const tendClose: CloseRow = {
+const tendClose: TendedClose = {
   op: 'close',
-  id: 'x',
+  uuid: '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6',
+  clock: 1,
   at: now.toISOString(),
+  ids: ['x'],
+  class: 'any-type',
   by: 'bed/any-type@1a2b3c4',
   kind: 'tended',
-  check: null,
+  check: 'eslint.config.mjs',
 };
+
+function grow(events: readonly GardenEvent[], ...drafts: EventDraft[]): GardenEvent[] {
+  return [...events, ...stamp(drafts, replay(events, now).maxClock, now)];
+}
+
+function draftOf(outcome: AddOutcome): EventDraft<AddEvent> {
+  if (outcome.said === 'added' || outcome.said === 'regrown') {
+    return outcome.draft;
+  }
+
+  throw new Error(`${outcome.said} plans no add`);
+}
+
+const notOffBase = (): boolean => false;
+
+function closing(id: string, kind: 'one-off' | 'kept', by: string, weedClass = 'hollow-assertion'): EventDraft {
+  return { op: 'close', ids: [id], class: weedClass, kind, by, check: null };
+}
+
+function tending(id: string, by: string, check: string, weedClass = 'any-type'): EventDraft {
+  return { op: 'close', ids: [id], class: weedClass, kind: 'tended', by, check };
+}
 
 function idOf(status: string): string {
   return status.trim().split(' ')[1] ?? '';
 }
 
-function queue(t: TestContext): string {
-  const dir = mkdtempSync(join(tmpdir(), 'weeds-'));
-  t.after(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
-
-  return dir;
+function checkout(t: TestContext): string {
+  return planted(t).dir;
 }
 
-test('the same class, place and source is one weed', () => {
-  const first = addWeed([], input(), now);
-  assert.ok(first.row);
-  assert.match(first.status, /^added /);
-
-  const again = addWeed([first.row], input(), now);
-  assert.equal(again.row, null);
-  assert.match(again.status, /^seen /);
-});
-
-test('a weed closed as a one-off comes back added, not regrown: no check was written to hold it', () => {
-  const first = addWeed([], input(), now);
-  assert.ok(first.row);
-  const rows: Row[] = [
-    first.row,
-    { op: 'close', id: first.row.id, at: now.toISOString(), by: 'generated code', kind: 'one-off', check: null },
-  ];
-
-  const back = addWeed(rows, input(), now);
-  assert.ok(back.row);
-  assert.equal(back.status, `added ${back.row.id}`);
-
-  const weeds = openWeeds([...rows, back.row]);
-  assert.equal(weeds.length, 1);
-  assert.equal(weeds[0]?.regrownAfter, null);
-});
-
-test('a weed of a class a tend pass closed is regrown wherever it comes back, naming the bed and its check', () => {
-  const first = addWeed([], input({ where: 'src/a.spec.ts:3', source: 'commit:aaa1111' }), now);
-  assert.ok(first.row);
-  const tended: Row = {
-    op: 'close',
-    id: first.row.id,
-    at: now.toISOString(),
-    by: 'bed/hollow-assertion@bbb2222',
-    kind: 'tended',
-    check: 'eslint.config.mjs',
-  };
-
-  const back = addWeed([first.row, tended], input({ where: 'src/b.spec.ts:8', source: 'commit:ccc3333' }), now);
-
-  assert.ok(back.row);
-  assert.equal(back.status, `regrown ${back.row.id} after bed/hollow-assertion@bbb2222 (check: eslint.config.mjs)`);
-});
-
-test('a weed of a class tended twice is judged against the latest tend pass', () => {
-  const tend = (id: string, sha: string, check: string | null): Row => ({
-    op: 'close',
-    id,
-    at: now.toISOString(),
-    by: `bed/any-type@${sha}`,
-    kind: 'tended',
-    check,
-  });
-  const rows: Row[] = [
-    weed({ id: 'first' }),
-    tend('first', 'aaa1111', 'tsconfig.json'),
-    weed({ id: 'second', where: 'src/b.ts:2' }),
-    tend('second', 'bbb2222', null),
-  ];
-
-  const back = addWeed(rows, input({ class: 'any-type', where: 'src/c.ts:3', source: 'commit:ccc3333' }), now);
-
-  assert.equal(back.status, `regrown ${back.row?.id ?? ''} after bed/any-type@bbb2222`);
-});
-
-test('a one-off close after a tend pass leaves the class tended: the check it added still stands', () => {
-  const close = (id: string, kind: CloseKind, by: string, check: string | null): Row => ({
-    op: 'close',
-    id,
-    at: now.toISOString(),
-    by,
-    kind,
-    check,
-  });
-  const rows: Row[] = [
-    weed({ id: 'first' }),
-    close('first', 'tended', 'bed/any-type@aaa1111', 'tsconfig.json'),
-    weed({ id: 'back', where: 'src/b.ts:2' }),
-    close('back', 'one-off', 'generated code', null),
-  ];
-
-  const again = addWeed(rows, input({ class: 'any-type', where: 'src/c.ts:3', source: 'commit:ccc3333' }), now);
-
-  assert.equal(again.status, `regrown ${again.row?.id ?? ''} after bed/any-type@aaa1111 (check: tsconfig.json)`);
-});
-
-test('the replayed queue marks a weed regrown when a tend pass closed its class before it was added', () => {
-  const tendedWeed = weed({ id: 'tended', class: 'any-type', where: 'src/a.ts:1' });
-  const rows: Row[] = [
-    tendedWeed,
-    { op: 'close', id: 'tended', at: now.toISOString(), by: 'bed/any-type@1a2b3c4', kind: 'tended', check: null },
-    weed({ id: 'back', class: 'any-type', where: 'src/b.ts:7' }),
-    weed({ id: 'other', class: 'todo-marker', where: 'src/b.ts:9' }),
-  ];
+test('add prints added for a new weed and seen for the same class, place and source', () => {
+  const first = planAdd([], input(), now);
+  const again = planAdd(grow([], draftOf(first)), input(), now);
 
   assert.deepEqual(
-    openWeeds(rows).map((item) => [item.id, item.regrownAfter !== null]),
-    [
-      ['back', true],
-      ['other', false],
-    ],
+    [addStatus(first, notOffBase), addStatus(again, notOffBase)],
+    [`added ${first.id}`, `seen ${first.id}`],
   );
 });
 
-test('a weed closed with keep is never queued again', () => {
-  const first = addWeed([], input(), now);
-  assert.ok(first.row);
-  const rows: Row[] = [
-    first.row,
-    {
-      op: 'close',
-      id: first.row.id,
-      at: now.toISOString(),
-      by: 'intentional: generated code',
-      kind: 'kept',
-      check: null,
-    },
-  ];
+test('add prints a regrown weed with the bed and check of the tend pass it came back after', () => {
+  const first = draftOf(planAdd([], input({ where: 'src/a.spec.ts:3', source: 'commit:aaa1111' }), now));
+  const tended = tending(first.id, 'bed/hollow-assertion@bbb2222', 'eslint.config.mjs', 'hollow-assertion');
 
-  const back = addWeed(rows, input(), now);
-  assert.equal(back.row, null);
-  assert.match(back.status, /^kept /);
-  assert.deepEqual(openWeeds(rows), []);
+  const back = planAdd(grow([], first, tended), input({ where: 'src/b.spec.ts:8', source: 'commit:ccc3333' }), now);
+
+  assert.equal(
+    addStatus(back, notOffBase),
+    `regrown ${back.id} after bed/hollow-assertion@bbb2222 (check: eslint.config.mjs)`,
+  );
+});
+
+test('add prints kept for a weed closed with keep, which stays out of the queue', () => {
+  const first = draftOf(planAdd([], input(), now));
+  const events = grow([], first, closing(first.id, 'kept', 'intentional: generated code'));
+
+  const back = planAdd(events, input(), now);
+
+  assert.equal(addStatus(back, notOffBase), `kept ${back.id}`);
+  assert.deepEqual(replay(events, now).open, []);
 });
 
 test('groups count open weeds and distinct files per class, most first', () => {
-  const rows = [
+  const drafts = [
     input(),
     input({ where: 'src/a.spec.ts:9', source: 'census:hollow-assertion' }),
     input({ where: 'src/b.spec.ts:1' }),
     input({ class: 'double-cast', where: 'src/c.ts:4', source: 'census:double-cast', layer: 1 }),
-  ].flatMap((item): Row[] => {
-    const { row } = addWeed([], item, now);
+  ].map((item) => draftOf(planAdd([], item, now)));
 
-    return row === null ? [] : [row];
-  });
-
-  const groups = groupWeeds(openWeeds(rows));
+  const groups = groupWeeds(replay(grow([], ...drafts), now).open);
   assert.deepEqual(
     groups.map((group) => [group.class, group.open, group.places, group.layer]),
     [
@@ -251,19 +175,8 @@ test('validation takes the joiners that words and emoji need in paths and notes'
   );
 });
 
-test('a malformed queue line fails loudly with its line number', () => {
-  assert.throws(() => parseRow('{"op":"add","id":"x","at":"t"}', 4), /line 4/);
-  assert.throws(() => parseRow('{"op":"prune","id":"x","at":"t"}', 2), /unknown op/);
-  assert.throws(() => parseRow('not json', 7), /line 7: not JSON/);
-});
-
-test('ids depend on class, place and source', () => {
-  assert.notEqual(weedId('a', 'f:1', 'commit:1'), weedId('a', 'f:1', 'commit:2'));
-  assert.equal(weedId('a', 'f:1', 'commit:1'), weedId('a', 'f:1', 'commit:1'));
-});
-
 test('through the CLI a weed is added, seen, regrown after a close, and kept out after a keep', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
   const add = ['add', '--class', 'hollow-assertion', '--where', 'src/a.spec.ts:3', '--source', 'census:x'];
 
   const statuses = [
@@ -290,7 +203,7 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
 });
 
 test('through the CLI a tend close records its bed and check, and a weed of the class elsewhere names both', (t) => {
-  const dir = queue(t);
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
 
   const closed = cli(dir, [
@@ -304,27 +217,24 @@ test('through the CLI a tend close records its bed and check, and a weed of the 
   ]);
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:4', '--source', 'commit:ccc3333']);
 
-  const file = join(dir, '.garden', 'weeds.jsonl');
-  const [first, close] = readQueue(file);
+  const close = [...logFiles(garden).values()].find((event) => event['op'] === 'close');
 
   assert.equal(closed.stdout, 'closed 1\n');
   assert.match(back.stdout, /^regrown [0-9a-f]{10} after bed\/any-type@bbb2222 \(check: eslint\.config\.mjs\)\n$/);
-  assert.equal(
-    readFileSync(file, 'utf8').split('\n')[1],
-    JSON.stringify({
-      op: 'close',
-      id: first?.id,
-      at: close?.at,
-      by: 'bed/any-type@bbb2222',
-      kind: 'tended',
-      check: 'eslint.config.mjs',
-    }),
+  assert.deepEqual(
+    ['ids', 'class', 'by', 'kind', 'check'].map((field) => close?.[field]),
+    [
+      [weedId('any-type', 'src/a.ts:1', 'commit:aaa1111')],
+      'any-type',
+      'bed/any-type@bbb2222',
+      'tended',
+      'eslint.config.mjs',
+    ],
   );
 });
 
 test('through the CLI a one-off close and a keep each record their reason and kind', (t) => {
-  const dir = queue(t);
-  const file = join(dir, '.garden', 'weeds.jsonl');
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
   const oneOff = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/b.ts:2', '--source', 'commit:aaa1111']);
@@ -332,7 +242,10 @@ test('through the CLI a one-off close and a keep each record their reason and ki
 
   assert.deepEqual([oneOff.stdout, kept.stdout], ['closed 1\n', 'kept 1\n']);
   assert.deepEqual(
-    readQueue(file).flatMap((row) => (row.op === 'close' ? [[row.by, row.kind, row.check]] : [])),
+    [...logFiles(garden).values()]
+      .filter((event) => event['op'] === 'close')
+      .toSorted((a, b) => Number(a['clock']) - Number(b['clock']))
+      .map((event) => [event['by'], event['kind'], event['check']]),
     [
       ['generated code', 'one-off', null],
       ['tracked in the issue tracker', 'kept', null],
@@ -341,7 +254,7 @@ test('through the CLI a one-off close and a keep each record their reason and ki
 });
 
 test('list shows a regrown weed with the bed and check it came back after', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', 'bed/any-type@bbb2222', '--check', 'eslint.config.mjs']);
   const id = idOf(
@@ -355,18 +268,8 @@ test('list shows a regrown weed with the bed and check it came back after', (t) 
   );
 });
 
-test('the CLI exits 2 on a malformed queue instead of treating it as empty', (t) => {
-  const dir = queue(t);
-  mkdirSync(join(dir, '.garden'));
-  writeFileSync(join(dir, '.garden', 'weeds.jsonl'), 'not json\n');
-
-  const result = cli(dir, ['list']);
-  assert.equal(result.code, 2);
-  assert.match(result.stderr, /weeds: queue line 1/);
-});
-
 test('a mistyped flag is a usage error, not ignored', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
 
   const result = cli(dir, ['list', '--clas', 'hollow-assertion']);
 
@@ -375,7 +278,7 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
 });
 
 test('groups refuses a --min that is not a positive whole number, rather than hiding every class', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
 
   for (const min of ['two', '0']) {
     const result = cli(dir, ['groups', '--min', min]);
@@ -394,83 +297,11 @@ test('validation takes layers 1 and 6, refuses 0 and 1.5, and matches the whole 
   assert.match(validateAdd(input({ source: 'see commit:abc' })) ?? '', /kind/);
 });
 
-test('each malformed queue line says what is wrong with it', () => {
-  for (const line of ['null', '[]', '42']) {
-    assert.throws(() => parseRow(line, 1), /^Error: queue line 1: not an object$/);
-  }
-
-  assert.throws(() => parseRow('{"op":"add","at":"t"}', 1), /: missing id or at$/);
-  assert.throws(() => parseRow('{"op":"close","id":"x","at":"t"}', 1), /: close without by$/);
-  assert.throws(
-    () => parseRow('{"op":"add","id":"x","at":"t","class":"c"}', 1),
-    /: add without class, where or source$/,
-  );
-});
-
-test('an add row without a note or layer reads as an empty note and no layer', () => {
-  assert.deepEqual(parseRow('{"op":"add","id":"x","at":"t","class":"c","where":"w","source":"s:1"}', 1), {
-    op: 'add',
-    id: 'x',
-    at: 't',
-    class: 'c',
-    where: 'w',
-    source: 's:1',
-    note: '',
-    layer: null,
-  });
-});
-
-test('a close row written before close kinds reads its kind from keep and by', () => {
-  const close = (fields: string): Row => parseRow(`{"op":"close","id":"x","at":"t",${fields}}`, 1);
-
-  assert.deepEqual(
-    [
-      close('"by":"generated code","keep":true'),
-      close('"by":"bed/any-type@1a2b3c4","keep":false'),
-      close('"by":"one-off: generated code"'),
-    ],
-    [
-      { op: 'close', id: 'x', at: 't', by: 'generated code', kind: 'kept', check: null },
-      { op: 'close', id: 'x', at: 't', by: 'bed/any-type@1a2b3c4', kind: 'tended', check: null },
-      { op: 'close', id: 'x', at: 't', by: 'one-off: generated code', kind: 'one-off', check: null },
-    ],
-  );
-});
-
-test('a close row with a kind the script does not know fails loudly instead of reading as another kind', () => {
-  assert.throws(
-    () => parseRow('{"op":"close","id":"x","at":"t","by":"bed/any-type@1a2b3c4","kind":"fixed"}', 2),
-    /^Error: queue line 2: unknown close kind "fixed"$/,
-  );
-});
-
-test('a weed id is ten hex characters', () => {
-  assert.match(weedId('any-type', 'src/a.ts:1', 'census:any-type'), /^[0-9a-f]{10}$/);
-});
-
-test('blank queue lines are skipped but still counted in line numbers', (t) => {
-  const file = join(queue(t), 'weeds.jsonl');
-  writeFileSync(file, '\n   \nnot json\n');
-
-  assert.throws(() => readQueue(file), /line 3: not JSON/);
-});
-
-test('a weed added twice while open keeps its first sighting', () => {
-  const first = weed({ id: 'x', at: '2026-11-07T10:00:00.000Z' });
-
-  const open = openWeeds([first, { ...first, at: '2026-11-08T10:00:00.000Z' }]);
-
-  assert.deepEqual(
-    open.map((item) => item.at),
-    ['2026-11-07T10:00:00.000Z'],
-  );
-});
-
 test('a group counts a file once with or without a line, counts regrown weeds, and takes the lowest layer and first sighting', () => {
   const [group] = groupWeeds([
-    weed({ where: 'src/a.ts:12', at: '2026-11-07T10:00:00.000Z', layer: 3, regrownAfter: tendClose }),
-    weed({ where: 'src/a.ts:34', at: '2026-11-06T09:00:00.000Z', layer: 1, regrownAfter: tendClose }),
-    weed({ where: 'src/a.ts', at: '2026-11-08T00:00:00.000Z' }),
+    weed({ where: 'src/a.ts:12', firstAt: '2026-11-07T10:00:00.000Z', layer: 3, regrownAfter: tendClose }),
+    weed({ where: 'src/a.ts:34', firstAt: '2026-11-06T09:00:00.000Z', layer: 1, regrownAfter: tendClose }),
+    weed({ where: 'src/a.ts', firstAt: '2026-11-08T00:00:00.000Z' }),
     weed({ where: 'src/x:1.ts:4' }),
     weed({ where: 'src/x:1.ts:9' }),
   ]);
@@ -505,93 +336,29 @@ test('groups sort by open weeds, then by regrowth, then by name', () => {
   );
 });
 
-test('a different weed is added beside open, closed and kept weeds', () => {
-  const close = (id: string, kind: CloseKind): Row => ({
-    op: 'close',
-    id,
-    at: now.toISOString(),
-    by: 'abc1234',
-    kind,
-    check: null,
-  });
-  const rows: Row[] = [
-    weed({ id: 'open', where: 'src/open.ts:1' }),
-    weed({ id: 'closed', where: 'src/closed.ts:1' }),
-    close('closed', 'one-off'),
-    weed({ id: 'kept', where: 'src/kept.ts:1' }),
-    close('kept', 'kept'),
-  ];
-
-  assert.match(addWeed(rows, input({ where: 'src/new.ts:1' }), now).status, /^added /);
-});
-
-test('a new weed of an untended class is added even when an open weed of another class is regrown', () => {
-  const first = addWeed([], input({ where: 'src/a.spec.ts:3', source: 'commit:aaa1111' }), now);
-  assert.ok(first.row);
-  const tended: Row = { ...tendClose, id: first.row.id, by: 'bed/hollow-assertion@bbb2222' };
-  const back = addWeed([first.row, tended], input({ where: 'src/b.spec.ts:8', source: 'commit:ccc3333' }), now);
-  assert.ok(back.row);
-  assert.match(back.status, /^regrown /);
-
-  const other = addWeed(
-    [first.row, tended, back.row],
-    input({ class: 'todo-marker', where: 'src/c.ts:1', source: 'census:todo-marker' }),
-    now,
-  );
-
-  assert.ok(other.row);
-  assert.equal(other.status, `added ${other.row.id}`);
-});
-
-test('the CLI refuses a --file outside a .garden folder and writes nothing', (t) => {
-  const dir = queue(t);
+test('the CLI takes no --file, so it writes nowhere but the site', (t) => {
+  const dir = checkout(t);
   const target = join(dir, 'profile');
 
-  const result = spawnSync(
-    process.execPath,
-    [script, 'add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type', '--file', target],
-    { encoding: 'utf8' },
-  );
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:any-type',
+    '--file',
+    target,
+  ]);
 
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /\.garden\/weeds\.jsonl/);
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /--file/);
   assert.equal(existsSync(target), false);
-});
-
-test('the CLI refuses a --file that only starts with .garden/weeds.jsonl', (t) => {
-  const dir = queue(t);
-  const target = join(dir, '.garden', 'weeds.jsonl.sh');
-
-  const result = spawnSync(
-    process.execPath,
-    [script, 'add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type', '--file', target],
-    { encoding: 'utf8' },
-  );
-
-  assert.equal(result.status, 2);
-  assert.equal(existsSync(target), false);
-});
-
-test('the CLI keeps the queue in .garden/weeds.jsonl when no --file is given', (t) => {
-  const dir = queue(t);
-
-  const result = spawnSync(
-    process.execPath,
-    [script, 'add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type'],
-    { cwd: dir, encoding: 'utf8' },
-  );
-
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(
-    readFileSync(join(dir, '.garden', 'weeds.jsonl'), 'utf8')
-      .trim()
-      .split('\n').length,
-    1,
-  );
 });
 
 test('groups prints a header, then a row per class with its layer or a dash and the date first seen', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type', '--layer', '3']);
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/b.ts:1', '--source', 'census:todo-marker']);
 
@@ -608,7 +375,7 @@ test('groups prints a header, then a row per class with its layer or a dash and 
 });
 
 test('groups --min leaves out classes with fewer open weeds', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/c.ts:1', '--source', 'census:todo-marker']);
@@ -622,7 +389,7 @@ test('groups --min leaves out classes with fewer open weeds', (t) => {
 });
 
 test('close takes one weed by id and leaves the rest of its class open', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
   const target = idOf(
     cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']).stdout,
   );
@@ -642,8 +409,7 @@ test('close takes one weed by id and leaves the rest of its class open', (t) => 
 });
 
 test('a close needs its target and exactly one non-blank kind of close, and writes nothing without them', (t) => {
-  const dir = queue(t);
-  const file = join(dir, '.garden', 'weeds.jsonl');
+  const { dir, garden } = planted(t);
   const target = idOf(
     cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']).stdout,
   );
@@ -666,12 +432,11 @@ test('a close needs its target and exactly one non-blank kind of close, and writ
       [2, 'weeds close-class: needs --class and exactly one of --tended, --one-off or --keep\n'],
     ],
   );
-  assert.equal(readQueue(file).length, 1);
+  assert.equal(logFiles(garden).size, 1);
 });
 
 test('a tend close needs a bed of the class it closes and a check, and a check goes with a tend close only', (t) => {
-  const dir = queue(t);
-  const file = join(dir, '.garden', 'weeds.jsonl');
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   const closeClass = ['close-class', '--class', 'any-type'];
 
@@ -691,12 +456,11 @@ test('a tend close needs a bed of the class it closes and a check, and a check g
       [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got any-type@1a2b3c4\n'],
     ],
   );
-  assert.equal(readQueue(file).length, 1);
+  assert.equal(logFiles(garden).size, 1);
 });
 
 test('a tend close refuses a bed with anything in front of bed/<class>@<commit>', (t) => {
-  const dir = queue(t);
-  const file = join(dir, '.garden', 'weeds.jsonl');
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
 
   const result = cli(dir, [
@@ -713,12 +477,11 @@ test('a tend close refuses a bed with anything in front of bed/<class>@<commit>'
     [result.code, result.stderr],
     [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got xbed/any-type@1a2b3c4\n'],
   );
-  assert.equal(readQueue(file).length, 1);
+  assert.equal(logFiles(garden).size, 1);
 });
 
 test('a tend close refuses a bed with anything after bed/<class>@<commit>', (t) => {
-  const dir = queue(t);
-  const file = join(dir, '.garden', 'weeds.jsonl');
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
 
   const result = cli(dir, [
@@ -735,12 +498,11 @@ test('a tend close refuses a bed with anything after bed/<class>@<commit>', (t) 
     [result.code, result.stderr],
     [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got bed/any-type@1a2b3c4-extra\n'],
   );
-  assert.equal(readQueue(file).length, 1);
+  assert.equal(logFiles(garden).size, 1);
 });
 
 test('a tend close refuses a check of only spaces, which names no place', (t) => {
-  const dir = queue(t);
-  const file = join(dir, '.garden', 'weeds.jsonl');
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
 
   const result = cli(dir, ['close-class', '--class', 'any-type', '--tended', 'bed/any-type@1a2b3c4', '--check', '   ']);
@@ -749,11 +511,11 @@ test('a tend close refuses a check of only spaces, which names no place', (t) =>
     [result.code, result.stderr],
     [2, 'weeds close-class: --tended needs --check <where the check lives>\n'],
   );
-  assert.equal(readQueue(file).length, 1);
+  assert.equal(logFiles(garden).size, 1);
 });
 
 test('a tend close takes a whole class: close by id refuses --tended and leaves the class untended', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
   const target = idOf(
     cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']).stdout,
   );
@@ -769,8 +531,7 @@ test('a tend close takes a whole class: close by id refuses --tended and leaves 
 });
 
 test('a close refuses a reason or check holding a control character, which later output would print raw', (t) => {
-  const dir = queue(t);
-  const file = join(dir, '.garden', 'weeds.jsonl');
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   const closeClass = ['close-class', '--class', 'any-type'];
 
@@ -786,11 +547,11 @@ test('a close refuses a reason or check holding a control character, which later
       [2, 'weeds close-class: --one-off must be one line of text without control characters\n'],
     ],
   );
-  assert.equal(readQueue(file).length, 1);
+  assert.equal(logFiles(garden).size, 1);
 });
 
 test('a close that finds nothing open exits 1 and names its target', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
 
   const result = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
 
@@ -798,19 +559,30 @@ test('a close that finds nothing open exits 1 and names its target', (t) => {
   assert.equal(result.stderr, 'weeds close-class: nothing open for any-type\n');
 });
 
-test('closing a class of several weeds appends one valid row per weed', (t) => {
-  const dir = queue(t);
+test('a close by id that finds nothing open exits 1 and names the id', (t) => {
+  const dir = checkout(t);
+
+  const result = cli(dir, ['close', '--id', '0123456789', '--one-off', 'generated code']);
+
+  assert.deepEqual([result.code, result.stderr], [1, 'weeds close: nothing open for 0123456789\n']);
+});
+
+test('closing a class of several weeds appends one close event naming each weed', (t) => {
+  const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
 
   const closed = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
 
   assert.equal(closed.stdout, 'closed 2\n');
-  assert.equal(readQueue(join(dir, '.garden', 'weeds.jsonl')).length, 4);
+  assert.deepEqual(
+    [...logFiles(garden).values()].flatMap((event) => (event['op'] === 'close' ? [event['ids']] : [])),
+    [[weedId('any-type', 'src/a.ts:1', 'census:any-type'), weedId('any-type', 'src/b.ts:1', 'census:any-type')]],
+  );
 });
 
 test('add says which flag is wrong', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
 
   const result = cli(dir, ['add', '--class', 'any-type', '--source', 'census:any-type']);
 
@@ -819,7 +591,7 @@ test('add says which flag is wrong', (t) => {
 });
 
 test('list prints each open weed as id, class, place, source and note, and --class keeps one class', (t) => {
-  const dir = queue(t);
+  const dir = checkout(t);
   const id = idOf(
     cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']).stdout,
   );
@@ -835,18 +607,122 @@ test('list prints each open weed as id, class, place, source and note, and --cla
 });
 
 test('a word after the command is a usage error and queues nothing', (t) => {
-  const dir = queue(t);
+  const { dir, garden } = planted(t);
 
   const result = cli(dir, ['add', 'any-type', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
 
   assert.equal(result.code, 2);
   assert.match(result.stderr, /^usage: weeds\.ts/);
-  assert.equal(readQueue(join(dir, '.garden', 'weeds.jsonl')).length, 0);
+  assert.equal(logFiles(garden).size, 0);
+});
+
+test('a weed added in one process is seen in another, run from anywhere in the checkout', (t) => {
+  const { dir } = planted(t);
+  const add = [script, 'add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type'];
+
+  const first = spawnSync(process.execPath, add, { cwd: dir, encoding: 'utf8' });
+  const again = spawnSync(process.execPath, add, { cwd: join(dir, 'src'), encoding: 'utf8' });
+
+  assert.deepEqual(
+    [first.stdout, again.stdout],
+    [
+      `added ${weedId('any-type', 'src/a.ts:1', 'census:any-type')}\n`,
+      `seen ${weedId('any-type', 'src/a.ts:1', 'census:any-type')}\n`,
+    ],
+  );
+});
+
+test('an event file the log cannot read is skipped and named, and the rest of the queue still lists', (t) => {
+  const { dir, garden } = planted(t);
+  const id = idOf(cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']).stdout);
+  writeToLogByHand(garden, 'events/ab/abc.json', 'not json');
+
+  const listed = cli(dir, ['list']);
+
+  assert.deepEqual(
+    [listed.code, listed.stdout, listed.stderr],
+    [0, `${id} any-type src/a.ts:1 [census:x] \n`, 'weeds: skipped events/ab/abc.json: not JSON\n'],
+  );
+});
+
+test('a skipped event file whose path breaks or reorders a line is named with those characters escaped', (t) => {
+  const { dir, garden } = planted(t);
+  writeToLogByHand(garden, 'events/ab/a b‮.json', 'not json');
+
+  const listed = cli(dir, ['list']);
+
+  assert.equal(listed.stderr, 'weeds: skipped events/ab/a\\u{2028}b\\u{202e}.json: not JSON\n');
+});
+
+test('a command that fails after reading the log still names the event files it skipped', (t) => {
+  const { dir, garden } = planted(t);
+  writeToLogByHand(garden, 'events/ab/abc.json', 'not json');
+  writeFileSync(join(garden, '.git', 'refs', 'garden', 'log.lock'), '');
+
+  const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+
+  assert.equal(added.code, 2);
+  assert.match(
+    added.stderr,
+    /^weeds: skipped events\/ab\/abc\.json: not JSON\nweeds: git update-ref refs\/garden\/log: .*cannot lock ref/s,
+  );
+});
+
+test('a log in a newer format is refused with exit 2, and nothing is added to it', (t) => {
+  const { dir, garden } = planted(t);
+  writeToLogByHand(garden, 'garden.json', '{"format":2}');
+
+  const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+
+  assert.deepEqual(
+    [added.code, added.stderr, logFiles(garden).size],
+    [2, 'weeds: refs/garden/log is in format 2, which this version cannot read; update lz-gardening\n', 0],
+  );
+});
+
+test('a close of a class another writer holds a claim on exits 1, names the holder and writes nothing', (t) => {
+  const { dir, garden } = planted(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+  const uuid = '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6';
+  const until = '2999-01-01T00:00:00.000Z';
+  const claim = {
+    op: 'claim',
+    uuid,
+    clock: 9,
+    at: now.toISOString(),
+    class: 'any-type',
+    writer: 'w',
+    holder: 'ci on runner',
+    until,
+  };
+  writeToLogByHand(garden, `events/0f/${uuid}.json`, JSON.stringify(claim));
+
+  const result = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
+
+  assert.deepEqual(
+    [result.code, result.stderr, logFiles(garden).size],
+    [1, `weeds close-class: any-type is claimed by ci on runner until ${until}\n`, 2],
+  );
 });
 
 test('an unknown command prints the usage line', (t) => {
-  const result = cli(queue(t), ['prune']);
+  const result = cli(checkout(t), ['prune']);
 
   assert.equal(result.code, 2);
   assert.match(result.stderr, /^usage: weeds\.ts add\|close\|close-class\|groups\|list/);
+});
+
+test('a usage error in a repository with no site names the usage error, not the missing site', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const results = [cli(dir, ['prune']), cli(dir, ['groups', '--min', '0'])];
+
+  assert.deepEqual(
+    results.map(({ code, stderr }) => [code, stderr]),
+    [
+      [2, 'usage: weeds.ts add|close|close-class|groups|list ... (see the header of weeds.ts)\n'],
+      [2, 'weeds groups: --min must be a whole number of at least 1, got 0\n'],
+    ],
+  );
 });

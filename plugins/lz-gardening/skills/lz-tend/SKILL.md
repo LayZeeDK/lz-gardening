@@ -19,9 +19,9 @@ stop.
 
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
-`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/weeds.ts"` with `--file "<site>/.garden/weeds.jsonl"` on every
-call. Both run without asking when the Bash call holds that command alone, as written. `<checkout>` below is the
-repository's checkout, the directory the session started in.
+`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/weeds.ts"`, run from the repository's checkout: it finds the
+site's queue from there. Both run without asking when the Bash call holds that command alone, as written.
+`<checkout>` below is the repository's checkout, the directory the session started in.
 
 A tend pass runs under the user's own permission rules, and the site lies beside the repository, outside the
 session's working directory. Until it is added as one, Claude Code asks before every read or edit of a bed file and
@@ -66,10 +66,9 @@ the base, and change the check only if it misses the new weeds.
 Then decide, and say which:
 
 - **Keep**: the pattern is deliberate and right here. `weeds close-class --class <class> --keep "<reason>"`,
-  `site commit --message "garden: keep <class>"`, report, stop.
-- **One-off**: on reading, the weeds share no cause or sit in one place.
-  `weeds close-class --class <class> --one-off "<reason>"`, `site commit --message "garden: one-off <class>"`,
   report, stop.
+- **One-off**: on reading, the weeds share no cause or sit in one place.
+  `weeds close-class --class <class> --one-off "<reason>"`, report, stop.
 - **Redirect**: a `repeated-lesson` class is tended through the class its lessons are about, and a
   `stale-verification` class through a refresh of the verification setup, not here. Name that class or job in the
   report and stop; the weeds stay open as evidence.
@@ -122,9 +121,9 @@ Quote their summary lines.
 
 Commit the bed change with `git -C "<bed>"`, following the repository's commit message convention
 (`git log --oneline -20`), one commit per check, holding the check and its clean-up together. Then, from the
-repository's checkout, close the class and commit the queue:
+repository's checkout, close the class:
 `weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
-check's file from step 3, then `site commit --message "garden: tend <class>"`. A later weed of the class, anywhere,
+check's file from step 3. The close lands in the site's queue as it runs. A later weed of the class, anywhere,
 is then queued as `regrown` and names this bed and check.
 
 ## 8. Report

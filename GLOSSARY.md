@@ -75,9 +75,19 @@ defined in the most files.
 _Avoid_: baseline (a baseline is what a check tolerates)
 
 **Queue**:
-The append-only list of weeds, each with its place, its source and the root cause it points to. Weeds leave the
-queue only by being closed, never by being edited.
+The grow-only set of events (adds, closes, claims, releases and seeds) that a replay turns into the weeds and their
+statuses, each weed with its place, its source and the root cause it points to. Weeds leave the queue only by being
+closed, never by being edited.
 _Avoid_: ledger, backlog, weeds file
+
+**Event**:
+One entry in the queue: an add, close, claim, release or seed, written once by one writer and never edited. Its
+clock orders it against the others only where "earliest" or "latest" matters.
+_Avoid_: row, record (records are the repository's own)
+
+**Writer**:
+A garden site that adds events to the queue, named by an id of its own in the site's git config
+(`lzGardening.writer`) that its claims carry. Two clones of one repository are two writers.
 
 **Records**:
 What the repository writes down about its own work: plans, summaries, lessons, decisions, agent instructions and
@@ -131,7 +141,13 @@ out of the repository's checkout.
 _Avoid_: garden clone, workspace
 
 **Garden branch**:
-The site's branch that holds only the garden's records, never the repository's code.
+The site's branch that holds the census and the census patterns, never the repository's code. The queue is not on
+it: it lives in the garden log.
+
+**Garden log**:
+The site's ref `refs/garden/log`, whose commits hold the queue's events, one file each, and the format file
+`garden.json`. It is a ref, not a branch or a folder, so nothing checks it out.
+_Avoid_: weeds file, queue branch
 
 **Bed**:
 A tend pass's working copy and branch in the garden site, holding one proposed change for a human to land. Its

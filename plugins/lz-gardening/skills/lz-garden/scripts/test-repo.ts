@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-// Git run by the tests, and by the scripts they start, ignores the machine's own settings (commit signing, hooks).
-process.env['GIT_CONFIG_GLOBAL'] = '/dev/null';
+process.env['GIT_CONFIG_GLOBAL'] = fileURLToPath(new URL('test.gitconfig', import.meta.url));
 process.env['GIT_CONFIG_NOSYSTEM'] = '1';
 
 export function git(cwd: string, args: readonly string[]): string {
@@ -22,12 +22,15 @@ export function repo(t: TestContext): string {
     rmSync(folderWithRoomForSiblings, { recursive: true, force: true });
   });
   const dir = join(folderWithRoomForSiblings, 'repo');
-  mkdirSync(dir);
-  git(dir, ['init', '-q', '-b', 'main']);
-  git(dir, ['config', 'user.email', 'test@example.com']);
-  git(dir, ['config', 'user.name', 'test']);
+  init(dir);
 
   return dir;
+}
+
+export function init(dir: string): void {
+  mkdirSync(dir);
+  git(dir, ['init', '-q', '-b', 'main']);
+  appendFileSync(join(dir, '.git', 'config'), '[user]\n\temail = test@example.com\n\tname = test\n');
 }
 
 export function commit(dir: string, files: Readonly<Record<string, string>>): string {

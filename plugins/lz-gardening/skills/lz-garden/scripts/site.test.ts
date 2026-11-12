@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { namedHooksOff, renameRetrying, resolveBase } from './site.ts';
+import { renameRetrying, resolveBase } from './site.ts';
+import { logRef } from './store.ts';
 import type { BaseFacts } from './site.ts';
 import { commit, git, repo } from './test-repo.ts';
-import { configEnv, planted, queueOneWeed, site } from './test-site.ts';
+import { configEnv, planted, writeCensus, site, siteProcess } from './test-site.ts';
 
 // A repository with branches feature/x and main, a hosted origin with no default, nothing recorded and nothing
 // asked for.
@@ -98,6 +99,22 @@ test('open in a clone of a hosted repository reports its default branch while a 
   assert.equal(result.summary.get('base'), 'trunk');
 });
 
+test('open in a clone whose origin/HEAD names a commit, not a branch, falls back to main', (t) => {
+  const source = repo(t);
+  const head = commit(source, { 'src/a.ts': 'export const a = 1;\n' });
+  const clone = join(dirname(source), 'clone');
+  git(dirname(source), ['clone', '-q', source, clone]);
+  git(clone, ['remote', 'set-url', 'origin', 'https://example.invalid/repo.git']);
+  git(clone, ['update-ref', '--no-deref', 'refs/remotes/origin/HEAD', head]);
+  git(clone, ['config', 'user.name', 'test']);
+  git(clone, ['config', 'user.email', 'test@example.com']);
+
+  const result = site(clone, ['open']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'main');
+});
+
 test('open without a base reports the base the last census recorded', (t) => {
   const { dir, garden } = planted(t);
   git(dir, ['branch', 'release']);
@@ -111,6 +128,82 @@ test('open without a base reports the base the last census recorded', (t) => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.summary.get('base'), 'release');
+});
+
+test('open plants the garden log, holding only its format file', (t) => {
+  const { garden } = planted(t);
+
+  assert.deepEqual(
+    [git(garden, ['ls-tree', '-r', '--name-only', logRef]), git(garden, ['show', `${logRef}:garden.json`])],
+    ['garden.json', '{"format":1}'],
+  );
+});
+
+test('open gives a new site a writer id of its own, which a second open keeps', (t) => {
+  const { dir, garden } = planted(t);
+  const writer = git(garden, ['config', 'lzGardening.writer']);
+  const other = repo(t);
+  commit(other, { 'src/a.ts': 'export const a = 1;\n' });
+  site(other, ['open', '--base', 'main']);
+
+  site(dir, ['open', '--base', 'main']);
+
+  assert.match(writer, /^[0-9a-f-]{36}$/);
+  assert.equal(git(garden, ['config', 'lzGardening.writer']), writer);
+  assert.notEqual(git(join(dirname(other), 'repo.garden'), ['config', 'lzGardening.writer']), writer);
+});
+
+test('open plants the garden log on a site planted before the site held one', (t) => {
+  const { dir, garden } = planted(t);
+  git(garden, ['update-ref', '-d', logRef]);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(garden, ['show', `${logRef}:garden.json`]), '{"format":1}');
+});
+
+test('open gives a writer id to a site whose log has lost it, and keeps the log', (t) => {
+  const { dir, garden } = planted(t);
+  const log = git(garden, ['rev-parse', logRef]);
+  git(garden, ['config', '--unset', 'lzGardening.writer']);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(git(garden, ['config', 'lzGardening.writer']), /^[0-9a-f-]{36}$/);
+  assert.equal(git(garden, ['rev-parse', logRef]), log);
+});
+
+test('open refuses a repository at the site path that has no garden branch, and writes nothing into it', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  const garden = join(dirname(dir), 'repo.garden');
+  git(dirname(dir), ['clone', '-q', dir, garden]);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.match(
+    result.stderr,
+    /^site: .+repo\.garden has no garden branch, so it is not a garden site; move it away and run open again\n$/,
+  );
+  assert.deepEqual(
+    [
+      result.status,
+      git(garden, ['for-each-ref', 'refs/garden']),
+      git(garden, ['config', '--local', '--list']).includes('lzgardening.writer'),
+    ],
+    [2, '', false],
+  );
+});
+
+test('open on a site whose config git cannot read exits 2 with the error git gives, not as a site to move away', (t) => {
+  const { dir, garden } = planted(t);
+  appendFileSync(join(garden, '.git', 'config'), '[core\n');
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.deepEqual([result.status, /fatal: bad config line \d+ in file /.test(result.stderr)], [2, true]);
 });
 
 test('open refuses a repository with no user.email and plants no site', (t) => {
@@ -127,19 +220,19 @@ test('open refuses a repository with no user.email and plants no site', (t) => {
 
 test('commit records the .garden folder on the garden branch with the given message', (t) => {
   const { dir, garden } = planted(t);
-  queueOneWeed(garden);
+  writeCensus(garden);
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.summary.get('committed'), true);
   assert.equal(git(garden, ['log', '-1', '--format=%s']), 'garden: watch abc1234');
-  assert.equal(git(garden, ['ls-tree', '-r', '--name-only', 'garden']), '.garden/weeds.jsonl\n.gitignore');
+  assert.equal(git(garden, ['ls-tree', '-r', '--name-only', 'garden']), '.garden/census.json\n.gitignore');
 });
 
 test('commit with nothing new in .garden reports committed false and adds no commit', (t) => {
   const { dir, garden } = planted(t);
-  queueOneWeed(garden);
+  writeCensus(garden);
   const first = site(dir, ['commit', '--message', 'garden: watch abc1234']);
   assert.equal(first.status, 0, first.stderr);
 
@@ -180,7 +273,7 @@ test('an argument the command does not take is a usage error, not ignored', (t) 
   const plantedAnyway = existsSync(join(dirname(dir), 'repo.garden'));
   const opened = site(dir, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);
-  queueOneWeed(join(dirname(dir), 'repo.garden'));
+  writeCensus(join(dirname(dir), 'repo.garden'));
   const baseOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--base', 'main']);
 
   assert.deepEqual([branchWithoutFlag.status, messageOnOpen.status, baseOnCommit.status], [2, 2, 2]);
@@ -190,7 +283,7 @@ test('an argument the command does not take is a usage error, not ignored', (t) 
 
 test('--class belongs to bed alone, and --message to commit alone', (t) => {
   const { dir, garden } = planted(t);
-  queueOneWeed(garden);
+  writeCensus(garden);
 
   const classOnOpen = site(dir, ['open', '--class', 'any-type', '--base', 'main']);
   const classOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--class', 'any-type']);
@@ -347,7 +440,7 @@ test('open refuses a base whose name the agent could not pass to a shell as it i
 
 test('commit without a message is a usage error and stages nothing', (t) => {
   const { dir, garden } = planted(t);
-  queueOneWeed(garden);
+  writeCensus(garden);
 
   const result = site(dir, ['commit']);
 
@@ -371,7 +464,7 @@ test('commit in a site that is not on the garden branch is an error and commits 
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
   const garden = join(dirname(dir), 'repo.garden');
   git(dirname(dir), ['clone', '-q', '--no-checkout', dir, garden]);
-  queueOneWeed(garden);
+  writeCensus(garden);
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
@@ -410,7 +503,7 @@ test('open from a linked worktree uses the site beside the main checkout', (t) =
 test('open reports the site seeded once the garden branch holds a commit past the plant', (t) => {
   const { dir, garden } = planted(t);
   const before = site(dir, ['open', '--base', 'main']);
-  queueOneWeed(garden);
+  writeCensus(garden);
   const recorded = site(dir, ['commit', '--message', 'garden: seed abc1234']);
   assert.equal(recorded.status, 0, recorded.stderr);
 
@@ -485,7 +578,7 @@ test('the site runs none of the user hooks and signs nothing, whatever the user 
 
   const opened = site(dir, ['open', '--base', 'main'], env);
   assert.equal(opened.status, 0, opened.stderr);
-  queueOneWeed(join(dirname(dir), 'repo.garden'));
+  writeCensus(join(dirname(dir), 'repo.garden'));
   const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
 
   assert.equal(recorded.status, 0, recorded.stderr);
@@ -505,7 +598,7 @@ test('the site runs none of the hooks the user set up by name in their git confi
 
   const opened = site(dir, ['open', '--base', 'main'], env);
   assert.equal(opened.status, 0, opened.stderr);
-  queueOneWeed(join(dirname(dir), 'repo.garden'));
+  writeCensus(join(dirname(dir), 'repo.garden'));
   const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
   assert.equal(recorded.status, 0, recorded.stderr);
   const bed = site(dir, ['bed', '--class', 'probe', '--base', 'main'], env);
@@ -530,23 +623,13 @@ for (const [holds, name] of [
 
     const opened = site(dir, ['open', '--base', 'main'], env);
     assert.equal(opened.status, 0, opened.stderr);
-    queueOneWeed(join(dirname(dir), 'repo.garden'));
+    writeCensus(join(dirname(dir), 'repo.garden'));
     const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
 
     assert.equal(recorded.status, 0, recorded.stderr);
     assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
   });
 }
-
-test('the hooks turned off are those the config names, by their whole name, and no other key', (t) => {
-  const dir = repo(t);
-  git(dir, ['config', 'hook.team.lint.event', 'pre-commit']);
-  git(dir, ['config', 'hook.team.lint.command', 'npm run lint']);
-  git(dir, ['config', 'alias.hook.x.command', 'log']);
-  git(dir, ['config', 'hook.other.commandeer', 'x']);
-
-  assert.deepEqual(namedHooksOff(dir), ['--config-env=hook.team.lint.enabled=LZ_GARDEN_HOOK_OFF']);
-});
 
 test('open without git on the PATH is an error that names git, not a crash', (t) => {
   const dir = repo(t);
@@ -555,7 +638,7 @@ test('open without git on the PATH is an error that names git, not a crash', (t)
   mkdirSync(empty);
   const otherVariables = Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PATH');
 
-  const result = site(dir, ['open', '--base', 'main'], { ...Object.fromEntries(otherVariables), PATH: empty });
+  const result = siteProcess(dir, ['open', '--base', 'main'], { ...Object.fromEntries(otherVariables), PATH: empty });
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /^site: git /);

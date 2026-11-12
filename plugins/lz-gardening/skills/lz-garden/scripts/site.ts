@@ -1,7 +1,8 @@
-// The garden site: a clone beside the repository whose `garden` branch holds the queue and the census.
+// The garden site: a clone beside the repository. Its `garden` branch holds the census; its refs/garden/log holds the
+// queue (see store.ts).
 // Usage, from the repository:
-//   node site.ts open [--base <branch>]     create the site if missing, resolve the base;
-//                                           prints {site, created, base, seeded}
+//   node site.ts open [--base <branch>]     create the site if missing, plant the garden log and the writer id if
+//                                           missing, resolve the base; prints {site, created, base, seeded}
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 //   node site.ts bed --class <kebab> --base <base>
 //                                           fetch the base into the site and make the bed beds/<class> on
@@ -10,96 +11,27 @@
 //                                           none, linked (to the checkout's node_modules), installed or install,
 //                                           and with install the command that installs the bed's dependencies
 // Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
-import { spawnSync } from 'node:child_process';
-import type { SpawnSyncReturns } from 'node:child_process';
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isRecord, readCensus } from './census.ts';
-import { classPattern } from './weeds.ts';
-
-let gitEnvironment: NodeJS.ProcessEnv | undefined;
-const settingsInEnvironment = ['GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
-const hookOffVariable = 'LZ_GARDEN_HOOK_OFF';
-
-// Without the variables that point git at a repository (GIT_DIR from a hook, say), each command acts on its cwd.
-// Settings passed in the environment stay.
-function gitEnv(): NodeJS.ProcessEnv {
-  if (gitEnvironment === undefined) {
-    const localVariables = spawnGit(process.cwd(), ['rev-parse', '--local-env-vars'], process.env)
-      .stdout.split('\n')
-      .filter((name) => !settingsInEnvironment.includes(name));
-    gitEnvironment = {
-      ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !localVariables.includes(name))),
-      // Stryker disable next-line StringLiteral: git reads an empty boolean as false, so '' turns the hooks off too
-      [hookOffVariable]: 'false',
-    };
-  }
-
-  return gitEnvironment;
-}
-
-// site.ts runs git only for the garden's own bookkeeping. The user's hooks and commit signing are for their own work,
-// and a hook or a signing passphrase would stop a tick that runs unattended. The hooks folder named here does not exist.
-const bookkeeping = [
-  '-c',
-  `core.hooksPath=${join(dirname(fileURLToPath(import.meta.url)), 'no-hooks')}`,
-  '-c',
-  'commit.gpgsign=false',
-];
-
-// A hook set up by name in the git config (hook.<name>.command) ignores core.hooksPath, so each is turned off by name.
-// A name may hold any character but NUL: keys are read NUL-separated, and --config-env splits at the last '='.
-export function namedHooksOff(cwd: string): string[] {
-  const keys = spawnGit(cwd, ['config', '--list', '--name-only', '-z'], gitEnv()).stdout.split('\0');
-  const names = new Set(keys.flatMap((key) => /^hook\.(.*)\.(?:command|event)$/s.exec(key)?.slice(1) ?? []));
-
-  return [...names].map((name) => `--config-env=hook.${name}.enabled=${hookOffVariable}`);
-}
-
-function runGit(cwd: string, args: readonly string[]): SpawnSyncReturns<string> {
-  return spawnGit(cwd, [...bookkeeping, ...namedHooksOff(cwd), ...args], gitEnv());
-}
-
-function spawnGit(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env });
-
-  if (result.error !== undefined) {
-    throw new Error(`git ${args.join(' ')}: ${result.error.message}`);
-  }
-
-  return result;
-}
-
-function git(cwd: string, args: readonly string[]): string {
-  const result = runGit(cwd, args);
-
-  if (result.status !== 0) {
-    throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
-  }
-
-  return result.stdout.trim();
-}
-
-function optionalGit(cwd: string, args: readonly string[]): string | undefined {
-  const result = runGit(cwd, args);
-
-  return result.status === 0 ? result.stdout.trim() : undefined;
-}
-
-function gitSucceeds(cwd: string, args: readonly string[]): boolean {
-  return runGit(cwd, args).status === 0;
-}
+import { isMainModule, processIo, runCommand } from './cli.ts';
+import type { Io } from './cli.ts';
+import { classPattern } from './log.ts';
+import {
+  configValue,
+  git,
+  gitSucceeds,
+  logRef,
+  objectIds,
+  optionalGit,
+  plantWriter,
+  requireSite,
+  siteOf,
+  startLog,
+  writerKey,
+} from './store.ts';
 
 export interface BaseFacts {
   readonly base: string | undefined;
@@ -132,7 +64,7 @@ export function resolveBase(facts: BaseFacts): string {
 }
 
 function repositoryIdentity(top: string): readonly (readonly [string, string])[] {
-  const identity = ['user.name', 'user.email'].map((key) => [key, optionalGit(top, ['config', key]) ?? ''] as const);
+  const identity = ['user.name', 'user.email'].map((key) => [key, configValue(top, key) ?? ''] as const);
   const missing = identity.find(([, value]) => value === '');
 
   if (missing !== undefined) {
@@ -145,6 +77,7 @@ function repositoryIdentity(top: string): readonly (readonly [string, string])[]
 // The codes Windows gives a rename while another program, such as a virus scanner, holds a file in the folder.
 const lockCodes: readonly unknown[] = ['EPERM', 'EBUSY', 'EACCES'];
 const lockTries = 20;
+// Stryker disable next-line LzJsNumericLiteral: how long a try waits is policy; no result depends on a millisecond more or less
 const lockPauseMs = 250;
 
 function pause(): void {
@@ -190,60 +123,79 @@ function plant(top: string, site: string): void {
   const identity = repositoryIdentity(top);
   const planting = `${site}.planting`;
   rmSync(planting, { recursive: true, force: true });
-  git(dirname(top), ['clone', '-q', '--no-checkout', top, planting]);
-
-  for (const [key, value] of identity) {
-    git(planting, ['config', key, value]);
-  }
-
+  git(top, [
+    'clone',
+    '-q',
+    '--no-checkout',
+    ...[...identity, [writerKey, randomUUID()] as const].flatMap(([key, value]) => ['-c', `${key}=${value}`]),
+    top,
+    planting,
+  ]);
   git(planting, ['switch', '-q', '--orphan', 'garden']);
   writeFileSync(join(planting, '.gitignore'), '/beds/\n');
   git(planting, ['add', '.gitignore']);
-  git(planting, ['commit', '-q', '-m', 'garden: plant']);
+  // A maintenance run the commit starts in the background would hold files in the folder the rename moves next.
+  git(planting, ['-c', 'maintenance.auto=false', 'commit', '-q', '-m', 'garden: plant']);
+  startLog(planting);
   renameRetrying(planting, site);
 }
 
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {
-  const originUrl = optionalGit(top, ['remote', 'get-url', 'origin']);
+  const originUrl = optionalGit(top, ['remote', 'get-url', 'origin'], { readsOnly: true });
+  const targetOf = new Map(
+    git(top, ['for-each-ref', '--format=%(refname)%00%(symref)', 'refs/heads', 'refs/remotes/origin'], {
+      readsOnly: true,
+    })
+      .split('\n')
+      .map((line) => [line.slice(0, line.indexOf('\0')), line.slice(line.indexOf('\0') + 1)] as const),
+  );
+  const under = (prefix: string): readonly string[] =>
+    [...targetOf.keys()].filter((ref) => ref.startsWith(prefix)).map((ref) => ref.slice(prefix.length));
+  const originPrefix = 'refs/remotes/origin/';
+  const originHeadTarget = targetOf.get(`${originPrefix}HEAD`);
 
   return {
     originIsLocal: originUrl !== undefined && (originUrl.startsWith('file:') || existsSync(resolve(top, originUrl))),
     base,
     censusRev: base === undefined ? readCensus(join(site, '.garden', 'census.json'))?.census.rev : undefined,
-    originHead: optionalGit(top, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])?.replace(
-      /^origin\//,
-      '',
-    ),
-    branches: git(top, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).split('\n'),
-    originBranchNames: git(top, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'])
-      .split('\n')
-      .map((ref) => ref.replace('refs/remotes/origin/', ''))
-      .filter((name) => name !== 'HEAD'),
+    originHead: originHeadTarget?.startsWith(originPrefix) ? originHeadTarget.slice(originPrefix.length) : undefined,
+    branches: under('refs/heads/'),
+    originBranchNames: under(originPrefix).filter((name) => name !== 'HEAD'),
   };
 }
 
 const shellSafeRef = /^[\w.+@][\w./+@-]*$/;
 
-function openSite(top: string, site: string, requested: string | undefined): object {
+function openOrPlant(top: string, site: string, requested: string | undefined) {
   const base = resolveBase(baseFacts(top, site, requested));
 
   if (!shellSafeRef.test(base)) {
     throw new Error(`the base ${base} has characters a shell would expand; pass --base <branch>`);
   }
 
-  if (!gitSucceeds(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`])) {
+  if (!gitSucceeds(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`], { readsOnly: true })) {
     throw new Error(`the base ${base} names no branch or commit in the repository; pass --base <branch>`);
   }
 
-  const created = !existsSync(join(site, '.git'));
-
-  if (created) {
+  if (!existsSync(join(site, '.git'))) {
     plant(top, site);
+
+    return { site, created: true, base, seeded: false };
   }
 
-  const seeded = git(site, ['rev-list', '--count', 'garden']) !== '1';
+  const [garden, seed, log] = objectIds(site, ['refs/heads/garden', 'refs/heads/garden~1', logRef]);
 
-  return { site, created, base, seeded };
+  if (garden === undefined) {
+    throw new Error(`${site} has no garden branch, so it is not a garden site; move it away and run open again`);
+  }
+
+  if (log === undefined) {
+    startLog(site);
+  }
+
+  plantWriter(site);
+
+  return { site, created: false, base, seeded: seed !== undefined };
 }
 
 const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
@@ -281,13 +233,7 @@ function declaresWorkspaces(dir: string): boolean {
   return (isRecord(manifest) && 'workspaces' in manifest) || existsSync(join(dir, 'pnpm-workspace.yaml'));
 }
 
-function requireSite(site: string): void {
-  if (!existsSync(join(site, '.git'))) {
-    throw new Error(`no garden site at ${site}; run site.ts open first`);
-  }
-}
-
-function commitSite(site: string, message: string): object {
+function commitSite(site: string, message: string) {
   requireSite(site);
 
   if (git(site, ['branch', '--show-current']) !== 'garden') {
@@ -308,7 +254,7 @@ function commitSite(site: string, message: string): object {
   return { committed: true };
 }
 
-function makeBed(top: string, site: string, bedClass: string, base: string): object {
+function makeBed(top: string, site: string, bedClass: string, base: string) {
   if (!classPattern.test(bedClass)) {
     throw new Error(`--class must be a kebab-case class id, got ${bedClass}`);
   }
@@ -319,11 +265,12 @@ function makeBed(top: string, site: string, bedClass: string, base: string): obj
 
   requireSite(site);
   git(site, ['fetch', '-q', 'origin', base]);
-  const start = git(site, ['rev-parse', 'FETCH_HEAD']);
   const branch = `bed/${bedClass}`;
   const branchRef = `refs/heads/${branch}`;
+  // Stryker disable next-line StringLiteral: a fetch that succeeded always leaves FETCH_HEAD, so the default never applies
+  const [start = '', branchTip] = objectIds(site, ['FETCH_HEAD', branchRef]);
   const bed = join(site, 'beds', bedClass);
-  const hasBranch = gitSucceeds(site, ['rev-parse', '--verify', '--quiet', branchRef]);
+  const hasBranch = branchTip !== undefined;
   const entry = lstatSync(bed, { throwIfNoEntry: false });
 
   if (
@@ -403,26 +350,6 @@ function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 
   return 'linked';
 }
 
-function mainCheckout(cwd: string): string {
-  const [gitDir, sharedGitDir] = git(cwd, [
-    'rev-parse',
-    '--path-format=absolute',
-    '--absolute-git-dir',
-    '--git-common-dir',
-  ]).split('\n');
-
-  if (gitDir === sharedGitDir) {
-    return git(cwd, ['rev-parse', '--show-toplevel']);
-  }
-
-  // A linked worktree finds the main checkout first in the worktree list.
-  // Stryker disable next-line StringLiteral: split always returns at least one element, so the default is never read
-  const [first = ''] = git(cwd, ['worktree', 'list', '--porcelain']).split('\n', 1);
-
-  // Stryker disable next-line Regex: the porcelain list starts with "worktree ", so the first match is at index 0
-  return first.replace(/^worktree /, '');
-}
-
 type Command =
   | { command: 'open'; base: string | undefined }
   | { command: 'commit'; message: string }
@@ -453,7 +380,7 @@ function parseCommand(
   return undefined;
 }
 
-function main(argv: readonly string[], cwd: string): number {
+function main(argv: readonly string[], io: Io): number {
   const { positionals, values } = parseArgs({
     args: [...argv],
     allowPositionals: true,
@@ -463,25 +390,19 @@ function main(argv: readonly string[], cwd: string): number {
   const parsed = parseCommand(positionals, values);
 
   if (parsed === undefined) {
-    process.stderr.write(
+    io.err(
       'usage: site.ts open [--base <branch>] | site.ts commit --message <text> | site.ts bed --class <kebab> --base <base>\n',
     );
 
     return 2;
   }
 
-  const top = resolve(mainCheckout(cwd));
-
-  if (basename(top).endsWith('.garden')) {
-    throw new Error(`${cwd} is in a garden site or bed; run site.ts from the repository's checkout`);
-  }
-
-  const site = join(dirname(top), `${basename(top)}.garden`);
+  const { checkout: top, path: site } = siteOf(io.cwd);
   let summary: object;
 
   switch (parsed.command) {
     case 'open': {
-      summary = openSite(top, site, parsed.base);
+      summary = openOrPlant(top, site, parsed.base);
       break;
     }
     case 'commit': {
@@ -494,20 +415,15 @@ function main(argv: readonly string[], cwd: string): number {
     }
   }
 
-  process.stdout.write(`${JSON.stringify(summary)}\n`);
+  io.out(`${JSON.stringify(summary)}\n`);
 
   return 0;
 }
 
-// import.meta.url is the real path, so compare real paths: run through a link, the CLI still runs.
-if (
-  process.argv[1] &&
-  realpathSync.native(resolve(process.argv[1])) === realpathSync.native(fileURLToPath(import.meta.url))
-) {
-  try {
-    process.exitCode = main(process.argv.slice(2), process.cwd());
-  } catch (error: unknown) {
-    process.stderr.write(`site: ${error instanceof Error ? error.message : String(error)}\n`);
-    process.exitCode = 2;
-  }
+export function run(argv: readonly string[], io: Io): number {
+  return runCommand('site', io, () => main(argv, io));
+}
+
+if (isMainModule(import.meta.url)) {
+  process.exitCode = run(process.argv.slice(2), processIo());
 }

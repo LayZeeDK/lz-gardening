@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { commit, repo } from './test-repo.ts';
+import { isRecord } from './census.ts';
+import { run } from './site.ts';
+import { commit, init } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
 
@@ -14,28 +18,85 @@ export interface SiteRun {
   readonly summary: ReadonlyMap<string, unknown>;
 }
 
-export function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
-  const result = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env });
-  const last = result.stdout.trim().split('\n').at(-1) ?? '';
+function siteRun(status: number | null, stdout: string, stderr: string): SiteRun {
+  const last = stdout.trim().split('\n').at(-1) ?? '';
   const parsed: unknown = last.startsWith('{') ? JSON.parse(last) : {};
-  const summary = new Map(typeof parsed === 'object' && parsed !== null ? Object.entries(parsed) : []);
+  const summary = new Map(isRecord(parsed) ? Object.entries(parsed) : []);
 
-  return { status: result.status, stderr: result.stderr, summary };
+  return { status, stderr, summary };
 }
 
-// A repository with one commit on main and its site, planted.
-export function planted(t: TestContext): { readonly dir: string; readonly garden: string } {
-  const dir = repo(t);
+export function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
+  let stdout = '';
+  let stderr = '';
+  const status = run(args, {
+    cwd,
+    env,
+    out: (text) => {
+      stdout += text;
+    },
+    err: (text) => {
+      stderr += text;
+    },
+  });
+
+  return siteRun(status, stdout, stderr);
+}
+
+export function siteProcess(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
+  const result = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env });
+
+  return siteRun(result.status, result.stdout, result.stderr);
+}
+
+// A repository with one commit on main and its site, planted once per test process and outside every test. A child
+// process plants it, so a mutation-test runner does not count what site.ts open reaches as reached by every test.
+// Each test plants a copy.
+const template = plantTemplate();
+
+function plantTemplate(): string {
+  const folder = mkdtempSync(join(tmpdir(), 'garden-'));
+  process.once('exit', () => {
+    rmSync(folder, { recursive: true, force: true });
+  });
+  const dir = join(folder, 'repo');
+  init(dir);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  const opened = site(dir, ['open', '--base', 'main']);
+  const opened = siteProcess(dir, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);
 
-  return { dir, garden: join(dirname(dir), 'repo.garden') };
+  return folder;
 }
 
-export function queueOneWeed(garden: string): void {
+export function planted(t: TestContext): { readonly dir: string; readonly garden: string } {
+  const folder = mkdtempSync(join(tmpdir(), 'garden-'));
+  t.after(() => {
+    rmSync(folder, { recursive: true, force: true });
+  });
+  cpSync(template, folder, { recursive: true });
+  const dir = join(folder, 'repo');
+  const garden = join(folder, 'repo.garden');
+  const config = join(garden, '.git', 'config');
+  const origin = (folderOfRepo: string): string =>
+    `url = ${join(realpathSync.native(folderOfRepo), 'repo').replaceAll('\\', '\\\\')}\n`;
+  const text = readFileSync(config, 'utf8');
+  assert.ok(text.includes(origin(template)), `${config} names its origin as ${origin(template)}`);
+  assert.match(text, /^\twriter = /m);
+  writeFileSync(
+    config,
+    // Replacer functions, as a replacement string would expand a $& or $1 in the path.
+    text
+      .replace(origin(template), () => origin(folder))
+      .replace(/^\twriter = .*$/m, () => `\twriter = ${randomUUID()}`),
+  );
+
+  return { dir, garden };
+}
+
+export function writeCensus(garden: string, sha = 'a'.repeat(40)): void {
+  const census = { rev: 'main', sha, takenAt: '2026-11-07T00:00:00.000Z', counts: {}, hits: {}, duplicates: {} };
   mkdirSync(join(garden, '.garden'), { recursive: true });
-  writeFileSync(join(garden, '.garden', 'weeds.jsonl'), '{"op":"add"}\n');
+  writeFileSync(join(garden, '.garden', 'census.json'), JSON.stringify(census));
 }
 
 // The process environment plus git settings, as a user passes them to git through GIT_CONFIG_COUNT.

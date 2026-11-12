@@ -9,7 +9,8 @@ the checkout, write into a **site** instead: a local clone beside the repository
 ```text
 <parent>/<repo>/                 the repository (read only; the clone's `origin`)
 <parent>/<repo>.garden/          the site: a clone with branch `garden` checked out
-  .garden/weeds.jsonl            the weeds queue (scripts/weeds.ts)
+  refs/garden/log                (git ref, not a folder) the weeds queue (scripts/weeds.ts): its commits hold
+                                 garden.json and one file per event
   .garden/census.json            the last census (scripts/census.ts)
   .garden/patterns.json          optional: this repository's own census patterns
   .gitignore                     ignores /beds/
@@ -20,8 +21,9 @@ the checkout, write into a **site** instead: a local clone beside the repository
 is the gardener's record and nothing else. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
 branch beside `garden`) start from the base branch and carry one proposed bed change each. Nothing in the site is
 pushed. A human lands a bed by fetching it into the repository with `git fetch ../<repo>.garden bed/<class>` and
-merging it the way the repository lands work; the `garden` branch can be fetched the same way to keep the queue in the
-repository's history.
+merging it the way the repository lands work. To keep a copy of the queue for safekeeping, fetch its ref under the
+same name: `git fetch ../<repo>.garden refs/garden/log:refs/garden/log`. `weeds.ts` reads only the site's own ref,
+so a site made again from that copy needs the ref fetched back into the site the same way.
 
 ## Open, commit
 
@@ -30,9 +32,12 @@ of the repository, it uses the one site beside the main checkout:
 
 - `site.ts open [--base <branch>]` creates the site on first use: a clone with no checkout, the repository's
   `user.name` and `user.email` copied in, and the orphan `garden` branch with one first commit holding
-  `.gitignore`. On later runs it leaves the site as it is. It prints JSON with `site`, `created`, `base` and
-  `seeded` (whether the `garden` branch holds a commit past the first one). It exits 2 when the repository has no
-  `user.name` or `user.email`, so the gardener never commits under a default identity.
+  `.gitignore`, the queue's `refs/garden/log` holding only `garden.json` (the format of its events), and a random
+  writer id in the site's `lzGardening.writer` setting. On later runs it plants only what the site lacks of
+  `refs/garden/log` and the writer id, and leaves the rest as it is. It prints JSON with `site`, `created`, `base`
+  and `seeded` (whether the `garden` branch holds a commit past the first one). It exits 2 when the repository has
+  no `user.name` or `user.email`, so the gardener never commits under a default identity, and when a repository at
+  `../<repo>.garden` has no `garden` branch, writing nothing into it.
 - `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
   `committed`, false when nothing changed.
 
@@ -40,7 +45,13 @@ Every git command `site.ts` runs, from the clone to each commit in the site, run
 signs nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick
 that runs unattended.
 
-The census and the queue are written by their own scripts, through `--out` and `--file` paths into the site.
+The census is written by its own script, through an `--out` path into the site. `weeds.ts`, run from the
+repository's checkout, finds the site beside it and appends events to `refs/garden/log` with git plumbing only: a
+commit per command, moved onto the ref only if no other run moved it first, so two runs on one machine both land. An
+entry in the log it cannot read (an event file that does not parse or whose text holds a line break or control
+character, an object the site lacks, a submodule entry) is skipped and named on stderr. A `garden.json` in a newer
+format stops it with exit 2 (update lz-gardening); one that is missing, is not JSON or names no format stops it with
+exit 2, naming the file.
 
 ## The base branch
 
@@ -113,7 +124,8 @@ with: unlink `node_modules` first (`rm "<bed>/node_modules"`, no `-r`; on Window
 `cmd //c rmdir "<bed>\node_modules"`), then `git -C "<site>" worktree remove "<bed>"`, then
 `git -C "<site>" branch -D bed/<class>` only once the change has landed: after
 `git -C "<site>" fetch -q origin <base>`, `git -C "<site>" merge-base --is-ancestor bed/<class> FETCH_HEAD` exits 0,
-or the base holds a commit that carries the same change. Deleting the whole site loses the queue unless the
-`garden` branch was fetched into the repository.
+or the base holds a commit that carries the same change. Deleting the whole site loses the queue unless a copy of
+`refs/garden/log` was fetched into the repository (see the top of this page).
 
-One gardener per site: two sessions looping on one repository append to the same queue and race on its commits.
+One gardener per site: two sessions looping on one repository both land their queue events, but race on the census
+commits on `garden`.

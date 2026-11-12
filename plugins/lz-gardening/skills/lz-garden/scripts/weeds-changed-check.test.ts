@@ -5,9 +5,9 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { commit, git, repo } from './test-repo.ts';
-import { configEnv } from './test-site.ts';
-import { cli, eslintConfig, recordCensus, tendedBed } from './test-weeds.ts';
-import { weedId } from './weeds.ts';
+import { configEnv, writeCensus } from './test-site.ts';
+import { cli, eslintConfig, tendedBed } from './test-weeds.ts';
+import { weedId } from './log.ts';
 
 test('a check whose file the base deleted after the bed landed is not on the base', (t) => {
   const check = { 'eslint.config.mjs': "export default [{ rules: { 'no-explicit-any': 'error' } }];\n" };
@@ -15,9 +15,9 @@ test('a check whose file the base deleted after the bed landed is not on the bas
   commit(dir, check);
   git(dir, ['rm', '-q', 'eslint.config.mjs']);
   git(dir, ['commit', '-q', '-m', 'x']);
-  recordCensus(garden, git(dir, ['rev-parse', 'HEAD']));
+  writeCensus(garden, git(dir, ['rev-parse', 'HEAD']));
 
-  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
   assert.equal(
     back.stdout,
@@ -29,12 +29,11 @@ test('a user who colours every git diff still sees an unlanded check as not on t
   const { dir, garden, tip } = tendedBed(t, {
     'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"),
   });
-  recordCensus(garden, commit(dir, { 'eslint.config.mjs': eslintConfig("['lib/**']", '{}') }));
+  writeCensus(garden, commit(dir, { 'eslint.config.mjs': eslintConfig("['lib/**']", '{}') }));
 
   const back = cli(
-    garden,
-    ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'],
     dir,
+    ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'],
     configEnv([['color.diff', 'always']]),
   );
 
@@ -45,15 +44,19 @@ test('a user who colours every git diff still sees an unlanded check as not on t
 });
 
 test('run from a folder inside the checkout, an unlanded check is still not on the base', (t) => {
-  const { dir, garden, tip } = tendedBed(t, {
+  const { dir, tip } = tendedBed(t, {
     'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"),
   });
 
-  const back = cli(
-    garden,
-    ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'],
-    join(dir, 'src'),
-  );
+  const back = cli(join(dir, 'src'), [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/b.ts:1',
+    '--source',
+    'commit:ccc3333',
+  ]);
 
   assert.equal(
     back.stdout,
@@ -62,20 +65,16 @@ test('run from a folder inside the checkout, an unlanded check is still not on t
 });
 
 test('a check the bed took from an unrelated history it merged is not on the base', (t) => {
-  const { dir, garden, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, 'eslint.config.mjs');
+  const { dir, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, 'eslint.config.mjs');
   const other = repo(t);
   commit(other, { 'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }") });
   git(bed, ['fetch', '-q', other, 'main']);
   git(bed, ['merge', '-q', '--allow-unrelated-histories', '-X', 'theirs', '-m', 'x', 'FETCH_HEAD']);
   const tip = git(bed, ['rev-parse', 'HEAD']);
-  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
-  cli(
-    garden,
-    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs'],
-    dir,
-  );
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
 
-  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'], dir);
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444']);
 
   assert.equal(
     back.stdout,
@@ -99,15 +98,11 @@ test('a check the bed and the base both took from the same older unrelated histo
     git(checkout, ['merge', '-q', '--allow-unrelated-histories', '-X', 'theirs', '-m', 'x', 'FETCH_HEAD']);
   }
   const tip = git(bed, ['rev-parse', 'HEAD']);
-  recordCensus(garden, git(dir, ['rev-parse', 'HEAD']));
-  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
-  cli(
-    garden,
-    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs'],
-    dir,
-  );
+  writeCensus(garden, git(dir, ['rev-parse', 'HEAD']));
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
 
-  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'], dir);
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444']);
 
   assert.equal(
     back.stdout,
@@ -117,9 +112,9 @@ test('a check the bed and the base both took from the same older unrelated histo
 
 test('a new check file the base created with content of its own is on the base', (t) => {
   const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
-  recordCensus(garden, commit(dir, { 'checks/any-type.test.mjs': 'export const other = 1;\n' }));
+  writeCensus(garden, commit(dir, { 'checks/any-type.test.mjs': 'export const other = 1;\n' }));
 
-  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
   assert.equal(
     back.stdout,
@@ -128,18 +123,14 @@ test('a new check file the base created with content of its own is on the base',
 });
 
 test('a check the bed changed and then changed back is on the base', (t) => {
-  const { dir, garden, bed } = tendedBed(t, {
+  const { dir, bed } = tendedBed(t, {
     'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"),
   });
   const tip = commit(bed, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}') });
-  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
-  cli(
-    garden,
-    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs'],
-    dir,
-  );
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
 
-  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'], dir);
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444']);
 
   assert.equal(
     back.stdout,
@@ -152,9 +143,9 @@ test('a check the base changed in another way than the bed did is not on the bas
   const { dir, garden, tip } = tendedBed(t, {
     'eslint.config.mjs': eslintConfig("['src/**']", "{ 'curly': 'error' }"),
   });
-  recordCensus(garden, commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-debugger': 'error' }") }));
+  writeCensus(garden, commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-debugger': 'error' }") }));
 
-  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
   assert.equal(
     back.stdout,
@@ -163,12 +154,12 @@ test('a check the base changed in another way than the bed did is not on the bas
 });
 
 test('a check path holding glob characters names that one file, not the files the glob would match', (t) => {
-  const { dir, garden, tip } = tendedBed(t, { 'src/b.txt': 'b2\n' }, 'src/[ab].txt', {
+  const { dir, tip } = tendedBed(t, { 'src/b.txt': 'b2\n' }, 'src/[ab].txt', {
     'src/[ab].txt': 'check\n',
     'src/b.txt': 'b\n',
   });
 
-  const back = cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
   assert.equal(
     back.stdout,
@@ -177,19 +168,15 @@ test('a check path holding glob characters names that one file, not the files th
 });
 
 test('a checkout cloned without every object never fetches for the label', (t) => {
-  const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const { dir } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   git(dir, ['config', 'uploadpack.allowFilter', 'true']);
   const partial = join(dirname(dir), 'partial');
   git(dirname(dir), ['clone', '-q', '--filter=blob:none', `file://${dir.replaceAll('\\', '/')}`, partial]);
   const elsewhere = commit(dir, { 'src/c.ts': 'export const c = 1;\n' });
-  cli(garden, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], dir);
-  cli(
-    garden,
-    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${elsewhere}`, '--check', 'src/c.ts'],
-    dir,
-  );
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${elsewhere}`, '--check', 'src/c.ts']);
 
-  cli(garden, ['add', '--class', 'any-type', '--where', 'src/d.ts:1', '--source', 'commit:ddd4444'], partial);
+  cli(partial, ['add', '--class', 'any-type', '--where', 'src/d.ts:1', '--source', 'commit:ddd4444']);
 
   const fetched = spawnSync('git', ['cat-file', '-e', elsewhere], {
     cwd: partial,

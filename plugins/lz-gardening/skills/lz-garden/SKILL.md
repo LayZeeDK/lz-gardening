@@ -85,7 +85,7 @@ Done when every commit in the range is read or counted as skipped.
 Queue each weed with `weeds.ts`. The script dedupes, so queueing the same weed twice is safe:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --file "<site>/.garden/weeds.jsonl" --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>]
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>]
 ```
 
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`
@@ -108,7 +108,7 @@ and 3 printed one of those words.
 ## 5. Group, commit, report
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --file "<site>/.garden/weeds.jsonl" --min 2
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --min 2
 node "${CLAUDE_SKILL_DIR}/scripts/site.ts" commit --message "garden: watch <short sha>"
 ```
 

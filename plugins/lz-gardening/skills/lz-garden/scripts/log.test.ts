@@ -1,9 +1,17 @@
 // Run: node --test log.test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { eventPath, parseEvent, planAdd, planClaim, planClose, replay, stamp } from './log.ts';
-import type { AddEvent, AddInput, ClaimEvent, CloseEvent, Garden, GardenEvent, ReleaseEvent } from './log.ts';
-import { weedId } from './weeds.ts';
+import { bedCommit, eventPath, parseEvent, planAdd, planClaim, planClose, replay, stamp, weedId } from './log.ts';
+import type {
+  AddEvent,
+  AddInput,
+  ClaimEvent,
+  CloseEvent,
+  Garden,
+  GardenEvent,
+  ReleaseEvent,
+  TendedClose,
+} from './log.ts';
 
 const now = new Date('2026-11-11T12:00:00.000Z');
 const at = '2026-11-11T10:00:00.000Z';
@@ -73,6 +81,15 @@ function statuses(garden: Garden, ids: readonly string[]): Record<string, string
     }),
   );
 }
+
+test('ids depend on class, place and source', () => {
+  assert.notEqual(weedId('a', 'f:1', 'commit:1'), weedId('a', 'f:1', 'commit:2'));
+  assert.equal(weedId('a', 'f:1', 'commit:1'), weedId('a', 'f:1', 'commit:1'));
+});
+
+test('a weed id is ten hex characters', () => {
+  assert.match(weedId('any-type', 'src/a.ts:1', 'census:any-type'), /^[0-9a-f]{10}$/);
+});
 
 test('an empty log has no open weeds', () => {
   const garden = replay([], now);
@@ -320,7 +337,10 @@ test('an add of a class a tend pass closed is regrown and records the latest ten
 
   const outcome = planAdd(events, input(), now);
 
-  assert.deepEqual([outcome.said, outcome.said === 'regrown' ? outcome.draft.sawTend : null], ['regrown', 't4']);
+  assert.deepEqual(
+    [outcome.said, outcome.said === 'regrown' ? [outcome.draft.sawTend, outcome.after.uuid] : null],
+    ['regrown', ['t4', 't4']],
+  );
 });
 
 const oneOff = { kind: 'one-off', by: 'generated code', check: null } as const;
@@ -334,6 +354,7 @@ test('a close by id writes one close event naming that open weed and its class',
 
   assert.deepEqual(planClose(events, { target: { id: 'x' }, ...oneOff }, 'writer-a', now), {
     said: 'closed',
+    closed: ['x'],
     drafts: [{ op: 'close', ids: ['x'], class: 'any-type', ...oneOff }],
   });
 });
@@ -343,6 +364,7 @@ test('a close of a class writes one close event naming every open weed of that c
 
   assert.deepEqual(planClose(events, { target: { class: 'any-type' }, ...oneOff }, 'writer-a', now), {
     said: 'closed',
+    closed: ['x', 'z'],
     drafts: [{ op: 'close', ids: ['x', 'z'], class: 'any-type', ...oneOff }],
   });
 });
@@ -535,6 +557,84 @@ test('an event file whose uuid is not its file name is skipped, so it cannot sha
   assert.equal(parseEvent(eventPath(other), JSON.stringify(add(uuid, 3, 'x'))), 'uuid is not its file name');
 });
 
+test('an event file whose uuid is not a lowercase UUID is skipped, though it is its file name', () => {
+  const parse = (name: string): GardenEvent | string => parseEvent(eventPath(name), JSON.stringify(add(name, 3, 'x')));
+
+  assert.deepEqual([parse('not-a-uuid'), parse(uuid.toUpperCase())], ['uuid is not a UUID', 'uuid is not a UUID']);
+});
+
+test('an event file whose uuid has text before or after a UUID is skipped, though it is its file name', () => {
+  const parse = (name: string): GardenEvent | string => parseEvent(eventPath(name), JSON.stringify(add(name, 3, 'x')));
+
+  assert.deepEqual([parse(`a${uuid}`), parse(`${uuid}a`)], ['uuid is not a UUID', 'uuid is not a UUID']);
+});
+
+test('an event file whose class has text after a kebab-case class id is skipped', () => {
+  const event = add(uuid, 3, 'x', { class: 'any-type!' });
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'class "any-type!" is not a kebab-case class id');
+});
+
+test('the bed commit of a tend close is what its by names after the @', () => {
+  const tended: TendedClose = { ...tend(uuid, 4, ['x']), kind: 'tended', check: 'eslint.config.mjs' };
+
+  assert.equal(bedCommit(tended), '1a2b3c4');
+});
+
+test('an event file whose at is not a date is skipped', () => {
+  const event = { ...add(uuid, 3, 'x'), at: 'yesterday' };
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'at is not a date');
+});
+
+test('an event file whose clock is past the whole numbers a double holds is skipped, so it cannot stop later clocks', () => {
+  const parse = (clock: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify(add(uuid, 3, 'x')).replace('"clock":3', `"clock":${clock}`));
+
+  assert.deepEqual(
+    [parse('1e400'), parse('9007199254740992')],
+    ['clock is not a whole number from 0', 'clock is not a whole number from 0'],
+  );
+});
+
+test('an event file whose clock is below 0 is skipped', () => {
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(add(uuid, -1, 'x'))), 'clock is not a whole number from 0');
+});
+
+test('an event file at clock 0 parses, since the clock counts from 0', () => {
+  const event = add(uuid, 0, 'x');
+
+  assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
+});
+
+test('an event file whose at is a date in another form than the UTC one writers stamp is skipped', () => {
+  const parse = (time: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify({ ...add(uuid, 3, 'x'), at: time }));
+
+  assert.deepEqual(
+    [parse('Wed, 11 Nov 2026 10:00:00 GMT'), parse('2026-11-11 10:00')],
+    ['at is not a date', 'at is not a date'],
+  );
+});
+
+test('an event file whose at is past year 9999 is skipped, so string order stays time order', () => {
+  const event = { ...add(uuid, 3, 'x'), at: '+010000-01-01T00:00:00.000Z' };
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'at is not a date');
+});
+
+test('a claim event file whose until is not a date is skipped, rather than read as expired', () => {
+  const event = { ...claim(uuid, 5, 'writer-a'), until: 'tomorrow' };
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'until is not a date');
+});
+
+test('a claim event file whose until is a local time is skipped, so every reader ends the claim at the same moment', () => {
+  const event = { ...claim(uuid, 5, 'writer-a'), until: '2026-11-11 16:00' };
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'until is not a date');
+});
+
 test('a close event file parses back to the event that was written', () => {
   const event = close(uuid, 4, ['x', 'y'], 'one-off');
 
@@ -603,6 +703,31 @@ test('an event file whose class is not a kebab-case class id is skipped, since b
   const event = claim(uuid, 5, 'writer-a', later, '../main');
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'class "../main" is not a kebab-case class id');
+});
+
+test('an event file whose text holds a line break or control character is skipped, since commands print it raw', () => {
+  const parse = (event: object): GardenEvent | string => parseEvent(eventPath(uuid), JSON.stringify(event));
+
+  assert.deepEqual(
+    [
+      parse(add(uuid, 3, 'x\nforged')),
+      parse(add(uuid, 3, 'x', { where: 'src/a.ts:1\nforged' })),
+      parse(add(uuid, 3, 'x', { source: 'census:\u001b[31m' })),
+      parse(add(uuid, 3, 'x', { note: 'a\u202eb' })),
+      parse({ ...tend(uuid, 4, ['x']), check: 'checks/a\u0000.mjs' }),
+      parse({ ...close(uuid, 4, ['x'], 'one-off'), by: 'reason\rmore' }),
+      parse({ ...claim(uuid, 5, 'writer-a'), holder: 'a\u2028b' }),
+    ],
+    [
+      'id holds a line break or control character',
+      'where holds a line break or control character',
+      'source holds a line break or control character',
+      'note holds a line break or control character',
+      'check holds a line break or control character',
+      'by holds a line break or control character',
+      'holder holds a line break or control character',
+    ],
+  );
 });
 
 test('each malformed event file says what is wrong with it', () => {

@@ -17,8 +17,9 @@ grow back."
 /plugin install lz-gardening@lz-gardening
 ```
 
-Requires `git` and Node.js 22.18 or later on the `PATH` (the scripts are TypeScript that Node.js runs directly, with
-no dependencies).
+Requires git 2.55 or later and Node.js 22.18 or later on the `PATH` (the scripts are TypeScript that Node.js runs
+directly, with no dependencies). The git version is the oldest that GitHub's hosted runners carry on Windows, Linux and
+macOS.
 
 ## Use
 
@@ -40,12 +41,12 @@ for a second. Recurring `/loop` tasks expire after seven days; start the loop ag
 ## How it stays out of the way
 
 The gardener never works in your checkout. Other agents may be writing there around the clock. It keeps a **garden
-site** beside the repository: a local clone at `../<repo>.garden` with an orphan branch `garden` that holds only
-the queue and the census.
+site** beside the repository: a local clone at `../<repo>.garden` with a ref `refs/garden/log` that holds the
+queue and an orphan branch `garden` that holds the census.
 
 ```text
 ../<repo>.garden/
-  .garden/weeds.jsonl     the queue, append-only
+  refs/garden/log         (git ref, not a folder) the queue: one file per event, never edited
   .garden/census.json     the last census
   .garden/patterns.json   optional extra census patterns for this repository
   beds/<class>/           a tend pass's worktree, on branch bed/<class>
@@ -59,9 +60,9 @@ git fetch ../<repo>.garden bed/<class>
 ```
 
 The watch runs in the `lz-gardener` agent. It reads the repository with read-only git commands and writes only
-through its three scripts, which keep the queue and the census in the site and commit them on `garden`. It never
-edits planning records, agent instructions, hooks or settings. Tend passes propose hooks and permission rules in
-their report; they never build them.
+through its three scripts, which keep the queue and the census in the site. It never edits planning records, agent
+instructions, hooks or settings. Tend passes propose hooks and permission rules in their report; they never build
+them.
 
 ## Permissions
 
