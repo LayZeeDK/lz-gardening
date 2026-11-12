@@ -31,13 +31,13 @@ function assertCount(starts: readonly string[], count: number): void {
   assert.equal(starts.length, count, starts.join('\n'));
 }
 
-test('open plants a new site with 15 git processes', (t) => {
+test('open plants a new site with 11 git processes', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
-    15,
+    11,
   );
 });
 
@@ -69,7 +69,7 @@ test('bed makes a new bed with 5 git processes', (t) => {
   );
 });
 
-test('an add that adds a weed starts 10 git processes', (t) => {
+test('an add that adds a weed starts 6 git processes', (t) => {
   const { dir } = planted(t);
 
   assertCount(
@@ -78,7 +78,7 @@ test('an add that adds a weed starts 10 git processes', (t) => {
       (env) =>
         cliProcess(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'], env).code,
     ),
-    10,
+    6,
   );
 });
 

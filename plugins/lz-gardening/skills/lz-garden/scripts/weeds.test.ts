@@ -664,7 +664,7 @@ test('a command that fails after reading the log still names the event files it 
   assert.equal(added.code, 2);
   assert.match(
     added.stderr,
-    /^weeds: skipped events\/ab\/abc\.json: not JSON\nweeds: git update-ref refs\/garden\/log: .*cannot lock ref/s,
+    /^weeds: skipped events\/ab\/abc\.json: not JSON\nweeds: git fast-import refs\/garden\/log: .*cannot lock ref/s,
   );
 });
 

@@ -1,8 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from './census.ts';
@@ -183,41 +182,69 @@ const logFormat = 1;
 
 const refLockWaitMs = 3000;
 
-function commitFiles(
-  site: string,
-  parent: Pick<Replica, 'tip' | 'lsTreeOutput'> | null,
-  files: readonly (readonly [path: string, text: string])[],
-): string {
-  // Stryker disable next-line StringLiteral: the prefix only names the folder for whoever reads the temp directory
-  // Absolute, as git runs in the site: a relative TMPDIR would name a folder beside the checkout.
-  const scratch = mkdtempSync(join(resolve(tmpdir()), 'garden-index-'));
-  const env = { GIT_INDEX_FILE: join(scratch, 'index') };
+function data(text: string): string {
+  return `data ${String(Buffer.byteLength(text))}\n${text}\n`;
+}
 
-  try {
-    const blobFiles = files.map(([, text], index) => {
-      const file = join(scratch, `blob-${String(index)}`);
-      writeFileSync(file, text);
+function identity(site: string, whose: 'author' | 'committer', now: string): string {
+  const env = gitEnv(site);
+  const variable = `GIT_${whose.toUpperCase()}`;
+  const name = env[`${variable}_NAME`] ?? configValue(site, `${whose}.name`) ?? configValue(site, 'user.name');
+  const email = env[`${variable}_EMAIL`] ?? configValue(site, `${whose}.email`) ?? configValue(site, 'user.email');
 
-      return file;
-    });
-    const oids = git(site, ['hash-object', '-w', '--no-filters', '--stdin-paths'], {
-      input: blobFiles.map((file) => `${file}\n`).join(''),
-    }).split('\n');
-    const entries = files.map(([path], index) => `100644 ${oids[index] ?? ''}\t${path}\0`);
-    git(site, ['update-index', '-z', '--index-info'], { env, input: (parent?.lsTreeOutput ?? '') + entries.join('') });
-    const tree = git(site, ['write-tree', '--missing-ok'], { env });
-
-    return git(site, ['commit-tree', tree, ...(parent === null ? [] : ['-p', parent.tip]), '-m', 'garden: log']);
-  } finally {
-    rmSync(scratch, { recursive: true });
+  // Without a configured name or address, git makes one up or refuses; one more git process asks it which.
+  if (name === undefined || email === undefined) {
+    return `${whose} ${git(site, ['var', `${variable}_IDENT`])}\n`;
   }
+
+  return `${whose} ${name} <${email}> ${env[`${variable}_DATE`] ?? now}\n`;
+}
+
+// fast-import moves the ref only by fast-forward, so a commit planned on the tip lands only while the ref names it,
+// and a first commit lands only where there is no log.
+function writeLogIfStill(
+  site: string,
+  tip: string | null,
+  files: readonly (readonly [path: string, text: string])[],
+): boolean {
+  const now = `@${String(Math.floor(Date.now() / 1000))}`;
+  const stream = [
+    `commit ${logRef}\n`,
+    identity(site, 'author', now),
+    identity(site, 'committer', now),
+    data('garden: log\n'),
+    ...(tip === null ? [] : [`from ${tip}\n`]),
+    ...files.map(([path, text]) => `M 100644 inline ${path}\n${data(text)}`),
+    'done\n',
+  ].join('');
+  const imported = runGit(
+    site,
+    [
+      '-c',
+      `core.filesRefLockTimeout=${String(refLockWaitMs)}`,
+      'fast-import',
+      '--quiet',
+      '--done',
+      '--date-format=rfc2822',
+    ],
+    { input: stream },
+  );
+
+  if (imported.status === 0) {
+    return true;
+  }
+
+  if (tip === null || git(site, ['rev-parse', '--verify', logRef]) === tip) {
+    throw new Error(`git fast-import ${logRef}: ${imported.stderr.trim()}`);
+  }
+
+  return false;
 }
 
 export const writerKey = 'lzGardening.writer';
 
 export function startLog(site: string): void {
-  const planted = commitFiles(site, null, [['garden.json', JSON.stringify({ format: logFormat })]]);
-  git(site, ['update-ref', logRef, planted, '']);
+  writeLogIfStill(site, null, [['garden.json', JSON.stringify({ format: logFormat })]]);
 }
 
 export function plantWriter(site: string): void {
@@ -279,7 +306,6 @@ interface Skipped {
 
 export interface Replica {
   readonly tip: string;
-  readonly lsTreeOutput: string;
   readonly events: readonly GardenEvent[];
   readonly skipped: readonly Skipped[];
 }
@@ -309,12 +335,10 @@ function blobsAt(
   site: string,
   commit: string,
 ): {
-  readonly lsTreeOutput: string;
   readonly texts: ReadonlyMap<string, string>;
   readonly skipped: readonly Skipped[];
 } {
-  const lsTreeOutput = git(site, ['ls-tree', '-r', '-z', commit]);
-  const listed = treeEntries(lsTreeOutput);
+  const listed = treeEntries(git(site, ['ls-tree', '-r', '-z', commit]));
   const entries = listed.filter(({ type }) => type === 'blob').map(({ oid, path }) => [oid, path] as const);
   const skipped: Skipped[] = listed
     .filter(({ type }) => type !== 'blob')
@@ -356,7 +380,7 @@ function blobsAt(
     at = end + 1;
   }
 
-  return { lsTreeOutput, texts, skipped };
+  return { texts, skipped };
 }
 
 function formatOf(gardenJson: string | undefined): number {
@@ -382,7 +406,7 @@ function formatOf(gardenJson: string | undefined): number {
 }
 
 function readReplica(site: string, tip: string): Replica {
-  const { lsTreeOutput, texts: blobs, skipped } = blobsAt(site, tip);
+  const { texts: blobs, skipped } = blobsAt(site, tip);
   const format = formatOf(blobs.get('garden.json'));
 
   if (format !== logFormat) {
@@ -397,7 +421,6 @@ function readReplica(site: string, tip: string): Replica {
 
   return {
     tip,
-    lsTreeOutput,
     events: parsed.flatMap(({ event }) => (typeof event === 'string' ? [] : [event])),
     skipped: [
       ...skipped,
@@ -418,27 +441,6 @@ export function readLog(site: Site): Replica {
 
 // Stryker disable next-line LzJsNumericLiteral: how many tries a writer spends is policy; the bound is tested through append's tries
 const appendTries = 50;
-
-function moveLogIfStill(site: Site, expected: string, next: string): boolean {
-  const moved = runGit(site.path, [
-    '-c',
-    `core.filesRefLockTimeout=${String(refLockWaitMs)}`,
-    'update-ref',
-    logRef,
-    next,
-    expected,
-  ]);
-
-  if (moved.status === 0) {
-    return true;
-  }
-
-  if (git(site.path, ['rev-parse', '--verify', logRef]) === expected) {
-    throw new Error(`git update-ref ${logRef}: ${moved.stderr.trim()}`);
-  }
-
-  return false;
-}
 
 export function append<T>(
   site: Site,
@@ -461,13 +463,14 @@ export function append<T>(
     }
 
     const events = stamp(drafts, maxClock, now);
-    const next = commitFiles(
-      site.path,
-      replica,
-      events.map((event) => [eventPath(event.uuid), JSON.stringify(event)]),
-    );
 
-    if (moveLogIfStill(site, replica.tip, next)) {
+    if (
+      writeLogIfStill(
+        site.path,
+        replica.tip,
+        events.map((event) => [eventPath(event.uuid), JSON.stringify(event)]),
+      )
+    ) {
       return result;
     }
 
