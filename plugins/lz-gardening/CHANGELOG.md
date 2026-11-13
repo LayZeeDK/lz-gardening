@@ -42,7 +42,9 @@ First release.
   both. The queue is shared with the repository, so `weeds.ts` takes repository-relative paths only (`--where`, a
   `lesson:<path>` source, `--check`) and refuses an event whose text holds this machine's home folder, the
   checkout's path or the site's path. A census, or a bed, whose base commit no branch fetched from `origin` holds
-  stays in the site and is named on stderr, as is a bed that adds a line holding one of those paths. `weeds.ts groups` shows who holds a claim of
+  stays in the site and is named on stderr, as is a bed that adds a line holding one of those paths. Each census
+  carries the site's `.garden/patterns.json` as it is, unchecked, so it is shared too; a site without one takes its
+  census with the extra patterns of the shared census. `weeds.ts groups` shows who holds a claim of
   each class in a last `tending` column (`-` for none).
 - `lz-tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Closes the class in

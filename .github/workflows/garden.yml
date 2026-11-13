@@ -1,0 +1,38 @@
+name: garden
+
+on:
+  workflow_dispatch:
+  # Scheduled runs are not supported: GitHub can delay or drop them and switches them off in a quiet public
+  # repository. Uncomment only to try one.
+  # schedule:
+  #   - cron: '17 6 * * 1-5'
+
+permissions:
+  # The garden scripts push refs/garden/log, refs/garden/census and refs/garden/beds/* with this job's token.
+  contents: write
+
+concurrency:
+  group: lz-gardening
+  cancel-in-progress: false
+
+jobs:
+  garden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The census reads the base's history since the last census.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          plugin_marketplaces: ./
+          plugins: lz-gardening@lz-gardening
+          prompt: /lz-gardening:lz-garden
+          claude_args: --permission-mode dontAsk

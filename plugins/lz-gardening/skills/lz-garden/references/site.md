@@ -16,7 +16,8 @@ the checkout, write into a **site** instead: a local clone beside the repository
   refs/garden/pending/<sha>      (git ref) a census taken at <sha> and not yet recorded
   refs/garden-shared/            (git refs) what the last sync fetched of origin's refs/garden/: log, census and
                                  beds/<class>, the beds other clones closed
-  .garden/patterns.json          optional, not committed: this repository's own census patterns
+  .garden/patterns.json          optional, not committed on `garden`: this repository's own census patterns; each
+                                 census the site records holds a copy, pushed to `origin` as it is
   .gitignore                     ignores /beds/
   beds/<class>/                  a tend pass's worktree on branch bed/<class>
 ```
@@ -61,7 +62,14 @@ review and carry the identity of whoever commits them.
 
 The queue is as public as the repository: whoever can read `origin` can read every event. So paths in events are
 repository-relative, and `weeds.ts` refuses, with exit 2, an event whose text holds this machine's home folder, the
-checkout's path or the site's path, in any letter case and with either slash.
+checkout's path or the site's path, in any letter case and with either slash. That check covers events only: a census
+holds the site's `.garden/patterns.json` byte for byte, and `origin` gets the same copy.
+
+In CI, the site sits beside the job's workspace and lasts one job. Events or a census a run has not shared by its end
+are gone with the runner, and the next run reads the same commits again, because the shared census did not move. The
+scripts read the checkout's `origin` URL on every sync,
+so a token the CI job put in that URL reaches the site, which needs no credentials of its own and keeps no copy of the
+token.
 
 Claims decide who tends a class. A sync that shares a claim of this writer's checks it against `origin`'s log: when
 another writer's claim of the class came first, it gives the claim back with a release, pushed in the same sync,

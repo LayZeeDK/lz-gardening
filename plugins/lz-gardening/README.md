@@ -48,7 +48,7 @@ queue and a ref `refs/garden/census` that holds the census.
 ../<repo>.garden/
   refs/garden/log         (git ref, not a folder) the queue: one file per event, never edited
   refs/garden/census      (git ref) the last census
-  .garden/patterns.json   optional extra census patterns for this repository
+  .garden/patterns.json   optional extra census patterns for this repository; pushed to origin as it is, in each census
   beds/<class>/           a tend pass's worktree, on branch bed/<class>
 ```
 
@@ -62,9 +62,11 @@ clone took. A tend pass claims its class in the queue first, so two clones never
 its close and its bed when it ends. No ref outside `refs/garden/` is pushed, and the checkout itself fetches nothing.
 A clone that cannot reach `origin`, or may not push to it, keeps working on its own copy and shares it on a later
 tick. Whoever can read the repository can read the shared queue: each claim names its holder by your `user.name`,
-and the bed commits carry your `user.name` and `user.email`. The queue's and the census's own commits are signed
-`lz-gardening <>`; to sign them yourself, set both `lzGardening.name` and `lzGardening.email` in the repository's
-git config. To keep the garden local only:
+and the bed commits carry your `user.name` and `user.email`. Each census also carries the site's
+`.garden/patterns.json` byte for byte, and nothing checks that file for machine paths, so keep local paths and private
+text out of it. A clone without the file takes its census with the extra patterns of the last census it holds, which
+a sync takes from `origin`. The queue's and the census's own commits are signed `lz-gardening <>`; to sign them
+yourself, set both `lzGardening.name` and `lzGardening.email` in the repository's git config. To keep the garden local only:
 
 ```bash
 git config lzGardening.share false
@@ -104,6 +106,83 @@ reading the `lz-tend` skill and the `lz-garden` references, and running the gard
 worktree in the site); it asks for the rest, such as edits in the bed and the repository's checks. Because the site
 lies beside your checkout, a tend pass first asks you to add it as a working directory (`/add-dir <site>`); without
 that, Claude Code asks before every read or edit of a file in the bed.
+
+## Run the watch in CI
+
+To run one watch tick on GitHub Actions, add this workflow as `.github/workflows/garden.yml`. It runs the tick with
+[claude-code-action](https://github.com/anthropics/claude-code-action). Start it from the repository's **Actions**
+tab or with `gh workflow run garden.yml`.
+
+```yaml
+name: garden
+
+on:
+  workflow_dispatch:
+  # Scheduled runs are not supported: GitHub can delay or drop them and switches them off in a quiet public
+  # repository. Uncomment only to try one.
+  # schedule:
+  #   - cron: '17 6 * * 1-5'
+
+permissions:
+  # The garden scripts push refs/garden/log, refs/garden/census and refs/garden/beds/* with this job's token.
+  contents: write
+
+concurrency:
+  group: lz-gardening
+  cancel-in-progress: false
+
+jobs:
+  garden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The census reads the base's history since the last census.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          plugin_marketplaces: https://github.com/LayZeeDK/lz-gardening.git
+          plugins: lz-gardening@lz-gardening
+          prompt: /lz-gardening:lz-garden
+          claude_args: --permission-mode dontAsk
+```
+
+The workflow needs a `CLAUDE_CODE_OAUTH_TOKEN` repository secret. To use an API key instead, replace
+`claude_code_oauth_token` with `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}`.
+
+The recipe has no credential step. The action puts the job's token, the one `github_token` passes, into the
+checkout's `origin` URL. The garden scripts read that URL on every sync, so the site fetches and pushes with the same
+token. Git leaves the token out of its messages, and the site keeps no copy of it. `contents: write` lets the token
+push the garden's refs, and the job's token lasts as long as the job.
+
+Leave these three claude-code-action inputs unset:
+
+- `allowed_bots` and `allowed_non_write_users`. With either one set, the action hands git the token through the
+  checkout's own git config instead of the `origin` URL. The site does not read that config, so its sync ends
+  `offline` or `read-only` and shares nothing.
+- `use_commit_signing`. With it set to `true`, the action sets no `user.name` or `user.email`, and `site.ts open`
+  stops because the repository has no identity.
+
+A run shares what a tick on your machine shares: the queue and the census, pushed to `refs/garden/` on the
+repository, where anyone who can read the repository can read them. The site copies the `claude[bot]` identity that
+the action sets, and the queue's and the census's commits are signed `lz-gardening <>` as on any clone.
+
+The site lasts one job. A run whose last `shared` state is `offline`, `read-only` or `behind` loses what it found,
+and the next run reads the same commits again, because the shared census did not move. The `concurrency` group
+keeps two runs from ticking at once. `--permission-mode dontAsk` makes Claude Code refuse every call that would
+otherwise ask for permission. Without it, the action lets a classifier approve such calls while a token that can
+push sits in the `origin` URL.
+
+Start the workflow by hand. A schedule is not supported: GitHub can delay or drop scheduled runs when it is busy, and
+it switches them off after 60 days without activity in a public repository. `lz-tend` does not run in CI yet: a tend
+pass needs the site added as a working directory before the session starts, and the repository's own checks allowed.
 
 ## Where a fix goes
 
