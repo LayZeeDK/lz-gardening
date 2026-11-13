@@ -8,6 +8,13 @@ everything else (`tools/`, `package.json`, the lint and type configs) is maintai
 Shipped files name none of the maintainer's own plugins or skills; `tools/hygiene.test.ts` lists the names it
 rejects. Describe an idea in its own words instead of pointing at another tool. Credit people, not tools.
 
+## Public repositories
+
+The plugin must be safe in open-source repositories. Everything the garden shares (`refs/garden/*` on `origin`) is
+readable by anyone who can read the repository, and its events are never removed: put no hostname, local path, user
+name or email, or other machine or personal data into an event, a census, a garden commit or a shared bed, unless the
+user configured it (`lzGardening.name` and `lzGardening.email` name the garden's commits).
+
 ## Words and decisions
 
 - `GLOSSARY.md` defines the plugin's words (weed, bed, regrown, one-off and the rest). Use them in code, docs, tests
