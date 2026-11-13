@@ -243,7 +243,7 @@ export async function takeCensus(cwd: string, rev: string, set: PatternSet, now:
 const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 // A const holding a parenthesised expression (`const x = (a + b)`) also counts; a parser would not.
 const definition =
-  /^\s*(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
+  /^(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
 // git grep takes POSIX extended regex, which has no \s or (?:), so it prefilters and `definition` names the match.
 const definitionPrefilter =
   // Stryker disable next-line StringLiteral: the prefilter only narrows what git returns, and the definition regex decides every match; they differ only on non-ASCII whitespace such as a no-break space, which no rule depends on
@@ -278,12 +278,9 @@ export function diffDuplicates(before: Census | null, after: Census): string[] {
     return [];
   }
 
-  return (
-    Object.entries(after.duplicates)
-      // Stryker disable next-line ArrayDeclaration: a duplicate's paths are source files, so no invented path matches one
-      .filter(([name, paths]) => paths.some((path) => !(before.duplicates[name] ?? []).includes(path)))
-      .map(([name]) => name)
-  );
+  return Object.entries(after.duplicates)
+    .filter(([name, paths]) => paths.some((path) => before.duplicates[name]?.includes(path) !== true))
+    .map(([name]) => name);
 }
 
 export function diffCensus(before: Census | null, after: Census): PatternDelta[] {
