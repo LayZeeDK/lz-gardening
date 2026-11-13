@@ -380,6 +380,7 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   git(second.garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
   const tip = commit(bed, { 'checks/any-type.mjs': 'export {};\n' });
   git(second.dir, ['config', 'lzGardening.share', 'false']);
+  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).code, 0);
   const closed = cli(second.dir, [
     'close-class',
     '--class',

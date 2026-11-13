@@ -29,6 +29,10 @@ function writerOf(dir: string): string {
   return openSite(dir).writer;
 }
 
+function holderOf(dir: string): string {
+  return `writer ${writerOf(dir).slice(0, 8)}`;
+}
+
 function racedPair(t: Parameters<typeof sharedPair>[0]) {
   const pair = sharedPair(t);
   const { first, second, remote } = pair;
@@ -98,7 +102,7 @@ test('a claim whose push loses to another writer that claimed first, on the merg
 
   assert.deepEqual(
     [claimed.code, claimed.stdout, liveClaimWriters(remote)],
-    [1, 'taken any-type by test until 2026-11-07T18:00:00.000Z\n', [writerOf(first.dir)]],
+    [1, `taken any-type by ${holderOf(first.dir)} until 2026-11-07T18:00:00.000Z\n`, [writerOf(first.dir)]],
   );
 });
 
@@ -121,7 +125,7 @@ test('a claim that yields on its first attempt and lands on a later one prints t
 
   assert.deepEqual(
     [claimed.code, claimed.stdout, waits.length, liveClaimWriters(remote)],
-    [1, 'taken any-type by test until 2026-11-07T18:00:00.000Z\n', 2, [writerOf(first.dir)]],
+    [1, `taken any-type by ${holderOf(first.dir)} until 2026-11-07T18:00:00.000Z\n`, 2, [writerOf(first.dir)]],
   );
 });
 
@@ -150,7 +154,7 @@ test('a claim appended and never pushed is given back by the next open once anot
 
   assert.deepEqual(
     [opened.status, opened.stderr, liveClaimWriters(remote, new Date())],
-    [0, 'site: gave back the claim of any-type; test holds it\n', [writerOf(first.dir)]],
+    [0, `site: gave back the claim of any-type; ${holderOf(first.dir)} holds it\n`, [writerOf(first.dir)]],
   );
 });
 

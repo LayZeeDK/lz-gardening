@@ -71,6 +71,7 @@ export function tendedBed(
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
   assert.equal(added.code, 0, added.stderr);
   writeCensus(garden, base);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type']).code, 0);
   const closed = cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', where]);
   assert.equal(closed.code, 0, closed.stderr);
 
@@ -83,4 +84,18 @@ export function editCheckByHand(garden: string, check: string): void {
     .forEach(([path, event]) => {
       writeToLogByHand(garden, path, JSON.stringify({ ...event, check }));
     });
+}
+
+export function homeAt(t: TestContext, folder: string): void {
+  for (const name of ['HOME', 'USERPROFILE']) {
+    const was = process.env[name];
+    t.after(() => {
+      if (was === undefined) {
+        Reflect.deleteProperty(process.env, name);
+      } else {
+        process.env[name] = was;
+      }
+    });
+    process.env[name] = folder;
+  }
 }

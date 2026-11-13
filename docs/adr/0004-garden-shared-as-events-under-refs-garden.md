@@ -57,15 +57,25 @@ file order or a logical clock, gives the wrong status for an add made beside a c
   claim it exists for.
 - `claim`, `close`, `close-class` and `bed` sync once before they plan, so none of them acts on a replica that has not
   seen a newer claim of the class. Only `close-class` releases the holder's claim; a `close --id` in the middle of a
-  pass leaves the class held.
+  pass leaves the class held. `close-class` and `bed` share one precondition: the first sync is `synced` or `local`
+  and this writer then holds a live claim of the class, else exit 1. Planning on a stale replica (a `behind` sync) let
+  a close by a writer with no claim reach `origin` under another writer's live claim, which then blocked the class
+  for 6 hours with nothing open to close; the sync pushes a close without looking at claims, so the refusal has to
+  come before the plan. `close --id` keeps no such check: it closes single weeds and ends no claim.
 - Beds are pushed after the log, in a push of their own, each bed ref on its own outcome. A bed the remote refuses
   (such as a workflow file a CI token may not push) or that is not a fast-forward is named and left out; it never
   blocks the log. Which bed to push comes from the latest tended close of its class in the merged log. A shared bed
   that is gone while its close is already shared stays gone: someone deleted it after landing it.
-- The garden is as public as the repository, and its events are never removed. A claim's holder is `user.name`, never
-  a hostname. Log and census commits are authored `lz-gardening <>` unless the checkout sets both
-  `lzGardening.name` and `lzGardening.email`; bed commits keep the user's identity, as they are code for review. An
-  event field holding this machine's home folder, the checkout's path or the site's path is refused, and `--check`,
-  `--where` and a lesson's path take repository-relative paths only. A census or a bed whose base commit no branch
-  fetched from `origin` holds stays local, and so does a bed that adds a line holding one of those paths; sync names
-  each on stderr.
+- The garden is as public as the repository, and its events are never removed. A claim's holder is `lzGardening.name`
+  when the checkout sets it, else `writer` and the first 8 characters of the site's random writer id; never
+  `user.name`, which the user did not set for the garden, and never a hostname. Log and census commits are authored
+  `lz-gardening <>` unless the checkout sets both `lzGardening.name` and `lzGardening.email`; bed commits keep the
+  user's identity, as they are code for review. An event field holding this machine's home folder, the checkout's
+  path or the site's path is refused, and `--check`, `--where` and a lesson's path take repository-relative paths
+  only. Paths match in any case, with runs of slashes or backslashes as one, and with a drive in Git Bash's `/d/`
+  form. A census whose base commit no branch fetched from `origin` holds stays local. A bed may bring `origin` only
+  its own commits, the ones made in the site, which the checkout's object store lacks; one that would bring any
+  commit the checkout holds stays local, whatever holds it (a branch, a tag, a reflog, another remote), since asking
+  which refs hold the base missed every holder the question did not name. A bed whose commits add a line or a message
+  holding one of those paths stays local too, merges and binary files included, with the diff read by its structure
+  rather than its line prefixes. Sync names each kept bed on stderr.

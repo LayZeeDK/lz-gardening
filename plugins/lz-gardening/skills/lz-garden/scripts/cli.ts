@@ -1,9 +1,9 @@
 import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { unprintablePattern } from './log.ts';
-import { inRun } from './store.ts';
-import type { SyncResult } from './store.ts';
+import { replay, unprintablePattern } from './log.ts';
+import { inRun, isShared, readLog } from './store.ts';
+import type { Site, SyncResult } from './store.ts';
 
 const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
 
@@ -13,6 +13,26 @@ export function escapeUnprintable(text: string): string {
 
 export function reasonOf(result: SyncResult): string {
   return result.reason === undefined ? '' : ` (${escapeUnprintable(result.reason)})`;
+}
+
+// bed and close-class act on a class only under this writer's live claim, read after a sync that left the log local
+// or shared, so another clone's newer claim is seen and this claim is on origin.
+export function claimRefusal(site: Site, weedClass: string, pre: SyncResult, now: Date): string | undefined {
+  if (!isShared(pre)) {
+    return `cannot check the claim of ${weedClass}: ${pre.state}${reasonOf(pre)}`;
+  }
+
+  const owner = replay(readLog(site).events, now).claims.get(weedClass);
+
+  if (owner === undefined) {
+    return `this site holds no claim of ${weedClass}; run weeds claim --class ${weedClass}`;
+  }
+
+  if (owner.writer !== site.writer) {
+    return `${weedClass} is claimed by ${escapeUnprintable(owner.holder)} until ${owner.until}`;
+  }
+
+  return undefined;
 }
 
 export interface Io {

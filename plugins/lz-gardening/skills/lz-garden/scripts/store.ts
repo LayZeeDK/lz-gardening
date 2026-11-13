@@ -904,25 +904,88 @@ function sharedBedRef(weedClass: string): string {
   return `refs/garden/beds/${weedClass}`;
 }
 
-function bedStaysLocal(site: Site, tip: string): string | undefined {
-  const lent = { GIT_ALTERNATE_OBJECT_DIRECTORIES: join(site.path, '.git', 'objects'), GIT_NO_LAZY_FETCH: '1' };
-  const notOn = (refs: readonly string[]): string =>
-    git(site.checkout, ['rev-list', '--count', tip, '--not', ...refs], { readsOnly: true, env: lent });
+// A hunk's lines are counted from its header, so no line inside it is taken for a header by how its text starts. A
+// merge's combined diff (--cc) marks each line once per parent; a line with no - is in the result, and one with a +
+// is new to some parent. A commit starts with a NUL and its id, and its message ends at a NUL, which no message holds.
+function readBedLog(log: string): { readonly commits: readonly string[]; readonly added: readonly string[] } {
+  const commits: string[] = [];
+  const added: string[] = [];
+  let inMessage = false;
+  let parents = 1;
+  let left = 0;
 
-  if (notOn(['--remotes=origin']) !== notOn(['--branches', '--remotes=origin'])) {
+  log.split('\n').forEach((line) => {
+    if (inMessage) {
+      const end = line.indexOf('\0');
+      added.push(end === -1 ? line : line.slice(0, end));
+      inMessage = end === -1;
+
+      return;
+    }
+
+    if (left === 0 && line.startsWith('\0')) {
+      commits.push(line.slice(1));
+      inMessage = true;
+
+      return;
+    }
+
+    if (left === 0) {
+      const hunk = /^(@@+) (?:-\d+(?:,\d+)? )+\+\d+(?:,(\d+))? \1/.exec(line);
+      parents = (hunk?.[1]?.length ?? 2) - 1;
+      left = hunk === null ? 0 : Number(hunk[2] ?? '1');
+
+      return;
+    }
+
+    const marks = line.slice(0, parents);
+
+    if (!marks.includes('-') && !line.startsWith('\\')) {
+      left -= 1;
+
+      if (marks.includes('+')) {
+        added.push(line.slice(parents));
+      }
+    }
+  });
+
+  return { commits, added };
+}
+
+function bedStaysLocal(site: Site, tip: string, shared: string | undefined): string | undefined {
+  const lent = { GIT_ALTERNATE_OBJECT_DIRECTORIES: join(site.path, '.git', 'objects'), GIT_NO_LAZY_FETCH: '1' };
+  const { commits, added } = readBedLog(
+    git(
+      site.checkout,
+      [
+        'log',
+        '-p',
+        '--cc',
+        '--text',
+        '--no-color',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--format=%x00%H%n%B%x00',
+        tip,
+        '--not',
+        '--remotes=origin',
+        ...(shared === undefined ? [] : [shared]),
+      ],
+      { readsOnly: true, env: lent },
+    ),
+  );
+  // The bed's own commits were made in the site, so the checkout lacks them; one it holds came from somewhere else.
+  const held = git(site.checkout, ['cat-file', '--batch-check=%(objectname)'], {
+    input: commits.map((commit) => `${commit}\n`).join(''),
+    readsOnly: true,
+    env: { GIT_NO_LAZY_FETCH: '1' },
+  });
+
+  if (held.split('\n').some((line) => objectIdPattern.test(line))) {
     return 'stays local: its base is on no branch fetched from origin';
   }
 
-  const holdsMachinePath = machinePathTest(site);
-  const added = git(
-    site.checkout,
-    ['log', '-p', '--no-color', '--no-ext-diff', '--no-textconv', '--format=', tip, '--not', '--remotes=origin'],
-    { readsOnly: true, env: lent },
-  )
-    .split('\n')
-    .filter((line) => line.startsWith('+') && !line.startsWith('+++'));
-
-  return added.some(holdsMachinePath) ? 'stays local: it adds a line holding a path on this machine' : undefined;
+  return added.some(machinePathTest(site)) ? 'stays local: it holds a path on this machine' : undefined;
 }
 
 function pushBeds(site: Site, leaving: readonly Leaving[], { pushUrl, timeoutMs }: Attempt): readonly string[] {
@@ -961,7 +1024,9 @@ function pushBeds(site: Site, leaving: readonly Leaving[], { pushUrl, timeoutMs 
     return [{ ...bed, descends: isAncestor(site.path, shared, bed.tip) }];
   });
   const kept = judged.flatMap((bed) => {
-    const why = bed.descends ? bedStaysLocal(site, bed.tip) : `does not descend from origin's bed`;
+    const why = bed.descends
+      ? bedStaysLocal(site, bed.tip, tipOf(sharedBeds, bed.weedClass))
+      : `does not descend from origin's bed`;
 
     return why === undefined ? [] : [{ ...bed, why }];
   });
@@ -1200,10 +1265,12 @@ function adoptSharedCensus(site: Pick<Site, 'checkout' | 'path'>, { local, share
 const appendTries = 50;
 
 function machinePathTest(site: Pick<Site, 'checkout' | 'path'>): (text: string) => boolean {
-  const fold = (text: string): string => text.replaceAll('\\', '/').toLowerCase();
+  const fold = (text: string): string => text.replaceAll(/[\\/]+/g, '/').toLowerCase();
   const paths = [homedir(), site.checkout, site.path]
     .map((path) => fold(path).replace(/\/+$/, ''))
-    .filter((path) => !/^(?:[a-z]:)?$/.test(path));
+    .filter((path) => !/^(?:[a-z]:)?$/.test(path))
+    // Git Bash writes d:/x as /d/x, and WSL's /mnt/d/x and Cygwin's /cygdrive/d/x hold that too.
+    .flatMap((path) => [path, path.replace(/^([a-z]):\//, '/$1/')]);
   const holds = (text: string, path: string): boolean => {
     for (let at = text.indexOf(path); at !== -1; at = text.indexOf(path, at + 1)) {
       if (!/[\w.-]/.test(text.charAt(at + path.length))) {

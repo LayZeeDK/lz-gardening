@@ -27,7 +27,7 @@ import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { claimRefusal, escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import type { Site, SyncResult } from './store.ts';
 import { classPattern, isRecord, replay } from './log.ts';
@@ -38,7 +38,6 @@ import {
   fetchedBedRef,
   git,
   gitSucceeds,
-  isShared,
   logRef,
   objectIdPattern,
   objectIds,
@@ -277,25 +276,10 @@ function checkBed(site: string, bedClass: string, base: string): void {
   requireSite(site);
 }
 
-function claimRefusal(site: Site, bedClass: string): string | undefined {
+function bedRefusal(site: Site, bedClass: string): string | undefined {
   const now = new Date();
-  const pre = sync(site, { attempts: 1 }, now);
 
-  if (!isShared(pre)) {
-    return `bed: cannot check the claim of ${bedClass}: ${pre.state}${reasonOf(pre)}`;
-  }
-
-  const owner = replay(readLog(site).events, now).claims.get(bedClass);
-
-  if (owner === undefined) {
-    return `bed: this site holds no claim of ${bedClass}; run weeds claim --class ${bedClass}`;
-  }
-
-  if (owner.writer !== site.writer) {
-    return `bed: ${bedClass} is claimed by ${escapeUnprintable(owner.holder)} until ${owner.until}`;
-  }
-
-  return undefined;
+  return claimRefusal(site, bedClass, sync(site, { attempts: 1 }, now), now);
 }
 
 function mergeInto(bed: string, commitId: string, name: string): void {
@@ -522,10 +506,10 @@ function main(argv: readonly string[], io: Io): number {
     }
     case 'bed': {
       checkBed(site, parsed.bedClass, parsed.base);
-      const refusal = claimRefusal(withWriter({ checkout: top, path: site }), parsed.bedClass);
+      const refusal = bedRefusal(withWriter({ checkout: top, path: site }), parsed.bedClass);
 
       if (refusal !== undefined) {
-        io.err(`site: ${refusal}\n`);
+        io.err(`site: bed: ${refusal}\n`);
 
         return 1;
       }

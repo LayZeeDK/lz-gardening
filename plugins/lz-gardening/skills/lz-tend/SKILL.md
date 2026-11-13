@@ -37,6 +37,8 @@ the session's working directories (the session's environment lists any added one
   the directory a `cd` leaves it in, and `site` finds the site from the checkout.
 - Run a command that takes no directory flag as `cd "<bed>" && <command>`. Before the next `site` or `weeds` call,
   run `cd "<checkout>"` as a call of its own.
+- Never put git after a `cd`: Claude Code refuses such a chain, whatever the allow list says. Run git as
+  `git -C "<bed>" ...`, and when another command reads its output, write it to a file outside the bed first, in a call of its own, so the bed holds only the change.
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
   timeout, up to its limit of 10 minutes. A background run writes its output to a file outside the session's working
   directories, so reading it asks.
@@ -79,7 +81,10 @@ Then decide, and say which:
   `weeds release --class <class>`, name that class or job in the report and stop; the weeds stay open as evidence.
 - **Tend**: continue.
 
-Keep and one-off end the claim through `close-class`.
+Keep and one-off end the claim through `close-class`. `close-class` closes nothing and exits 1 unless its first sync
+is `synced` or `local` and this site still holds the claim; report its line as it is
+(`cannot check the claim of <class>: ...`, `this site holds no claim of <class>; ...` or
+`<class> is claimed by <holder> until <time>`).
 
 ## 3. Choose the layer
 
@@ -133,10 +138,12 @@ Commit the bed change with `git -C "<bed>"`, following the repository's commit m
 repository's checkout, renew the claim with `weeds claim --class <class>`: a long pass can outlast it. When that
 prints anything but `claimed`, stop and report its line; the bed stays for the next pass. Then close the class:
 `weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
-check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). It prints `closed <n>; <state>`: the close and the end of the claim land in the site's
-queue and, when the state is `synced`, on `origin`, followed by the bed. Any other state shares them on the next
-`site open`. A line on stderr names a bed `origin` did not take. A later weed of the class, anywhere, is then queued
-as `regrown` and names this bed and check.
+check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). Like the keep and
+one-off closes, it exits 1 and closes nothing when its first sync is not `synced` or `local` or the claim is no
+longer this site's: stop and report its line; the bed stays for the next pass. It prints `closed <n>; <state>`: the
+close and the end of the claim land in the site's queue and, when the state is `synced`, on `origin`, followed by
+the bed. Any other state shares them on the next `site open`. A line on stderr names a bed `origin` did not take. A
+later weed of the class, anywhere, is then queued as `regrown` and names this bed and check.
 
 ## 8. Report
 

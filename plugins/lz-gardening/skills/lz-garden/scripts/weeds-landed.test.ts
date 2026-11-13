@@ -77,6 +77,7 @@ test('a bed tended a second time, with the base merged in, is on the base once i
   assert.equal(site(dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
   const fix = { 'src/b.ts': 'export const b: number = 1;\n' };
   const tip = commit(bed, fix);
+  cli(dir, ['claim', '--class', 'any-type']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
   const landed = commit(dir, { ...check, ...fix });
   writeCensus(garden, landed);
@@ -121,6 +122,7 @@ test('a bed that changed its check in two commits is on the base once both land 
   const { dir, garden, bed } = tendedBed(t, first);
   const tip = commit(bed, second);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
   commit(dir, first);
   writeCensus(garden, commit(dir, second));
@@ -141,6 +143,7 @@ test('a bed that changed its check in two commits is not on the base while only 
   const { dir, garden, bed } = tendedBed(t, first);
   const tip = commit(bed, second);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
   writeCensus(garden, commit(dir, first));
 

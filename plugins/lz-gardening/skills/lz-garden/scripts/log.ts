@@ -68,7 +68,7 @@ export interface ClaimEvent extends EventBase {
   readonly class: string;
   /** The site's writer id. */
   readonly writer: string;
-  /** Display only: the site's `user.name`, or `writer <first 8 of the writer id>` when it has none. */
+  /** Display only: the checkout's `lzGardening.name`, or `writer <first 8 of the writer id>`; never `user.name`. */
   readonly holder: string;
   /** at + claimLifetimeMs. */
   readonly until: string;

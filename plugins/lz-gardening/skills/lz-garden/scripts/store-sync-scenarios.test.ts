@@ -85,6 +85,7 @@ const scenarios: readonly {
     name: 'an add beside a tend pass of its class that its writer never saw is added, not regrown',
     act: ({ a, b }) => {
       add(a, weed);
+      run(a, ['claim', '--class', weed.class]);
       run(a, ['close-class', '--class', weed.class, '--tended', 'bed/any-type@abc1234', '--check', 'src/check.ts']);
       add(b, later);
     },
@@ -95,6 +96,7 @@ const scenarios: readonly {
     name: 'an add after a tend pass of its class that its writer saw is regrown',
     act: ({ a, b, share }) => {
       add(a, weed);
+      run(a, ['claim', '--class', weed.class]);
       run(a, ['close-class', '--class', weed.class, '--tended', 'bed/any-type@abc1234', '--check', 'src/check.ts']);
       share();
       add(b, later);

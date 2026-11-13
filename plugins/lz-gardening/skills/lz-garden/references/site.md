@@ -46,10 +46,12 @@ After the log lands, a sync pushes beds in a push of their own, one ref per bed,
 neither the log nor another bed. For each class, the latest tended close in the merged log names the bed: the sync
 pushes the site's `bed/<class>` as `refs/garden/beds/<class>` when that branch's commit is the close's, and either
 `origin`'s bed is an ancestor of it or `origin` has no bed of the class and the close is shared by this very sync.
-A bed that does not descend from `origin`'s, or that `origin` refuses, is named on stderr and left in the site. So is
-a bed that would bring `origin` a commit only a branch of the checkout holds (its base was never pushed), and a bed
-whose own commits add a line holding this machine's home folder, the checkout's path or the site's path. A bed ref
-deleted on `origin` after its close was shared stays deleted.
+A bed that does not descend from `origin`'s, or that `origin` refuses, is named on stderr and left in the site. The
+only commits a bed may bring `origin` are its own, made in the site: a bed that would bring any commit the checkout
+holds (a base on an unpushed branch, a tag, a detached commit or another remote's branch) stays in the site and is
+named too. So is a bed whose commits add a line, or hold a message, with this machine's home folder, the checkout's
+path or the site's path in it, spelled as the event check below reads them; merges and files git reads as binary
+count. A bed ref deleted on `origin` after its close was shared stays deleted.
 
 A census is shared only while a branch the checkout fetched from `origin` (`refs/remotes/origin/*`) holds its base
 commit. Otherwise it stays in the site, and `site.ts` says so on stderr; a later sync, once that commit is pushed and
@@ -62,7 +64,9 @@ review and carry the identity of whoever commits them.
 
 The queue is as public as the repository: whoever can read `origin` can read every event. So paths in events are
 repository-relative, and `weeds.ts` refuses, with exit 2, an event whose text holds this machine's home folder, the
-checkout's path or the site's path, in any letter case and with either slash. That check covers events only: a census
+checkout's path or the site's path, in any letter case, with either slash or doubled backslashes (as JSON escapes
+them), and with a drive written as Git Bash writes it (`/d/...`, which WSL's `/mnt/d/...` holds too). Beyond events,
+only a bed is checked (above): a census
 holds the site's `.garden/patterns.json` byte for byte, and `origin` gets the same copy.
 
 In CI, the site sits beside the job's workspace and lasts one job. Events or a census a run has not shared by its end
@@ -73,7 +77,9 @@ token.
 
 Claims decide who tends a class. A sync that shares a claim of this writer's checks it against `origin`'s log: when
 another writer's claim of the class came first, it gives the claim back with a release, pushed in the same sync,
-and names the class and the holder on stderr.
+and names the class and the holder on stderr. `weeds.ts close-class` and `site.ts bed` share one precondition: each
+syncs first and acts only when that sync is `synced` or `local` and this writer then holds a live claim of the
+class; otherwise each exits 1 and changes nothing. `close --id` needs no claim.
 
 The census is decided by the ancestry of its base commit, read in the checkout. A sync takes the shared census over
 the site's unless the site's census is of a commit that descends from the shared one's; a shared census that is not

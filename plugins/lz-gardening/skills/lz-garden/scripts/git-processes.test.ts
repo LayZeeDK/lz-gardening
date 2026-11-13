@@ -158,7 +158,7 @@ test('claim of a class with an origin and no race starts 28 git processes', (t) 
   );
 });
 
-test('close-class --tended with an origin and no shared bed starts 31 git processes', (t) => {
+test('close-class --tended with an origin and no shared bed starts 33 git processes', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
   addWeed(dir);
@@ -177,7 +177,7 @@ test('close-class --tended with an origin and no shared bed starts 31 git proces
 
   assertCount(
     gitStarts(t, (env) => cliProcess(dir, close, env).code),
-    31,
+    33,
   );
 });
 

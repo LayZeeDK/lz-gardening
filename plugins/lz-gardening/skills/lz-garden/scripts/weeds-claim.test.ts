@@ -60,19 +60,19 @@ function holders(gitDir: string): readonly unknown[] {
   return [...logFiles(gitDir).values()].filter((event) => event['op'] === 'claim').map((event) => event['holder']);
 }
 
-test("a claim's holder is the site's user.name", (t) => {
+test("a claim's holder is the checkout's lzGardening.name when it is set", (t) => {
   const { dir, garden } = planted(t);
-  git(garden, ['config', 'user.name', 'Ada Lovelace']);
+  git(dir, ['config', 'lzGardening.name', 'Ada']);
   addWeed(dir, 'src/a.ts:1');
 
   cli(dir, ['claim', '--class', 'any-type'], process.env, now);
 
-  assert.deepEqual(holders(garden), ['Ada Lovelace']);
+  assert.deepEqual(holders(garden), ['Ada']);
 });
 
-test("a claim's holder has a control character in user.name escaped, so every reader parses the claim", (t) => {
+test("a claim's holder has a control character in lzGardening.name escaped, so every reader parses the claim", (t) => {
   const { dir, garden } = planted(t);
-  git(garden, ['config', 'user.name', 'Ada\u0007']);
+  git(dir, ['config', 'lzGardening.name', 'Ada\u0007']);
   addWeed(dir, 'src/a.ts:1');
 
   cli(dir, ['claim', '--class', 'any-type'], process.env, now);
@@ -80,9 +80,10 @@ test("a claim's holder has a control character in user.name escaped, so every re
   assert.equal(replay(readLog({ path: garden }).events, now).claims.get('any-type')?.holder, 'Ada\\u{7}');
 });
 
-test("a claim's holder is writer and the first 8 characters of the writer id when the site has no user.name", (t) => {
+test("a claim's holder is writer and the first 8 characters of the writer id, never user.name", (t) => {
   const { dir, garden } = planted(t);
-  git(garden, ['config', '--unset', 'user.name']);
+  git(dir, ['config', 'user.name', 'Ada Lovelace']);
+  git(garden, ['config', 'user.name', 'Ada Lovelace']);
   addWeed(dir, 'src/a.ts:1');
 
   cli(dir, ['claim', '--class', 'any-type'], process.env, now);
@@ -230,6 +231,7 @@ test('claim and release with a class that is not a kebab-case class id are usage
 
 test('groups shows the holder of a claimed class in a last tending column and a dash for the others', (t) => {
   const { dir } = planted(t);
+  git(dir, ['config', 'lzGardening.name', 'test']);
   addWeed(dir, 'src/a.ts:1');
   addWeed(dir, 'src/b.ts:1', 'todo-marker');
   cli(dir, ['claim', '--class', 'any-type']);

@@ -118,10 +118,10 @@ A hook or permission that stops an agent from writing a weed or bypassing a chec
 a human.
 
 **Claim**:
-A writer's hold on one weed class for one tend pass, an event naming the class, the writer, its holder (the site's
-`user.name`) and an end six hours on. The earliest live claim of a class owns it; a claim by the same writer renews
-it. It ends with a close of the class by its writer, a release, or its end time. A bed is made and a class closed
-only under one's own claim.
+A writer's hold on one weed class for one tend pass, an event naming the class, the writer, its holder (the
+checkout's `lzGardening.name`, else `writer` and the first 8 characters of the writer id) and an end six hours on.
+The earliest live claim of a class owns it; a claim by the same writer renews it. It ends with a close of the class
+by its writer, a release, or its end time. A bed is made and a class closed only under one's own claim.
 _Avoid_: lock, lease
 
 **Paved road**:

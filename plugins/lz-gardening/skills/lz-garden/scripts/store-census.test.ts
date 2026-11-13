@@ -346,6 +346,26 @@ test('a census of a commit no branch fetched from origin holds stays local, and 
   );
 });
 
+test('a census of a commit only a tag and another remote hold stays local', (t) => {
+  const place = planted(t);
+  const remote = bareRemote(place.dir);
+  const upstream = join(dirname(place.dir), 'upstream.git');
+  git(place.dir, ['init', '-q', '--bare', upstream]);
+  git(place.dir, ['remote', 'add', 'upstream', upstream]);
+  const sha = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
+  git(place.dir, ['tag', 'private']);
+  git(place.dir, ['push', '-q', 'upstream', 'main']);
+  git(place.dir, ['reset', '-q', '--hard', 'HEAD~1']);
+  writePendingCensus(place.garden, sha, censusText(sha));
+
+  const synced = site(place.dir, ['sync', '--census', sha]);
+
+  assert.deepEqual(
+    [synced.status, synced.stderr, remoteCensus(remote), git(upstream, ['rev-parse', 'main'])],
+    [0, `site: the census of ${sha} stays local: no branch fetched from origin holds that commit\n`, '', sha],
+  );
+});
+
 test('a census commit is signed lz-gardening with no address, and an origin that checks every object takes it', (t) => {
   const place = planted(t);
   const remote = bareRemote(place.dir);

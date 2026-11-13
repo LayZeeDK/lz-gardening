@@ -11,9 +11,12 @@
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
 //     pass added a check; close-class only), --one-off <reason> (no check written), --keep <reason> (the weed is
 //     deliberate). Values are one line of text without control characters. Both sync with origin before they plan
-//     (a state other than synced or local is named on stderr) and after they append, then print
-//     `<closed|kept> <n>; <share state>`; a bed origin did not take is named on stderr. close-class ends this
-//     writer's claim of the class; close --id leaves it.
+//     and after they append, then print `<closed|kept> <n>; <share state>`; a bed origin did not take is named on
+//     stderr. close-class acts only when that first sync leaves the share state synced or local and this writer
+//     holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check the claim of <class>:
+//     <state> (<reason>)`, `this site holds no claim of <class>; run weeds claim --class <class>` or `<class> is
+//     claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of the class. close --id
+//     needs no claim, names a first sync other than synced or local on stderr, and leaves the claim as it is.
 //   node weeds.ts claim [--class <kebab>]
 //     Claims the class, or the first ready one (two or more open weeds, claimed by no other writer), for six hours,
 //     and shares the claim: `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
@@ -30,8 +33,9 @@
 // An event file the log cannot read, or whose text holds a line break or control character, is skipped and named on
 // stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read the
 // log again, because another writer moved it, names it again.
-// Exit 0 on success; 1 when a close finds nothing open or a claim or release is refused; 2 on a usage error or any
-// other failure: no site, a damaged or newer log, a log that kept moving, or a git error.
+// Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, or a claim or release is
+// refused; 2 on a usage error or any other failure: no site, a damaged or newer log, a log that kept moving, or a
+// git error.
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
@@ -55,7 +59,7 @@ import type {
   OpenWeed,
   TendedClose,
 } from './log.ts';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { claimRefusal, escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import {
   append,
@@ -329,7 +333,7 @@ function eventsReportingSkipped(io: Io, replica: Replica): readonly GardenEvent[
 }
 
 function holderOf(site: Site): string {
-  return escapeUnprintable(configValue(site.path, 'user.name') ?? `writer ${site.writer.slice(0, 8)}`);
+  return escapeUnprintable(configValue(site.checkout, 'lzGardening.name') ?? `writer ${site.writer.slice(0, 8)}`);
 }
 
 export type SyncSeams = Pick<SyncOptions, 'wait' | 'look' | 'timeoutMs'>;
@@ -492,6 +496,13 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const site = openSite(io.cwd);
       const before = sync(site, { ...seams, attempts: 1 }, now);
+      const refusal = 'class' in request.target ? claimRefusal(site, request.target.class, before, now) : undefined;
+
+      if (refusal !== undefined) {
+        io.err(`weeds ${command}: ${refusal}\n`);
+
+        return 1;
+      }
 
       if (!isShared(before)) {
         io.err(`weeds ${command}: planned ${before.state}${reasonOf(before)}\n`);

@@ -41,8 +41,10 @@ First release.
   are signed `lz-gardening <>`, or by `lzGardening.name` and `lzGardening.email` when the checkout's git config sets
   both. The queue is shared with the repository, so `weeds.ts` takes repository-relative paths only (`--where`, a
   `lesson:<path>` source, `--check`) and refuses an event whose text holds this machine's home folder, the
-  checkout's path or the site's path. A census, or a bed, whose base commit no branch fetched from `origin` holds
-  stays in the site and is named on stderr, as is a bed that adds a line holding one of those paths. Each census
+  checkout's path or the site's path, in any letter case, with either slash, doubled backslashes or a drive in Git
+  Bash's `/d/` form. A census whose base commit no branch fetched from `origin` holds stays in the site and is named
+  on stderr, as is a bed that would bring `origin` any commit but its own (one made in the site) and a bed whose
+  commits add a line or a message holding one of those paths, merges and binary files included. Each census
   carries the site's `.garden/patterns.json` as it is, unchecked, so it is shared too; a site without one takes its
   census with the extra patterns of the shared census. `weeds.ts groups` shows who holds a claim of
   each class in a last `tending` column (`-` for none).
@@ -56,15 +58,17 @@ First release.
   the garden scripts, and asks you to add the site as a working directory. Claims its class first with
   `weeds.ts claim [--class <class>]`, so no other clone or run tends it at the same time: the claim lasts six hours,
   a second claim by its holder renews it, the earliest live claim on `origin` wins, and a claim that lost is given
-  back with a release. A claim names its holder by the site's `user.name` (`writer <first 8 of the writer id>` when
-  there is none). `claim` prints `claimed <class> until <time>` (exit 0), or exits 1 with
-  `taken <class> by <holder> until <time>`, `nothing ready to tend`, `nothing open for <class>` or
-  `cannot claim <class>: <state> (<reason>)`. `weeds.ts release --class <class>` ends a claim
+  back with a release. A claim names its holder by the checkout's `lzGardening.name`, or
+  `writer <first 8 of the writer id>` when it is not set; never by `user.name`. `claim` prints
+  `claimed <class> until <time>` (exit 0), or exits 1 with `taken <class> by <holder> until <time>`,
+  `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state> (<reason>)`.
+  `weeds.ts release --class <class>` ends a claim
   (`released <class>; <state>`, or `no claim of <class> held here` and exit 1). `close` and `close-class` sync before
   they plan and share the close after it, printing `<closed|kept> <n>; <state>`; `close-class` ends this writer's
-  claim of the class, and `close --id` leaves it. A tended close shares its bed as `refs/garden/beds/<class>`, in a
-  push of its own after the log; a bed that does not descend from `origin`'s, or that `origin` refuses, is named on
-  stderr. `site.ts bed` syncs first and exits 1 unless this site holds the claim of the class, and starts from, or
-  merges in, the bed another clone shared.
+  claim of the class, and `close --id` leaves it. `close-class`, like `site.ts bed`, exits 1 and closes nothing
+  unless its first sync is `synced` or `local` and this writer then holds a live claim of the class. A tended close
+  shares its bed as `refs/garden/beds/<class>`, in a push of its own after the log; a bed that does not descend from
+  `origin`'s, or that `origin` refuses, is named on stderr. `site.ts bed` syncs first and exits 1 unless this site
+  holds the claim of the class, and starts from, or merges in, the bed another clone shared.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the
   garden scripts, which keep the queue and the census in the site.

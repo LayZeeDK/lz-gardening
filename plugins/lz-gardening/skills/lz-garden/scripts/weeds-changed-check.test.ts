@@ -72,6 +72,7 @@ test('a check the bed took from an unrelated history it merged is not on the bas
   git(bed, ['merge', '-q', '--allow-unrelated-histories', '-X', 'theirs', '-m', 'x', 'FETCH_HEAD']);
   const tip = git(bed, ['rev-parse', 'HEAD']);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444']);
@@ -100,6 +101,7 @@ test('a check the bed and the base both took from the same older unrelated histo
   const tip = git(bed, ['rev-parse', 'HEAD']);
   writeCensus(garden, git(dir, ['rev-parse', 'HEAD']));
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444']);
@@ -128,6 +130,7 @@ test('a check the bed changed and then changed back is on the base', (t) => {
   });
   const tip = commit(bed, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}') });
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444']);
@@ -174,6 +177,7 @@ test('a checkout cloned without every object never fetches for the label', (t) =
   git(dirname(dir), ['clone', '-q', '--filter=blob:none', `file://${dir.replaceAll('\\', '/')}`, partial]);
   const elsewhere = commit(dir, { 'src/c.ts': 'export const c = 1;\n' });
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${elsewhere}`, '--check', 'src/c.ts']);
 
   cli(partial, ['add', '--class', 'any-type', '--where', 'src/d.ts:1', '--source', 'commit:ddd4444']);

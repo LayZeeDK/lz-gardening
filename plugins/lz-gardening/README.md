@@ -59,10 +59,12 @@ they never show in `git branch` or a plain clone. Each tick's `site.ts open` and
 site, merge the queue with the site's own events, keep the census of the later base commit, and push both back, so
 every clone that runs the gardener, on your machine or another, sees one queue and reads on from the last census any
 clone took. A tend pass claims its class in the queue first, so two clones never tend one class at once, and shares
-its close and its bed when it ends. No ref outside `refs/garden/` is pushed, and the checkout itself fetches nothing.
-A clone that cannot reach `origin`, or may not push to it, keeps working on its own copy and shares it on a later
-tick. Whoever can read the repository can read the shared queue: each claim names its holder by your `user.name`,
-and the bed commits carry your `user.name` and `user.email`. Each census also carries the site's
+its close and its bed when it ends; a class is closed, like a bed made, only under the closer's own claim. No ref
+outside `refs/garden/` is pushed, and the checkout itself fetches nothing. A clone that cannot reach `origin`, or may
+not push to it, keeps working on its own copy and shares it on a later tick. Whoever can read the repository can read
+the shared queue: each claim names its holder by `lzGardening.name` when you set it, and otherwise by the first 8
+characters of the site's random writer id, never by your `user.name`; the bed commits carry your `user.name` and
+`user.email`. Each census also carries the site's
 `.garden/patterns.json` byte for byte, and nothing checks that file for machine paths, so keep local paths and private
 text out of it. A clone without the file takes its census with the extra patterns of the last census it holds, which
 a sync takes from `origin`. The queue's and the census's own commits are signed `lz-gardening <>`; to sign them

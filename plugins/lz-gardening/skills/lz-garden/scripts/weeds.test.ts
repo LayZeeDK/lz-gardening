@@ -11,7 +11,7 @@ import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent, OpenWeed,
 import { commit, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { cli, now, script } from './test-weeds.ts';
+import { cli, homeAt, now, script } from './test-weeds.ts';
 import { addStatus, groupWeeds, validateAdd } from './weeds.ts';
 
 function input(overrides: Partial<AddInput> = {}): AddInput {
@@ -217,6 +217,14 @@ test('validation takes the joiners that words and emoji need in paths and notes'
   );
 });
 
+// close-class acts only under the site's own claim of the class.
+function closeUnderClaim(dir: string, args: readonly string[]): ReturnType<typeof cli> {
+  const claimed = cli(dir, ['claim', '--class', args[args.indexOf('--class') + 1] ?? '']);
+  assert.equal(claimed.code, 0, claimed.stdout);
+
+  return cli(dir, args);
+}
+
 test('through the CLI a weed is added, seen, regrown after a close, and kept out after a keep', (t) => {
   const dir = checkout(t);
   const add = ['add', '--class', 'hollow-assertion', '--where', 'src/a.spec.ts:3', '--source', 'census:x'];
@@ -224,7 +232,7 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
   const statuses = [
     cli(dir, add).stdout,
     cli(dir, add).stdout,
-    cli(dir, [
+    closeUnderClaim(dir, [
       'close-class',
       '--class',
       'hollow-assertion',
@@ -234,7 +242,7 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
       'scripts/hollow-assertion.test.mjs',
     ]).stdout,
     cli(dir, add).stdout,
-    cli(dir, ['close-class', '--class', 'hollow-assertion', '--keep', 'on purpose']).stdout,
+    closeUnderClaim(dir, ['close-class', '--class', 'hollow-assertion', '--keep', 'on purpose']).stdout,
     cli(dir, add).stdout,
   ];
 
@@ -248,7 +256,7 @@ test('through the CLI a tend close records its bed and check, and a weed of the 
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
 
-  const closed = cli(dir, [
+  const closed = closeUnderClaim(dir, [
     'close-class',
     '--class',
     'any-type',
@@ -278,9 +286,15 @@ test('through the CLI a tend close records its bed and check, and a weed of the 
 test('through the CLI a one-off close and a keep each record their reason and kind', (t) => {
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
-  const oneOff = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
+  const oneOff = closeUnderClaim(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/b.ts:2', '--source', 'commit:aaa1111']);
-  const kept = cli(dir, ['close-class', '--class', 'todo-marker', '--keep', 'tracked in the issue tracker']);
+  const kept = closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'todo-marker',
+    '--keep',
+    'tracked in the issue tracker',
+  ]);
 
   assert.deepEqual([oneOff.stdout, kept.stdout], ['closed 1; local\n', 'kept 1; local\n']);
   assert.deepEqual(
@@ -298,7 +312,15 @@ test('through the CLI a one-off close and a keep each record their reason and ki
 test('list shows a regrown weed with the bed and check it came back after', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
-  cli(dir, ['close-class', '--class', 'any-type', '--tended', 'bed/any-type@bbb2222', '--check', 'eslint.config.mjs']);
+  closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    'bed/any-type@bbb2222',
+    '--check',
+    'eslint.config.mjs',
+  ]);
   const id = idOf(
     cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:4', '--source', 'commit:ccc3333', '--note', 'cast'])
       .stdout,
@@ -611,8 +633,11 @@ test('a close refuses a reason or check holding a control character, which later
   assert.equal(logFiles(garden).size, 1);
 });
 
-test('a close that finds nothing open exits 1 and names its target', (t) => {
+test('a close-class under a claim whose class has nothing open any more exits 1 and names its target', (t) => {
   const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type']).code, 0);
+  cli(dir, ['close', '--id', weedId('any-type', 'src/a.ts:1', 'census:any-type'), '--one-off', 'fixed by hand']);
 
   const result = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
 
@@ -633,7 +658,7 @@ test('closing a class of several weeds appends one close event naming each weed'
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
 
-  const closed = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
+  const closed = closeUnderClaim(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
 
   assert.equal(closed.stdout, 'closed 2; local\n');
   assert.deepEqual(
@@ -788,20 +813,6 @@ test('a usage error in a repository with no site names the usage error, not the 
   );
 });
 
-function homeAt(t: TestContext, folder: string): void {
-  for (const name of ['HOME', 'USERPROFILE']) {
-    const was = process.env[name];
-    t.after(() => {
-      if (was === undefined) {
-        Reflect.deleteProperty(process.env, name);
-      } else {
-        process.env[name] = was;
-      }
-    });
-    process.env[name] = folder;
-  }
-}
-
 test('add takes a note that only looks like a path of this machine: a longer folder name, or a home folder at the root', (t) => {
   const { dir } = planted(t);
   const add = (where: string, note: string) =>
@@ -818,6 +829,7 @@ test('add takes a note that only looks like a path of this machine: a longer fol
 test("close-class refuses a reason holding the checkout's or the site's path, in any case and with either slash", (t) => {
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type']).code, 0);
   const flipped = (path: string): string =>
     path.includes('\\') ? path.replaceAll('\\', '/') : path.replaceAll('/', '\\');
 
@@ -838,7 +850,60 @@ test("close-class refuses a reason holding the checkout's or the site's path, in
         2,
         'weeds: the by holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
       ]),
-      1,
+      2,
+    ],
+  );
+});
+
+test("add refuses a note holding the checkout's path with its backslashes escaped, as JSON writes it", (t) => {
+  const { dir, garden } = planted(t);
+  homeAt(t, join(sep, 'elsewhere'));
+  const escaped = realpathSync.native(dir).replaceAll(/[\\/]/g, '\\\\');
+
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:any-type',
+    '--note',
+    `{ "root": "${escaped}\\\\src" }`,
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
+      0,
+    ],
+  );
+});
+
+test("add refuses a note holding a drive's folder in Git Bash's form, /<drive>/ in place of <drive>:\\", (t) => {
+  const { dir, garden } = planted(t);
+  homeAt(t, 'Q:\\Users\\gardener');
+
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:any-type',
+    '--note',
+    'copied from /q/Users/gardener/notes.txt',
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
+      0,
     ],
   );
 });
