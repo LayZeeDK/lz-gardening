@@ -39,4 +39,10 @@ file order or a logical clock, gives the wrong status for an add made beside a c
   push drops it from the remote's tip.
 - The union of two logs is a merge commit, so the remote log's history grows by every local write, not one commit
   per sync. Nothing reads that history; replicas read only the tree.
+- Of two censuses, the one whose base commit descends from the other's is kept. A sync adopts the remote's census
+  unless the local one strictly descends from it. A new census is recorded when its base descends from the remote's,
+  when neither descends from the other, or when the checkout lacks the remote's base commit. After a force-push to the
+  base, a clone that has not fetched the rewrite and one that has can replace each other's census on every tick until
+  the stale clone fetches. Nothing is lost: adds dedupe and the ranges are read again. Keeping the remote's census
+  instead would leave a clone without the old history, such as CI, stuck on a census from before the rewrite.
 - A claim expires after 6 hours, so a crashed pass blocks its class that long.

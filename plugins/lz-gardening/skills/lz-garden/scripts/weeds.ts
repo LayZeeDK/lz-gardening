@@ -19,14 +19,12 @@
 // Exit 0 on success; 1 when a close finds nothing open; 2 on a usage error or any other failure: no site, a damaged
 // or newer log, a log that kept moving, or a git error.
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { readCensus } from './census.ts';
 import { bedCommit, bedPattern, classPattern, planAdd, planClose, replay, unprintablePattern } from './log.ts';
 import type { AddInput, AddOutcome, CloseRequest, GardenEvent, OpenWeed, TendedClose } from './log.ts';
 import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import { append, objectIdPattern, openSite, readLog } from './store.ts';
+import { append, censusRef, objectIdPattern, openSite, readCensusAt, readLog } from './store.ts';
 import type { Replica } from './store.ts';
 
 export interface Group {
@@ -161,13 +159,10 @@ function after(tended: TendedClose, offBase: boolean): string {
 }
 
 function shaOfReadableCensus(site: string): string | undefined {
-  try {
-    const sha = readCensus(join(site, '.garden', 'census.json'))?.census.sha;
+  const recorded = readCensusAt(site, censusRef);
+  const sha = typeof recorded === 'object' ? recorded?.census.sha : undefined;
 
-    return sha !== undefined && objectIdPattern.test(sha) ? sha : undefined;
-  } catch {
-    return undefined;
-  }
+  return sha !== undefined && objectIdPattern.test(sha) ? sha : undefined;
 }
 
 function checkOffBase(io: Io, site: string, tended: TendedClose): boolean {

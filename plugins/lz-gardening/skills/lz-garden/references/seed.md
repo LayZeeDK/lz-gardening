@@ -1,6 +1,6 @@
 # Seed pass
 
-Run on every tick until a seed pass has committed (`site.ts open` reports `seeded: false`). The census records every
+Run on every tick until a seed pass has synced, in this clone or another (`site.ts open` reports `seeded: false`). The census records every
 current hit as its starting count, so nothing in it is "new"; the seed pass queues what the repository already
 shows instead, so the first tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file,
 first. Queue with the tick's step 4 command, and stay in the repository's working directory throughout. Run all four
@@ -51,11 +51,11 @@ Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up run
 they point at, and of the newest 20 commits, as in a tick's step 3. Done when each of those commits is read and its
 weeds are queued.
 
-## 4. Commit and report
+## 4. Record and report
 
-Run the three commands of the tick's step 5, `groups`, `commit` and `sync`, with the commit message
-`garden: seed <short sha>`. Done when `commit` prints `"committed": true` and `sync` exits 0. Report in this shape,
-and nothing else:
+Run the two commands of the tick's step 5, `groups` and `sync --census <sha>`, with `--seeded` added at the end of
+`sync`. `--seeded` records in the queue that the seed pass ran, so no clone of the repository seeds again. Done when `sync`
+exits 0. Report in this shape, and nothing else:
 
 ```text
 garden: seeded <base> at <short sha>

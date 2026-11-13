@@ -47,3 +47,10 @@ and the checkout still gains no refs and no files. Three consequences above chan
 - Deleting a site no longer loses the queue while another clone or the remote holds it.
 - "One gardener per site" no longer holds: the site writes its refs by compare-and-swap, without a working tree, so
   runs on one site do not race.
+
+## Update, 2026-11-13: the census leaves the garden branch
+
+The census and its patterns now live in the site's ref `refs/garden/census`, shared like the log (ADR 0004), so
+"its queue and census live on an orphan `garden` branch" no longer holds. The `garden` branch stays the site's
+checked-out branch and holds only the ignore rule for the beds. A census is recorded by `site.ts sync --census`; there
+is no commit step, and no file in the site changes when a tick takes a census.

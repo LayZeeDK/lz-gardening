@@ -1,18 +1,26 @@
 #!/usr/bin/env node
 // Counts census-pattern hits in the tracked files of one git revision and reports what changed since the last census.
 // It reads the revision with `git grep`, so it never checks anything out and works in a clone with no working tree.
-// Usage:
-//   node census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]
-//     Prints a table of counts with the change since the previous census at --out, then the new hits, then, with
-//     --seed, the seed list (`= ` lines), then one JSON summary line. Writes the new census to --out, creating
-//     its folder, when it differs from the one there in more than the time taken. --out must end in
-//     .garden/census.json. Exit 0 on success, 2 on a usage or git error or an --out file that is not a census.
-// Patterns: patterns.json beside this script, extended or overridden (same id) by --patterns.
+// Usage, from the repository's checkout once site.ts open has planted the garden site:
+//   node census.ts --rev <rev> [--seed]
+//     Prints a table of counts with the change since the site's census (refs/garden/census), then the new hits, then,
+//     with --seed, the seed list (`= ` lines), then one JSON summary line: sha, previousSha (null when there is no
+//     census or this checkout lacks its commit), behind (the census's commit descends from sha), grew, newHits and
+//     newDuplicates. When the new census differs from the site's in more than the time taken, it is written to
+//     refs/garden/pending/<sha>, named by the commit rev-parse gives; site.ts sync --census <sha> records it.
+//     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
+// Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
+// or, when the site has none, by the patterns the site's census carries.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { isMainModule, processIo } from './cli.ts';
+import type { Io } from './cli.ts';
+import { isRecord } from './log.ts';
+import { censusRef, inRun, openSite, readCensusAt, writePendingCensus } from './store.ts';
+import type { Census, StoredCensus } from './store.ts';
 
 export interface Pattern {
   readonly id: string;
@@ -26,15 +34,6 @@ export interface PatternSet {
   readonly patterns: readonly Pattern[];
 }
 
-export interface Census {
-  readonly rev: string;
-  readonly sha: string;
-  readonly takenAt: string;
-  readonly counts: Readonly<Record<string, number>>;
-  readonly hits: Readonly<Record<string, readonly string[]>>;
-  readonly duplicates: Readonly<Record<string, readonly string[]>>;
-}
-
 export interface PatternDelta {
   readonly id: string;
   readonly before: number | null;
@@ -44,12 +43,6 @@ export interface PatternDelta {
 
 // Hits are capped per pattern; counts stay exact, and a delta over a capped list can miss new hits.
 const hitCap = 1000;
-// The lz-garden skill allows this script with any arguments, so it writes nowhere but a garden census.
-const censusPattern = /[\\/]\.garden[\\/]census\.json$/;
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function stringArray(value: unknown, what: string): string[] {
   if (value === undefined) {
@@ -119,7 +112,30 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function run(args: readonly string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
+function extraPatterns(
+  site: string,
+  recorded: StoredCensus | null,
+): { readonly text: string; readonly source: string } | undefined {
+  const siteFile = join(site, '.garden', 'patterns.json');
+
+  if (existsSync(siteFile)) {
+    return { text: readFileSync(siteFile, 'utf8'), source: siteFile };
+  }
+
+  return recorded?.patterns === undefined
+    ? undefined
+    : { text: recorded.patterns, source: `${censusRef}:patterns.json` };
+}
+
+function branchName(rev: string): string {
+  return rev.replace(/^origin\//, '');
+}
+
+async function hasCommit(cwd: string, sha: string): Promise<boolean> {
+  return (await gitAsync(['cat-file', '-e', `${sha}^{commit}`], cwd)).code === 0;
+}
+
+function gitAsync(args: readonly string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     const out: Buffer[] = [];
@@ -183,7 +199,7 @@ async function grepRevision(
   specs: readonly string[],
   what: string,
 ): Promise<string[]> {
-  const grep = await run(['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], cwd);
+  const grep = await gitAsync(['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], cwd);
 
   // git grep exits 1 when nothing matches; anything else above 0 is an error.
   if (grep.code > 1) {
@@ -194,7 +210,7 @@ async function grepRevision(
 }
 
 export async function takeCensus(cwd: string, rev: string, set: PatternSet, now: Date): Promise<Census> {
-  const parsed = await run(['rev-parse', '--verify', `${rev}^{commit}`], cwd);
+  const parsed = await gitAsync(['rev-parse', '--verify', `${rev}^{commit}`], cwd);
 
   if (parsed.code !== 0) {
     throw new Error(`git rev-parse ${rev}: ${parsed.stderr.trim()}`);
@@ -212,7 +228,7 @@ export async function takeCensus(cwd: string, rev: string, set: PatternSet, now:
   );
 
   return {
-    rev,
+    rev: branchName(rev),
     sha,
     takenAt: now.toISOString(),
     counts: Object.fromEntries(results.map(([id, hits]) => [id, hits.length])),
@@ -249,71 +265,6 @@ async function findDuplicates(cwd: string, sha: string, exclude: readonly string
       .map(([name, items]) => [name, [...new Set(items.map((item) => item.path))].sort()] as const)
       .filter(([, paths]) => paths.length > 1)
       .sort(([a], [b]) => a.localeCompare(b)),
-  );
-}
-
-export function parseCensus(json: unknown): Census | null {
-  if (!isRecord(json) || !isRecord(json['counts']) || !isRecord(json['hits'])) {
-    return null;
-  }
-
-  const { rev, sha, takenAt } = json;
-
-  if (typeof rev !== 'string' || typeof sha !== 'string' || typeof takenAt !== 'string') {
-    return null;
-  }
-
-  const counts: Record<string, number> = {};
-
-  for (const [id, count] of Object.entries(json['counts'])) {
-    if (typeof count === 'number') {
-      counts[id] = count;
-    }
-  }
-
-  return {
-    rev,
-    sha,
-    takenAt,
-    counts,
-    hits: stringLists(json['hits']),
-    duplicates: stringLists(json['duplicates']),
-  };
-}
-
-export function readCensus(path: string): { readonly census: Census; readonly text: string } | null {
-  if (!existsSync(path)) {
-    return null;
-  }
-
-  const text = readFileSync(path, 'utf8');
-  const unreadable = new Error(`${path} is not a census; remove it, and the next tick records a new one`);
-  let json: unknown;
-
-  try {
-    json = JSON.parse(text);
-  } catch {
-    throw unreadable;
-  }
-
-  const census = parseCensus(json);
-
-  if (census === null) {
-    throw unreadable;
-  }
-
-  return { census, text };
-}
-
-function stringLists(value: unknown): Record<string, string[]> {
-  if (!isRecord(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([key, list]) =>
-      Array.isArray(list) ? [[key, list.filter((item): item is string => typeof item === 'string')] as const] : [],
-    ),
   );
 }
 
@@ -392,46 +343,57 @@ function formatDelta(deltas: readonly PatternDelta[]): string {
   return [`${'pattern'.padEnd(30)} ${'count'.padStart(6)}  change`, ...rows, '', ...added].join('\n');
 }
 
-async function main(argv: readonly string[]): Promise<number> {
+function readSite(cwd: string): {
+  readonly site: string;
+  readonly recorded: StoredCensus | null;
+  readonly extraFile: { readonly text: string; readonly source: string } | undefined;
+} {
+  const site = openSite(cwd).path;
+  const recorded = readCensusAt(site, censusRef);
+
+  if (recorded === 'not a census') {
+    throw new Error(
+      `${censusRef} in ${site} is not a census; delete it (git -C "${site}" update-ref -d ${censusRef}), and the next tick records a new one`,
+    );
+  }
+
+  return { site, recorded, extraFile: extraPatterns(site, recorded) };
+}
+
+async function main(argv: readonly string[], io: Io): Promise<number> {
   const { values } = parseArgs({
     args: [...argv],
     strict: true,
     options: {
       rev: { type: 'string' },
-      out: { type: 'string' },
-      patterns: { type: 'string' },
       seed: { type: 'boolean', default: false },
     },
   });
-  const { rev, out, patterns: extraPath } = values;
+  const { rev } = values;
 
   if (rev === undefined) {
-    process.stderr.write('usage: census.ts --rev <rev> [--out <census.json>] [--patterns <extra.json>] [--seed]\n');
+    io.err('usage: census.ts --rev <rev> [--seed]\n');
 
     return 2;
   }
 
-  if (out !== undefined && !censusPattern.test(resolve(out))) {
-    process.stderr.write(`census: --out must be a .garden/census.json file, got ${out}\n`);
-
-    return 2;
-  }
-
+  const { site, recorded, extraFile } = inRun(io.env, () => readSite(io.cwd));
   const here = dirname(fileURLToPath(import.meta.url));
-  const extra =
-    extraPath !== undefined && existsSync(extraPath) ? parsePatternSet(readJson(extraPath), extraPath) : null;
-  const set = mergePatternSets(parsePatternSet(readJson(join(here, 'patterns.json')), 'patterns.json'), extra);
-  const recorded = out === undefined ? null : readCensus(out);
   const before = recorded?.census ?? null;
-  const after = await takeCensus(process.cwd(), rev, set, new Date());
+  const extra = extraFile === undefined ? null : parsePatternSet(JSON.parse(extraFile.text), extraFile.source);
+  const set = mergePatternSets(parsePatternSet(readJson(join(here, 'patterns.json')), 'patterns.json'), extra);
+  const after = await takeCensus(io.cwd, rev, set, new Date());
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
 
-  if (out !== undefined && changed) {
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, serialize(after));
+  if (changed) {
+    inRun(io.env, () => {
+      writePendingCensus(site, after.sha, serialize(after), extraFile?.text);
+    });
   }
+
+  const previousSha = before !== null && (await hasCommit(io.cwd, before.sha)) ? before.sha : null;
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
   const newDuplicates = diffDuplicates(before, after);
@@ -440,29 +402,31 @@ async function main(argv: readonly string[]): Promise<number> {
   );
   const summary = {
     sha: after.sha,
-    previousSha: before?.sha ?? null,
+    previousSha,
+    behind:
+      previousSha !== null &&
+      previousSha !== after.sha &&
+      (await gitAsync(['merge-base', '--is-ancestor', after.sha, previousSha], io.cwd)).code === 0,
     grew,
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
   };
   const seed = values.seed ? seedList(after) : [];
-  process.stdout.write(`${[formatDelta(deltas), ...duplicateLines, ...seed].join('\n')}\n${JSON.stringify(summary)}\n`);
+  io.out(`${[formatDelta(deltas), ...duplicateLines, ...seed].join('\n')}\n${JSON.stringify(summary)}\n`);
 
   return 0;
 }
 
-// import.meta.url is the real path, so compare real paths: run through a link, the CLI still runs.
-if (
-  process.argv[1] &&
-  realpathSync.native(resolve(process.argv[1])) === realpathSync.native(fileURLToPath(import.meta.url))
-) {
-  main(process.argv.slice(2)).then(
-    (code) => {
-      process.exitCode = code;
-    },
-    (error: unknown) => {
-      process.stderr.write(`census: ${error instanceof Error ? error.message : String(error)}\n`);
-      process.exitCode = 2;
-    },
-  );
+export async function run(argv: readonly string[], io: Io): Promise<number> {
+  try {
+    return await main(argv, io);
+  } catch (error: unknown) {
+    io.err(`census: ${error instanceof Error ? error.message : String(error)}\n`);
+
+    return 2;
+  }
+}
+
+if (isMainModule(import.meta.url)) {
+  process.exitCode = await run(process.argv.slice(2), processIo());
 }

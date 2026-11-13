@@ -2,9 +2,10 @@
 
 This plugin uses [Semantic Versioning](https://semver.org/). Its public interface is: the plugin name; the skill
 names and their slash commands; the agent name; who may invoke each skill; the arguments each skill takes; the
-garden site layout (the `refs/garden/log` ref, the `garden` branch, `.garden/` files, `bed/<class>` bed branches);
-the `refs/garden/log` ref the site shares on the repository's `origin`, and the `lzGardening.share` setting;
-the formats of the event files and `garden.json` in `refs/garden/log`, and of `.garden/census.json` and
+garden site layout (the `refs/garden/log`, `refs/garden/census` and `refs/garden/pending/<sha>` refs, the `garden`
+branch, `.garden/patterns.json`, `bed/<class>` bed branches); the `refs/garden/log` and `refs/garden/census` refs the
+site shares on the repository's `origin`, and the `lzGardening.share` setting; the formats of the event files and
+`garden.json` in `refs/garden/log`, of `census.json` and `patterns.json` in `refs/garden/census`, and of
 `.garden/patterns.json`; and the class ids a queue may hold. A change that makes an existing site, queue or census
 unreadable is a major change.
 
@@ -20,12 +21,16 @@ First release.
   check's file is gone from it. A weed of a class only ever closed as a one-off is queued as new. Carries its own
   permission rules: they allow reading its own files and running its own scripts and read-only git commands; anything
   else falls back to your own settings. The queue script writes only events to the site's `refs/garden/log`, and the
-  census script only `.garden/census.json`, refusing any other output path. Two runs on one machine both land their
-  events; an event file the queue cannot read, or whose text holds a line break or control character, is skipped and
-  named, not fatal. A close exits 1 when it finds nothing open. The site's own git commands run none of your git
-  hooks and sign nothing. The queue is shared through the repository's `origin`: `site.ts open` and the tick's last
-  command, `site.ts sync`, fetch `origin`'s `refs/garden/log`, merge it with the site's events and push the result
-  back, pushing no other ref. Both report the share state in a `shared` field: `local` (no `origin`, or
+  census script only a census it took, to the site's `refs/garden/pending/<sha>`, and takes no output path. Two runs
+  on one machine both land their events; an event file the queue cannot read, or whose text holds a line break or
+  control character, is skipped and named, not fatal. A close exits 1 when it finds nothing open. The site's own git
+  commands run none of your git hooks and sign nothing. The queue and the census are shared through the repository's
+  `origin`: `site.ts open` and the tick's last command, `site.ts sync --census <sha>`, fetch `origin`'s
+  `refs/garden/log` and `refs/garden/census`, merge the log with the site's events, keep the census of the later
+  base commit (read by ancestry in your checkout), record the tick's census unless another clone already read past
+  it, and push both refs back in one atomic push, pushing no ref outside `refs/garden/`. A tick whose base is behind
+  the garden's census says so and stops; a seed pass marks the queue seeded, so no other clone seeds again. Both
+  report the share state in a `shared` field: `local` (no `origin`, or
   `git config lzGardening.share false`), `synced`, `offline` (with git's reason; a fetch or push never asks for
   credentials and gives up after a minute), `read-only` (the push was declined, with git's reason) or `behind` (every
   try lost to another push or another sync of the site; the next run pushes the events). `site.ts sync` also prints how many events it shared and

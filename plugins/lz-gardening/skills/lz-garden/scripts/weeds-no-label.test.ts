@@ -1,16 +1,14 @@
 // Run: node --test weeds-no-label.test.ts
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { test } from 'node:test';
 import { commit, git } from './test-repo.ts';
-import { writeCensus } from './test-site.ts';
+import { writeCensus, writeCensusText } from './test-site.ts';
 import { cli, editCheckByHand, tendedBed } from './test-weeds.ts';
 import { weedId } from './log.ts';
 
 test('a census the label cannot read leaves a regrown weed queued and listed, without the label', (t) => {
   const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
-  writeFileSync(join(garden, '.garden', 'census.json'), '{ not json');
+  writeCensusText(garden, '{ not json');
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
   const listed = cli(dir, ['list', '--class', 'any-type']);

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { eventPath } from './log.ts';
-import { inRun, logRef, mayPointAtARepository, openSite, sync } from './store.ts';
+import { censusRef, inRun, logRef, mayPointAtARepository, openSite, sync, writePendingCensus } from './store.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
@@ -371,10 +371,16 @@ test('a shared log whose commit holds no garden.json stops the sync with an erro
   assert.throws(() => sync(openSite(second.dir), { attempts: 1 }), { message: notAGardenLog });
 });
 
-test('every push a sync starts names refs/garden/log as its only destination', (t) => {
+test('every push a sync starts names only the garden log and the census as destinations', (t) => {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   addWeed(second.dir, 'src/b.ts:1');
+  const base = git(second.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus(
+    second.garden,
+    base,
+    `${JSON.stringify({ rev: 'main', sha: base, takenAt: '', counts: {}, hits: {} })}\n`,
+  );
   const spawned = t.mock.method(childProcess, 'spawnSync');
   syncBuiltinESMExports();
   t.after(() => {
@@ -383,7 +389,7 @@ test('every push a sync starts names refs/garden/log as its only destination', (
   });
 
   sync(openSite(first.dir), { attempts: 1 });
-  sync(openSite(second.dir), { attempts: 1 });
+  sync(openSite(second.dir), { attempts: 1, census: base });
   sync(openSite(first.dir), { attempts: 1 });
   const pushes = spawned.mock.calls
     .map(({ arguments: [, args] }) => (Array.isArray(args) ? args.filter((arg) => typeof arg === 'string') : []))
@@ -391,7 +397,7 @@ test('every push a sync starts names refs/garden/log as its only destination', (
 
   assert.deepEqual(
     pushes.map((args) => args.slice(args.indexOf('--end-of-options') + 2).map((refspec) => refspec.split(':')[1])),
-    [[logRef], [logRef]],
+    [[logRef], [logRef, censusRef]],
   );
 });
 

@@ -5,11 +5,20 @@ import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { renameRetrying, resolveBase } from './site.ts';
-import { logRef } from './store.ts';
+import { censusRef, logRef, pendingCensusRef, writePendingCensus } from './store.ts';
 import type { BaseFacts } from './site.ts';
 import { commit, git, repo } from './test-repo.ts';
-import { writeToLogByHand } from './test-log.ts';
-import { bareRemote, configEnv, planted, sharedPair, writeCensus, site, siteProcess } from './test-site.ts';
+import { logFiles, writeToLogByHand } from './test-log.ts';
+import {
+  bareRemote,
+  configEnv,
+  planted,
+  sharedPair,
+  writeCensus,
+  writeCensusText,
+  site,
+  siteProcess,
+} from './test-site.ts';
 import { cli } from './test-weeds.ts';
 
 // A repository with branches feature/x and main, a hosted origin with no default, nothing recorded and nothing
@@ -54,6 +63,13 @@ test('without an explicit base, the base the last census recorded wins', () => {
       facts({ censusRev: 'release', originHead: 'trunk', branches: ['feature/x', 'main', 'release', 'trunk'] }),
     ),
     'release',
+  );
+});
+
+test("the base a census recorded is read as origin/<name> in a clone with only origin's branch of that name", () => {
+  assert.equal(
+    resolveBase(facts({ censusRev: 'main', branches: ['feature/x'], originBranchNames: ['main'] })),
+    'origin/main',
   );
 });
 
@@ -123,10 +139,7 @@ test('open without a base reports the base the last census recorded', (t) => {
   const { dir, garden } = planted(t);
   git(dir, ['branch', 'release']);
   git(dir, ['switch', '-q', '-c', 'feature/x']);
-  const records = join(garden, '.garden');
-  mkdirSync(records);
-  const census = { rev: 'release', sha: 'abc', takenAt: '2026-11-07T00:00:00.000Z', counts: {}, hits: {} };
-  writeFileSync(join(records, 'census.json'), JSON.stringify(census));
+  writeCensus(garden, 'abc', 'release');
 
   const result = site(dir, ['open']);
 
@@ -359,29 +372,54 @@ test('sync takes no option, so --base, --class and --message are usage errors', 
   assert.deepEqual(statuses, [2, 2, 2]);
 });
 
-test('commit records the .garden folder on the garden branch with the given message', (t) => {
+function pendCensus(dir: string, garden: string): { readonly sha: string; readonly pending: string } {
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  const census = { rev: 'main', sha, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {}, duplicates: {} };
+  writePendingCensus(garden, sha, JSON.stringify(census));
+
+  return { sha, pending: git(garden, ['rev-parse', pendingCensusRef(sha)]) };
+}
+
+test('sync --census records the census taken of that commit as the garden census', (t) => {
   const { dir, garden } = planted(t);
-  writeCensus(garden);
+  const { sha, pending } = pendCensus(dir, garden);
 
-  const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
+  const result = site(dir, ['sync', '--census', sha]);
 
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.summary.get('committed'), true);
-  assert.equal(git(garden, ['log', '-1', '--format=%s']), 'garden: watch abc1234');
-  assert.equal(git(garden, ['ls-tree', '-r', '--name-only', 'garden']), '.garden/census.json\n.gitignore');
+  assert.deepEqual(
+    [result.status, git(garden, ['for-each-ref', '--format=%(objectname)', censusRef, 'refs/garden/pending'])],
+    [0, pending],
+  );
 });
 
-test('commit with nothing new in .garden reports committed false and adds no commit', (t) => {
+test('sync --census takes the commit id census.ts printed, and anything else is a usage error', (t) => {
+  const { dir } = planted(t);
+
+  const statuses = ['main', '../../heads/main', 'A'.repeat(40)].map(
+    (census) => site(dir, ['sync', '--census', census]).status,
+  );
+
+  assert.deepEqual(statuses, [2, 2, 2]);
+});
+
+test('open names a shared census that is not a census, leaves it out, and still exits 0', (t) => {
   const { dir, garden } = planted(t);
-  writeCensus(garden);
-  const first = site(dir, ['commit', '--message', 'garden: watch abc1234']);
-  assert.equal(first.status, 0, first.stderr);
+  const remote = bareRemote(dir);
+  writePendingCensus(garden, 'bad', '{"rev":"main"}\n');
+  git(garden, ['push', '-q', remote, `${pendingCensusRef('bad')}:${censusRef}`]);
+  git(garden, ['update-ref', '-d', pendingCensusRef('bad')]);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.deepEqual([result.status, /refs\/garden\/census on origin is not a census/.test(result.stderr)], [0, true]);
+});
+
+test('commit is no longer a command: sync --census records the census', (t) => {
+  const { dir } = planted(t);
 
   const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
 
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.summary.get('committed'), false);
-  assert.equal(git(garden, ['rev-list', '--count', 'garden']), '2');
+  assert.deepEqual([result.status, /^(usage: |site: Unknown option '--message')/.test(result.stderr)], [2, true]);
 });
 
 test('a mistyped flag is a usage error, not ignored', (t) => {
@@ -414,23 +452,21 @@ test('an argument the command does not take is a usage error, not ignored', (t) 
   const plantedAnyway = existsSync(join(dirname(dir), 'repo.garden'));
   const opened = site(dir, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);
-  writeCensus(join(dirname(dir), 'repo.garden'));
-  const baseOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--base', 'main']);
+  const baseOnSync = site(dir, ['sync', '--census', 'a'.repeat(40), '--base', 'main']);
 
-  assert.deepEqual([branchWithoutFlag.status, messageOnOpen.status, baseOnCommit.status], [2, 2, 2]);
+  assert.deepEqual([branchWithoutFlag.status, messageOnOpen.status, baseOnSync.status], [2, 2, 2]);
   assert.match(branchWithoutFlag.stderr, /usage/);
   assert.equal(plantedAnyway, false);
 });
 
-test('--class belongs to bed alone, and --message to commit alone', (t) => {
+test('--class belongs to bed alone, and --message to no command', (t) => {
   const { dir, garden } = planted(t);
-  writeCensus(garden);
 
   const classOnOpen = site(dir, ['open', '--class', 'any-type', '--base', 'main']);
-  const classOnCommit = site(dir, ['commit', '--message', 'garden: watch', '--class', 'any-type']);
+  const classOnSync = site(dir, ['sync', '--census', 'a'.repeat(40), '--class', 'any-type']);
   const messageOnBed = site(dir, ['bed', '--class', 'any-type', '--base', 'main', '--message', 'garden: watch']);
 
-  assert.deepEqual([classOnOpen.status, classOnCommit.status, messageOnBed.status], [2, 2, 2]);
+  assert.deepEqual([classOnOpen.status, classOnSync.status, messageOnBed.status], [2, 2, 2]);
   assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
 });
 
@@ -588,7 +624,19 @@ test('open on a planted site reads the base without reading the repository confi
         ? args.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
         : undefined,
     ),
-    ['rev-parse', 'rev-parse', 'remote', 'for-each-ref', 'rev-parse', 'cat-file', 'config', 'remote'],
+    [
+      'rev-parse',
+      'rev-parse',
+      'remote',
+      'for-each-ref',
+      'rev-parse',
+      'cat-file',
+      'config',
+      'remote',
+      'rev-parse',
+      'ls-tree',
+      'cat-file',
+    ],
   );
 });
 
@@ -640,41 +688,6 @@ test('open refuses a base whose first character a shell would expand', (t) => {
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
 });
 
-test('commit without a message is a usage error and stages nothing', (t) => {
-  const { dir, garden } = planted(t);
-  writeCensus(garden);
-
-  const result = site(dir, ['commit']);
-
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /--message/);
-  assert.equal(git(garden, ['diff', '--cached', '--name-only']), '');
-});
-
-test('commit before the site exists says to open it first', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-
-  const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
-
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /site\.ts open/);
-});
-
-test('commit in a site that is not on the garden branch is an error and commits nothing', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
-  const garden = join(dirname(dir), 'repo.garden');
-  git(dirname(dir), ['clone', '-q', '--no-checkout', dir, garden]);
-  writeCensus(garden);
-
-  const result = site(dir, ['commit', '--message', 'garden: watch abc1234']);
-
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /garden branch/);
-  assert.equal(git(garden, ['rev-list', '--count', 'main']), '1');
-});
-
 test('open from inside a bed is an error and plants no site there', (t) => {
   const { garden } = planted(t);
   const bed = join(garden, 'beds', 'any-type');
@@ -702,17 +715,28 @@ test('open from a linked worktree uses the site beside the main checkout', (t) =
   assert.equal(existsSync(join(dirname(dir), 'agent-x.garden')), false);
 });
 
-test('open reports the site seeded once the garden branch holds a commit past the plant', (t) => {
+test('sync --census --seeded adds a seed event naming the commit the seed pass read', (t) => {
+  const { dir, garden } = planted(t);
+  const { sha } = pendCensus(dir, garden);
+
+  const result = site(dir, ['sync', '--census', sha, '--seeded']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    [...logFiles(garden).values()].map((event) => [event['op'], event['sha']]),
+    [['seed', sha]],
+  );
+});
+
+test('open reports the site seeded once sync --census --seeded has run, and not before', (t) => {
   const { dir, garden } = planted(t);
   const before = site(dir, ['open', '--base', 'main']);
-  writeCensus(garden);
-  const recorded = site(dir, ['commit', '--message', 'garden: seed abc1234']);
+  const recorded = site(dir, ['sync', '--census', pendCensus(dir, garden).sha, '--seeded']);
   assert.equal(recorded.status, 0, recorded.stderr);
 
   const after = site(dir, ['open', '--base', 'main']);
 
-  assert.equal(before.summary.get('seeded'), false);
-  assert.equal(after.summary.get('seeded'), true);
+  assert.deepEqual([before.summary.get('seeded'), after.summary.get('seeded')], [false, true]);
 });
 
 test('open refuses a folder where the site goes that is not a site, before cloning anything', (t) => {
@@ -744,19 +768,13 @@ test('open plants over the leftover of a plant that stopped part way', (t) => {
   assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%s']), 'garden: plant');
 });
 
-test('a corrupt census does not stop an explicit base, and is named when it is read', (t) => {
+test('a census that is not a census does not stop open, which takes the base it would take with none', (t) => {
   const { dir, garden } = planted(t);
-  const records = join(garden, '.garden');
-  mkdirSync(records);
-  writeFileSync(join(records, 'census.json'), '{"rev":');
+  writeCensusText(garden, '{"rev":');
 
-  const explicit = site(dir, ['open', '--base', 'main']);
   const recorded = site(dir, ['open']);
 
-  assert.equal(explicit.status, 0, explicit.stderr);
-  assert.equal(explicit.summary.get('base'), 'main');
-  assert.equal(recorded.status, 2);
-  assert.match(recorded.stderr, /census\.json/);
+  assert.deepEqual([recorded.status, recorded.summary.get('base')], [0, 'main']);
 });
 
 test('the site runs none of the user hooks and signs nothing, whatever the user set globally', (t) => {
@@ -780,8 +798,7 @@ test('the site runs none of the user hooks and signs nothing, whatever the user 
 
   const opened = site(dir, ['open', '--base', 'main'], env);
   assert.equal(opened.status, 0, opened.stderr);
-  writeCensus(join(dirname(dir), 'repo.garden'));
-  const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
+  const recorded = site(dir, ['sync', '--census', pendCensus(dir, join(dirname(dir), 'repo.garden')).sha], env);
 
   assert.equal(recorded.status, 0, recorded.stderr);
   assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');
@@ -800,8 +817,7 @@ test('the site runs none of the hooks the user set up by name in their git confi
 
   const opened = site(dir, ['open', '--base', 'main'], env);
   assert.equal(opened.status, 0, opened.stderr);
-  writeCensus(join(dirname(dir), 'repo.garden'));
-  const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
+  const recorded = site(dir, ['sync', '--census', pendCensus(dir, join(dirname(dir), 'repo.garden')).sha], env);
   assert.equal(recorded.status, 0, recorded.stderr);
   const bed = site(dir, ['bed', '--class', 'probe', '--base', 'main'], env);
 
@@ -825,8 +841,7 @@ for (const [holds, name] of [
 
     const opened = site(dir, ['open', '--base', 'main'], env);
     assert.equal(opened.status, 0, opened.stderr);
-    writeCensus(join(dirname(dir), 'repo.garden'));
-    const recorded = site(dir, ['commit', '--message', 'garden: watch abc1234'], env);
+    const recorded = site(dir, ['sync', '--census', pendCensus(dir, join(dirname(dir), 'repo.garden')).sha], env);
 
     assert.equal(recorded.status, 0, recorded.stderr);
     assert.equal(existsSync(ran) ? readFileSync(ran, 'utf8') : '', '');

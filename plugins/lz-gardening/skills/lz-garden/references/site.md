@@ -11,22 +11,25 @@ the checkout, write into a **site** instead: a local clone beside the repository
 <parent>/<repo>.garden/          the site: a clone with branch `garden` checked out
   refs/garden/log                (git ref, not a folder) the weeds queue (scripts/weeds.ts): its commits hold
                                  garden.json and one file per event
-  .garden/census.json            the last census (scripts/census.ts)
-  .garden/patterns.json          optional: this repository's own census patterns
+  refs/garden/census             (git ref) the garden's census (scripts/census.ts): one commit holding census.json,
+                                 and patterns.json when the census used extra patterns
+  refs/garden/pending/<sha>      (git ref) a census taken at <sha> and not yet recorded
+  .garden/patterns.json          optional, not committed: this repository's own census patterns
   .gitignore                     ignores /beds/
   beds/<class>/                  a tend pass's worktree on branch bed/<class>
 ```
 
-`garden` is an orphan branch: it holds only `.garden/` and `.gitignore`, never the repository's code, so its history
-is the gardener's record and nothing else. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
+`garden` is an orphan branch: it holds only `.gitignore`, never the repository's code. The census is not on it: each
+census is its own commit with no parent, written to `refs/garden/census`. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
 branch beside `garden`) start from the base branch and carry one proposed bed change each. A human lands a bed by
 fetching it into the repository with `git fetch ../<repo>.garden bed/<class>` and merging it the way the repository
 lands work.
 
-The garden log is the one thing the site shares: `site.ts open` and `site.ts sync` fetch the repository's `origin`
-`refs/garden/log` into the site's `refs/garden-shared/log`, merge it with the site's own log, and push the result
-back to `origin` `refs/garden/log`. They read the URLs from the checkout on every run (`git remote get-url origin`
-to fetch, `--push` to push), so the checkout itself fetches nothing and gains no refs, and they push no other ref.
+The site shares two refs, the garden log and the census: `site.ts open` and `site.ts sync` fetch the repository's
+`origin` `refs/garden/log` and `refs/garden/census` into the site's `refs/garden-shared/`, merge the log with the
+site's own log, settle the census (below), and push both back to `origin` in one atomic push. They read the URLs from
+the checkout on every run (`git remote get-url origin` to fetch, `--push` to push), so the checkout itself fetches
+nothing and gains no refs, and they push no ref outside `refs/garden/`.
 `git config lzGardening.share false` in the checkout keeps the garden local. Events are never edited or deleted, so
 the merge is the union of both logs' event files: the commit takes the site's log and adds the shared log's files.
 A file both logs hold with different content keeps the shared content and is reported as a conflict; a shared file
@@ -35,7 +38,14 @@ log in a format other than this version's stops the sync with exit 2, naming bot
 holding `garden.json` stops it with exit 2 too, saying to delete or fix it on `origin`. Because every site holds
 the whole log, a site made again, or one whose remote ref was deleted, gets the log back on its next sync.
 
-## Open, sync, commit
+The census is decided by the ancestry of its base commit, read in the checkout. A sync takes the shared census over
+the site's unless the site's census is of a commit that descends from the shared one's; a shared census that is not
+a census is left out, named on stderr, and replaced by the next census pushed. `sync --census <sha>` then records the
+census `census.ts` took at `<sha>`, unless the site's census is of `<sha>` or a commit that descends from it: then
+another run already read past it, and the taken census is dropped. A push that loses the shared census to another
+clone fetches again and decides again.
+
+## Open, sync
 
 `scripts/site.ts` does all of the site's git work, run from the repository's checkout. Run from a linked worktree
 of the repository, it uses the one site beside the main checkout:
@@ -46,14 +56,16 @@ of the repository, it uses the one site beside the main checkout:
   writer id in the site's `lzGardening.writer` setting. On later runs it plants only what the site lacks of
   `refs/garden/log` and the writer id, and leaves the rest as it is. Then it syncs the garden log once, with no
   wait, which also pushes events a run appended but never shared. It prints JSON with `site`, `created`, `base`,
-  `seeded` (whether the `garden` branch holds a commit past the first one) and `shared` (the share state, below). It
+  `seeded` (whether the queue holds the event a seed pass records, after the sync) and `shared` (the share state,
+  below). It
   exits 2 when the repository has no `user.name` or `user.email`, so the gardener never commits under a default
   identity, and when a repository at `../<repo>.garden` has no `garden` branch, writing nothing into it.
-- `site.ts sync` syncs the garden log, trying up to five times. It prints JSON with `shared` and `events` (how many
-  of the site's events the push shared), plus `reason` (git's message) when there is one and `conflicts` (the files
-  whose shared content it kept) when there are any. It exits 0 in every share state.
-- `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
-  `committed`, false when nothing changed.
+- `site.ts sync [--census <sha> [--seeded]]` syncs the garden log and census, trying up to five times. With
+  `--census`, it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares
+  nothing (a `local` or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once. It
+  prints JSON with `shared` and `events` (how many of the site's events the push shared), plus `reason` (git's
+  message) when there is one and `conflicts` (the files whose shared content it kept) when there are any. It exits 0
+  in every share state, and 2 when `<sha>` is not a full commit id or `--seeded` comes without `--census`.
 
 The share states:
 
@@ -73,7 +85,9 @@ Every git command `site.ts` runs, from the clone to each commit in the site, run
 signs nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick
 that runs unattended.
 
-The census is written by its own script, through an `--out` path into the site. `weeds.ts`, run from the
+`census.ts --rev <base>`, run from the repository's checkout, reads the site's census and writes the census it takes
+to `refs/garden/pending/<sha>` when it differs from the site's census in more than the time it was taken; `sync --census <sha>` records it. A
+`refs/garden/census` that is not a census stops it with exit 2, naming the command that deletes it. `weeds.ts`, run from the
 repository's checkout, finds the site beside it and appends events to `refs/garden/log` with git plumbing only: a
 commit per command, moved onto the ref only if no other run moved it first, so two runs on one machine both land. An
 entry in the log it cannot read (an event file that does not parse or whose text holds a line break or control
@@ -84,7 +98,7 @@ exit 2, naming the file.
 ## The base branch
 
 The base is the branch work lands on. `site.ts open` takes, in order: the `--base` argument; the `rev` recorded
-in the site's `.garden/census.json`; the repository's default branch (`origin/HEAD`); `main` when that branch
+in the site's census (stored without `origin/`, so each clone finds the branch its own way); the repository's default branch (`origin/HEAD`); `main` when that branch
 exists; else `master`. A repository cloned from a local path is the exception: its `origin/HEAD` names whatever
 the source had checked out when it was cloned, often a feature or milestone branch in flight, so `open` passes over
 it for `main` or `master`.
@@ -155,5 +169,5 @@ with: unlink `node_modules` first (`rm "<bed>/node_modules"`, no `-r`; on Window
 or the base holds a commit that carries the same change. Deleting the whole site loses the queue events it never
 shared (a `local` garden shares none of them); the next `site.ts open` brings back the rest from `origin`.
 
-One gardener per site: two sessions looping on one repository both land their queue events, but race on the census
-commits on `garden`.
+Two sessions looping on one repository, in one site or in clones on different machines, both land their queue
+events; the census they record is the one of the later base commit.

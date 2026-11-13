@@ -2,7 +2,10 @@
 // statuses. Every clone holds a replica; replicas merge by union, so the replay must not depend on the order the
 // events arrive in. No I/O here: the store reads and writes the events.
 import { createHash, randomUUID } from 'node:crypto';
-import { isRecord } from './census.ts';
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
 

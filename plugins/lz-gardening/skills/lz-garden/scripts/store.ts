@@ -4,8 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isRecord } from './census.ts';
-import { eventPath, eventPathPattern, parseEvent, stamp } from './log.ts';
+import { eventPath, eventPathPattern, isRecord, parseEvent, stamp } from './log.ts';
 import type { EventDraft, GardenEvent } from './log.ts';
 
 interface Run {
@@ -346,7 +345,7 @@ function blobsAt(
   readonly texts: ReadonlyMap<string, string>;
   readonly skipped: readonly Skipped[];
 } {
-  const listed = treeEntries(git(site, ['ls-tree', '-r', '-z', commit]));
+  const listed = treeEntries(git(site, ['ls-tree', '-r', '-z', commit], { readsOnly: true }));
   const entries = listed.filter(({ type }) => type === 'blob').map(({ oid, path }) => [oid, path] as const);
   const skipped: Skipped[] = listed
     .filter(({ type }) => type !== 'blob')
@@ -437,8 +436,8 @@ function readReplica(site: string, tip: string): Replica {
   };
 }
 
-export function readLog(site: Site): Replica {
-  const tip = optionalGit(site.path, ['rev-parse', '--verify', '--quiet', logRef]);
+export function readLog(site: Pick<Site, 'path'>): Replica {
+  const tip = optionalGit(site.path, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true });
 
   if (tip === undefined) {
     throw new Error(`no garden log at ${site.path}; run site.ts open first`);
@@ -450,6 +449,8 @@ export function readLog(site: Site): Replica {
 export const shareKey = 'lzGardening.share';
 
 const sharedLogRef = 'refs/garden-shared/log';
+
+const sharedCensusRef = 'refs/garden-shared/census';
 
 // git knows the empty tree of either object format without holding it.
 function emptyTreeLike(oid: string): string {
@@ -486,12 +487,14 @@ export interface SyncResult {
   readonly pushedEvents: number;
   readonly conflicts: readonly string[];
   readonly skipped: readonly string[];
+  readonly sharedCensusIgnored?: boolean;
 }
 
 export interface SyncOptions {
   readonly attempts: number;
   readonly wait?: (ms: number) => void;
   readonly timeoutMs?: number;
+  readonly census?: string | undefined;
 }
 
 function reasonOf(stderr: string): string {
@@ -519,14 +522,17 @@ interface Merged {
   readonly skipped: readonly string[];
 }
 
-function mergeOnce(site: string): Merged | 'lost to another writer' {
-  const [shared, local = '', sharedFormatFile, localFormatFile] = objectIds(site, [
-    sharedLogRef,
-    logRef,
-    `${sharedLogRef}^{commit}:garden.json`,
-    `${logRef}:garden.json`,
-  ]);
+interface Tips {
+  readonly shared: string | undefined;
+  readonly local: string;
+  readonly sharedFormatFile: string | undefined;
+  readonly localFormatFile: string | undefined;
+}
 
+function mergeOnce(
+  site: string,
+  { shared, local, sharedFormatFile, localFormatFile }: Tips,
+): Merged | 'lost to another writer' {
   if (shared !== undefined) {
     if (sharedFormatFile === undefined) {
       throw new Error(
@@ -591,12 +597,25 @@ function moveLogIfStill(site: string, to: string, from: string): boolean {
 // Stryker disable next-line LzJsNumericLiteral: how many tries a merge spends is policy, as with appendTries
 const mergeTries = 50;
 
-function mergeShared(site: string): Merged {
+interface CensusTips {
+  readonly local: string | undefined;
+  readonly shared: string | undefined;
+}
+
+function mergeShared(site: string): Merged & { readonly census: CensusTips } {
   for (let attempt = 1; ; attempt += 1) {
-    const merged = mergeOnce(site);
+    const [shared, local = '', sharedFormatFile, localFormatFile, localCensus, sharedCensus] = objectIds(site, [
+      sharedLogRef,
+      logRef,
+      `${sharedLogRef}^{commit}:garden.json`,
+      `${logRef}:garden.json`,
+      censusRef,
+      sharedCensusRef,
+    ]);
+    const merged = mergeOnce(site, { shared, local, sharedFormatFile, localFormatFile });
 
     if (merged !== 'lost to another writer') {
-      return merged;
+      return { ...merged, census: { local: localCensus, shared: sharedCensus } };
     }
 
     if (attempt >= mergeTries) {
@@ -609,8 +628,10 @@ function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-// A push lost to another writer: a fast-forward refused by this git, or the remote's ref moved or locked under it.
-const lostRace = /\t(?:\[rejected\]|\[remote rejected\] \(.*(?:lock|old value|failed to update))/;
+// A push lost to another writer: a fast-forward or lease refused by this git, or the remote's ref moved or locked
+// under it, which an atomic push reports as a failed transaction.
+const lostRace =
+  /\t(?:\[rejected\]|\[remote rejected\] \(.*(?:lock|old value|failed to update|atomic transaction failed))/;
 
 function rejected(porcelain: string): boolean {
   return porcelain.split('\n').some((line) => line.startsWith('!\t') && lostRace.test(line));
@@ -631,9 +652,24 @@ function networkGit(site: string, args: readonly string[], timeoutMs: number): S
   );
 }
 
-export function sync(
+export function sync(site: Pick<Site, 'checkout' | 'path'>, options: SyncOptions): SyncResult {
+  const result = syncWithOrigin(site, options);
+
+  if (options.census !== undefined) {
+    finishPendingCensus(site, options.census);
+  }
+
+  return result;
+}
+
+function finishPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): void {
+  recordPendingCensus(site, pendingSha);
+  git(site.path, ['update-ref', '-d', pendingCensusRef(pendingSha)]);
+}
+
+function syncWithOrigin(
   site: Pick<Site, 'checkout' | 'path'>,
-  { attempts, wait = sleep, timeoutMs = networkTimeoutMs }: SyncOptions,
+  { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha }: SyncOptions,
 ): SyncResult {
   const fetchUrl = optionalGit(site.checkout, ['remote', 'get-url', 'origin'], { readsOnly: true });
 
@@ -647,7 +683,7 @@ export function sync(
   const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const result = syncOnce(site.path, fetchUrl, pushUrl, timeoutMs);
+    const result = syncOnce(site, fetchUrl, pushUrl, timeoutMs, pendingSha);
 
     if (result !== 'lost to another writer') {
       return result;
@@ -662,10 +698,11 @@ export function sync(
 }
 
 function syncOnce(
-  site: string,
+  { checkout, path: site }: Pick<Site, 'checkout' | 'path'>,
   fetchUrl: string,
   pushUrl: string,
   timeoutMs: number,
+  pendingSha: string | undefined,
 ): SyncResult | 'lost to another writer' {
   const fetched = networkGit(
     site,
@@ -683,15 +720,27 @@ function syncOnce(
       : { state: 'offline', reason: reasonOf(fetched.stderr), ...nothingShared };
   }
 
-  const { upToDate, ...merged } = mergeShared(site);
+  const { upToDate, census: censusTips, ...mergedLog } = mergeShared(site);
+  const settled = settleCensus({ checkout, path: site }, censusTips, pendingSha);
+  const merged = settled.ignored ? { ...mergedLog, sharedCensusIgnored: true } : mergedLog;
+  const censusAhead = settled.local !== undefined && settled.local !== censusTips.shared;
 
-  if (upToDate) {
+  if (upToDate && !censusAhead) {
     return { state: 'synced', ...merged };
   }
 
   const pushed = networkGit(
     site,
-    ['push', '--porcelain', '--end-of-options', pushUrl, `${logRef}:${logRef}`],
+    [
+      'push',
+      '--porcelain',
+      '--atomic',
+      ...(censusAhead ? [leaseOnFetchedCensus(censusTips.shared)] : []),
+      '--end-of-options',
+      pushUrl,
+      ...(upToDate ? [] : [`${logRef}:${logRef}`]),
+      ...(censusAhead ? [`${censusRef}:${censusRef}`] : []),
+    ],
     timeoutMs,
   );
 
@@ -706,6 +755,202 @@ function syncOnce(
   return rejected(pushed.stdout)
     ? 'lost to another writer'
     : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0 };
+}
+
+export const censusRef = 'refs/garden/census';
+
+function leaseOnFetchedCensus(fetched: string | undefined): string {
+  return `--force-with-lease=${censusRef}:${fetched ?? ''}`;
+}
+
+export function pendingCensusRef(sha: string): string {
+  return `refs/garden/pending/${sha}`;
+}
+
+export interface Census {
+  readonly rev: string;
+  readonly sha: string;
+  readonly takenAt: string;
+  readonly counts: Readonly<Record<string, number>>;
+  readonly hits: Readonly<Record<string, readonly string[]>>;
+  readonly duplicates: Readonly<Record<string, readonly string[]>>;
+}
+
+export function parseCensus(json: unknown): Census | null {
+  if (!isRecord(json) || !isRecord(json['counts']) || !isRecord(json['hits'])) {
+    return null;
+  }
+
+  const { rev, sha, takenAt } = json;
+
+  if (typeof rev !== 'string' || typeof sha !== 'string' || typeof takenAt !== 'string') {
+    return null;
+  }
+
+  const counts: Record<string, number> = {};
+
+  for (const [id, count] of Object.entries(json['counts'])) {
+    if (typeof count === 'number') {
+      counts[id] = count;
+    }
+  }
+
+  return {
+    rev,
+    sha,
+    takenAt,
+    counts,
+    hits: stringLists(json['hits']),
+    duplicates: stringLists(json['duplicates']),
+  };
+}
+
+function stringLists(value: unknown): Record<string, string[]> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, list]) =>
+      Array.isArray(list) ? [[key, list.filter((item): item is string => typeof item === 'string')] as const] : [],
+    ),
+  );
+}
+
+export interface StoredCensus {
+  readonly census: Census;
+  readonly text: string;
+  readonly patterns: string | undefined;
+}
+
+export function writePendingCensus(site: string, sha: string, text: string, patterns?: string): void {
+  const now = `@${String(Math.floor(Date.now() / 1000))}`;
+  const stream = [
+    `commit ${pendingCensusRef(sha)}\n`,
+    identity(site, 'author', now),
+    identity(site, 'committer', now),
+    data('garden: census\n'),
+    `M 100644 inline census.json\n${data(text)}`,
+    ...(patterns === undefined ? [] : [`M 100644 inline patterns.json\n${data(patterns)}`]),
+    'done\n',
+  ].join('');
+  git(site, ['fast-import', '--quiet', '--done', '--force', '--date-format=rfc2822'], { input: stream });
+}
+
+function blobTexts(site: string, names: readonly string[]): readonly (string | undefined)[] {
+  const batch = spawnSync('git', ['cat-file', '--batch'], {
+    cwd: site,
+    env: gitEnv(site),
+    input: names.map((name) => `${name}\n`).join(''),
+    maxBuffer: Infinity,
+  });
+  const output = batch.stdout;
+  let at = 0;
+
+  return names.map(() => {
+    const headerEnd = output.indexOf('\n', at);
+    const [, type, size] = output.subarray(at, headerEnd).toString().split(' ');
+
+    if (type !== 'blob') {
+      at = headerEnd + 1;
+
+      return undefined;
+    }
+
+    const start = headerEnd + 1;
+    const end = start + Number(size);
+    at = end + 1;
+
+    return output.subarray(start, end).toString();
+  });
+}
+
+export function readCensusAt(site: string, ref: string): StoredCensus | null | 'not a census' {
+  const [text, patterns] = blobTexts(site, [`${ref}:census.json`, `${ref}:patterns.json`]);
+
+  if (text === undefined) {
+    return null;
+  }
+
+  let json: unknown;
+
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return 'not a census';
+  }
+
+  const census = parseCensus(json);
+
+  return census === null ? 'not a census' : { census, text, patterns };
+}
+
+function isAncestorInCheckout(site: Pick<Site, 'checkout'>, ancestor: string, descendant: string): boolean {
+  return gitSucceeds(site.checkout, ['merge-base', '--is-ancestor', ancestor, descendant], { readsOnly: true });
+}
+
+function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): string | undefined {
+  const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
+  const current = local === undefined ? undefined : censusIn(site.path, local);
+
+  if (pending === undefined || (current !== undefined && isAncestorInCheckout(site, pendingSha, current.sha))) {
+    return local;
+  }
+
+  git(site.path, ['update-ref', censusRef, pending, local ?? '']);
+
+  return pending;
+}
+
+function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string | undefined, theirs: Census): boolean {
+  const mine = local === undefined ? undefined : censusIn(site.path, local);
+
+  return mine !== undefined && mine.sha !== theirs.sha && isAncestorInCheckout(site, theirs.sha, mine.sha);
+}
+
+function censusIn(site: string, ref: string): Census | undefined {
+  const read = readCensusAt(site, ref);
+
+  return typeof read === 'object' && read !== null ? read.census : undefined;
+}
+
+function settleCensus(
+  site: Pick<Site, 'checkout' | 'path'>,
+  tips: CensusTips,
+  pendingSha: string | undefined,
+): Settled {
+  const adopted = adoptSharedCensus(site, tips);
+
+  if (pendingSha === undefined) {
+    return adopted;
+  }
+
+  return { ...adopted, local: recordPendingCensus(site, pendingSha) };
+}
+
+interface Settled {
+  readonly local: string | undefined;
+  readonly ignored: boolean;
+}
+
+function adoptSharedCensus(site: Pick<Site, 'checkout' | 'path'>, { local, shared }: CensusTips): Settled {
+  if (shared === undefined || shared === local) {
+    return { local, ignored: false };
+  }
+
+  const theirs = censusIn(site.path, shared);
+
+  if (theirs === undefined) {
+    return { local, ignored: true };
+  }
+
+  if (localCensusIsNewer(site, local, theirs)) {
+    return { local, ignored: false };
+  }
+
+  git(site.path, ['update-ref', censusRef, shared, local ?? '']);
+
+  return { local: shared, ignored: false };
 }
 
 // Stryker disable next-line LzJsNumericLiteral: how many tries a writer spends is policy; the bound is tested through append's tries

@@ -2,19 +2,45 @@
 // Each test builds a throwaway git repository and counts weeds at one of its commits.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { diffCensus, mergePatternSets, parseCensus, parseGrep, parsePatternSet, takeCensus } from './census.ts';
+import { diffCensus, mergePatternSets, parseGrep, parsePatternSet, run, takeCensus } from './census.ts';
+import { isRecord } from './log.ts';
 import type { PatternSet } from './census.ts';
+import { censusRef, openSite, parseCensus, pendingCensusRef, sync, writePendingCensus } from './store.ts';
 import { commit, git, repo } from './test-repo.ts';
+import { planted } from './test-site.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'census.ts');
 const now = new Date('2026-11-07T12:00:00.000Z');
 
-function census(dir: string, args: readonly string[]): { status: number | null; stdout: string; stderr: string } {
+interface Ran {
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+function censusCli(dir: string, args: readonly string[]): Ran {
   return spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: 'utf8' });
+}
+
+async function census(dir: string, args: readonly string[]): Promise<Ran> {
+  let stdout = '';
+  let stderr = '';
+  const status = await run(args, {
+    cwd: dir,
+    env: process.env,
+    out: (text) => {
+      stdout += text;
+    },
+    err: (text) => {
+      stderr += text;
+    },
+  });
+
+  return { status, stdout, stderr };
 }
 
 const set: PatternSet = {
@@ -175,19 +201,61 @@ test('git grep output keeps colons inside the matched text', () => {
   ]);
 });
 
-test('the CLI names a helper that became duplicated since the last census, not one that already was', (t) => {
-  const dir = repo(t);
+test('the CLI writes its census to the pending ref of the commit the rev names, not of the rev', async (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+
+  const result = await census(dir, ['--rev', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    [
+      git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending']),
+      parseCensus(JSON.parse(git(garden, ['show', `${pendingCensusRef(sha)}:census.json`])))?.sha,
+    ],
+    [pendingCensusRef(sha), sha],
+  );
+});
+
+function summaryOf(stdout: string): ReadonlyMap<string, unknown> {
+  const parsed: unknown = JSON.parse(stdout.trim().split('\n').at(-1) ?? '');
+
+  return new Map(isRecord(parsed) ? Object.entries(parsed) : []);
+}
+
+async function takeAndRecord(dir: string, args: readonly string[] = []): Promise<Ran> {
+  const result = await census(dir, ['--rev', 'HEAD', ...args]);
+  assert.equal(result.status, 0, result.stderr);
+  const sha = summaryOf(result.stdout).get('sha');
+  assert.equal(typeof sha, 'string');
+  sync(openSite(dir), { attempts: 1, census: String(sha) });
+
+  return result;
+}
+
+test('a census in a garden that is not shared reads the census the last tick recorded as the previous one', async (t) => {
+  const { dir } = planted(t);
+  git(dir, ['config', 'lzGardening.share', 'false']);
+  const first = summaryOf((await takeAndRecord(dir)).stdout).get('sha');
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(summaryOf(second.stdout).get('previousSha'), first);
+});
+
+test('the CLI names a helper that became duplicated since the last census, not one that already was', async (t) => {
+  const { dir } = planted(t);
   commit(dir, {
     'src/a.ts': 'export function isRecord() {}\n',
     'src/x.ts': 'export const toKey = (x) => x;\n',
     'src/y.ts': 'export const toKey = (x) => x;\n',
   });
-  const out = join(dir, '.garden', 'census.json');
-  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
-  assert.equal(first.status, 0, first.stderr);
+  await takeAndRecord(dir);
   commit(dir, { 'src/b.ts': 'function isRecord() {}\n' });
 
-  const second = census(dir, ['--rev', 'HEAD', '--out', out]);
+  const second = await census(dir, ['--rev', 'HEAD']);
 
   assert.equal(second.status, 0, second.stderr);
   const summary: unknown = JSON.parse(second.stdout.trim().split('\n').at(-1) ?? '');
@@ -196,8 +264,8 @@ test('the CLI names a helper that became duplicated since the last census, not o
   assert.match(second.stdout, /^\+ duplicate isRecord: src\/a\.ts, src\/b\.ts$/m);
 });
 
-test('--seed prints the seed list: files per pattern by hit count, and every duplicate name', (t) => {
-  const dir = repo(t);
+test('--seed prints the seed list: files per pattern by hit count, and every duplicate name', async (t) => {
+  const { dir } = planted(t);
   commit(dir, {
     'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n',
     'src/b.ts': '// eslint-disable-next-line\n// eslint-disable-next-line\nconst b = 1;\n',
@@ -205,7 +273,7 @@ test('--seed prints the seed list: files per pattern by hit count, and every dup
     'src/y.ts': 'export const toKey = (x) => x;\n',
   });
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, '.garden', 'census.json'), '--seed']);
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const seedLines = result.stdout.split('\n').filter((line) => line.startsWith('= '));
@@ -216,16 +284,16 @@ test('--seed prints the seed list: files per pattern by hit count, and every dup
   ]);
 });
 
-test('--seed adds exactly the seed list to the output', (t) => {
-  const dir = repo(t);
+test('--seed adds exactly the seed list to the output', async (t) => {
+  const { dir } = planted(t);
   commit(dir, {
     'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n',
     'src/x.ts': 'export const toKey = (x) => x;\n',
     'src/y.ts': 'export const toKey = (x) => x;\n',
   });
 
-  const plain = census(dir, ['--rev', 'HEAD']);
-  const seeded = census(dir, ['--rev', 'HEAD', '--seed']);
+  const plain = await census(dir, ['--rev', 'HEAD']);
+  const seeded = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(seeded.status, 0, seeded.stderr);
   const lines = seeded.stdout.split('\n');
@@ -236,18 +304,18 @@ test('--seed adds exactly the seed list to the output', (t) => {
   );
 });
 
-test('a census with no --rev is a usage error that names the flags', (t) => {
+test('a census with no --rev is a usage error that names the flags', async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
 
-  const result = census(dir, ['--seed']);
+  const result = await census(dir, ['--seed']);
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /^usage: census\.ts --rev <rev>/);
 });
 
-test('the seed list keeps a colon inside a file path', (t) => {
-  const dir = repo(t);
+test('the seed list keeps a colon inside a file path', async (t) => {
+  const { dir } = planted(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
   const blob = spawnSync('git', ['hash-object', '-w', '--stdin'], {
     cwd: dir,
@@ -258,20 +326,20 @@ test('the seed list keeps a colon inside a file path', (t) => {
   git(dir, ['update-index', '--add', '--cacheinfo', `100644,${blob.stdout.trim()},src/a:b.ts`]);
   git(dir, ['commit', '-q', '-m', 'colon']);
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dirname(dir), '.garden', 'census.json'), '--seed']);
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^= \[eslint-disable\] src\/a:b\.ts 1$/m);
 });
 
-test('the seed list names at most 20 files per pattern, keeping those with the most hits', (t) => {
-  const dir = repo(t);
+test('the seed list names at most 20 files per pattern, keeping those with the most hits', async (t) => {
+  const { dir } = planted(t);
   const files = Object.fromEntries(
     Array.from({ length: 21 }, (_, index) => [`src/f${String(index).padStart(2, '0')}.ts`, '// eslint-disable\n']),
   );
   commit(dir, { ...files, 'src/f20.ts': '// eslint-disable\n// eslint-disable\n' });
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, '.garden', 'census.json'), '--seed']);
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const seedLines = result.stdout.split('\n').filter((line) => line.startsWith('= [eslint-disable]'));
@@ -280,18 +348,164 @@ test('the seed list names at most 20 files per pattern, keeping those with the m
   assert.ok(!seedLines.includes('= [eslint-disable] src/f19.ts 1'));
 });
 
-test('a mistyped flag is a usage error, not ignored', (t) => {
+test('a mistyped flag is a usage error, not ignored', async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
 
-  const result = census(dir, ['--rev', 'HEAD', '--ot', join(dir, '.garden', 'census.json')]);
+  const result = await census(dir, ['--rev', 'HEAD', '--ot', join(dir, '.garden', 'census.json')]);
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /--ot/);
 });
 
-test('the seed list names at most 30 duplicate names, the most widely defined first, and counts the rest', (t) => {
+test('--out and --patterns are not options: the census goes to the garden, and its patterns come from there', async (t) => {
+  const { dir, garden } = planted(t);
+  const file = join(garden, '.garden', 'census.json');
+
+  const results = [
+    await census(dir, ['--rev', 'HEAD', '--out', file]),
+    await census(dir, ['--rev', 'HEAD', '--patterns', file]),
+  ];
+
+  assert.deepEqual(
+    results.map((result) => [result.status, /Unknown option '--(out|patterns)'/.test(result.stderr)]),
+    [
+      [2, true],
+      [2, true],
+    ],
+  );
+});
+
+const todoPatterns = `${JSON.stringify({ patterns: [{ id: 'todo', regex: 'TODO' }] })}\n`;
+
+function writeSitePatterns(garden: string, text = todoPatterns): void {
+  mkdirSync(join(garden, '.garden'), { recursive: true });
+  writeFileSync(join(garden, '.garden', 'patterns.json'), text);
+}
+
+test("the census counts the extra patterns in the site's .garden/patterns.json", async (t) => {
+  const { dir, garden } = planted(t);
+  commit(dir, { 'src/t.ts': '// TODO: one\n' });
+  writeSitePatterns(garden);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^todo +1 {2}new$/m);
+});
+
+test("a census taken with the site's extra patterns carries them, so a clone without the file counts the same", async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  assert.equal(git(garden, ['show', `${pendingCensusRef(sha)}:patterns.json`]), todoPatterns.trim());
+});
+
+test('a site with no .garden/patterns.json counts with the extra patterns the previous census carried', async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden);
+  await takeAndRecord(dir);
+  rmSync(join(garden, '.garden', 'patterns.json'));
+  commit(dir, { 'src/t.ts': '// TODO: one\n' });
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^todo +1 {2}\+1$/m);
+});
+
+test('a census that differs from the recorded one in nothing but the time taken leaves nothing pending', async (t) => {
+  const { dir, garden } = planted(t);
+  await takeAndRecord(dir);
+
+  const again = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(git(garden, ['for-each-ref', 'refs/garden/pending']), '');
+});
+
+test('a first census is not behind the garden', async (t) => {
+  const { dir } = planted(t);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summaryOf(result.stdout).get('behind'), false);
+});
+
+test('a census of a commit the recorded census descends from is behind the garden', async (t) => {
+  const { dir } = planted(t);
+  const older = git(dir, ['rev-parse', 'HEAD']);
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  await takeAndRecord(dir);
+
+  const result = await census(dir, ['--rev', older]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summaryOf(result.stdout).get('behind'), true);
+});
+
+function recordByHand(garden: string, sha: string, text: string): void {
+  writePendingCensus(garden, sha, text);
+  git(garden, ['update-ref', censusRef, pendingCensusRef(sha)]);
+  git(garden, ['update-ref', '-d', pendingCensusRef(sha)]);
+}
+
+test('a previous census of a commit this checkout lacks reports no previous sha, so the tick reads no range', async (t) => {
+  const { dir, garden } = planted(t);
+  const unknown = 'f'.repeat(40);
+  recordByHand(
+    garden,
+    unknown,
+    JSON.stringify({ rev: 'main', sha: unknown, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {} }),
+  );
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summaryOf(result.stdout).get('previousSha'), null);
+});
+
+test('a census in a repository with no garden site is refused, saying to open the site first', (t) => {
   const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+
+  const result = censusCli(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual([result.status, /no garden site at .*; run site\.ts open first/.test(result.stderr)], [2, true]);
+});
+
+test('a recorded census that is not a census is refused by name and left as it was', async (t) => {
+  const { dir, garden } = planted(t);
+  recordByHand(garden, git(dir, ['rev-parse', 'HEAD']), '{"rev": 1}\n');
+  const recorded = git(garden, ['rev-parse', censusRef]);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual(
+    [result.status, /refs\/garden\/census in .* is not a census; delete it/.test(result.stderr)],
+    [2, true],
+  );
+  assert.equal(git(garden, ['rev-parse', censusRef]), recorded);
+});
+
+test('a census of origin/main records the base as main, for each clone to resolve on its own', async (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  git(dir, ['update-ref', 'refs/remotes/origin/main', sha]);
+
+  const result = await census(dir, ['--rev', 'origin/main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(parseCensus(JSON.parse(git(garden, ['show', `${pendingCensusRef(sha)}:census.json`])))?.rev, 'main');
+});
+
+test('the seed list names at most 30 duplicate names, the most widely defined first, and counts the rest', async (t) => {
+  const { dir } = planted(t);
   const files = Object.fromEntries(
     Array.from({ length: 32 }, (_, index) => index).flatMap((index) => [
       [`src/a${String(index)}.ts`, `function helper${String(index)}() {}\n`] as const,
@@ -300,7 +514,7 @@ test('the seed list names at most 30 duplicate names, the most widely defined fi
   );
   commit(dir, { ...files, 'src/c.ts': 'function helper31() {}\n' });
 
-  const result = census(dir, ['--rev', 'HEAD', '--out', join(dir, '.garden', 'census.json'), '--seed']);
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const listed = result.stdout.split('\n').filter((line) => line.startsWith('= duplicate '));
@@ -309,112 +523,29 @@ test('the seed list names at most 30 duplicate names, the most widely defined fi
   assert.match(result.stdout, /^2 more duplicate names not listed$/m);
 });
 
-test('the CLI creates the folder it writes the census into', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), 'repo.garden', '.garden', 'census.json');
-
-  const result = census(dir, ['--rev', 'HEAD', '--out', out]);
-
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.sha, git(dir, ['rev-parse', 'HEAD']));
-});
-
-test('the CLI refuses an --out outside a .garden folder and writes nothing', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), 'profile');
-
-  const result = census(dir, ['--rev', 'HEAD', '--out', out]);
-
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /\.garden\/census\.json/);
-  assert.equal(existsSync(out), false);
-});
-
-test('the CLI refuses an --out that only starts with .garden/census.json', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), '.garden', 'census.json.sh');
-
-  const result = census(dir, ['--rev', 'HEAD', '--out', out]);
-
-  assert.equal(result.status, 2);
-  assert.equal(existsSync(out), false);
-});
-
-test('a census file that is not a census is refused by name and left as it was', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), '.garden', 'census.json');
-
-  mkdirSync(dirname(out));
-
-  for (const text of ['{', '{"rev": 1}\n']) {
-    writeFileSync(out, text);
-
-    const result = census(dir, ['--rev', 'HEAD', '--out', out]);
-
-    assert.equal(result.status, 2);
-    assert.match(result.stderr, /census\.json is not a census; remove it/);
-    assert.equal(readFileSync(out, 'utf8'), text);
-  }
-});
-
-test('a census of the commit already recorded leaves the census file as it was', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), '.garden', 'census.json');
-  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
-  assert.equal(first.status, 0, first.stderr);
-  const recorded = readFileSync(out, 'utf8');
-
-  const second = census(dir, ['--rev', 'HEAD', '--out', out]);
-
-  assert.equal(second.status, 0, second.stderr);
-  assert.equal(readFileSync(out, 'utf8'), recorded);
-});
-
-test('--seed prints the seed list even when a census was recorded before, and only then', (t) => {
-  const dir = repo(t);
+test('--seed prints the seed list even when a census was recorded before, and only then', async (t) => {
+  const { dir } = planted(t);
   commit(dir, { 'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n' });
-  const out = join(dirname(dir), '.garden', 'census.json');
-  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
+  const first = await takeAndRecord(dir);
 
-  const again = census(dir, ['--rev', 'HEAD', '--out', out, '--seed']);
+  const again = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(again.status, 0, again.stderr);
   assert.doesNotMatch(first.stdout, /^= /m);
   assert.match(again.stdout, /^= \[eslint-disable\] src\/a\.ts 1$/m);
 });
 
-test('a census of the recorded commit under another rev records the new rev', (t) => {
-  const dir = repo(t);
+test('the CLI writes the census, and a second run reports what grew', async (t) => {
+  const { dir } = planted(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dirname(dir), '.garden', 'census.json');
-  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
-  assert.equal(first.status, 0, first.stderr);
-
-  const second = census(dir, ['--rev', 'main', '--out', out]);
-
-  assert.equal(second.status, 0, second.stderr);
-  assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.rev, 'main');
-});
-
-test('the CLI writes the census, and a second run reports what grew', (t) => {
-  const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
-  const out = join(dir, '.garden', 'census.json');
-  const first = census(dir, ['--rev', 'HEAD', '--out', out]);
-  assert.equal(first.status, 0, first.stderr);
+  await takeAndRecord(dir);
 
   commit(dir, { 'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n' });
-  const second = census(dir, ['--rev', 'HEAD', '--out', out]);
+  const second = await census(dir, ['--rev', 'HEAD']);
   assert.equal(second.status, 0, second.stderr);
 
   const summary: unknown = JSON.parse(second.stdout.trim().split('\n').at(-1) ?? '');
   assert.ok(typeof summary === 'object' && summary !== null && 'grew' in summary);
   assert.ok(Array.isArray(summary.grew) && summary.grew.includes('eslint-disable'));
   assert.match(second.stdout, /\+ \[eslint-disable\] src\/a\.ts:1:/);
-  assert.equal(parseCensus(JSON.parse(readFileSync(out, 'utf8')))?.sha, git(dir, ['rev-parse', 'HEAD']));
 });

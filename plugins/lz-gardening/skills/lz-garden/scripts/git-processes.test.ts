@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
-import { mayPointAtARepository } from './store.ts';
-import { commit, repo } from './test-repo.ts';
-import { bareRemote, planted, sharedPair, siteProcess, writeCensus } from './test-site.ts';
+import { mayPointAtARepository, writePendingCensus } from './store.ts';
+import { commit, git, repo } from './test-repo.ts';
+import { bareRemote, planted, sharedPair, siteProcess } from './test-site.ts';
 import { cliProcess } from './test-weeds.ts';
 
 const startsModule = new URL('test-git-starts.ts', import.meta.url).href;
@@ -31,33 +31,33 @@ function assertCount(starts: readonly string[], count: number): void {
   assert.equal(starts.length, count, starts.join('\n'));
 }
 
-test('open plants a new site in a repository with no origin with 12 git processes', (t) => {
+test('open plants a new site in a repository with no origin with 15 git processes', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
-    12,
+    15,
   );
 });
 
-test('open on a planted site in a repository with no origin starts 7 git processes', (t) => {
+test('open on a planted site in a repository with no origin starts 10 git processes', (t) => {
   const { dir } = planted(t);
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
-    7,
+    10,
   );
 });
 
-test('open on a planted site whose origin holds its log starts 11 git processes and pushes nothing', (t) => {
+test('open on a planted site whose origin holds its log starts 14 git processes and pushes nothing', (t) => {
   const { dir } = planted(t);
   bareRemote(dir);
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
-    11,
+    14,
   );
 });
 
@@ -94,13 +94,27 @@ test('sync of a site whose events the origin lacks while the origin holds events
   );
 });
 
-test('commit records the census with 6 git processes', (t) => {
+test('sync --census --seeded that records the census of a garden with no origin starts 11 git processes', (t) => {
   const { dir, garden } = planted(t);
-  writeCensus(garden);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  writePendingCensus(garden, sha, JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }));
 
   assertCount(
-    gitStarts(t, (env) => siteProcess(dir, ['commit', '--message', 'census'], env).status),
-    6,
+    gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha, '--seeded'], env).status),
+    11,
+  );
+});
+
+test('sync --census that records the census and pushes it starts 14 git processes', (t) => {
+  const { dir, garden } = planted(t);
+  bareRemote(dir);
+  assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  writePendingCensus(garden, sha, JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }));
+
+  assertCount(
+    gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha], env).status),
+    14,
   );
 });
 

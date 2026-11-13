@@ -59,7 +59,8 @@ of only what is new. Every tick runs it until one has been recorded.
 
 **Census**:
 A count of every census pattern's hits, and of duplicate helpers, at one commit of the base branch. Each tick
-compares its census with the last one.
+compares its census with the garden's census, the one recorded in the site's ref `refs/garden/census` and shared
+through the repository's `origin` like the garden log.
 _Avoid_: scan, inventory
 
 **Census pattern**:
@@ -141,8 +142,8 @@ out of the repository's checkout.
 _Avoid_: garden clone, workspace
 
 **Garden branch**:
-The site's branch that holds the census and the census patterns, never the repository's code. The queue is not on
-it: it lives in the garden log.
+The site's branch, which holds only the ignore rule for the beds, never the repository's code. The queue and the
+census are not on it: they live in the refs `refs/garden/log` and `refs/garden/census`.
 
 **Garden log**:
 The site's ref `refs/garden/log`, whose commits hold the queue's events, one file each, and the format file

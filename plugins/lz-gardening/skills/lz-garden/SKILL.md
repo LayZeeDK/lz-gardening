@@ -42,7 +42,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/site.ts" open $ARGUMENTS
 
 It creates the site on the first tick, picks the base on every tick, and syncs the queue with the repository's
 `origin`. The last line is JSON: `site` (the site's path, written `<site>` below), `created`, `base` (the branch to
-watch, such as `main` or `origin/main`, written `<base>`), `seeded` (false until a seed pass has committed), and
+watch, such as `main` or `origin/main`, written `<base>`), `seeded` (false until a seed pass has synced, in this
+clone or another), and
 `shared` (the share state: `local`, `synced`, `offline`, `read-only` or `behind`; see
 `${CLAUDE_SKILL_DIR}/references/site.md`). Any share state is fine: the tick goes on with the site's own queue. Done
 when it exits 0.
@@ -50,23 +51,26 @@ when it exits 0.
 ## 2. Take the census
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base> --out "<site>/.garden/census.json" --patterns "<site>/.garden/patterns.json"
+node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base>
 ```
 
 When `seeded` is false, add `--seed` at the end: the output then holds the seed list.
 
-The last line of output is a JSON summary: `sha`, `previousSha`, `grew`, `newHits`, `newDuplicates`. Lines above it
-starting `+ [<pattern>]` are new hits and lines starting `+ duplicate` are names newly defined in a second file.
-Below, `<short sha>` is `sha` shortened with `git rev-parse --short <sha>`.
+The census compares the base with the garden's census, which every clone shares, and sets the new census aside until
+step 5 records it. The last line of output is a JSON summary: `sha`, `previousSha`, `behind`, `grew`, `newHits`,
+`newDuplicates`. Lines above it starting `+ [<pattern>]` are new hits and lines starting `+ duplicate` are names
+newly defined in a second file. Below, `<short sha>` is `sha` shortened with `git rev-parse --short <sha>`.
 
 - `seeded` was false: run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md` in place of steps 3 to 5,
-  whatever the census says; it ends with its own commit and report. A seed pass cut short runs again on the next
-  tick.
-- `previousSha` is `null` on a seeded site (its census was removed): there is nothing to compare against. Run
-  `node "${CLAUDE_SKILL_DIR}/scripts/site.ts" commit --message "garden: census <short sha>"`, reply with the one line
+  whatever the census says; it ends with its own sync and report. A seed pass cut short runs again on the next tick.
+- `behind` is true: another run already read past this base commit. Reply with the one line
+  `garden: <base> at <short sha> is behind the garden's census`, and stop.
+- `previousSha` is `null` on a seeded site: there is nothing this checkout can compare against (the census was
+  removed, or another clone recorded it at a commit this checkout has not fetched). Run
+  `node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>`, reply with the one line
   `garden: census recorded on <base> at <short sha>`, and stop.
 - `sha` equals `previousSha`: nothing landed. Reply with the one line
-  `garden: nothing new on <base> since <short sha>`, and stop without committing.
+  `garden: nothing new on <base> since <short sha>`, and stop.
 
 ## 3. Read what landed
 
@@ -108,16 +112,16 @@ the line names that bed and its check: say so in the report, because the check d
 check's file is gone from the base. Report it that way, not as a check that failed. Done when every weed from steps 2
 and 3 printed one of those words.
 
-## 5. Group, commit, report
+## 5. Group, record, report
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --min 2
-node "${CLAUDE_SKILL_DIR}/scripts/site.ts" commit --message "garden: watch <short sha>"
-node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync
+node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>
 ```
 
-`sync` shares the queue's new events with the repository's `origin`. Its last line is JSON: `shared` (the share
-state), `events` (how many events it shared), and `reason` when the state has one.
+`sync --census` records the census of step 2 as the garden's census, unless another clone already recorded one of a
+later commit, and shares it and the queue's new events with the repository's `origin`. Its last line is JSON:
+`shared` (the share state), `events` (how many events it shared), and `reason` when the state has one.
 
 A class with two or more open weeds is ready to tend: several agents took the same shortcut. Report in this shape,
 and nothing else:
@@ -130,5 +134,4 @@ shared: <state> (<reason>)
 ```
 
 Leave out the `ready to tend` line when no class has two open weeds, and the `shared` line when `sync` printed
-`synced` or `local`. Done when `site.ts commit` exits 0 with `"committed": true` in its JSON line, and `site.ts sync`
-exits 0.
+`synced` or `local`. Done when `site.ts sync --census <sha>` exits 0.

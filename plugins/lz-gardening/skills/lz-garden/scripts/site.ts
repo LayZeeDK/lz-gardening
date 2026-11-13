@@ -1,13 +1,17 @@
-// The garden site: a clone beside the repository. Its `garden` branch holds the census; its refs/garden/log holds the
-// queue (see store.ts), shared with the checkout's origin under the same ref.
+// The garden site: a clone beside the repository. Its refs/garden/log holds the queue and its refs/garden/census the
+// census (see store.ts), both shared with the checkout's origin under the same refs; its `garden` branch holds only
+// the .gitignore for the beds.
 // Usage, from the repository:
 //   node site.ts open [--base <branch>]     create the site if missing, plant the garden log and the writer id if
-//                                           missing, resolve the base, sync the garden log once; prints
-//                                           {site, created, base, seeded, shared}, shared being the share state:
-//                                           local, synced, offline, read-only or behind
-//   node site.ts sync                       sync the garden log with origin, up to 5 tries; prints {shared, events}
-//                                           and reason and conflicts when there are any; exit 0 in every state
-//   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
+//                                           missing, resolve the base (--base, else the census's base, else
+//                                           origin's default), sync once; prints {site, created, base, seeded,
+//                                           shared}, seeded once the log holds a seed event, shared being the share
+//                                           state: local, synced, offline, read-only or behind
+//   node site.ts sync [--census <sha> [--seeded]]
+//                                           sync with origin, up to 5 tries; with --census, record the census
+//                                           census.ts took of <sha> unless the garden's census is of that commit or
+//                                           a later one, and with --seeded add the seed event; prints {shared,
+//                                           events} and reason and conflicts when there are any; exit 0 in every state
 //   node site.ts bed --class <kebab> --base <base>
 //                                           fetch the base into the site and make the bed beds/<class> on
 //                                           bed/<class>, or merge the base into the bed that exists; start is the
@@ -19,18 +23,24 @@ import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { isRecord, readCensus } from './census.ts';
 import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import { classPattern } from './log.ts';
+import type { SyncResult } from './store.ts';
+import { classPattern, isRecord, replay } from './log.ts';
 import {
+  append,
+  censusRef,
   configValue,
   git,
   gitSucceeds,
   logRef,
+  objectIdPattern,
   objectIds,
+  openSite,
   optionalGit,
   plantWriter,
+  readCensusAt,
+  readLog,
   requireSite,
   siteOf,
   startLog,
@@ -57,7 +67,7 @@ export function resolveBase(facts: BaseFacts): string {
   }
 
   if (facts.censusRev !== undefined) {
-    return facts.censusRev;
+    return ref(facts.censusRev);
   }
 
   // A clone of a local path takes its origin/HEAD from whatever the source had checked out.
@@ -145,6 +155,16 @@ function plant(top: string, site: string): void {
   renameRetrying(planting, site);
 }
 
+function readableCensusRev(site: string): string | undefined {
+  if (!existsSync(join(site, '.git'))) {
+    return undefined;
+  }
+
+  const recorded = readCensusAt(site, censusRef);
+
+  return typeof recorded === 'object' ? recorded?.census.rev : undefined;
+}
+
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {
   const originUrl = optionalGit(top, ['remote', 'get-url', 'origin'], { readsOnly: true });
   const targetOf = new Map(
@@ -162,7 +182,7 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
   return {
     originIsLocal: originUrl !== undefined && (originUrl.startsWith('file:') || existsSync(resolve(top, originUrl))),
     base,
-    censusRev: base === undefined ? readCensus(join(site, '.garden', 'census.json'))?.census.rev : undefined,
+    censusRev: base === undefined ? readableCensusRev(site) : undefined,
     originHead: originHeadTarget?.startsWith(originPrefix) ? originHeadTarget.slice(originPrefix.length) : undefined,
     branches: under('refs/heads/'),
     originBranchNames: under(originPrefix).filter((name) => name !== 'HEAD'),
@@ -185,10 +205,10 @@ function openOrPlant(top: string, site: string, requested: string | undefined) {
   if (!existsSync(join(site, '.git'))) {
     plant(top, site);
 
-    return { site, created: true, base, seeded: false };
+    return { site, created: true, base };
   }
 
-  const [garden, seed, log] = objectIds(site, ['refs/heads/garden', 'refs/heads/garden~1', logRef]);
+  const [garden, log] = objectIds(site, ['refs/heads/garden', logRef]);
 
   if (garden === undefined) {
     throw new Error(`${site} has no garden branch, so it is not a garden site; move it away and run open again`);
@@ -200,7 +220,7 @@ function openOrPlant(top: string, site: string, requested: string | undefined) {
 
   plantWriter(site);
 
-  return { site, created: false, base, seeded: seed !== undefined };
+  return { site, created: false, base };
 }
 
 const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
@@ -236,27 +256,6 @@ function declaresWorkspaces(dir: string): boolean {
   }
 
   return (isRecord(manifest) && 'workspaces' in manifest) || existsSync(join(dir, 'pnpm-workspace.yaml'));
-}
-
-function commitSite(site: string, message: string) {
-  requireSite(site);
-
-  if (git(site, ['branch', '--show-current']) !== 'garden') {
-    throw new Error(
-      `the site at ${site} is not on the garden branch; it was not planted fully, so remove it and run site.ts open`,
-    );
-  }
-
-  git(site, ['add', '.garden']);
-  const nothingStaged = gitSucceeds(site, ['diff', '--cached', '--quiet']);
-
-  if (nothingStaged) {
-    return { committed: false };
-  }
-
-  git(site, ['commit', '-q', '-m', message]);
-
-  return { committed: true };
 }
 
 function makeBed(top: string, site: string, bedClass: string, base: string) {
@@ -355,39 +354,62 @@ function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 
   return 'linked';
 }
 
+function recordSeed(cwd: string, sha: string): void {
+  const now = new Date();
+  append(
+    openSite(cwd),
+    (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }], result: undefined }),
+    now,
+  );
+}
+
 type Command =
   | { command: 'open'; base: string | undefined }
-  | { command: 'commit'; message: string }
-  | { command: 'sync' }
+  | { command: 'sync'; census: string | undefined; seeded: boolean }
   | { command: 'bed'; bedClass: string; base: string };
 
 function parseCommand(
   positionals: readonly string[],
-  values: { base?: string | undefined; class?: string | undefined; message: string },
+  values: {
+    base?: string | undefined;
+    class?: string | undefined;
+    census?: string | undefined;
+    seeded: boolean;
+  },
 ): Command | undefined {
   const [command] = positionals;
+  const noCensus = values.census === undefined && !values.seeded;
 
   if (positionals.length !== 1) {
     return undefined;
   }
 
-  if (command === 'open' && values.message === '' && values.class === undefined) {
+  if (command === 'open' && values.class === undefined && noCensus) {
     return { command, base: values.base };
   }
 
-  if (command === 'commit' && values.message !== '' && values.base === undefined && values.class === undefined) {
-    return { command, message: values.message };
+  if (
+    command === 'sync' &&
+    values.base === undefined &&
+    values.class === undefined &&
+    (values.census === undefined ? !values.seeded : objectIdPattern.test(values.census))
+  ) {
+    return { command, census: values.census, seeded: values.seeded };
   }
 
-  if (command === 'sync' && values.message === '' && values.base === undefined && values.class === undefined) {
-    return { command };
-  }
-
-  if (command === 'bed' && values.class !== undefined && values.base !== undefined && values.message === '') {
+  if (command === 'bed' && values.class !== undefined && values.base !== undefined && noCensus) {
     return { command, bedClass: values.class, base: values.base };
   }
 
   return undefined;
+}
+
+function nameIgnoredCensus(io: Io, result: SyncResult): void {
+  if (result.sharedCensusIgnored === true) {
+    io.err(
+      `site: the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it\n`,
+    );
+  }
 }
 
 function main(argv: readonly string[], io: Io): number {
@@ -395,13 +417,18 @@ function main(argv: readonly string[], io: Io): number {
     args: [...argv],
     allowPositionals: true,
     strict: true,
-    options: { base: { type: 'string' }, class: { type: 'string' }, message: { type: 'string', default: '' } },
+    options: {
+      base: { type: 'string' },
+      class: { type: 'string' },
+      census: { type: 'string' },
+      seeded: { type: 'boolean', default: false },
+    },
   });
   const parsed = parseCommand(positionals, values);
 
   if (parsed === undefined) {
     io.err(
-      'usage: site.ts open [--base <branch>] | site.ts sync | site.ts commit --message <text> | site.ts bed --class <kebab> --base <base>\n',
+      'usage: site.ts open [--base <branch>] | site.ts sync [--census <sha> [--seeded]] | site.ts bed --class <kebab> --base <base>\n',
     );
 
     return 2;
@@ -413,15 +440,19 @@ function main(argv: readonly string[], io: Io): number {
   switch (parsed.command) {
     case 'open': {
       const opened = openOrPlant(top, site, parsed.base);
-      summary = { ...opened, shared: sync({ checkout: top, path: site }, { attempts: 1 }).state };
-      break;
-    }
-    case 'commit': {
-      summary = commitSite(site, parsed.message);
+      const shared = sync({ checkout: top, path: site }, { attempts: 1 });
+      nameIgnoredCensus(io, shared);
+      const seeded = replay(readLog({ path: site }).events, new Date()).seeded;
+      summary = { ...opened, seeded, shared: shared.state };
       break;
     }
     case 'sync': {
-      const shared = sync({ checkout: top, path: site }, { attempts: 5 });
+      if (parsed.seeded && parsed.census !== undefined) {
+        recordSeed(io.cwd, parsed.census);
+      }
+
+      const shared = sync({ checkout: top, path: site }, { attempts: 5, census: parsed.census });
+      nameIgnoredCensus(io, shared);
       shared.skipped.forEach((path) => {
         io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);
       });

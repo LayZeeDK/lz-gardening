@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { isRecord } from './census.ts';
+import { isRecord } from './log.ts';
 import { run } from './site.ts';
+import { censusRef, pendingCensusRef, writePendingCensus } from './store.ts';
 import { commit, git, init } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
@@ -114,10 +115,15 @@ export function sharedPair(t: TestContext): {
   return { first, second, remote };
 }
 
-export function writeCensus(garden: string, sha = 'a'.repeat(40)): void {
-  const census = { rev: 'main', sha, takenAt: '2026-11-07T00:00:00.000Z', counts: {}, hits: {}, duplicates: {} };
-  mkdirSync(join(garden, '.garden'), { recursive: true });
-  writeFileSync(join(garden, '.garden', 'census.json'), JSON.stringify(census));
+export function writeCensusText(garden: string, text: string): void {
+  writePendingCensus(garden, 'fixture', text);
+  git(garden, ['update-ref', censusRef, pendingCensusRef('fixture')]);
+  git(garden, ['update-ref', '-d', pendingCensusRef('fixture')]);
+}
+
+export function writeCensus(garden: string, sha = 'a'.repeat(40), rev = 'main'): void {
+  const census = { rev, sha, takenAt: '2026-11-07T00:00:00.000Z', counts: {}, hits: {}, duplicates: {} };
+  writeCensusText(garden, JSON.stringify(census));
 }
 
 // The process environment plus git settings, as a user passes them to git through GIT_CONFIG_COUNT.
