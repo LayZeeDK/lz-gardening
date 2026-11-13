@@ -931,6 +931,25 @@ test("add refuses a note holding a drive's folder in Git Bash's form, /<drive>/ 
   );
 });
 
+test("add takes a note whose repository path holds the home folder's name inside it, as a home of /root holds src/root", (t) => {
+  const { dir, garden } = planted(t);
+  homeAt(t, '/root');
+
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:any-type',
+    '--note',
+    'mirrors src/root/a.ts',
+  ]);
+
+  assert.deepEqual([result.code, result.stderr, logFiles(garden).size], [0, '', 1]);
+});
+
 test("add refuses a note holding this machine's home folder and writes nothing", (t) => {
   const { dir, garden } = planted(t);
 

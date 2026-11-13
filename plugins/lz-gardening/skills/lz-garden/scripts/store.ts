@@ -1273,7 +1273,7 @@ function machinePathTest(site: Pick<Site, 'checkout' | 'path'>): (text: string) 
     .flatMap((path) => [path, path.replace(/^([a-z]):\//, '/$1/')]);
   const holds = (text: string, path: string): boolean => {
     for (let at = text.indexOf(path); at !== -1; at = text.indexOf(path, at + 1)) {
-      if (!/[\w.-]/.test(text.charAt(at + path.length))) {
+      if (!/[\w.-]/.test(text.charAt(at - 1)) && !/[\w.-]/.test(text.charAt(at + path.length))) {
         return true;
       }
     }
