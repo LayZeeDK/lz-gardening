@@ -669,18 +669,23 @@ test('an append run with an author date other than its committer date writes the
   assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
 });
 
-test('an append with no date in the env is dated now, in the offset git gives that time', (t) => {
+test("an append with no date in the env is dated now in UTC, not in the machine's offset", (t) => {
   const { dir, garden } = planted(t);
   const before = Math.floor(Date.now() / 1000);
 
-  appendIn(dir, {});
+  appendIn(dir, { TZ: 'EST5' });
   const after = Math.ceil(Date.now() / 1000);
-  const time = Number(git(garden, ['log', '-1', '--format=%ct', logRef]));
-  const at = { GIT_AUTHOR_DATE: `@${String(time)}`, GIT_COMMITTER_DATE: `@${String(time)}` };
+  const [time = '', authorZone, committerZone] = git(garden, [
+    'log',
+    '-1',
+    '--format=%ct %ad %cd',
+    '--date=format:%z',
+    logRef,
+  ]).split(' ');
 
   assert.deepEqual(
-    [before <= time && time <= after, git(garden, ['rev-parse', logRef])],
-    [true, commitTreeOfLastAppend(garden, at)],
+    [before <= Number(time) && Number(time) <= after, authorZone, committerZone],
+    [true, '+0000', '+0000'],
   );
 });
 

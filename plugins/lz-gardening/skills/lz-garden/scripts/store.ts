@@ -221,7 +221,7 @@ function writeLogIfStill(
   files: readonly LogFile[],
   merge?: string,
 ): boolean {
-  const now = `@${String(Math.floor(Date.now() / 1000))}`;
+  const now = `@${String(Math.floor(Date.now() / 1000))} +0000`;
   const stream = [
     `commit ${logRef}\n`,
     identity(checkout, 'author', now),
@@ -1126,7 +1126,7 @@ export interface StoredCensus {
 }
 
 export function writePendingCensus(site: string, sha: string, text: string, patterns?: string): void {
-  const now = `@${String(Math.floor(Date.now() / 1000))}`;
+  const now = `@${String(Math.floor(Date.now() / 1000))} +0000`;
   const checkout = site.slice(0, -'.garden'.length);
   const stream = [
     `commit ${pendingCensusRef(sha)}\n`,
