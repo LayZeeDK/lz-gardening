@@ -2,7 +2,7 @@
 // Each test builds a throwaway git repository and counts weeds at one of its commits.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -67,6 +67,67 @@ test('counts hits per pattern at a revision, honouring paths and excludes', asyn
     'src/a.ts:1: const a: any = 1; // eslint-disable-line',
     'src/a.ts:2: const b = a as any;',
   ]);
+});
+
+test('a pattern with no paths counts hits in source files only, not in data files or prose', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.mjs': '// eslint-disable-next-line\n',
+    'data/scraped.json': '{ "text": "eslint-disable" }\n',
+    'notes.txt': 'eslint-disable is discussed here\n',
+  });
+
+  const census = await takeCensus(dir, 'main', set, now);
+
+  assert.deepEqual(census.hits['eslint-disable'], ['src/a.mjs:1: // eslint-disable-next-line']);
+});
+
+test('the bundled structural-directive pattern counts templates and components, not other files', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/list.html': '<li *ngFor="let item of items">{{ item }}</li>\n',
+    'src/card.ts': '@Component({ template: \'<p *ngIf="shown">x</p>\' })\n',
+    'eslint.config.mjs': '// Checks only *ngFor, which prefer-control-flow bans.\n',
+    'docs/digest.json': '{ "text": "use *ngIf" }\n',
+  });
+  const bundled = parsePatternSet(JSON.parse(readFileSync(join(dirname(script), 'patterns.json'), 'utf8')), 'bundled');
+
+  const census = await takeCensus(dir, 'main', bundled, now);
+
+  assert.deepEqual(census.hits['angular-structural-directive'], [
+    'src/card.ts:1: @Component({ template: \'<p *ngIf="shown">x</p>\' })',
+    'src/list.html:1: <li *ngFor="let item of items">{{ item }}</li>',
+  ]);
+});
+
+test("a hit's stored text is cut to 200 characters, marked with an ellipsis", async (t) => {
+  const dir = repo(t);
+  const line = `// eslint-disable-next-line ${'x'.repeat(5000)}`;
+  commit(dir, { 'src/a.ts': `${line}\n` });
+
+  const census = await takeCensus(dir, 'main', set, now);
+
+  assert.deepEqual(census.hits['eslint-disable'], [`src/a.ts:1: ${line.slice(0, 200)}...`]);
+});
+
+test("a hit's text of exactly 200 characters is kept whole", async (t) => {
+  const dir = repo(t);
+  const line = `// eslint-disable ${'x'.repeat(182)}`;
+  commit(dir, { 'src/a.ts': `${line}\n` });
+
+  const census = await takeCensus(dir, 'main', set, now);
+
+  assert.deepEqual(census.hits['eslint-disable'], [`src/a.ts:1: ${line}`]);
+});
+
+test("a hit's text is cut by characters, not UTF-16 units: 118 characters in 218 units are kept whole", async (t) => {
+  const dir = repo(t);
+  const line = `// eslint-disable ${String.fromCodePoint(0x1f331).repeat(100)}`;
+  commit(dir, { 'src/a.ts': `${line}\n` });
+
+  const census = await takeCensus(dir, 'main', set, now);
+
+  assert.deepEqual(census.hits['eslint-disable'], [`src/a.ts:1: ${line}`]);
 });
 
 test('a function defined in two files is reported as a duplicate with both paths', async (t) => {
@@ -469,6 +530,35 @@ test('a census in a garden that is not shared reads the census the last tick rec
   assert.equal(summaryOf(second.stdout).get('previousSha'), first);
 });
 
+test('a duplicate that gains a file names the new file apart from the files it was already in', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/a.ts': 'function f() {}\n', 'src/b.ts': 'function f() {}\n' });
+  await takeAndRecord(dir);
+  commit(dir, { 'src/c.ts': 'function f() {}\n' });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(
+    second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
+    ['+ duplicate f: new src/c.ts; already src/a.ts, src/b.ts'],
+  );
+});
+
+test('a duplicate whose every file is new names no earlier file', async (t) => {
+  const { dir } = planted(t);
+  await takeAndRecord(dir);
+  commit(dir, { 'src/x.ts': 'function g() {}\n', 'src/y.ts': 'function g() {}\n' });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(
+    second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
+    ['+ duplicate g: new src/x.ts, src/y.ts'],
+  );
+});
+
 test('the CLI names a helper that became duplicated since the last census, not one that already was', async (t) => {
   const { dir } = planted(t);
   commit(dir, {
@@ -487,7 +577,7 @@ test('the CLI names a helper that became duplicated since the last census, not o
   assert.deepEqual(summary.newDuplicates, ['isRecord']);
   assert.deepEqual(
     second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
-    ['+ duplicate isRecord: src/a.ts, src/b.ts'],
+    ['+ duplicate isRecord: new src/b.ts; already src/a.ts'],
   );
 });
 
@@ -511,7 +601,35 @@ test('--seed prints the seed list: files per pattern by hit count, and every dup
   ]);
 });
 
-test('--seed adds exactly the seed list to the output', async (t) => {
+test("--seed prints the seed report's census line: each pattern with hits and its count", async (t) => {
+  const { dir } = planted(t);
+  commit(dir, {
+    'src/a.ts': '// eslint-disable-next-line\n// eslint-disable-next-line\nconst a = 1;\n',
+    'src/t.ts': '// TODO one\n',
+  });
+
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    result.stdout.split('\n').filter((line) => line.startsWith('census: ')),
+    ['census: eslint-disable 2, todo-marker 1'],
+  );
+});
+
+test("--seed prints the census line as 'census: none' when no pattern has a hit", async (t) => {
+  const { dir } = planted(t);
+
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    result.stdout.split('\n').filter((line) => line.startsWith('census: ')),
+    ['census: none'],
+  );
+});
+
+test('--seed adds exactly the seed list and the census line to the output', async (t) => {
   const { dir } = planted(t);
   commit(dir, {
     'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n',
@@ -526,7 +644,7 @@ test('--seed adds exactly the seed list to the output', async (t) => {
   const lines = seeded.stdout.split('\n');
   assert.ok(lines.some((line) => line.startsWith('= ')));
   assert.deepEqual(
-    lines.filter((line) => !line.startsWith('= ')),
+    lines.filter((line) => !line.startsWith('= ') && !line.startsWith('census: ')),
     plain.stdout.split('\n'),
   );
 });
@@ -781,6 +899,18 @@ test('--seed prints the seed list even when a census was recorded before, and on
   assert.match(again.stdout, /^= \[eslint-disable\] src\/a\.ts 1$/m);
 });
 
+test('a long hit the last census recorded, cut, is not new in the next census', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/a.ts': `// eslint-disable ${'x'.repeat(5000)}\n` });
+  await takeAndRecord(dir);
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(summaryOf(second.stdout).get('newHits'), 0);
+});
+
 test('the CLI writes the census, and a second run reports what grew', async (t) => {
   const { dir } = planted(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
@@ -873,6 +1003,42 @@ test('a census that differs from the recorded one is left pending for its commit
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending']), pendingCensusRef(later));
+});
+
+test('the summary counts the commits in the range from the previous census to this one', async (t) => {
+  const { dir } = planted(t);
+  await takeAndRecord(dir);
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  commit(dir, { 'src/c.ts': 'export const c = 3;\n' });
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summaryOf(result.stdout).get('commits'), 2);
+});
+
+test('the commits in the range leave out merge commits, as the tick reads them', async (t) => {
+  const { dir } = planted(t);
+  await takeAndRecord(dir);
+  git(dir, ['switch', '-q', '-c', 'side']);
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  git(dir, ['switch', '-q', 'main']);
+  git(dir, ['merge', '-q', '--no-ff', '-m', 'merge side', 'side']);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summaryOf(result.stdout).get('commits'), 1);
+});
+
+test('a census with no previous census to compare with counts no commits', async (t) => {
+  const { dir, garden } = planted(t);
+  git(garden, ['update-ref', '-d', censusRef]);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summaryOf(result.stdout).get('commits'), null);
 });
 
 test('a census of a commit that descends from the recorded one is not behind the garden', async (t) => {

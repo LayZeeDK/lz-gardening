@@ -76,6 +76,7 @@
     {
       "id": "angular-structural-directive",
       "regex": "\\*ng(If|For|Switch)\\b",
+      "paths": ["**/*.html", "**/*.ts"],
       "note": "Structural directives where built-in control flow exists."
     },
     {

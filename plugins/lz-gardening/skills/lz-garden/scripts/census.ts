@@ -3,14 +3,16 @@
 // It reads the revision with `git grep`, so it never checks anything out and works in a clone with no working tree.
 // Usage, from the repository's checkout once site.ts open has planted the garden site:
 //   node census.ts --rev <rev> [--seed]
-//     Prints a table of counts with the change since the site's census (refs/garden/census), then the new hits, then,
-//     with --seed, the seed list (`= ` lines), then one JSON summary line: sha, previousSha (null when there is no
-//     census or this checkout lacks its commit), behind (the census's commit descends from sha), grew, newHits and
+//     Prints a table of counts with the change since the site's census (refs/garden/census), then the new hits, then
+//     `+ duplicate <name>: new <path>, ...[; already <path>, ...]` per name newly defined in another file, then, with
+//     --seed, the seed list (`= ` lines) and `census: <id> <count>, ...` (or `census: none`), then one JSON summary
+//     line: sha, previousSha (null when there is no census or this checkout lacks its commit), behind (the census's
+//     commit descends from sha), commits (non-merge commits from previousSha to sha, or null), grew, newHits and
 //     newDuplicates. When the new census differs from the site's in more than the time taken, it is written to
 //     refs/garden/pending/<sha>, named by the commit rev-parse gives; site.ts sync --census <sha> records it.
 //     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
-// or, when the site has none, by the patterns the site's census carries.
+// or, when the site has none, by the patterns the site's census carries. A pattern without paths searches sourceGlobs.
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -43,6 +45,9 @@ export interface PatternDelta {
 
 // Hits are capped per pattern; counts stay exact, and a delta over a capped list can miss new hits.
 const hitCap = 1000;
+
+// The files duplicate helpers are looked for in, and those a pattern without paths searches.
+const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 
 function stringArray(value: unknown, what: string): string[] {
   if (value === undefined) {
@@ -159,7 +164,23 @@ function pathspecs(paths: readonly string[], exclude: readonly string[]): string
   return [...paths.map((glob) => `:(glob)${glob}`), ...exclude.map((glob) => `:(exclude,glob)${glob}`)];
 }
 
-/** One hit as `path:line: text`; the delta compares hits by path and text, so moved lines are not new. */
+// A hit's text is cut to this many characters, so a minified or scraped line does not swell the shared census.
+const hitTextCap = 200;
+
+function cut(text: string): string {
+  if (text.length <= hitTextCap) {
+    return text;
+  }
+
+  const characters = Array.from(new Intl.Segmenter().segment(text), ({ segment }) => segment);
+
+  return characters.length > hitTextCap ? `${characters.slice(0, hitTextCap).join('')}...` : text;
+}
+
+/**
+ * One hit as `path:line: text`, its text cut to hitTextCap; the delta compares hits by path and text, so moved lines
+ * are not new, and both censuses it compares cut their text here.
+ */
 export function parseGrep(stdout: string, sha: string): string[] {
   const prefix = `${sha}:`;
 
@@ -177,7 +198,7 @@ export function parseGrep(stdout: string, sha: string): string[] {
       // Stryker disable next-line StringLiteral: a match fills every group, so no default applies
       const [, path = '', lineNo = '', text = ''] = match;
 
-      return [`${path}:${lineNo}: ${text.trim()}`];
+      return [`${path}:${lineNo}: ${cut(text.trim())}`];
     });
 }
 
@@ -225,7 +246,13 @@ export async function takeCensus(cwd: string, rev: string, set: PatternSet, now:
       async (pattern) =>
         [
           pattern.id,
-          await grepRevision(cwd, sha, pattern.regex, pathspecs(pattern.paths, set.exclude), pattern.id),
+          await grepRevision(
+            cwd,
+            sha,
+            pattern.regex,
+            pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
+            pattern.id,
+          ),
         ] as const,
     ),
   );
@@ -240,7 +267,6 @@ export async function takeCensus(cwd: string, rev: string, set: PatternSet, now:
   };
 }
 
-const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 // A const holding a parenthesised expression (`const x = (a + b)`) also counts; a parser would not.
 const definition =
   /^(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
@@ -251,11 +277,17 @@ const definitionPrefilter =
 
 const dotDirectories = '**/.*/**';
 
-/** Top-level function names defined in two or more files, each with its sorted file list. */
-async function findDuplicates(cwd: string, sha: string, exclude: readonly string[]): Promise<Record<string, string[]>> {
+interface Definition {
+  readonly name: string;
+  readonly path: string;
+}
+
+/** Every top-level function definition in the source files of a commit. */
+async function definitionsAt(cwd: string, sha: string, exclude: readonly string[]): Promise<readonly Definition[]> {
   const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', dotDirectories]);
   const hits = await grepRevision(cwd, sha, definitionPrefilter, specs, 'definitions');
-  const definitions = hits.flatMap((hit) => {
+
+  return hits.flatMap((hit) => {
     const parts = splitHit(hit);
     // Stryker disable next-line StringLiteral: every hit has the path:line: text shape, and neither default is a definition
     const match = definition.exec(parts?.text ?? '');
@@ -263,7 +295,11 @@ async function findDuplicates(cwd: string, sha: string, exclude: readonly string
 
     return parts === null || name === undefined ? [] : [{ name, path: parts.path }];
   });
-  const byName = Map.groupBy(definitions, (item) => item.name);
+}
+
+/** Top-level function names defined in two or more files, each with its sorted file list. */
+async function findDuplicates(cwd: string, sha: string, exclude: readonly string[]): Promise<Record<string, string[]>> {
+  const byName = Map.groupBy(await definitionsAt(cwd, sha, exclude), (item) => item.name);
 
   return Object.fromEntries(
     [...byName.entries()]
@@ -335,8 +371,16 @@ function seedList(census: Census): string[] {
     .slice(0, seedDuplicateNames)
     .map(([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`);
   const rest = duplicates.length - listed.length;
+  const counted = Object.entries(census.counts)
+    .filter(([, count]) => count > 0)
+    .map(([id, count]) => `${id} ${String(count)}`);
 
-  return [...files, ...listed, ...(rest > 0 ? [`${String(rest)} more duplicate names not listed`] : [])];
+  return [
+    ...files,
+    ...listed,
+    ...(rest > 0 ? [`${String(rest)} more duplicate names not listed`] : []),
+    `census: ${counted.length === 0 ? 'none' : counted.join(', ')}`,
+  ];
 }
 
 function formatDelta(deltas: readonly PatternDelta[]): string {
@@ -405,9 +449,21 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
   const newDuplicates = diffDuplicates(before, after);
+  // A name that was defined in one file only had no entry in the previous census, so that file is found at its commit.
+  const earlier =
+    previousSha === null || newDuplicates.length === 0 ? [] : await definitionsAt(io.cwd, previousSha, set.exclude);
   const duplicateLines = Object.entries(after.duplicates)
     .filter(([name]) => newDuplicates.includes(name))
-    .map(([name, paths]) => `+ duplicate ${name}: ${paths.join(', ')}`);
+    .map(([name, paths]) => {
+      const already = paths.filter(
+        (path) =>
+          before?.duplicates[name]?.includes(path) === true ||
+          earlier.some((item) => item.name === name && item.path === path),
+      );
+      const added = paths.filter((path) => !already.includes(path));
+
+      return `+ duplicate ${name}: new ${added.join(', ')}${already.length === 0 ? '' : `; already ${already.join(', ')}`}`;
+    });
   const summary = {
     sha: after.sha,
     previousSha,
@@ -415,6 +471,12 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
       previousSha !== null &&
       previousSha !== after.sha &&
       (await gitAsync(['merge-base', '--is-ancestor', after.sha, previousSha], io.cwd)).code === 0,
+    commits:
+      previousSha === null
+        ? null
+        : Number(
+            (await gitAsync(['rev-list', '--no-merges', '--count', `${previousSha}..${after.sha}`], io.cwd)).stdout,
+          ),
     grew,
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,

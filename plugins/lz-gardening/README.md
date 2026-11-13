@@ -34,9 +34,9 @@ Run the watch on a loop and tend by hand:
 /loop 2h /lz-gardening:lz-garden
 ```
 
-A tick that finds nothing replies with one line. A tick that finds a class with two or more open weeds ends with
-`ready to tend: <class>`. Two or more means several agents took the same shortcut. A class with one open weed waits
-for a second. Recurring `/loop` tasks expire after seven days; start the loop again after that.
+A tick that finds nothing replies with one line. A tick that finds a class whose open weeds sit in two or more files
+names it in its `ready to tend: <class>` line. Two or more files means several agents took the same shortcut. A
+class whose open weeds all sit in one file waits for a second. Recurring `/loop` tasks expire after seven days; start the loop again after that.
 
 ## How it stays out of the way
 

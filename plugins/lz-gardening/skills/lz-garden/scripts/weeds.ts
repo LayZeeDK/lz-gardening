@@ -18,7 +18,7 @@
 //     claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of the class. close --id
 //     needs no claim, names a first sync other than synced or local on stderr, and leaves the claim as it is.
 //   node weeds.ts claim [--class <kebab>]
-//     Claims the class, or the first ready one (two or more open weeds, claimed by no other writer), for six hours,
+//     Claims the class, or the first ready one (open weeds in two or more files, claimed by no other writer), for six hours,
 //     and shares the claim: `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
 //     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state> (<reason>)`, the last
 //     after releasing the claim (`; release pending` when that release is not shared yet).
@@ -26,7 +26,8 @@
 //     Ends this writer's claim and shares the release: `released <class>; <share state>`; exit 1 with
 //     `no claim of <class> held here`.
 //   node weeds.ts groups [--min <n>]     open weeds per class, most first, and who holds a claim of it (tending);
-//                                        --min defaults to 1
+//                                        --min <n> keeps the classes whose open weeds sit in n or more files
+//                                        (places); it defaults to 1
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
@@ -45,6 +46,7 @@ import {
   planAdd,
   planClaim,
   planClose,
+  placeOf,
   planRelease,
   replay,
   unprintablePattern,
@@ -107,7 +109,7 @@ export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
       return {
         class: weedClass,
         open: members.length,
-        places: new Set(members.map((weed) => weed.where.replace(/:\d+$/, ''))).size,
+        places: new Set(members.map((weed) => placeOf(weed.where))).size,
         regrown: members.filter((weed) => weed.regrownAfter !== null).length,
         // Stryker disable next-line StringLiteral: a group always has a member, so times[0] is never missing
         firstAt: times[0] ?? '',
@@ -148,6 +150,10 @@ export function validateAdd(input: AddInput): string | null {
 
   if (!sourcePattern.test(input.source)) {
     return '--source must look like <kind>:<ref>, for example commit:1a2b3c4 or census:eslint-disable';
+  }
+
+  if (input.class === 'repeated-lesson' && !input.source.startsWith('lesson:')) {
+    return "--class repeated-lesson takes --source lesson:<path>:<line>, a record that holds the lesson; queue a clean-up that did not hold under the mistake's own class";
   }
 
   if (input.layer !== null && !(Number.isInteger(input.layer) && input.layer >= 1 && input.layer <= 6)) {
@@ -601,7 +607,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const site = openSite(io.cwd);
       const garden = replay(eventsReportingSkipped(io, readLog(site)), now);
-      const groups = groupWeeds(garden.open).filter((group) => group.open >= min);
+      const groups = groupWeeds(garden.open).filter((group) => group.places >= min);
       write(`${'class'.padEnd(36)} open places regrown layer first-seen tending`);
 
       for (const group of groups) {

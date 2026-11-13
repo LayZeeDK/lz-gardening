@@ -46,11 +46,22 @@ First release.
   on stderr, as is a bed that would bring `origin` any commit but its own (one made in the site) and a bed whose
   commits add a line or a message holding one of those paths, merges and binary files included. Each census
   carries the site's `.garden/patterns.json` as it is, unchecked, so it is shared too; a site without one takes its
-  census with the extra patterns of the shared census. `weeds.ts groups` shows who holds a claim of
-  each class in a last `tending` column (`-` for none).
+  census with the extra patterns of the shared census. A census pattern without `paths` searches the JavaScript and
+  TypeScript source files only (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`), and the bundled
+  `angular-structural-directive` pattern searches `.html` and `.ts` files. The census stores each hit's text cut to
+  200 characters, marked `...`. Its summary counts the commits from the previous census to this one (`commits`,
+  merges left out), its `+ duplicate <name>:` line names the files that define the name since the previous census
+  (`new`) apart from those that defined it before (`already`), and with `--seed` it prints the seed report's census
+  line (`census: <pattern> <count>, ...` or `census: none`). The tick and the seed pass reply with a fixed form,
+  every line always there. `weeds.ts add` refuses a `repeated-lesson` weed whose source is not a
+  `lesson:<path>:<line>` record. A class is ready to tend when its open weeds sit in two or more files (places), not
+  when it has two open weeds: `weeds.ts groups --min <n>` keeps the classes with `n` or more places, and
+  `weeds.ts claim` without a class takes only such a class. `weeds.ts groups` shows who holds a claim of each class in
+  a last `tending` column (`-` for none).
 - `lz-tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Closes the class in
-  the queue as tended, one-off or kept; a tended close records the bed and where its check lives. A class tended
+  the queue as tended, one-off or kept; a tended close records the bed and where its check lives, and the weeds of
+  the class its check does not hold are closed first, one by one, as kept or one-off. A class tended
   again before its bed lands is tended in the same bed, with what the base gained since merged in, so the check sees
   the weeds that came back. Makes the bed with the garden's site script, which links the checkout's Node.js
   dependencies into the bed, or names the command that installs them, for npm, pnpm, Yarn 1, and Yarn 4 or later.

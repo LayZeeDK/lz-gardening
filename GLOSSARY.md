@@ -35,9 +35,12 @@ file is gone from the base.
 **Kept**:
 Said of a weed a human or a tend pass judged deliberate; it is never queued again.
 
+**Place**:
+The file a weed sits in, its `--where` without the line. Six weeds in one file are six weeds in one place.
+
 **Ready to tend**:
-Said of a weed class with two or more open weeds: several agents took the same shortcut. A class with one open weed
-waits for a second.
+Said of a weed class whose open weeds sit in two or more places: several agents took the same shortcut. A class
+whose open weeds all sit in one place waits for a second.
 
 **One-off**:
 Weeds judged an isolated occurrence rather than a pattern agents copy: they share no cause, or sit in one place. A
@@ -67,7 +70,7 @@ _Avoid_: scan, inventory
 A text pattern that marks a weed class the census can count, such as a lint suppression.
 
 **Hit**:
-One place on the base branch where a census pattern matches.
+One line on the base branch where a census pattern matches.
 _Avoid_: weed marker, match
 
 **Seed list**:
@@ -77,8 +80,8 @@ _Avoid_: baseline (a baseline is what a check tolerates)
 
 **Queue**:
 The grow-only set of events (adds, closes, claims, releases and seeds) that a replay turns into the weeds and their
-statuses, each weed with its place, its source and the root cause it points to. Weeds leave the queue only by being
-closed, never by being edited.
+statuses, each weed with its file and line, its source and the root cause it points to. Weeds leave the queue only
+by being closed, never by being edited.
 _Avoid_: ledger, backlog, weeds file
 
 **Event**:
@@ -109,7 +112,7 @@ Anything that rejects a weed mechanically: code structure, a type, a compiler fl
 _Avoid_: guard (that is an agent guard), fence
 
 **Layer**:
-One of six places a correction can live, strongest first: codebase, static analysis, agent guards, agent
+Where a correction lives, one of six, strongest first: codebase, static analysis, agent guards, agent
 instructions, skills, and style guide. A tend pass uses the strongest layer that can hold the weed class.
 _Avoid_: level, tier
 

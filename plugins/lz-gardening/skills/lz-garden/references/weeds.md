@@ -26,7 +26,9 @@ A weed held only at layer 4 to 6 regrows whenever an agent misses the text. Pref
 ## Census classes
 
 `scripts/patterns.json` finds these by text; the class id is the pattern id. A repository adds or overrides
-patterns in the site's `.garden/patterns.json` (same shape).
+patterns in the site's `.garden/patterns.json` (same shape). A pattern without `paths` searches the JavaScript and
+TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`), the files the census looks for
+duplicate helpers in, so data files and prose do not count.
 
 | Class                                                                                    | Usual layer | Note                                                                                                                                    |
 | ---------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -59,7 +61,7 @@ Only reading a diff finds these. Record what the code shows, not what you suspec
 | `stale-verification`      | 5           | A change to routes, features or user flows in a repository that keeps a verification skill, control script or feature map, which the change did not update. Queue it; refreshing verification is a separate job, not a tend pass.                                                |
 | `missing-check`           | 2           | A kind of check the repository lacks for its stack: no type-check in CI, no lint for TypeScript, no test runner on a package, no mutation testing where tests are hollow, no end-to-end path for a user flow. Queue once per kind, `--where` the config file that would hold it. |
 | `rule-in-prose`           | 2           | A rule written in agent instructions or a style guide (layers 4 to 6) that a type, lint rule or test could enforce, and that the code already breaks somewhere. `--where` the place it is broken; `--source lesson:<file>:<line>` the rule.                                      |
-| `repeated-lesson`         | 1           | The repository's records hold the same lesson, correction or post-mortem finding twice or more. The strongest sign of all: a weed someone pulled by hand that grew back.                                                                                                         |
+| `repeated-lesson`         | 1           | The repository's records hold the same lesson, correction or post-mortem finding twice or more. Its source is a record, `--source lesson:<path>:<line>`. A clean-up in the code that did not hold is queued under the class of the mistake it cleaned up.                        |
 
 ## Records
 

@@ -139,6 +139,13 @@ test('validation refuses a bad class, an empty place, a source without a kind, a
   assert.match(validateAdd(input({ layer: 7 })) ?? '', /layer/);
 });
 
+test('validation refuses a repeated-lesson whose source is not a record, naming the class to queue under', () => {
+  assert.equal(
+    validateAdd(input({ class: 'repeated-lesson', source: 'commit:a366e49b' })),
+    "--class repeated-lesson takes --source lesson:<path>:<line>, a record that holds the lesson; queue a clean-up that did not hold under the mistake's own class",
+  );
+});
+
 test('validation refuses a place, source or note holding a control character, which list would print raw', () => {
   assert.deepEqual(
     [
@@ -446,6 +453,22 @@ test('groups --min leaves out classes with fewer open weeds', (t) => {
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/c.ts:1', '--source', 'census:todo-marker']);
+
+  const rows = cli(dir, ['groups', '--min', '2']).stdout.trimEnd().split('\n').slice(1);
+
+  assert.deepEqual(
+    rows.map((row) => row.split(' ')[0]),
+    ['any-type'],
+  );
+});
+
+test('groups --min counts places: a class whose open weeds all sit in one file is left out', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
+  ['412', '476', '499'].forEach((line) => {
+    cli(dir, ['add', '--class', 'double-cast', '--where', `src/panel.spec.ts:${line}`, '--source', 'commit:7c4bca3']);
+  });
 
   const rows = cli(dir, ['groups', '--min', '2']).stdout.trimEnd().split('\n').slice(1);
 

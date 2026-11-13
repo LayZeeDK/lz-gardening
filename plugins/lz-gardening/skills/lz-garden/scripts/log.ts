@@ -305,12 +305,17 @@ function heldByAnother(garden: Garden, weedClass: string, writer: string): Claim
   return held?.writer === writer ? undefined : held;
 }
 
-/** Classes with two or more open weeds, in groups order: most open, then most regrown, then by name. */
+/** The file a weed sits in: its `--where` without the line. */
+export function placeOf(where: string): string {
+  return where.replace(/:\d+$/, '');
+}
+
+/** Classes whose open weeds sit in two or more places, in groups order: most open, then most regrown, then by name. */
 function readyClasses(open: readonly OpenWeed[]): string[] {
   const regrownIn = (weeds: readonly OpenWeed[]): number => weeds.filter((weed) => weed.regrownAfter !== null).length;
 
   return [...Map.groupBy(open, (weed) => weed.class)]
-    .filter(([, weeds]) => weeds.length >= 2)
+    .filter(([, weeds]) => new Set(weeds.map((weed) => placeOf(weed.where))).size >= 2)
     .toSorted(
       ([aClass, a], [bClass, b]) => b.length - a.length || regrownIn(b) - regrownIn(a) || aClass.localeCompare(bClass),
     )

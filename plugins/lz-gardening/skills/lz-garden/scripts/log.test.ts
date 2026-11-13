@@ -533,6 +533,15 @@ test('a claim of the next ready class finds nothing ready when no class has two 
   assert.deepEqual(planClaim([add('a1', 1, 'x')], null, 'writer-a', 'Ada on laptop', now), { said: 'nothing ready' });
 });
 
+test('a claim of the next ready class finds nothing ready when a class has two open weeds in one file', () => {
+  const events = [
+    add('a1', 1, 'x', { where: 'src/panel.spec.ts:412' }),
+    add('a2', 2, 'y', { where: 'src/panel.spec.ts:476' }),
+  ];
+
+  assert.deepEqual(planClaim(events, null, 'writer-a', 'Ada on laptop', now), { said: 'nothing ready' });
+});
+
 test('a claim of the next ready class takes a class with two open weeds', () => {
   const outcome = planClaim([add('a1', 1, 'x'), add('a2', 2, 'y')], null, 'writer-a', 'Ada on laptop', now);
 
