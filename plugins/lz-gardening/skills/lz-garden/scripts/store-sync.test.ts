@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import childProcess, { spawn } from 'node:child_process';
-import { rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { eventPath } from './log.ts';
 import { inRun, logRef, mayPointAtARepository, openSite, sync } from './store.ts';
-import { writeToLogByHand } from './test-log.ts';
+import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 import { cli } from './test-weeds.ts';
@@ -257,6 +257,24 @@ test('a site whose origin keeps moving is behind after its attempts, and one syn
   );
 });
 
+test('a fetch that finds the shared log locked by another sync of the site waits, tries again, and lands', (t) => {
+  const { first, second } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  const lock = join(second.garden, '.git', 'refs', 'garden-shared', 'log.lock');
+  mkdirSync(dirname(lock), { recursive: true });
+  writeFileSync(lock, '');
+
+  const result = sync(openSite(second.dir), {
+    attempts: 2,
+    wait: () => {
+      rmSync(lock);
+    },
+  });
+
+  assert.deepEqual([result.state, wheres(second.dir)], ['synced', ['src/a.ts:1']]);
+});
+
 test('a push the origin declines counts no event as pushed', (t) => {
   const { dir } = planted(t);
   preReceive(bareRemote(dir), 'exit 1');
@@ -333,14 +351,24 @@ test('a shared log in another format stops the sync with an error naming both fo
   assert.equal(git(second.garden, ['rev-parse', logRef]), tip);
 });
 
-test('a shared log that names no commit stops the sync with what git said, instead of merging it', (t) => {
+const notAGardenLog =
+  'the shared refs/garden/log on origin is not a garden log (a commit holding garden.json); delete or fix it on origin';
+
+test('a shared log that names no commit stops the sync with an error saying it is not a garden log', (t) => {
   const { first, second, remote } = sharedPair(t);
   git(first.garden, ['push', '-q', remote, `${logRef}^{tree}:${logRef}`]);
   addWeed(second.dir, 'src/a.ts:1');
 
-  assert.throws(() => sync(openSite(second.dir), { attempts: 1 }), {
-    message: /^git merge-base --is-ancestor [0-9a-f]+ [0-9a-f]+: error: object [0-9a-f]+ is a tree, not a commit\n/,
-  });
+  assert.throws(() => sync(openSite(second.dir), { attempts: 1 }), { message: notAGardenLog });
+});
+
+test('a shared log whose commit holds no garden.json stops the sync with an error saying it is not a garden log', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  writeEntriesToLogByHand(first.garden, [`0 ${'0'.repeat(40)}\tgarden.json`]);
+  git(first.garden, ['push', '-q', remote, `${logRef}:${logRef}`]);
+  addWeed(second.dir, 'src/a.ts:1');
+
+  assert.throws(() => sync(openSite(second.dir), { attempts: 1 }), { message: notAGardenLog });
 });
 
 test('every push a sync starts names refs/garden/log as its only destination', (t) => {

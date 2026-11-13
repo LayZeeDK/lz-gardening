@@ -28,7 +28,7 @@ First release.
   back, pushing no other ref. Both report the share state in a `shared` field: `local` (no `origin`, or
   `git config lzGardening.share false`), `synced`, `offline` (with git's reason; a fetch or push never asks for
   credentials and gives up after a minute), `read-only` (the push was declined, with git's reason) or `behind` (every
-  try lost to another push; the next run pushes the events). `site.ts sync` also prints how many events it shared and
+  try lost to another push or another sync of the site; the next run pushes the events). `site.ts sync` also prints how many events it shared and
   the files whose shared content it kept over the site's, and exits 0 in every state.
 - `lz-tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Closes the class in

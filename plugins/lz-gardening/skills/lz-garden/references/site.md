@@ -31,7 +31,8 @@ to fetch, `--push` to push), so the checkout itself fetches nothing and gains no
 the merge is the union of both logs' event files: the commit takes the site's log and adds the shared log's files.
 A file both logs hold with different content keeps the shared content and is reported as a conflict; a shared file
 that is not an event file (`events/<xx>/<uuid>.json`) or `garden.json` is not copied and is named on stderr. A shared
-log in a format other than this version's stops the sync with exit 2, naming both formats. Because every site holds
+log in a format other than this version's stops the sync with exit 2, naming both formats; one that is not a commit
+holding `garden.json` stops it with exit 2 too, saying to delete or fix it on `origin`. Because every site holds
 the whole log, a site made again, or one whose remote ref was deleted, gets the log back on its next sync.
 
 ## Open, sync, commit
@@ -62,10 +63,11 @@ The share states:
   than a minute; `reason` says which. The site's events stay in the site.
 - `read-only`: the fetch worked but `origin` declined the push, for a reason other than another push landing first;
   `reason` gives git's message, such as what a server hook said.
-- `behind`: every try lost the race to another push. The site's events stay in the site and the next run pushes them.
+- `behind`: every try lost the race to another push, or to another sync of the same site. The site's events stay in
+  the site and the next run pushes them.
 
 Fetch and push never ask for a password or wait for input: a URL that needs credentials git cannot find is
-`offline`. A push another push beat waits 1, 2, 4 and 8 seconds (give or take half) before the next try.
+`offline`. A try that another push or sync beat waits 1, 2, 4 and 8 seconds (give or take half) before the next try.
 
 Every git command `site.ts` runs, from the clone to each commit in the site, runs none of the user's git hooks and
 signs nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick

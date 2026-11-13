@@ -523,17 +523,25 @@ function mergeOnce(site: string): Merged | 'lost to another writer' {
   const [shared, local = '', sharedFormatFile, localFormatFile] = objectIds(site, [
     sharedLogRef,
     logRef,
-    `${sharedLogRef}:garden.json`,
+    `${sharedLogRef}^{commit}:garden.json`,
     `${logRef}:garden.json`,
   ]);
 
-  if (shared !== undefined && sharedFormatFile !== localFormatFile) {
-    const format = formatOf(git(site, ['cat-file', 'blob', sharedFormatFile ?? ''], { readsOnly: true }));
-
-    if (format !== logFormat) {
+  if (shared !== undefined) {
+    if (sharedFormatFile === undefined) {
       throw new Error(
-        `the shared ${logRef} is in format ${String(format)} and this version reads format ${String(logFormat)}; update lz-gardening`,
+        `the shared ${logRef} on origin is not a garden log (a commit holding garden.json); delete or fix it on origin`,
       );
+    }
+
+    if (sharedFormatFile !== localFormatFile) {
+      const format = formatOf(git(site, ['cat-file', 'blob', sharedFormatFile], { readsOnly: true }));
+
+      if (format !== logFormat) {
+        throw new Error(
+          `the shared ${logRef} is in format ${String(format)} and this version reads format ${String(logFormat)}; update lz-gardening`,
+        );
+      }
     }
   }
 
@@ -608,6 +616,9 @@ function rejected(porcelain: string): boolean {
   return porcelain.split('\n').some((line) => line.startsWith('!\t') && lostRace.test(line));
 }
 
+// A fetch lost to another sync of this site, which held or moved the shared ref first.
+const lostSharedRefLock = /cannot lock ref 'refs\/garden-shared\//;
+
 // Stryker disable next-line LzJsNumericLiteral: how long a fetch or push may take is policy; the limit is tested through timeoutMs
 const networkTimeoutMs = 60_000;
 
@@ -636,42 +647,10 @@ export function sync(
   const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const fetched = networkGit(
-      site.path,
-      ['fetch', '--prune', '--no-tags', '--end-of-options', fetchUrl, '+refs/garden/*:refs/garden-shared/*'],
-      timeoutMs,
-    );
+    const result = syncOnce(site.path, fetchUrl, pushUrl, timeoutMs);
 
-    if (timedOut(fetched)) {
-      return { state: 'offline', reason: 'timed out', ...nothingShared };
-    }
-
-    if (fetched.status !== 0) {
-      return { state: 'offline', reason: reasonOf(fetched.stderr), ...nothingShared };
-    }
-
-    const { upToDate, ...merged } = mergeShared(site.path);
-
-    if (upToDate) {
-      return { state: 'synced', ...merged };
-    }
-
-    const pushed = networkGit(
-      site.path,
-      ['push', '--porcelain', '--end-of-options', pushUrl, `${logRef}:${logRef}`],
-      timeoutMs,
-    );
-
-    if (timedOut(pushed)) {
-      return { state: 'offline', reason: 'timed out', ...nothingShared };
-    }
-
-    if (pushed.status === 0) {
-      return { state: 'synced', ...merged };
-    }
-
-    if (!rejected(pushed.stdout)) {
-      return { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0 };
+    if (result !== 'lost to another writer') {
+      return result;
     }
 
     if (attempt < attempts) {
@@ -680,6 +659,53 @@ export function sync(
   }
 
   return { state: 'behind', ...nothingShared };
+}
+
+function syncOnce(
+  site: string,
+  fetchUrl: string,
+  pushUrl: string,
+  timeoutMs: number,
+): SyncResult | 'lost to another writer' {
+  const fetched = networkGit(
+    site,
+    ['fetch', '--prune', '--no-tags', '--end-of-options', fetchUrl, '+refs/garden/*:refs/garden-shared/*'],
+    timeoutMs,
+  );
+
+  if (timedOut(fetched)) {
+    return { state: 'offline', reason: 'timed out', ...nothingShared };
+  }
+
+  if (fetched.status !== 0) {
+    return lostSharedRefLock.test(fetched.stderr)
+      ? 'lost to another writer'
+      : { state: 'offline', reason: reasonOf(fetched.stderr), ...nothingShared };
+  }
+
+  const { upToDate, ...merged } = mergeShared(site);
+
+  if (upToDate) {
+    return { state: 'synced', ...merged };
+  }
+
+  const pushed = networkGit(
+    site,
+    ['push', '--porcelain', '--end-of-options', pushUrl, `${logRef}:${logRef}`],
+    timeoutMs,
+  );
+
+  if (timedOut(pushed)) {
+    return { state: 'offline', reason: 'timed out', ...nothingShared };
+  }
+
+  if (pushed.status === 0) {
+    return { state: 'synced', ...merged };
+  }
+
+  return rejected(pushed.stdout)
+    ? 'lost to another writer'
+    : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0 };
 }
 
 // Stryker disable next-line LzJsNumericLiteral: how many tries a writer spends is policy; the bound is tested through append's tries
