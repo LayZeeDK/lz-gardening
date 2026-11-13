@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { censusRef, openSite, pendingCensusRef, readCensusAt, sync, writePendingCensus } from './store.ts';
 import type { StoredCensus } from './store.ts';
 import { commit, git } from './test-repo.ts';
-import { bareRemote, planted, sharedPair } from './test-site.ts';
+import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 
 function censusText(sha: string, extra: Readonly<Record<string, unknown>> = {}): string {
   const census = {
@@ -98,6 +98,39 @@ test('a sync keeps the census when the pending census is of an older base commit
   assert.equal(censusRefs(place.garden), `${censusRef} ${kept}`);
 });
 
+test('a sync --census of a newer base deletes the pending census of an older base a crashed tick left', (t) => {
+  const place = planted(t);
+  const older = git(place.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus(place.garden, older, censusText(older));
+
+  const recorded = record(place, commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' }));
+
+  assert.equal(censusRefs(place.garden), `${censusRef} ${recorded}`);
+});
+
+test('a sync --census keeps a pending census of a base that descends from the census it records', (t) => {
+  const place = planted(t);
+  const older = git(place.dir, ['rev-parse', 'HEAD']);
+  const newer = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
+  writePendingCensus(place.garden, newer, censusText(newer));
+  const pending = git(place.garden, ['rev-parse', pendingCensusRef(newer)]);
+
+  const recorded = record(place, older);
+
+  assert.equal(censusRefs(place.garden), `${censusRef} ${recorded}\n${pendingCensusRef(newer)} ${pending}`);
+});
+
+test('a sync --census keeps a pending census of a commit the checkout lacks', (t) => {
+  const place = planted(t);
+  const missing = 'f'.repeat(40);
+  writePendingCensus(place.garden, missing, censusText(missing));
+  const pending = git(place.garden, ['rev-parse', pendingCensusRef(missing)]);
+
+  const recorded = record(place, git(place.dir, ['rev-parse', 'HEAD']));
+
+  assert.equal(censusRefs(place.garden), `${censusRef} ${recorded}\n${pendingCensusRef(missing)} ${pending}`);
+});
+
 test('a sync whose log the origin already holds still pushes the census it records', (t) => {
   const place = planted(t);
   const remote = bareRemote(place.dir);
@@ -108,6 +141,13 @@ test('a sync whose log the origin already holds still pushes the census it recor
   assert.equal(git(remote, ['for-each-ref', '--format=%(objectname)', censusRef]), recorded);
 });
 
+// A base commit pushed to origin, as a census is shared only of a commit a branch fetched from origin holds.
+function onOrigin(place: { readonly dir: string }, sha: string): string {
+  git(place.dir, ['push', '-q', 'origin', `${sha}:refs/heads/base-${sha.slice(0, 8)}`]);
+
+  return sha;
+}
+
 function remoteCensus(remote: string): string {
   return git(remote, ['for-each-ref', '--format=%(objectname)', censusRef]);
 }
@@ -116,7 +156,7 @@ test('a census of a newer base commit replaces the shared census on the origin',
   const { first, second, remote } = sharedPair(t);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
 
-  const newer = record(second, commit(second.dir, { 'src/b.ts': 'export const b = 2;\n' }));
+  const newer = record(second, onOrigin(second, commit(second.dir, { 'src/b.ts': 'export const b = 2;\n' })));
 
   assert.equal(remoteCensus(remote), newer);
 });
@@ -145,7 +185,7 @@ test('a site takes a shared census of a newer base commit in place of its own, a
   const { first, second, remote } = sharedPair(t);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
   sync(openSite(second.dir), { attempts: 1 });
-  const newer = record(first, commit(first.dir, { 'src/b.ts': 'export const b = 2;\n' }));
+  const newer = record(first, onOrigin(first, commit(first.dir, { 'src/b.ts': 'export const b = 2;\n' })));
 
   sync(openSite(second.dir), { attempts: 1 });
 
@@ -157,7 +197,7 @@ test('a census of a newer base commit recorded while the garden was local is kep
   const remote = bareRemote(place.dir);
   record(place, git(place.dir, ['rev-parse', 'HEAD']));
   git(place.dir, ['config', 'lzGardening.share', 'false']);
-  const newer = record(place, commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' }));
+  const newer = record(place, onOrigin(place, commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' })));
   git(place.dir, ['config', 'lzGardening.share', 'true']);
 
   sync(openSite(place.dir), { attempts: 1 });
@@ -223,7 +263,7 @@ test('two clones that take censuses of the same base commit both end with the fi
 test('a clone that takes a census of an ancestor of the shared census base keeps the shared census', (t) => {
   const { first, second, remote } = sharedPair(t);
   const older = git(first.dir, ['rev-parse', 'HEAD']);
-  const shared = record(first, commit(first.dir, { 'src/b.ts': 'export const b = 2;\n' }));
+  const shared = record(first, onOrigin(first, commit(first.dir, { 'src/b.ts': 'export const b = 2;\n' })));
   git(second.dir, ['fetch', '-q', first.dir, 'main']);
 
   record(second, older);
@@ -235,7 +275,7 @@ test('a clone that takes a census of a descendant of the shared census base repl
   const { first, second, remote } = sharedPair(t);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
 
-  const newer = record(second, commit(second.dir, { 'src/b.ts': 'export const b = 2;\n' }));
+  const newer = record(second, onOrigin(second, commit(second.dir, { 'src/b.ts': 'export const b = 2;\n' })));
 
   assert.deepEqual(eachHolds([first, second], remote), Array(3).fill(`${censusRef} ${newer}`));
 });
@@ -244,7 +284,7 @@ test('a clone that takes a census of a rewritten base replaces the shared census
   const { first, second, remote } = sharedPair(t);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
 
-  const rewritten = record(second, rewrittenBase(second.dir));
+  const rewritten = record(second, onOrigin(second, rewrittenBase(second.dir)));
 
   assert.deepEqual(eachHolds([first, second], remote), Array(3).fill(`${censusRef} ${rewritten}`));
 });
@@ -271,7 +311,7 @@ test('a census push whose lease another clone took first is decided again agains
   git(second.dir, ['remote', 'set-url', 'origin', staleMirror]);
   git(second.dir, ['remote', 'set-url', '--push', 'origin', remote]);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
-  const sha = rewrittenBase(second.dir);
+  const sha = onOrigin(second, rewrittenBase(second.dir));
   writePendingCensus(second.garden, sha, censusText(sha));
   const pending = git(second.garden, ['rev-parse', pendingCensusRef(sha)]);
   const waits: number[] = [];
@@ -288,5 +328,34 @@ test('a census push whose lease another clone took first is decided again agains
   assert.deepEqual(
     [result.state, waits.length, remoteCensus(remote), censusRefs(second.garden)],
     ['synced', 1, pending, `${censusRef} ${pending}`],
+  );
+});
+
+test('a census of a commit no branch fetched from origin holds stays local, and the sync says so on stderr', (t) => {
+  const place = planted(t);
+  const remote = bareRemote(place.dir);
+  const sha = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
+  writePendingCensus(place.garden, sha, censusText(sha));
+  const pending = git(place.garden, ['rev-parse', pendingCensusRef(sha)]);
+
+  const synced = site(place.dir, ['sync', '--census', sha]);
+
+  assert.deepEqual(
+    [synced.status, synced.stderr, remoteCensus(remote), git(place.garden, ['rev-parse', censusRef])],
+    [0, `site: the census of ${sha} stays local: no branch fetched from origin holds that commit\n`, '', pending],
+  );
+});
+
+test('a census commit is signed lz-gardening with no address, and an origin that checks every object takes it', (t) => {
+  const place = planted(t);
+  const remote = bareRemote(place.dir);
+  git(remote, ['config', 'receive.fsckObjects', 'true']);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+
+  const pending = record(place, sha);
+
+  assert.deepEqual(
+    [git(place.garden, ['log', '-1', '--format=%an <%ae>|%cn <%ce>', pending]), remoteCensus(remote)],
+    ['lz-gardening <>|lz-gardening <>', pending],
   );
 });

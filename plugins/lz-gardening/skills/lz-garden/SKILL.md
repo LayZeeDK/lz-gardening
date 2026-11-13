@@ -97,7 +97,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`
   with one weed per file the name is defined in.
-- `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record, or
+- `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
+  `~` or one through `..` is refused with exit 2.
+- `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record (the path
+  repository-relative, as for `--where`), or
   `census:seed` in the seed pass. For a census hit, the planting commit is
   `git log -n 1 --format=%h -S '<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`, with a space
   after `-S`.

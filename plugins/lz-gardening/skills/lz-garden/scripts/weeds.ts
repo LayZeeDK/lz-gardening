@@ -10,22 +10,65 @@
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
 //     pass added a check; close-class only), --one-off <reason> (no check written), --keep <reason> (the weed is
-//     deliberate). Values are one line of text without control characters.
-//   node weeds.ts groups [--min <n>]     open weeds per class, most first; --min defaults to 1
+//     deliberate). Values are one line of text without control characters. Both sync with origin before they plan
+//     (a state other than synced or local is named on stderr) and after they append, then print
+//     `<closed|kept> <n>; <share state>`; a bed origin did not take is named on stderr. close-class ends this
+//     writer's claim of the class; close --id leaves it.
+//   node weeds.ts claim [--class <kebab>]
+//     Claims the class, or the first ready one (two or more open weeds, claimed by no other writer), for six hours,
+//     and shares the claim: `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
+//     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state> (<reason>)`, the last
+//     after releasing the claim (`; release pending` when that release is not shared yet).
+//   node weeds.ts release --class <kebab>
+//     Ends this writer's claim and shares the release: `released <class>; <share state>`; exit 1 with
+//     `no claim of <class> held here`.
+//   node weeds.ts groups [--min <n>]     open weeds per class, most first, and who holds a claim of it (tending);
+//                                        --min defaults to 1
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
+// Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
+// folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
 // An event file the log cannot read, or whose text holds a line break or control character, is skipped and named on
 // stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read the
 // log again, because another writer moved it, names it again.
-// Exit 0 on success; 1 when a close finds nothing open; 2 on a usage error or any other failure: no site, a damaged
-// or newer log, a log that kept moving, or a git error.
+// Exit 0 on success; 1 when a close finds nothing open or a claim or release is refused; 2 on a usage error or any
+// other failure: no site, a damaged or newer log, a log that kept moving, or a git error.
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { bedCommit, bedPattern, classPattern, planAdd, planClose, replay, unprintablePattern } from './log.ts';
-import type { AddInput, AddOutcome, CloseRequest, GardenEvent, OpenWeed, TendedClose } from './log.ts';
-import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
+import {
+  bedCommit,
+  bedPattern,
+  classPattern,
+  planAdd,
+  planClaim,
+  planClose,
+  planRelease,
+  replay,
+  unprintablePattern,
+} from './log.ts';
+import type {
+  AddInput,
+  AddOutcome,
+  ClaimEvent,
+  CloseRequest,
+  EventDraft,
+  GardenEvent,
+  OpenWeed,
+  TendedClose,
+} from './log.ts';
+import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import { append, censusRef, objectIdPattern, openSite, readCensusAt, readLog } from './store.ts';
-import type { Replica } from './store.ts';
+import {
+  append,
+  censusRef,
+  configValue,
+  isShared,
+  objectIdPattern,
+  openSite,
+  readCensusAt,
+  readLog,
+  sync,
+} from './store.ts';
+import type { Replica, Site, SyncOptions } from './store.ts';
 
 export interface Group {
   readonly class: string;
@@ -70,6 +113,12 @@ export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
     .sort((a, b) => b.open - a.open || b.regrown - a.regrown || a.class.localeCompare(b.class));
 }
 
+const fromRootDriveOrHome = /^(?:[/\\~]|[a-z]:)/i;
+const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;
+function notRepositoryRelative(path: string): boolean {
+  return fromRootDriveOrHome.test(path) || throughParent.test(path);
+}
+
 export function validateAdd(input: AddInput): string | null {
   if (!classPattern.test(input.class)) {
     return '--class must be kebab-case';
@@ -83,6 +132,14 @@ export function validateAdd(input: AddInput): string | null {
 
   if (unprintable !== null) {
     return unprintable;
+  }
+
+  if (notRepositoryRelative(input.where)) {
+    return '--where must be a repository-relative path';
+  }
+
+  if (input.source.startsWith('lesson:') && notRepositoryRelative(input.source.slice('lesson:'.length))) {
+    return '--source lesson:<path> must be a repository-relative path';
   }
 
   if (!sourcePattern.test(input.source)) {
@@ -147,6 +204,10 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
 
   if (check === undefined || check.trim() === '') {
     return '--tended needs --check <where the check lives>';
+  }
+
+  if (notRepositoryRelative(check)) {
+    return '--check must be a repository-relative path';
   }
 
   return bedPattern.exec(by)?.[1] === target
@@ -267,7 +328,99 @@ function eventsReportingSkipped(io: Io, replica: Replica): readonly GardenEvent[
   return replica.events;
 }
 
-function main(argv: readonly string[], io: Io, now: Date): number {
+function holderOf(site: Site): string {
+  return escapeUnprintable(configValue(site.path, 'user.name') ?? `writer ${site.writer.slice(0, 8)}`);
+}
+
+export type SyncSeams = Pick<SyncOptions, 'wait' | 'look' | 'timeoutMs'>;
+
+function releasesOfClaim(events: readonly GardenEvent[], draft: EventDraft<ClaimEvent>): readonly EventDraft[] {
+  const released = new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
+
+  return events
+    .filter(
+      (event): event is ClaimEvent =>
+        event.op === 'claim' &&
+        event.writer === draft.writer &&
+        event.class === draft.class &&
+        event.until === draft.until &&
+        !released.has(event.uuid),
+    )
+    .map((claim) => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+}
+
+function takenLine(owner: ClaimEvent): string {
+  return `taken ${owner.class} by ${escapeUnprintable(owner.holder)} until ${owner.until}\n`;
+}
+
+// Stryker disable next-line LzJsNumericLiteral: how many classes a claim without --class tries is policy
+const claimRounds = 3;
+
+function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: SyncSeams): number {
+  const holder = holderOf(site);
+  sync(site, { ...seams, attempts: 1 }, now);
+  let owner: ClaimEvent | undefined;
+
+  for (let round = 1; round <= (wanted === null ? claimRounds : 1); round += 1) {
+    const planned = append(
+      site,
+      (replica) => {
+        const plan = planClaim(eventsReportingSkipped(io, replica), wanted, site.writer, holder, now);
+
+        return { drafts: plan.said === 'claimed' ? [plan.draft] : [], result: plan };
+      },
+      now,
+    );
+
+    switch (planned.said) {
+      case 'taken': {
+        io.out(takenLine(planned.claim));
+
+        return 1;
+      }
+      case 'nothing open': {
+        io.out(`nothing open for ${planned.class}\n`);
+
+        return 1;
+      }
+      case 'nothing ready': {
+        io.out('nothing ready to tend\n');
+
+        return 1;
+      }
+      case 'claimed': {
+        break;
+      }
+    }
+
+    const shared = sync(site, { ...seams, attempts: 5 }, now);
+
+    if (!isShared(shared)) {
+      append(site, (replica) => ({ drafts: releasesOfClaim(replica.events, planned.draft), result: null }), now);
+      const pending = isShared(sync(site, { ...seams, attempts: 1 }, now)) ? '' : '; release pending';
+      io.out(`cannot claim ${planned.class}: ${shared.state}${reasonOf(shared)}${pending}\n`);
+
+      return 1;
+    }
+
+    owner = replay(readLog(site).events, now).claims.get(planned.class);
+
+    if (owner?.writer === site.writer) {
+      io.out(`claimed ${owner.class} until ${owner.until}\n`);
+
+      return 0;
+    }
+  }
+
+  // Stryker disable next-line ConditionalExpression: a claim that synced always has an owner, its own or another's
+  if (owner !== undefined) {
+    io.out(takenLine(owner));
+  }
+
+  return 1;
+}
+
+function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): number {
   const { positionals, values } = parseArgs({
     args: [...argv],
     allowPositionals: true,
@@ -338,6 +491,12 @@ function main(argv: readonly string[], io: Io, now: Date): number {
       }
 
       const site = openSite(io.cwd);
+      const before = sync(site, { ...seams, attempts: 1 }, now);
+
+      if (!isShared(before)) {
+        io.err(`weeds ${command}: planned ${before.state}${reasonOf(before)}\n`);
+      }
+
       const outcome = append(
         site,
         (replica) => {
@@ -366,11 +525,59 @@ function main(argv: readonly string[], io: Io, now: Date): number {
         }
         case 'closed':
         case 'kept': {
-          write(`${outcome.said} ${String(outcome.closed.length)}`);
+          const shared = sync(site, { ...seams, attempts: 5 }, now);
+          write(`${outcome.said} ${String(outcome.closed.length)}; ${shared.state}`);
+
+          if (shared.reason !== undefined) {
+            io.err(`weeds ${command}: ${escapeUnprintable(shared.reason)}\n`);
+          }
+
+          shared.divergedBeds.forEach((bed) => {
+            io.err(`weeds ${command}: ${escapeUnprintable(bed)}\n`);
+          });
 
           return 0;
         }
       }
+    }
+    case 'claim': {
+      if (values.class !== undefined && !classPattern.test(values.class)) {
+        io.err('weeds claim: --class must be kebab-case\n');
+
+        return 2;
+      }
+
+      return claim(io, openSite(io.cwd), values.class ?? null, now, seams);
+    }
+    case 'release': {
+      const weedClass = values.class ?? '';
+
+      if (!classPattern.test(weedClass)) {
+        io.err('weeds release: --class must be kebab-case\n');
+
+        return 2;
+      }
+
+      const site = openSite(io.cwd);
+      const planned = append(
+        site,
+        (replica) => {
+          const plan = planRelease(eventsReportingSkipped(io, replica), weedClass, site.writer, now);
+
+          return { drafts: plan.said === 'released' ? plan.drafts : [], result: plan };
+        },
+        now,
+      );
+
+      if (planned.said === 'no claim') {
+        write(`no claim of ${weedClass} held here`);
+
+        return 1;
+      }
+
+      write(`released ${weedClass}; ${sync(site, { ...seams, attempts: 5 }, now).state}`);
+
+      return 0;
     }
     case 'groups': {
       const min = Number(values.min);
@@ -382,14 +589,14 @@ function main(argv: readonly string[], io: Io, now: Date): number {
       }
 
       const site = openSite(io.cwd);
-      const groups = groupWeeds(replay(eventsReportingSkipped(io, readLog(site)), now).open).filter(
-        (group) => group.open >= min,
-      );
-      write(`${'class'.padEnd(36)} open places regrown layer first-seen`);
+      const garden = replay(eventsReportingSkipped(io, readLog(site)), now);
+      const groups = groupWeeds(garden.open).filter((group) => group.open >= min);
+      write(`${'class'.padEnd(36)} open places regrown layer first-seen tending`);
 
       for (const group of groups) {
+        const tending = escapeUnprintable(garden.claims.get(group.class)?.holder ?? '-');
         write(
-          `${group.class.padEnd(36)} ${String(group.open).padStart(4)} ${String(group.places).padStart(6)} ${String(group.regrown).padStart(7)} ${String(group.layer ?? '-').padStart(5)} ${group.firstAt.slice(0, 10)}`,
+          `${group.class.padEnd(36)} ${String(group.open).padStart(4)} ${String(group.places).padStart(6)} ${String(group.regrown).padStart(7)} ${String(group.layer ?? '-').padStart(5)} ${group.firstAt.slice(0, 10)} ${tending}`,
         );
       }
 
@@ -411,15 +618,15 @@ function main(argv: readonly string[], io: Io, now: Date): number {
       return 0;
     }
     default: {
-      io.err('usage: weeds.ts add|close|close-class|groups|list ... (see the header of weeds.ts)\n');
+      io.err('usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n');
 
       return 2;
     }
   }
 }
 
-export function run(argv: readonly string[], io: Io, now = new Date()): number {
-  return runCommand('weeds', io, () => main(argv, io, now));
+export function run(argv: readonly string[], io: Io, now = new Date(), seams: SyncSeams = {}): number {
+  return runCommand('weeds', io, () => main(argv, io, now, seams));
 }
 
 if (isMainModule(import.meta.url)) {

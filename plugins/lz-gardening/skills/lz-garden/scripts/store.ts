@@ -2,10 +2,20 @@ import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { eventPath, eventPathPattern, isRecord, parseEvent, stamp } from './log.ts';
-import type { EventDraft, GardenEvent } from './log.ts';
+import {
+  bedCommit,
+  eventPath,
+  eventPathPattern,
+  isRecord,
+  latestTendedClose,
+  losingClaims,
+  parseEvent,
+  stamp,
+} from './log.ts';
+import type { ClaimEvent, EventDraft, GardenEvent, LostClaim } from './log.ts';
 
 interface Run {
   readonly env: Readonly<NodeJS.ProcessEnv>;
@@ -191,18 +201,13 @@ function data(text: string): string {
   return `data ${String(Buffer.byteLength(text))}\n${text}\n`;
 }
 
-function identity(site: string, whose: 'author' | 'committer', now: string): string {
-  const env = gitEnv(site);
+function identity(checkout: string, whose: 'author' | 'committer', now: string): string {
   const variable = `GIT_${whose.toUpperCase()}`;
-  const name = env[`${variable}_NAME`] ?? configValue(site, `${whose}.name`) ?? configValue(site, 'user.name');
-  const email = env[`${variable}_EMAIL`] ?? configValue(site, `${whose}.email`) ?? configValue(site, 'user.email');
+  const name = configValue(checkout, 'lzGardening.name');
+  const email = configValue(checkout, 'lzGardening.email');
+  const signer = name === undefined || email === undefined ? 'lz-gardening <>' : `${name} <${email}>`;
 
-  // Without a configured name or address, git makes one up or refuses; one more git process asks it which.
-  if (name === undefined || email === undefined) {
-    return `${whose} ${git(site, ['var', `${variable}_IDENT`])}\n`;
-  }
-
-  return `${whose} ${name} <${email}> ${env[`${variable}_DATE`] ?? now}\n`;
+  return `${whose} ${signer} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
 }
 
 type LogFile = { readonly path: string; readonly text: string } | { readonly path: string; readonly oid: string };
@@ -210,12 +215,17 @@ type LogFile = { readonly path: string; readonly text: string } | { readonly pat
 // fast-import moves the ref only by fast-forward, so a commit planned on the tip lands only while the ref names it,
 // and a first commit lands only where there is no log. A merge parent adds history, not files: the tree is the tip's
 // plus the files given.
-function writeLogIfStill(site: string, tip: string | null, files: readonly LogFile[], merge?: string): boolean {
+function writeLogIfStill(
+  { path: site, checkout }: Pick<Site, 'path' | 'checkout'>,
+  tip: string | null,
+  files: readonly LogFile[],
+  merge?: string,
+): boolean {
   const now = `@${String(Math.floor(Date.now() / 1000))}`;
   const stream = [
     `commit ${logRef}\n`,
-    identity(site, 'author', now),
-    identity(site, 'committer', now),
+    identity(checkout, 'author', now),
+    identity(checkout, 'committer', now),
     data('garden: log\n'),
     ...(tip === null ? [] : [`from ${tip}\n`]),
     ...(merge === undefined ? [] : [`merge ${merge}\n`]),
@@ -250,7 +260,7 @@ function writeLogIfStill(site: string, tip: string | null, files: readonly LogFi
 
 export const writerKey = 'lzGardening.writer';
 
-export function startLog(site: string): void {
+export function startLog(site: Pick<Site, 'path' | 'checkout'>): void {
   writeLogIfStill(site, null, [{ path: 'garden.json', text: JSON.stringify({ format: logFormat }) }]);
 }
 
@@ -297,6 +307,11 @@ export function requireSite(path: string): void {
 export function openSite(cwd: string): Site {
   const { checkout, path } = siteOf(cwd);
   requireSite(path);
+
+  return withWriter({ checkout, path });
+}
+
+export function withWriter({ checkout, path }: Pick<Site, 'checkout' | 'path'>): Site {
   const writer = configValue(path, writerKey);
 
   if (writer === undefined) {
@@ -462,6 +477,7 @@ function emptyTreeLike(oid: string): string {
 interface Change {
   readonly status: string;
   readonly sharedOid: string;
+  readonly localOid: string;
   readonly path: string;
 }
 
@@ -473,9 +489,9 @@ function diffTree(site: string, shared: string, local: string): readonly Change[
     // Stryker disable next-line StringLiteral: diff-tree prints five fields and a path for every change, so no default applies
     const [meta = '', path = ''] = fields.slice(index * 2, index * 2 + 2);
     // Stryker disable next-line StringLiteral: as above
-    const [, , sharedOid = '', , status = ''] = meta.split(' ');
+    const [, , sharedOid = '', localOid = '', status = ''] = meta.split(' ');
 
-    return { status, sharedOid, path };
+    return { status, sharedOid, localOid, path };
   });
 }
 
@@ -488,13 +504,17 @@ export interface SyncResult {
   readonly conflicts: readonly string[];
   readonly skipped: readonly string[];
   readonly sharedCensusIgnored?: boolean;
+  readonly yielded: readonly LostClaim[];
+  readonly divergedBeds: readonly string[];
+  readonly censusKeptLocal?: string;
 }
 
 export interface SyncOptions {
   readonly attempts: number;
-  readonly wait?: (ms: number) => void;
+  readonly wait?: ((ms: number) => void) | undefined;
   readonly timeoutMs?: number;
   readonly census?: string | undefined;
+  readonly look?: typeof losingClaims;
 }
 
 function reasonOf(stderr: string): string {
@@ -513,13 +533,19 @@ function isAncestor(site: string, ancestor: string, descendant: string): boolean
   return result.status === 0;
 }
 
-const nothingShared = { pushedEvents: 0, conflicts: [], skipped: [] } as const;
+const nothingShared = { pushedEvents: 0, conflicts: [], skipped: [], yielded: [], divergedBeds: [] } as const;
+
+interface Leaving {
+  readonly path: string;
+  readonly localOid: string;
+}
 
 interface Merged {
   readonly upToDate: boolean;
   readonly pushedEvents: number;
   readonly conflicts: readonly string[];
   readonly skipped: readonly string[];
+  readonly leaving: readonly Leaving[];
 }
 
 interface Tips {
@@ -530,7 +556,7 @@ interface Tips {
 }
 
 function mergeOnce(
-  site: string,
+  { path: site, checkout }: Pick<Site, 'path' | 'checkout'>,
   { shared, local, sharedFormatFile, localFormatFile }: Tips,
 ): Merged | 'lost to another writer' {
   if (shared !== undefined) {
@@ -552,14 +578,17 @@ function mergeOnce(
   }
 
   if (shared === local) {
-    return { upToDate: true, ...nothingShared };
+    return { upToDate: true, ...nothingShared, leaving: [] };
   }
 
   const changes = diffTree(site, shared ?? emptyTreeLike(local), local);
-  const pushedEvents = changes.filter(({ status, path }) => status === 'A' && eventPathPattern.test(path)).length;
+  const leaving = changes
+    .filter(({ status, path }) => status === 'A' && eventPathPattern.test(path))
+    .map(({ path, localOid }) => ({ path, localOid }));
+  const pushedEvents = leaving.length;
 
   if (shared === undefined || isAncestor(site, shared, local)) {
-    return { upToDate: false, ...nothingShared, pushedEvents };
+    return { upToDate: false, ...nothingShared, pushedEvents, leaving };
   }
 
   const fromShared = changes.filter(({ status }) => status !== 'A');
@@ -569,17 +598,17 @@ function mergeOnce(
 
   if (copied.length === fromShared.length && !changes.some(({ status }) => status === 'A')) {
     return moveLogIfStill(site, shared, local)
-      ? { upToDate: true, pushedEvents: 0, conflicts, skipped }
+      ? { upToDate: true, pushedEvents: 0, conflicts, skipped, leaving: [] }
       : 'lost to another writer';
   }
 
   return writeLogIfStill(
-    site,
+    { path: site, checkout },
     local,
     copied.map(({ path, sharedOid }) => ({ path, oid: sharedOid })),
     shared,
   )
-    ? { upToDate: false, pushedEvents, conflicts, skipped }
+    ? { upToDate: false, pushedEvents, conflicts, skipped, leaving }
     : 'lost to another writer';
 }
 
@@ -602,9 +631,11 @@ interface CensusTips {
   readonly shared: string | undefined;
 }
 
-function mergeShared(site: string): Merged & { readonly census: CensusTips } {
+function mergeShared(
+  site: Pick<Site, 'path' | 'checkout'>,
+): Merged & { readonly census: CensusTips; readonly sharedTip: string | undefined } {
   for (let attempt = 1; ; attempt += 1) {
-    const [shared, local = '', sharedFormatFile, localFormatFile, localCensus, sharedCensus] = objectIds(site, [
+    const [shared, local = '', sharedFormatFile, localFormatFile, localCensus, sharedCensus] = objectIds(site.path, [
       sharedLogRef,
       logRef,
       `${sharedLogRef}^{commit}:garden.json`,
@@ -615,7 +646,7 @@ function mergeShared(site: string): Merged & { readonly census: CensusTips } {
     const merged = mergeOnce(site, { shared, local, sharedFormatFile, localFormatFile });
 
     if (merged !== 'lost to another writer') {
-      return { ...merged, census: { local: localCensus, shared: sharedCensus } };
+      return { ...merged, census: { local: localCensus, shared: sharedCensus }, sharedTip: shared };
     }
 
     if (attempt >= mergeTries) {
@@ -652,8 +683,12 @@ function networkGit(site: string, args: readonly string[], timeoutMs: number): S
   );
 }
 
-export function sync(site: Pick<Site, 'checkout' | 'path'>, options: SyncOptions): SyncResult {
-  const result = syncWithOrigin(site, options);
+export function isShared(result: SyncResult): boolean {
+  return result.state === 'synced' || result.state === 'local';
+}
+
+export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {
+  const result = syncWithOrigin(site, options, now);
 
   if (options.census !== undefined) {
     finishPendingCensus(site, options.census);
@@ -662,14 +697,29 @@ export function sync(site: Pick<Site, 'checkout' | 'path'>, options: SyncOptions
   return result;
 }
 
-function finishPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): void {
-  recordPendingCensus(site, pendingSha);
-  git(site.path, ['update-ref', '-d', pendingCensusRef(pendingSha)]);
+function finishPendingCensus(site: Site, pendingSha: string): void {
+  const recorded = recordPendingCensus(site, pendingSha);
+  const pendingPrefix = pendingCensusRef('');
+  const leftovers = git(site.path, ['for-each-ref', '--format=%(refname) %(objectname)', pendingPrefix], {
+    readsOnly: true,
+  })
+    .split('\n')
+    .filter((line) => line !== '')
+    .map((line) => line.split(' '));
+  const deletes = leftovers.filter(([name = '']) => {
+    const sha = name.slice(pendingPrefix.length);
+
+    return sha === pendingSha || (recorded.sha !== undefined && isAncestorInCheckout(site, sha, recorded.sha));
+  });
+  git(site.path, ['update-ref', '--stdin'], {
+    input: deletes.map(([name = '', oid = '']) => `delete ${name} ${oid}\n`).join(''),
+  });
 }
 
 function syncWithOrigin(
-  site: Pick<Site, 'checkout' | 'path'>,
-  { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha }: SyncOptions,
+  site: Site,
+  { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha, look = losingClaims }: SyncOptions,
+  now: Date,
 ): SyncResult {
   const fetchUrl = optionalGit(site.checkout, ['remote', 'get-url', 'origin'], { readsOnly: true });
 
@@ -681,12 +731,13 @@ function syncWithOrigin(
   }
 
   const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
+  const yielded: LostClaim[] = [];
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const result = syncOnce(site, fetchUrl, pushUrl, timeoutMs, pendingSha);
+    const result = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, look, now, yielded });
 
     if (result !== 'lost to another writer') {
-      return result;
+      return { ...result, yielded };
     }
 
     if (attempt < attempts) {
@@ -694,18 +745,93 @@ function syncWithOrigin(
     }
   }
 
-  return { state: 'behind', ...nothingShared };
+  return { state: 'behind', ...nothingShared, yielded };
 }
 
-function syncOnce(
-  { checkout, path: site }: Pick<Site, 'checkout' | 'path'>,
-  fetchUrl: string,
-  pushUrl: string,
-  timeoutMs: number,
-  pendingSha: string | undefined,
-): SyncResult | 'lost to another writer' {
-  const fetched = networkGit(
+interface Attempt {
+  readonly fetchUrl: string;
+  readonly pushUrl: string;
+  readonly timeoutMs: number;
+  readonly pendingSha: string | undefined;
+  readonly look: typeof losingClaims;
+  readonly now: Date;
+  readonly yielded: LostClaim[];
+}
+
+function giveBackLosingClaims(
+  site: Site,
+  sharedTip: string | undefined,
+  leaving: readonly Leaving[],
+  { look, now, yielded }: Attempt,
+): number {
+  if (leaving.length === 0) {
+    return 0;
+  }
+
+  const events = blobTexts(
+    site.path,
+    leaving.map(({ localOid }) => localOid),
+  ).flatMap((text, index) => {
+    const event = parseEvent(leaving[index]?.path ?? '', text ?? '');
+
+    return typeof event === 'string' ? [] : [event];
+  });
+  const released = new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
+  const mine = events.filter(
+    (event): event is ClaimEvent =>
+      event.op === 'claim' &&
+      event.writer === site.writer &&
+      !released.has(event.uuid) &&
+      Date.parse(event.until) > now.getTime(),
+  );
+
+  if (mine.length === 0) {
+    return 0;
+  }
+
+  const lost = look(sharedTip === undefined ? [] : readReplica(site.path, sharedTip).events, mine, site.writer, now);
+
+  if (lost.length === 0) {
+    return 0;
+  }
+
+  yielded.push(...lost);
+
+  return append(
     site,
+    (replica) => {
+      const releasedHere = new Set(replica.events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
+      const drafts = lost
+        .filter(({ claim }) => !releasedHere.has(claim.uuid))
+        .map(({ claim }): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+
+      return { drafts, result: drafts.length };
+    },
+    now,
+  );
+}
+
+function censusOffOrigin(site: Site, ref: string): string | undefined {
+  const sha = censusIn(site.path, ref)?.sha;
+
+  if (sha === undefined) {
+    return undefined;
+  }
+
+  const holders = optionalGit(
+    site.checkout,
+    ['for-each-ref', '--count=1', '--format=%(refname)', `--contains=${sha}`, 'refs/remotes/origin/'],
+    { readsOnly: true },
+  );
+
+  return holders === undefined || holders === '' ? sha : undefined;
+}
+
+function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> | 'lost to another writer' {
+  const { path } = site;
+  const { fetchUrl, pushUrl, timeoutMs, pendingSha } = attempt;
+  const fetched = networkGit(
+    path,
     ['fetch', '--prune', '--no-tags', '--end-of-options', fetchUrl, '+refs/garden/*:refs/garden-shared/*'],
     timeoutMs,
   );
@@ -720,17 +846,26 @@ function syncOnce(
       : { state: 'offline', reason: reasonOf(fetched.stderr), ...nothingShared };
   }
 
-  const { upToDate, census: censusTips, ...mergedLog } = mergeShared(site);
-  const settled = settleCensus({ checkout, path: site }, censusTips, pendingSha);
-  const merged = settled.ignored ? { ...mergedLog, sharedCensusIgnored: true } : mergedLog;
-  const censusAhead = settled.local !== undefined && settled.local !== censusTips.shared;
+  const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
+  const releases = giveBackLosingClaims(site, sharedTip, leaving, attempt);
+  const settled = settleCensus(site, censusTips, pendingSha);
+  const pushedEvents = mergedLog.pushedEvents + releases;
+  const newerCensus = settled.local === censusTips.shared ? undefined : settled.local;
+  const keptLocal = newerCensus === undefined ? undefined : censusOffOrigin(site, newerCensus);
+  const censusAhead = newerCensus !== undefined && keptLocal === undefined;
+  const merged = {
+    ...mergedLog,
+    pushedEvents,
+    ...(settled.ignored ? { sharedCensusIgnored: true } : {}),
+    ...(keptLocal === undefined ? {} : { censusKeptLocal: keptLocal }),
+  };
 
   if (upToDate && !censusAhead) {
-    return { state: 'synced', ...merged };
+    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, leaving, attempt) };
   }
 
   const pushed = networkGit(
-    site,
+    path,
     [
       'push',
       '--porcelain',
@@ -749,12 +884,114 @@ function syncOnce(
   }
 
   if (pushed.status === 0) {
-    return { state: 'synced', ...merged };
+    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, leaving, attempt) };
   }
 
   return rejected(pushed.stdout)
     ? 'lost to another writer'
-    : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0 };
+    : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [] };
+}
+
+const bedBranches = 'refs/heads/bed/';
+
+const sharedBeds = 'refs/garden-shared/beds/';
+
+export function fetchedBedRef(weedClass: string): string {
+  return `${sharedBeds}${weedClass}`;
+}
+
+function sharedBedRef(weedClass: string): string {
+  return `refs/garden/beds/${weedClass}`;
+}
+
+function bedStaysLocal(site: Site, tip: string): string | undefined {
+  const lent = { GIT_ALTERNATE_OBJECT_DIRECTORIES: join(site.path, '.git', 'objects'), GIT_NO_LAZY_FETCH: '1' };
+  const notOn = (refs: readonly string[]): string =>
+    git(site.checkout, ['rev-list', '--count', tip, '--not', ...refs], { readsOnly: true, env: lent });
+
+  if (notOn(['--remotes=origin']) !== notOn(['--branches', '--remotes=origin'])) {
+    return 'stays local: its base is on no branch fetched from origin';
+  }
+
+  const holdsMachinePath = machinePathTest(site);
+  const added = git(
+    site.checkout,
+    ['log', '-p', '--no-color', '--no-ext-diff', '--no-textconv', '--format=', tip, '--not', '--remotes=origin'],
+    { readsOnly: true, env: lent },
+  )
+    .split('\n')
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'));
+
+  return added.some(holdsMachinePath) ? 'stays local: it adds a line holding a path on this machine' : undefined;
+}
+
+function pushBeds(site: Site, leaving: readonly Leaving[], { pushUrl, timeoutMs }: Attempt): readonly string[] {
+  const tips = git(site.path, ['for-each-ref', '--format=%(refname) %(objectname)', bedBranches, sharedBeds], {
+    readsOnly: true,
+  })
+    .split('\n')
+    .filter((line) => line !== '')
+    .map((line) => line.split(' '));
+  const tipOf = (prefix: string, weedClass: string): string | undefined =>
+    tips.find(([name]) => name === `${prefix}${weedClass}`)?.[1];
+  const candidates = tips.flatMap(([name = '', oid = '']) => {
+    const weedClass = name.slice(bedBranches.length);
+
+    return name.startsWith(bedBranches) && tipOf(sharedBeds, weedClass) !== oid ? [{ weedClass, tip: oid }] : [];
+  });
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const { events } = readReplica(site.path, logRef);
+  const leavingPaths = new Set(leaving.map(({ path }) => path));
+  const judged = candidates.flatMap((bed) => {
+    const close = latestTendedClose(events, bed.weedClass);
+    const shared = tipOf(sharedBeds, bed.weedClass);
+
+    if (close === undefined || !bed.tip.startsWith(bedCommit(close))) {
+      return [];
+    }
+
+    if (shared === undefined) {
+      return leavingPaths.has(eventPath(close.uuid)) ? [{ ...bed, descends: true }] : [];
+    }
+
+    return [{ ...bed, descends: isAncestor(site.path, shared, bed.tip) }];
+  });
+  const kept = judged.flatMap((bed) => {
+    const why = bed.descends ? bedStaysLocal(site, bed.tip) : `does not descend from origin's bed`;
+
+    return why === undefined ? [] : [{ ...bed, why }];
+  });
+  const pushing = judged.filter((bed) => !kept.some(({ weedClass }) => weedClass === bed.weedClass));
+  const diverged = kept.map(({ weedClass, why }) => `${weedClass}: bed/${weedClass} ${why}`);
+
+  if (pushing.length === 0) {
+    return diverged;
+  }
+
+  const pushed = networkGit(
+    site.path,
+    [
+      'push',
+      '--porcelain',
+      '--end-of-options',
+      pushUrl,
+      ...pushing.map(({ weedClass, tip }) => `${tip}:${sharedBedRef(weedClass)}`),
+    ],
+    timeoutMs,
+  );
+  // A porcelain line per ref: "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as it was.
+  const refused = pushed.stdout.split('\n').flatMap((line) => {
+    const [flag, refs = '', summary = ''] = line.split('\t');
+    const weedClass = refs.slice(refs.indexOf(':') + 1).slice(sharedBedRef('').length);
+
+    return flag === '!' ? [`${weedClass}: ${summary}`] : [];
+  });
+
+  return [...diverged, ...refused];
 }
 
 export const censusRef = 'refs/garden/census';
@@ -825,10 +1062,11 @@ export interface StoredCensus {
 
 export function writePendingCensus(site: string, sha: string, text: string, patterns?: string): void {
   const now = `@${String(Math.floor(Date.now() / 1000))}`;
+  const checkout = site.slice(0, -'.garden'.length);
   const stream = [
     `commit ${pendingCensusRef(sha)}\n`,
-    identity(site, 'author', now),
-    identity(site, 'committer', now),
+    identity(checkout, 'author', now),
+    identity(checkout, 'committer', now),
     data('garden: census\n'),
     `M 100644 inline census.json\n${data(text)}`,
     ...(patterns === undefined ? [] : [`M 100644 inline patterns.json\n${data(patterns)}`]),
@@ -889,17 +1127,22 @@ function isAncestorInCheckout(site: Pick<Site, 'checkout'>, ancestor: string, de
   return gitSucceeds(site.checkout, ['merge-base', '--is-ancestor', ancestor, descendant], { readsOnly: true });
 }
 
-function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): string | undefined {
+interface Recorded {
+  readonly local: string | undefined;
+  readonly sha: string | undefined;
+}
+
+function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): Recorded {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
   const current = local === undefined ? undefined : censusIn(site.path, local);
 
   if (pending === undefined || (current !== undefined && isAncestorInCheckout(site, pendingSha, current.sha))) {
-    return local;
+    return { local, sha: current?.sha };
   }
 
   git(site.path, ['update-ref', censusRef, pending, local ?? '']);
 
-  return pending;
+  return { local: pending, sha: pendingSha };
 }
 
 function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string | undefined, theirs: Census): boolean {
@@ -925,7 +1168,7 @@ function settleCensus(
     return adopted;
   }
 
-  return { ...adopted, local: recordPendingCensus(site, pendingSha) };
+  return { ...adopted, local: recordPendingCensus(site, pendingSha).local };
 }
 
 interface Settled {
@@ -956,6 +1199,38 @@ function adoptSharedCensus(site: Pick<Site, 'checkout' | 'path'>, { local, share
 // Stryker disable next-line LzJsNumericLiteral: how many tries a writer spends is policy; the bound is tested through append's tries
 const appendTries = 50;
 
+function machinePathTest(site: Pick<Site, 'checkout' | 'path'>): (text: string) => boolean {
+  const fold = (text: string): string => text.replaceAll('\\', '/').toLowerCase();
+  const paths = [homedir(), site.checkout, site.path]
+    .map((path) => fold(path).replace(/\/+$/, ''))
+    .filter((path) => !/^(?:[a-z]:)?$/.test(path));
+  const holds = (text: string, path: string): boolean => {
+    for (let at = text.indexOf(path); at !== -1; at = text.indexOf(path, at + 1)) {
+      if (!/[\w.-]/.test(text.charAt(at + path.length))) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  return (text) => paths.some((path) => holds(fold(text), path));
+}
+
+function refuseMachinePaths(site: Site, drafts: readonly EventDraft[]): void {
+  const holdsMachinePath = machinePathTest(site);
+
+  for (const draft of drafts) {
+    for (const [field, value] of Object.entries(draft)) {
+      if (typeof value === 'string' && holdsMachinePath(value)) {
+        throw new Error(
+          `the ${field} holds a path on this machine; the queue is shared with the repository, so write paths repository-relative`,
+        );
+      }
+    }
+  }
+}
+
 export function append<T>(
   site: Site,
   plan: (replica: Replica) => { readonly drafts: readonly EventDraft[]; readonly result: T },
@@ -970,6 +1245,8 @@ export function append<T>(
       return result;
     }
 
+    refuseMachinePaths(site, drafts);
+
     const maxClock = replica.events.reduce((max, event) => Math.max(max, event.clock), 0);
 
     if (!Number.isSafeInteger(maxClock + drafts.length)) {
@@ -980,7 +1257,7 @@ export function append<T>(
 
     if (
       writeLogIfStill(
-        site.path,
+        site,
         replica.tip,
         events.map((event) => ({ path: eventPath(event.uuid), text: JSON.stringify(event) })),
       )

@@ -3,11 +3,16 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { unprintablePattern } from './log.ts';
 import { inRun } from './store.ts';
+import type { SyncResult } from './store.ts';
 
 const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
 
 export function escapeUnprintable(text: string): string {
   return text.replace(everyUnprintable, (character) => `\\u{${character.charCodeAt(0).toString(16)}}`);
+}
+
+export function reasonOf(result: SyncResult): string {
+  return result.reason === undefined ? '' : ` (${escapeUnprintable(result.reason)})`;
 }
 
 export interface Io {

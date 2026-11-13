@@ -1,8 +1,9 @@
 // Run: node --test weeds.test.ts
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, realpathSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, parse, sep } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { planAdd, replay, stamp, weedId } from './log.ts';
@@ -162,6 +163,47 @@ test('validation also refuses line and paragraph separators and bidirectional co
   );
 });
 
+test('validation refuses an absolute --where, so no machine path reaches the shared queue', () => {
+  assert.deepEqual(
+    [
+      '/home/ada/repo/src/a.ts:1',
+      'C:\\Users\\ada\\repo\\src\\a.ts:1',
+      'd:/repo/src/a.ts',
+      '\\\\server\\share\\a.ts',
+    ].map((where) => validateAdd(input({ where }))),
+    Array.from({ length: 4 }, () => '--where must be a repository-relative path'),
+  );
+});
+
+test('validation refuses a --where in a home folder or above the repository, and takes dots inside a name', () => {
+  assert.deepEqual(
+    [
+      '~/repo/src/a.ts:1',
+      '~ada/a.ts',
+      '../other/a.ts:1',
+      'src/../../a.ts',
+      'src\\..\\..\\a.ts',
+      'src/a..b.ts:1',
+      '.github/x.yml',
+    ].map((where) => validateAdd(input({ where }))),
+    [...Array.from({ length: 5 }, () => '--where must be a repository-relative path'), null, null],
+  );
+});
+
+test('validation refuses a lesson source whose path is not repository-relative, and leaves other kinds alone', () => {
+  assert.deepEqual(
+    ['lesson:/home/ada/notes.md', 'lesson:../notes.md', 'lesson:docs/notes.md', 'commit:/abc'].map((source) =>
+      validateAdd(input({ source })),
+    ),
+    [
+      '--source lesson:<path> must be a repository-relative path',
+      '--source lesson:<path> must be a repository-relative path',
+      null,
+      null,
+    ],
+  );
+});
+
 test('validation takes the joiners that words and emoji need in paths and notes', () => {
   const nonJoiner = String.fromCodePoint(0x200c);
   const joiner = String.fromCodePoint(0x200d);
@@ -219,7 +261,7 @@ test('through the CLI a tend close records its bed and check, and a weed of the 
 
   const close = [...logFiles(garden).values()].find((event) => event['op'] === 'close');
 
-  assert.equal(closed.stdout, 'closed 1\n');
+  assert.equal(closed.stdout, 'closed 1; local\n');
   assert.match(back.stdout, /^regrown [0-9a-f]{10} after bed\/any-type@bbb2222 \(check: eslint\.config\.mjs\)\n$/);
   assert.deepEqual(
     ['ids', 'class', 'by', 'kind', 'check'].map((field) => close?.[field]),
@@ -240,7 +282,7 @@ test('through the CLI a one-off close and a keep each record their reason and ki
   cli(dir, ['add', '--class', 'todo-marker', '--where', 'src/b.ts:2', '--source', 'commit:aaa1111']);
   const kept = cli(dir, ['close-class', '--class', 'todo-marker', '--keep', 'tracked in the issue tracker']);
 
-  assert.deepEqual([oneOff.stdout, kept.stdout], ['closed 1\n', 'kept 1\n']);
+  assert.deepEqual([oneOff.stdout, kept.stdout], ['closed 1; local\n', 'kept 1; local\n']);
   assert.deepEqual(
     [...logFiles(garden).values()]
       .filter((event) => event['op'] === 'close')
@@ -366,11 +408,14 @@ test('groups prints a header, then a row per class with its layer or a dash and 
   const lines = result.stdout.trimEnd().split('\n');
 
   assert.equal(result.code, 0);
-  assert.equal(lines[0], `${'class'.padEnd(36)} open places regrown layer first-seen`);
-  assert.match(lines[1] ?? '', new RegExp(`^${'any-type'.padEnd(36)}    1      1       0     3 \\d{4}-\\d{2}-\\d{2}$`));
+  assert.equal(lines[0], `${'class'.padEnd(36)} open places regrown layer first-seen tending`);
+  assert.match(
+    lines[1] ?? '',
+    new RegExp(`^${'any-type'.padEnd(36)}    1      1       0     3 \\d{4}-\\d{2}-\\d{2} -$`),
+  );
   assert.match(
     lines[2] ?? '',
-    new RegExp(`^${'todo-marker'.padEnd(36)}    1      1       0     - \\d{4}-\\d{2}-\\d{2}$`),
+    new RegExp(`^${'todo-marker'.padEnd(36)}    1      1       0     - \\d{4}-\\d{2}-\\d{2} -$`),
   );
 });
 
@@ -398,7 +443,7 @@ test('close takes one weed by id and leaves the rest of its class open', (t) => 
   const result = cli(dir, ['close', '--id', target, '--one-off', 'generated code']);
 
   assert.equal(result.code, 0);
-  assert.equal(result.stdout, 'closed 1\n');
+  assert.equal(result.stdout, 'closed 1; local\n');
   assert.deepEqual(
     cli(dir, ['list'])
       .stdout.trimEnd()
@@ -514,6 +559,22 @@ test('a tend close refuses a check of only spaces, which names no place', (t) =>
   assert.equal(logFiles(garden).size, 1);
 });
 
+test('a tend close refuses a check that is not repository-relative and writes nothing', (t) => {
+  const { dir, garden } = planted(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  const tended = ['close-class', '--class', 'any-type', '--tended', 'bed/any-type@1a2b3c4', '--check'];
+
+  const results = ['C:\\Users\\ada\\repo\\eslint.config.mjs', '~/eslint.config.mjs', '../eslint.config.mjs'].map(
+    (check) => cli(dir, [...tended, check]),
+  );
+
+  assert.deepEqual(
+    results.map((result) => [result.code, result.stderr]),
+    Array.from({ length: 3 }, () => [2, 'weeds close-class: --check must be a repository-relative path\n']),
+  );
+  assert.equal(logFiles(garden).size, 1);
+});
+
 test('a tend close takes a whole class: close by id refuses --tended and leaves the class untended', (t) => {
   const dir = checkout(t);
   const target = idOf(
@@ -574,7 +635,7 @@ test('closing a class of several weeds appends one close event naming each weed'
 
   const closed = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
 
-  assert.equal(closed.stdout, 'closed 2\n');
+  assert.equal(closed.stdout, 'closed 2; local\n');
   assert.deepEqual(
     [...logFiles(garden).values()].flatMap((event) => (event['op'] === 'close' ? [event['ids']] : [])),
     [[weedId('any-type', 'src/a.ts:1', 'census:any-type'), weedId('any-type', 'src/b.ts:1', 'census:any-type')]],
@@ -709,7 +770,7 @@ test('an unknown command prints the usage line', (t) => {
   const result = cli(checkout(t), ['prune']);
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /^usage: weeds\.ts add\|close\|close-class\|groups\|list/);
+  assert.match(result.stderr, /^usage: weeds\.ts add\|close\|close-class\|claim\|release\|groups\|list/);
 });
 
 test('a usage error in a repository with no site names the usage error, not the missing site', (t) => {
@@ -721,8 +782,88 @@ test('a usage error in a repository with no site names the usage error, not the 
   assert.deepEqual(
     results.map(({ code, stderr }) => [code, stderr]),
     [
-      [2, 'usage: weeds.ts add|close|close-class|groups|list ... (see the header of weeds.ts)\n'],
+      [2, 'usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
       [2, 'weeds groups: --min must be a whole number of at least 1, got 0\n'],
+    ],
+  );
+});
+
+function homeAt(t: TestContext, folder: string): void {
+  for (const name of ['HOME', 'USERPROFILE']) {
+    const was = process.env[name];
+    t.after(() => {
+      if (was === undefined) {
+        Reflect.deleteProperty(process.env, name);
+      } else {
+        process.env[name] = was;
+      }
+    });
+    process.env[name] = folder;
+  }
+}
+
+test('add takes a note that only looks like a path of this machine: a longer folder name, or a home folder at the root', (t) => {
+  const { dir } = planted(t);
+  const add = (where: string, note: string) =>
+    cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:any-type', '--note', note]).code;
+
+  homeAt(t, join(sep, 'ada'));
+  const longer = add('src/a.ts:1', `copied from ${join(sep, 'adams', 'notes.txt')}`);
+  homeAt(t, parse(dir).root);
+  const root = add('src/b.ts:1', `built in ${parse(dir).root}tmp, see https://example.com/x`);
+
+  assert.deepEqual([longer, root], [0, 0]);
+});
+
+test("close-class refuses a reason holding the checkout's or the site's path, in any case and with either slash", (t) => {
+  const { dir, garden } = planted(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  const flipped = (path: string): string =>
+    path.includes('\\') ? path.replaceAll('\\', '/') : path.replaceAll('/', '\\');
+
+  const checkoutPath = flipped(realpathSync.native(dir)).toUpperCase();
+  const sitePath = flipped(realpathSync.native(garden)).toLowerCase();
+  // A home folder that holds neither, as the temporary folders may lie in the real one.
+  homeAt(t, join(sep, 'elsewhere'));
+
+  const results = [
+    cli(dir, ['close-class', '--class', 'any-type', '--keep', `generated into ${checkoutPath}`]),
+    cli(dir, ['close-class', '--class', 'any-type', '--one-off', `only in ${sitePath}/beds`]),
+  ];
+
+  assert.deepEqual(
+    [...results.map((result) => [result.code, result.stderr]), logFiles(garden).size],
+    [
+      ...Array.from({ length: 2 }, () => [
+        2,
+        'weeds: the by holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
+      ]),
+      1,
+    ],
+  );
+});
+
+test("add refuses a note holding this machine's home folder and writes nothing", (t) => {
+  const { dir, garden } = planted(t);
+
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:any-type',
+    '--note',
+    `copied from ${homedir()}${sep}notes.txt`,
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
+      0,
     ],
   );
 });

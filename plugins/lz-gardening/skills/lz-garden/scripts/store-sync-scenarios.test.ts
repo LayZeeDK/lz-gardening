@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { replay, weedId } from './log.ts';
 import type { GardenEvent } from './log.ts';
 import { openSite, readLog, sync } from './store.ts';
-import { sharedPair } from './test-site.ts';
+import { configEnv, sharedPair } from './test-site.ts';
 import { cli, now } from './test-weeds.ts';
 
 const weed = { class: 'any-type', where: 'src/a.ts:1', source: 'census:x' } as const;
@@ -13,6 +13,11 @@ const laterId = weedId(later.class, later.where, later.source);
 
 function run(dir: string, args: readonly string[]): void {
   const result = cli(dir, args);
+  assert.equal(result.code, 0, result.stderr);
+}
+
+function cliWithShareOff(dir: string, args: readonly string[]): void {
+  const result = cli(dir, args, configEnv([['lzGardening.share', 'false']]));
   assert.equal(result.code, 0, result.stderr);
 }
 
@@ -113,7 +118,7 @@ const scenarios: readonly {
       add(a, weed);
       share();
       run(a, ['close', '--id', id, '--one-off', 'fixed by hand']);
-      run(b, ['close', '--id', id, '--one-off', 'fixed again']);
+      cliWithShareOff(b, ['close', '--id', id, '--one-off', 'fixed again']);
     },
     weedOf: id,
     expected: 'closed one-off',

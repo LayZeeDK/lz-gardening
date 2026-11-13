@@ -13,10 +13,11 @@ Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
 
 Every weed pulled becomes a rule, so it cannot grow back. A tend pass writes the rule first, proves it rejects the
 weed, then clears the bed. It works in a bed: a worktree of the garden site on branch `bed/<class>`. It never
-writes to the repository's checkout (tool caches in a linked `node_modules` aside), never pushes the bed and never
-merges; a human lands the bed. Only `site open` pushes anything: the queue's `refs/garden/log` and the census's
-`refs/garden/census`, to the repository's `origin`. Each step ends on a done condition; when one is not met, report the command and its output and
-stop.
+writes to the repository's checkout (tool caches in a linked `node_modules` aside), never pushes with git itself and
+never merges; a human lands the bed. The scripts push to the repository's `origin`, under `refs/garden/` only: the
+queue's `refs/garden/log` with the claim, the release and the close, and the closed bed's
+`refs/garden/beds/<class>`. Each step ends on a done condition; when one is not met, report the command and its
+output and stop.
 
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
@@ -48,10 +49,13 @@ the session's working directories (the session's environment lists any added one
 ## 1. Pick the class
 
 Run `site open`, passing `--base <branch>` when the arguments name one; its JSON line names `<site>` and `<base>`
-(`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` explains both). With no class argument, run
-`weeds groups --min 2` and take the first class other than `stale-verification` and `repeated-lesson`, which are
-not tended directly (step 2); say which. When it lists no class, report `nothing ready to tend` and stop. Then
-`weeds list --class <class>`. Done when you hold the open weeds of one class.
+(`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` explains both). Then claim the class, so no other
+clone or CI run tends it at the same time: `weeds claim --class <class>` with a class argument, else `weeds claim`,
+which takes the first ready class (two or more open weeds, not `stale-verification` or `repeated-lesson`, not
+claimed by another writer) and prints it; say which. It prints `claimed <class> until <time>` and exits 0 when the
+claim is yours and shared. Exit 1 stops the pass: report its line as it is (`taken <class> by <holder> until <time>`,
+`nothing ready to tend`, `nothing open for <class>`, or `cannot claim <class>: <state> ...`). Then
+`weeds list --class <class>`. Done when you hold the claim and the open weeds of one class.
 
 ## 2. Find the root cause
 
@@ -71,9 +75,11 @@ Then decide, and say which:
 - **One-off**: on reading, the weeds share no cause or sit in one place.
   `weeds close-class --class <class> --one-off "<reason>"`, report, stop.
 - **Redirect**: a `repeated-lesson` class is tended through the class its lessons are about, and a
-  `stale-verification` class through a refresh of the verification setup, not here. Name that class or job in the
-  report and stop; the weeds stay open as evidence.
+  `stale-verification` class through a refresh of the verification setup, not here. Run
+  `weeds release --class <class>`, name that class or job in the report and stop; the weeds stay open as evidence.
 - **Tend**: continue.
+
+Keep and one-off end the claim through `close-class`.
 
 ## 3. Choose the layer
 
@@ -89,7 +95,9 @@ Done when you can name the check, where it lives, and the message it prints.
 ## 4. Make the bed
 
 Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and the `<start>` commit, which you keep.
-On a bed that exists it merges the base in first, keeping the bed's work.
+It syncs first and makes the bed only while you hold the claim; exit 1 stops the pass, and you report its line as it
+is. On a bed that exists it merges the base in first, keeping the bed's work. When another clone tended the class
+before, the bed starts from, or merges in, the bed that clone shared.
 When its `deps` is `install`, run the command its `install` field names before anything else in the bed: the bed has
 no dependencies until you do. When it is `linked` and a later step changes the bed's dependencies (a new lint
 plugin, say), remove the link and install first, as `${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/site.md` says
@@ -122,10 +130,13 @@ Quote their summary lines.
 
 Commit the bed change with `git -C "<bed>"`, following the repository's commit message convention
 (`git log --oneline -20`), one commit per check, holding the check and its clean-up together. Then, from the
-repository's checkout, close the class:
+repository's checkout, renew the claim with `weeds claim --class <class>`: a long pass can outlast it. When that
+prints anything but `claimed`, stop and report its line; the bed stays for the next pass. Then close the class:
 `weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
-check's file from step 3. The close lands in the site's queue as it runs. A later weed of the class, anywhere,
-is then queued as `regrown` and names this bed and check.
+check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). It prints `closed <n>; <state>`: the close and the end of the claim land in the site's
+queue and, when the state is `synced`, on `origin`, followed by the bed. Any other state shares them on the next
+`site open`. A line on stderr names a bed `origin` did not take. A later weed of the class, anywhere, is then queued
+as `regrown` and names this bed and check.
 
 ## 8. Report
 
@@ -136,5 +147,6 @@ is then queued as `regrown` and names this bed and check.
 - The lint, type-check and test commands run in the bed, with their summary lines from step 4's starting results
   and from after the change.
 - A layer 3 proposal, if one would help, described but not built.
-- How to land it, from the repository: `git fetch ../<repo>.garden bed/<class>`, then review and merge the
-  fetched branch the way the repository lands work.
+- How to land it, from the repository: `git fetch origin refs/garden/beds/<class>` (or
+  `git fetch ../<repo>.garden bed/<class>` when the close was not shared), then review and merge the fetched commit
+  the way the repository lands work, and delete `refs/garden/beds/<class>` on `origin` once it has landed.

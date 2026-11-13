@@ -1,6 +1,6 @@
 // The garden site: a clone beside the repository. Its refs/garden/log holds the queue and its refs/garden/census the
-// census (see store.ts), both shared with the checkout's origin under the same refs; its `garden` branch holds only
-// the .gitignore for the beds.
+// census (see store.ts), both shared with the checkout's origin under the same refs, as are the beds of tended closes
+// under refs/garden/beds/<class>; its `garden` branch holds only the .gitignore for the beds.
 // Usage, from the repository:
 //   node site.ts open [--base <branch>]     create the site if missing, plant the garden log and the writer id if
 //                                           missing, resolve the base (--base, else the census's base, else
@@ -13,26 +13,32 @@
 //                                           a later one, and with --seeded add the seed event; prints {shared,
 //                                           events} and reason and conflicts when there are any; exit 0 in every state
 //   node site.ts bed --class <kebab> --base <base>
-//                                           fetch the base into the site and make the bed beds/<class> on
-//                                           bed/<class>, or merge the base into the bed that exists; start is the
-//                                           base commit fetched; prints {bed, branch, start, created, deps}, deps being
-//                                           none, linked (to the checkout's node_modules), installed or install,
-//                                           and with install the command that installs the bed's dependencies
-// Exit 0 on success, 2 on a usage error, a git error or a site or census it cannot use.
+//                                           sync once, then, while this site holds the claim of the class, fetch
+//                                           the base into the site and make the bed beds/<class> on bed/<class>
+//                                           from origin's bed of the class when there is one, else from the base,
+//                                           or merge origin's bed and the base into the bed that exists; start is
+//                                           the base commit fetched; prints {bed, branch, start, created, deps}, deps
+//                                           being none, linked (to the checkout's node_modules), installed or
+//                                           install, and with install the command that installs the bed's
+//                                           dependencies
+// Exit 0 on success, 1 when bed cannot check the claim or this site does not hold it, 2 on a usage error, a git error
+// or a site or census it cannot use.
 import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import type { SyncResult } from './store.ts';
+import type { Site, SyncResult } from './store.ts';
 import { classPattern, isRecord, replay } from './log.ts';
 import {
   append,
   censusRef,
   configValue,
+  fetchedBedRef,
   git,
   gitSucceeds,
+  isShared,
   logRef,
   objectIdPattern,
   objectIds,
@@ -45,6 +51,7 @@ import {
   siteOf,
   startLog,
   sync,
+  withWriter,
   writerKey,
 } from './store.ts';
 
@@ -151,7 +158,7 @@ function plant(top: string, site: string): void {
   git(planting, ['add', '.gitignore']);
   // A maintenance run the commit starts in the background would hold files in the folder the rename moves next.
   git(planting, ['-c', 'maintenance.auto=false', 'commit', '-q', '-m', 'garden: plant']);
-  startLog(planting);
+  startLog({ path: planting, checkout: top });
   renameRetrying(planting, site);
 }
 
@@ -215,7 +222,7 @@ function openOrPlant(top: string, site: string, requested: string | undefined) {
   }
 
   if (log === undefined) {
-    startLog(site);
+    startLog({ path: site, checkout: top });
   }
 
   plantWriter(site);
@@ -258,7 +265,7 @@ function declaresWorkspaces(dir: string): boolean {
   return (isRecord(manifest) && 'workspaces' in manifest) || existsSync(join(dir, 'pnpm-workspace.yaml'));
 }
 
-function makeBed(top: string, site: string, bedClass: string, base: string) {
+function checkBed(site: string, bedClass: string, base: string): void {
   if (!classPattern.test(bedClass)) {
     throw new Error(`--class must be a kebab-case class id, got ${bedClass}`);
   }
@@ -268,11 +275,42 @@ function makeBed(top: string, site: string, bedClass: string, base: string) {
   }
 
   requireSite(site);
+}
+
+function claimRefusal(site: Site, bedClass: string): string | undefined {
+  const now = new Date();
+  const pre = sync(site, { attempts: 1 }, now);
+
+  if (!isShared(pre)) {
+    return `bed: cannot check the claim of ${bedClass}: ${pre.state}${reasonOf(pre)}`;
+  }
+
+  const owner = replay(readLog(site).events, now).claims.get(bedClass);
+
+  if (owner === undefined) {
+    return `bed: this site holds no claim of ${bedClass}; run weeds claim --class ${bedClass}`;
+  }
+
+  if (owner.writer !== site.writer) {
+    return `bed: ${bedClass} is claimed by ${escapeUnprintable(owner.holder)} until ${owner.until}`;
+  }
+
+  return undefined;
+}
+
+function mergeInto(bed: string, commitId: string, name: string): void {
+  if (!gitSucceeds(bed, ['merge', '-q', '--no-edit', commitId])) {
+    gitSucceeds(bed, ['merge', '--abort']);
+    throw new Error(`${name} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
+  }
+}
+
+function makeBed(top: string, site: string, bedClass: string, base: string) {
   git(site, ['fetch', '-q', 'origin', base]);
   const branch = `bed/${bedClass}`;
   const branchRef = `refs/heads/${branch}`;
   // Stryker disable next-line StringLiteral: a fetch that succeeded always leaves FETCH_HEAD, so the default never applies
-  const [start = '', branchTip] = objectIds(site, ['FETCH_HEAD', branchRef]);
+  const [start = '', branchTip, shared] = objectIds(site, ['FETCH_HEAD', branchRef, fetchedBedRef(bedClass)]);
   const bed = join(site, 'beds', bedClass);
   const hasBranch = branchTip !== undefined;
   const entry = lstatSync(bed, { throwIfNoEntry: false });
@@ -294,12 +332,17 @@ function makeBed(top: string, site: string, bedClass: string, base: string) {
       throw new Error(`a merge is in progress in ${bed}; finish or abort it, then run bed again`);
     }
 
-    if (!gitSucceeds(bed, ['merge', '-q', '--no-edit', start])) {
-      gitSucceeds(bed, ['merge', '--abort']);
-      throw new Error(`${base} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
+    if (shared !== undefined) {
+      mergeInto(bed, shared, `origin's ${branch}`);
     }
+
+    mergeInto(bed, start, base);
   } else {
-    git(site, ['worktree', 'add', '-q', '-b', branch, bed, start]);
+    git(site, ['worktree', 'add', '-q', '-b', branch, bed, shared ?? start]);
+
+    if (shared !== undefined) {
+      mergeInto(bed, start, base);
+    }
   }
 
   const deps = plantDeps(top, bed);
@@ -404,12 +447,25 @@ function parseCommand(
   return undefined;
 }
 
-function nameIgnoredCensus(io: Io, result: SyncResult): void {
+function reportSync(io: Io, result: SyncResult): void {
   if (result.sharedCensusIgnored === true) {
     io.err(
       `site: the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it\n`,
     );
   }
+
+  if (result.censusKeptLocal !== undefined) {
+    io.err(
+      `site: the census of ${escapeUnprintable(result.censusKeptLocal)} stays local: no branch fetched from origin holds that commit\n`,
+    );
+  }
+
+  result.yielded.forEach(({ claim, owner }) => {
+    io.err(`site: gave back the claim of ${claim.class}; ${escapeUnprintable(owner.holder)} holds it\n`);
+  });
+  result.divergedBeds.forEach((bed) => {
+    io.err(`site: ${escapeUnprintable(bed)}\n`);
+  });
 }
 
 function main(argv: readonly string[], io: Io): number {
@@ -440,8 +496,8 @@ function main(argv: readonly string[], io: Io): number {
   switch (parsed.command) {
     case 'open': {
       const opened = openOrPlant(top, site, parsed.base);
-      const shared = sync({ checkout: top, path: site }, { attempts: 1 });
-      nameIgnoredCensus(io, shared);
+      const shared = sync(withWriter({ checkout: top, path: site }), { attempts: 1 });
+      reportSync(io, shared);
       const seeded = replay(readLog({ path: site }).events, new Date()).seeded;
       summary = { ...opened, seeded, shared: shared.state };
       break;
@@ -451,8 +507,8 @@ function main(argv: readonly string[], io: Io): number {
         recordSeed(io.cwd, parsed.census);
       }
 
-      const shared = sync({ checkout: top, path: site }, { attempts: 5, census: parsed.census });
-      nameIgnoredCensus(io, shared);
+      const shared = sync(withWriter({ checkout: top, path: site }), { attempts: 5, census: parsed.census });
+      reportSync(io, shared);
       shared.skipped.forEach((path) => {
         io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);
       });
@@ -465,6 +521,15 @@ function main(argv: readonly string[], io: Io): number {
       break;
     }
     case 'bed': {
+      checkBed(site, parsed.bedClass, parsed.base);
+      const refusal = claimRefusal(withWriter({ checkout: top, path: site }), parsed.bedClass);
+
+      if (refusal !== undefined) {
+        io.err(`site: ${refusal}\n`);
+
+        return 1;
+      }
+
       summary = makeBed(top, site, parsed.bedClass, parsed.base);
       break;
     }

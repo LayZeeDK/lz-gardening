@@ -7,6 +7,7 @@ import { logFiles, writeToLogByHand } from './test-log.ts';
 import { commit, git } from './test-repo.ts';
 import { planted, writeCensus } from './test-site.ts';
 import { run } from './weeds.ts';
+import type { SyncSeams } from './weeds.ts';
 
 export const script = join(dirname(fileURLToPath(import.meta.url)), 'weeds.ts');
 
@@ -18,19 +19,28 @@ export interface WeedsRun {
   readonly stderr: string;
 }
 
-export function cli(cwd: string, args: readonly string[], env = process.env): WeedsRun {
+export function cli(cwd: string, args: readonly string[], env = process.env, at?: Date): WeedsRun {
+  return cliWith(cwd, args, {}, at ?? new Date(), env);
+}
+
+export function cliWith(cwd: string, args: readonly string[], seams: SyncSeams, at = now, env = process.env): WeedsRun {
   let stdout = '';
   let stderr = '';
-  const code = run(args, {
-    cwd,
-    env,
-    out: (text) => {
-      stdout += text;
+  const code = run(
+    args,
+    {
+      cwd,
+      env,
+      out: (text) => {
+        stdout += text;
+      },
+      err: (text) => {
+        stderr += text;
+      },
     },
-    err: (text) => {
-      stderr += text;
-    },
-  });
+    at,
+    seams,
+  );
 
   return { code, stdout, stderr };
 }

@@ -98,6 +98,7 @@ export function bareRemote(dir: string): string {
   const remote = join(dirname(dir), 'remote.git');
   git(dirname(dir), ['init', '-q', '--bare', remote]);
   git(dir, ['remote', 'add', 'origin', remote]);
+  git(dir, ['push', '-q', 'origin', 'main']);
 
   return remote;
 }
@@ -111,6 +112,7 @@ export function sharedPair(t: TestContext): {
   const remote = bareRemote(first.dir);
   const second = planted(t);
   git(second.dir, ['remote', 'add', 'origin', remote]);
+  git(second.dir, ['fetch', '-q', 'origin']);
 
   return { first, second, remote };
 }

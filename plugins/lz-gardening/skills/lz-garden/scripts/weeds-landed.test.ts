@@ -73,7 +73,8 @@ test('a bed tended a second time, with the base merged in, is on the base once i
   const check = { 'eslint.config.mjs': "export default [{ rules: { 'no-explicit-any': 'error' } }];\n" };
   const { dir, garden, bed } = tendedBed(t, check);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
-  site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  cli(dir, ['claim', '--class', 'any-type']);
+  assert.equal(site(dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
   const fix = { 'src/b.ts': 'export const b: number = 1;\n' };
   const tip = commit(bed, fix);
   cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);

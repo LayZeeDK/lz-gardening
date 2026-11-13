@@ -117,6 +117,13 @@ _Avoid_: level, tier
 A hook or permission that stops an agent from writing a weed or bypassing a check. Proposed by a tend pass, built by
 a human.
 
+**Claim**:
+A writer's hold on one weed class for one tend pass, an event naming the class, the writer, its holder (the site's
+`user.name`) and an end six hours on. The earliest live claim of a class owns it; a claim by the same writer renews
+it. It ends with a close of the class by its writer, a release, or its end time. A bed is made and a class closed
+only under one's own claim.
+_Avoid_: lock, lease
+
 **Paved road**:
 The one sanctioned way to do a thing in the codebase, made easier to follow than any shortcut.
 _Avoid_: golden path, happy path
@@ -161,5 +168,6 @@ _Avoid_: sync status
 
 **Bed**:
 A tend pass's working copy and branch in the garden site, holding one proposed change for a human to land. Its
-branch is the bed branch, `bed/<class>`.
+branch is the bed branch, `bed/<class>`. A sync shares the bed of a tended close as `refs/garden/beds/<class>` on the
+repository's `origin`, the shared bed, which the next bed of the class in any clone starts from.
 _Avoid_: patch, fix branch

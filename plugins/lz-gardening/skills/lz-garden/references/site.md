@@ -14,6 +14,8 @@ the checkout, write into a **site** instead: a local clone beside the repository
   refs/garden/census             (git ref) the garden's census (scripts/census.ts): one commit holding census.json,
                                  and patterns.json when the census used extra patterns
   refs/garden/pending/<sha>      (git ref) a census taken at <sha> and not yet recorded
+  refs/garden-shared/            (git refs) what the last sync fetched of origin's refs/garden/: log, census and
+                                 beds/<class>, the beds other clones closed
   .garden/patterns.json          optional, not committed: this repository's own census patterns
   .gitignore                     ignores /beds/
   beds/<class>/                  a tend pass's worktree on branch bed/<class>
@@ -21,9 +23,10 @@ the checkout, write into a **site** instead: a local clone beside the repository
 
 `garden` is an orphan branch: it holds only `.gitignore`, never the repository's code. The census is not on it: each
 census is its own commit with no parent, written to `refs/garden/census`. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
-branch beside `garden`) start from the base branch and carry one proposed bed change each. A human lands a bed by
-fetching it into the repository with `git fetch ../<repo>.garden bed/<class>` and merging it the way the repository
-lands work.
+branch beside `garden`) start from the base branch and carry one proposed bed change each. A tended close shares
+its bed on `origin` as `refs/garden/beds/<class>`. A human lands a bed by fetching it into the repository with
+`git fetch origin refs/garden/beds/<class>` (or `git fetch ../<repo>.garden bed/<class>` when its close was never
+shared) and merging it the way the repository lands work.
 
 The site shares two refs, the garden log and the census: `site.ts open` and `site.ts sync` fetch the repository's
 `origin` `refs/garden/log` and `refs/garden/census` into the site's `refs/garden-shared/`, merge the log with the
@@ -37,6 +40,32 @@ that is not an event file (`events/<xx>/<uuid>.json`) or `garden.json` is not co
 log in a format other than this version's stops the sync with exit 2, naming both formats; one that is not a commit
 holding `garden.json` stops it with exit 2 too, saying to delete or fix it on `origin`. Because every site holds
 the whole log, a site made again, or one whose remote ref was deleted, gets the log back on its next sync.
+
+After the log lands, a sync pushes beds in a push of their own, one ref per bed, so a bed `origin` refuses holds back
+neither the log nor another bed. For each class, the latest tended close in the merged log names the bed: the sync
+pushes the site's `bed/<class>` as `refs/garden/beds/<class>` when that branch's commit is the close's, and either
+`origin`'s bed is an ancestor of it or `origin` has no bed of the class and the close is shared by this very sync.
+A bed that does not descend from `origin`'s, or that `origin` refuses, is named on stderr and left in the site. So is
+a bed that would bring `origin` a commit only a branch of the checkout holds (its base was never pushed), and a bed
+whose own commits add a line holding this machine's home folder, the checkout's path or the site's path. A bed ref
+deleted on `origin` after its close was shared stays deleted.
+
+A census is shared only while a branch the checkout fetched from `origin` (`refs/remotes/origin/*`) holds its base
+commit. Otherwise it stays in the site, and `site.ts` says so on stderr; a later sync, once that commit is pushed and
+fetched, shares it.
+
+The garden log's and the census's commits are signed `lz-gardening <>`, with no one's name or address, unless the
+checkout's git config, in any scope, sets both `lzGardening.name` and `lzGardening.email`: then those are the
+author and committer. With only one of the two set, the commits keep `lz-gardening <>`. Bed commits are code for
+review and carry the identity of whoever commits them.
+
+The queue is as public as the repository: whoever can read `origin` can read every event. So paths in events are
+repository-relative, and `weeds.ts` refuses, with exit 2, an event whose text holds this machine's home folder, the
+checkout's path or the site's path, in any letter case and with either slash.
+
+Claims decide who tends a class. A sync that shares a claim of this writer's checks it against `origin`'s log: when
+another writer's claim of the class came first, it gives the claim back with a release, pushed in the same sync,
+and names the class and the holder on stderr.
 
 The census is decided by the ancestry of its base commit, read in the checkout. A sync takes the shared census over
 the site's unless the site's census is of a commit that descends from the shared one's; a shared census that is not
@@ -118,18 +147,26 @@ the repository's checkout, and runs no git command against the site itself. Belo
 checkout and `<bed>` is `<site>/beds/<class>`, both full paths.
 
 `site.ts bed --class <class> --base <base>` takes the base by the name `site.ts open` reported (`main`, or
-`origin/main` when only the repository's remote has it). It fetches the base into the site and adds the worktree
-`<bed>` on branch `bed/<class>` at the commit it fetched. Run again on a bed that exists, it keeps the bed's work
-and merges the fetched base into it, so weeds that landed on the base since the bed was made are in the bed too;
+`origin/main` when only the repository's remote has it). It first syncs the garden log once, as `open` does, and
+goes on only while this site holds a live claim of the class in the merged log (`weeds.ts claim`; a `local` garden
+claims locally). It exits 1, before it fetches or changes anything, when the sync is `offline`, `read-only` or
+`behind` (`bed: cannot check the claim of <class>: <state> (<reason>)`), when this site holds no claim of the class
+or its claim expired (`bed: this site holds no claim of <class>; run weeds claim --class <class>`), and when another
+writer holds it (`bed: <class> is claimed by <holder> until <time>`). It fetches the base into the site and adds the
+worktree `<bed>` on branch `bed/<class>`: at `origin`'s bed of the class when another clone shared one
+(`refs/garden-shared/beds/<class>`), with the fetched base merged into it, else at the commit it fetched. Run again
+on a bed that exists, it keeps the bed's work, merges `origin`'s bed of the class in first when there is one, then
+the fetched base, so weeds that landed on the base since the bed was made are in the bed too;
 when the bed's folder is gone but its branch is not, it adds the folder again from the branch, with the work
 committed there, before the merge. The merge commit, like every git command of the site, runs no git hooks and is
 not signed. It prints JSON with `bed`, `branch`, `start`, `created` and `deps`, and `install` when `deps` is
 `install`. `start` is the base commit it fetched, written `<start>` below, so `git diff <start>` shows the bed's own
 change. `bed` exits 2 on a class that is
 not a kebab-case class id; when a merge is already in progress in a bed that exists (it is left alone; finish or
-abort it, then run `bed` again); when the base does not merge into a bed that exists cleanly (a conflict with the
-bed's commits, or a change to a file the bed holds uncommitted work in; the bed is left as it was and the message
-names it); on a base that is not a plain branch name or commit (one that starts
+abort it, then run `bed` again); when the base, or `origin`'s bed, does not merge into the bed cleanly (a conflict
+with the bed's commits, or a change to a file the bed holds uncommitted work in; the bed is left as it was and the
+message names it; a new bed made at `origin`'s bed whose base merge conflicts stays at `origin`'s bed, and a rerun
+reports the same conflict until it is merged by hand in the bed); on a base that is not a plain branch name or commit (one that starts
 with `-`, or holds characters such as `~`, `^` or `:`); on a base the site cannot fetch; when `site.ts open` has not
 made the site; when something other than the worktree of `bed/<class>` is at `<bed>`, such as a file or a folder
 left from an earlier bed (the message names it; move it aside and run `bed` again); and when it must read a bed
@@ -166,8 +203,10 @@ with: unlink `node_modules` first (`rm "<bed>/node_modules"`, no `-r`; on Window
 `cmd //c rmdir "<bed>\node_modules"`), then `git -C "<site>" worktree remove "<bed>"`, then
 `git -C "<site>" branch -D bed/<class>` only once the change has landed: after
 `git -C "<site>" fetch -q origin <base>`, `git -C "<site>" merge-base --is-ancestor bed/<class> FETCH_HEAD` exits 0,
-or the base holds a commit that carries the same change. Deleting the whole site loses the queue events it never
+or the base holds a commit that carries the same change. Once it has landed, delete its shared copy on `origin` too:
+`git push origin --delete refs/garden/beds/<class>`; no sync pushes it back. Deleting the whole site loses the queue events it never
 shared (a `local` garden shares none of them); the next `site.ts open` brings back the rest from `origin`.
 
 Two sessions looping on one repository, in one site or in clones on different machines, both land their queue
-events; the census they record is the one of the later base commit.
+events; the census they record is the one of the later base commit. Claims decide which of them tends a class: the
+earliest live claim on `origin` wins, and the other gives its claim back.

@@ -46,3 +46,26 @@ file order or a logical clock, gives the wrong status for an add made beside a c
   the stale clone fetches. Nothing is lost: adds dedupe and the ranges are read again. Keeping the remote's census
   instead would leave a clone without the old history, such as CI, stuck on a census from before the rewrite.
 - A claim expires after 6 hours, so a crashed pass blocks its class that long.
+
+## Update, 2026-11-13: claims, shared beds and what the garden may publish
+
+- A claim that loses the race is answered by a release, not deleted from the replica, since sync depends on no event
+  being removed. A claim whose push failed (offline, read-only, or timed out after the remote took it) is released too,
+  and the release is pushed once more, so a claim left on the remote does not block its class for 6 hours.
+- The look for another writer's claim reads the remote's log as fetched, not this site's tip from before the merge:
+  when both sides hold new events, the merged tip is a new commit, and a look at the old local tip misses the very
+  claim it exists for.
+- `claim`, `close`, `close-class` and `bed` sync once before they plan, so none of them acts on a replica that has not
+  seen a newer claim of the class. Only `close-class` releases the holder's claim; a `close --id` in the middle of a
+  pass leaves the class held.
+- Beds are pushed after the log, in a push of their own, each bed ref on its own outcome. A bed the remote refuses
+  (such as a workflow file a CI token may not push) or that is not a fast-forward is named and left out; it never
+  blocks the log. Which bed to push comes from the latest tended close of its class in the merged log. A shared bed
+  that is gone while its close is already shared stays gone: someone deleted it after landing it.
+- The garden is as public as the repository, and its events are never removed. A claim's holder is `user.name`, never
+  a hostname. Log and census commits are authored `lz-gardening <>` unless the checkout sets both
+  `lzGardening.name` and `lzGardening.email`; bed commits keep the user's identity, as they are code for review. An
+  event field holding this machine's home folder, the checkout's path or the site's path is refused, and `--check`,
+  `--where` and a lesson's path take repository-relative paths only. A census or a bed whose base commit no branch
+  fetched from `origin` holds stays local, and so does a bed that adds a line holding one of those paths; sync names
+  each on stderr.

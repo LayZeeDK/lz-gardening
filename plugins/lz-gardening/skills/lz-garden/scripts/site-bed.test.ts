@@ -12,11 +12,27 @@ import {
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
+import { writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
-import { planted, site } from './test-site.ts';
+import { logRef } from './store.ts';
+import { bareRemote, planted, sharedPair, site } from './test-site.ts';
+import { cli } from './test-weeds.ts';
+
+function claimAnyType(dir: string): void {
+  const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  const claimed = cli(dir, ['claim', '--class', 'any-type']);
+  assert.deepEqual([added.code, claimed.code], [0, 0], added.stderr + claimed.stderr);
+}
+
+function claimed(t: TestContext): { readonly dir: string; readonly garden: string } {
+  const garden = planted(t);
+  claimAnyType(garden.dir);
+
+  return garden;
+}
 
 test('bed makes a worktree on bed/<class> from the base as the repository has it now', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
   const main = git(dir, ['rev-parse', 'main']);
 
@@ -35,7 +51,7 @@ test('bed makes a worktree on bed/<class> from the base as the repository has it
 });
 
 test('bed on an existing bed takes what the base gained since, keeps its work, and starts from the base', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -53,7 +69,7 @@ test('bed on an existing bed takes what the base gained since, keeps its work, a
 });
 
 test('bed refuses a base that conflicts with the bed, names the bed, and leaves the bed as it was', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -69,7 +85,7 @@ test('bed refuses a base that conflicts with the bed, names the bed, and leaves 
 });
 
 test('bed refuses a base that would overwrite uncommitted work in the bed, names the bed, and keeps the work', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -84,7 +100,7 @@ test('bed refuses a base that would overwrite uncommitted work in the bed, names
 });
 
 test('bed leaves a merge someone started in the bed alone, and names the bed', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -101,7 +117,7 @@ test('bed leaves a merge someone started in the bed alone, and names the bed', (
 });
 
 test('bed on a bed whose folder is gone brings the folder back with the branch work', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -116,7 +132,7 @@ test('bed on a bed whose folder is gone brings the folder back with the branch w
 });
 
 test('bed refuses a folder at the bed path that is no longer the worktree of its branch, and names it', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -130,7 +146,7 @@ test('bed refuses a folder at the bed path that is no longer the worktree of its
 });
 
 test('bed refuses a file at the path of an existing bed, and names it', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -144,7 +160,7 @@ test('bed refuses a file at the path of an existing bed, and names it', (t) => {
 });
 
 test('bed refuses a link whose target is gone at the path of an existing bed, and names it', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.status, 0, first.stderr);
   const bed = join(garden, 'beds', 'any-type');
@@ -158,7 +174,7 @@ test('bed refuses a link whose target is gone at the path of an existing bed, an
 });
 
 test('bed refuses a link at the bed path whose target is gone, before it makes the branch', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const bed = join(garden, 'beds', 'any-type');
   mkdirSync(dirname(bed), { recursive: true });
   symlinkSync(join(garden, 'gone'), bed, 'junction');
@@ -171,7 +187,7 @@ test('bed refuses a link at the bed path whose target is gone, before it makes t
 });
 
 test('bed refuses a folder at the bed path before it makes the branch, and names the folder', (t) => {
-  const { dir, garden } = planted(t);
+  const { dir, garden } = claimed(t);
   const bed = join(garden, 'beds', 'any-type');
   mkdirSync(bed, { recursive: true });
   writeFileSync(join(bed, 'notes.txt'), 'left here\n');
@@ -194,8 +210,167 @@ test('bed refuses a class that is not a kebab-case class id and makes no bed', (
   assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
 });
 
-test('bed needs no dependencies when the base has no package.json', (t) => {
+test('bed for a class this site holds no claim of exits 1, names weeds claim, and makes no branch or worktree', (t) => {
   const { dir, garden } = planted(t);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, git(garden, ['branch', '--list', 'bed/*']), existsSync(join(garden, 'beds'))],
+    [1, 'site: bed: this site holds no claim of any-type; run weeds claim --class any-type\n', '', false],
+  );
+});
+
+test('bed for a class another writer holds exits 1 and names the holder', (t) => {
+  const { dir, garden } = planted(t);
+  const at = new Date();
+  const until = new Date(at.getTime() + 60 * 60 * 1000).toISOString();
+  const uuid = '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6';
+  const held = { op: 'claim', uuid, clock: 9, at: at.toISOString(), class: 'any-type', writer: 'w', holder: 'Bea' };
+  writeToLogByHand(garden, `events/0f/${uuid}.json`, JSON.stringify({ ...held, until }));
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, git(garden, ['branch', '--list', 'bed/*'])],
+    [1, `site: bed: any-type is claimed by Bea until ${until}\n`, ''],
+  );
+});
+
+test("bed after this site's claim expired exits 1 and makes no branch", (t) => {
+  const { dir, garden } = planted(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, new Date('2026-01-01T00:00:00.000Z')).code, 0);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, git(garden, ['branch', '--list', 'bed/*'])],
+    [1, 'site: bed: this site holds no claim of any-type; run weeds claim --class any-type\n', ''],
+  );
+});
+
+test('bed whose pre-sync is offline exits 1, names the state, and makes no branch', (t) => {
+  const { dir, garden } = claimed(t);
+  git(dir, ['remote', 'add', 'origin', join(dirname(dir), 'missing.git')]);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /^site: bed: cannot check the claim of any-type: offline \(fatal: '.*missing\.git' does not appear to be a git repository\)\n$/,
+  );
+  assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
+});
+
+test('bed right after a pre-sync that shared a claim made while the garden was local makes the bed', (t) => {
+  const { dir, garden } = claimed(t);
+  const remote = bareRemote(dir);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(remote, ['rev-parse', logRef]), git(garden, ['rev-parse', logRef]));
+});
+
+function sharedBed(
+  t: TestContext,
+  files: Readonly<Record<string, string>>,
+): {
+  readonly dir: string;
+  readonly garden: string;
+  readonly tip: string;
+  readonly share: (more: Readonly<Record<string, string>>) => string;
+} {
+  const { first, second, remote } = sharedPair(t);
+  git(first.dir, ['switch', '-q', '-c', 'tended']);
+  const share = (more: Readonly<Record<string, string>>): string => {
+    const shared = commit(first.dir, more);
+    git(first.dir, ['push', '-q', '--force', remote, `${shared}:refs/garden/beds/any-type`]);
+
+    return shared;
+  };
+  const tip = share(files);
+  claimAnyType(second.dir);
+
+  return { ...second, tip, share };
+}
+
+test('bed with a shared bed and no local branch starts from the shared bed commit and merges the base', (t) => {
+  const { dir, garden } = sharedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' });
+  const gained = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  const bed = join(garden, 'beds', 'any-type');
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    [result.summary.get('start'), readFileSync(join(bed, 'src', 'a.ts'), 'utf8'), existsSync(join(bed, 'src', 'b.ts'))],
+    [gained, 'export const a: number = 1;\n', true],
+  );
+});
+
+test('bed with a local bed behind the shared bed fast-forwards it', (t) => {
+  const { dir, garden, share } = sharedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' });
+  assert.equal(site(dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
+  const later = share({ 'src/c.ts': 'export const c = 3;\n' });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(join(garden, 'beds', 'any-type'), ['rev-parse', 'HEAD']), later);
+});
+
+test('bed with a local bed and a shared bed that both moved merges the shared bed in', (t) => {
+  const { dir, garden, share } = sharedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' });
+  assert.equal(site(dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
+  const bed = join(garden, 'beds', 'any-type');
+  const work = commit(bed, { 'src/d.ts': 'export const d = 4;\n' });
+  const later = share({ 'src/c.ts': 'export const c = 3;\n' });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    [work, later].map((commitId) => git(bed, ['merge-base', '--is-ancestor', commitId, 'HEAD'])),
+    ['', ''],
+  );
+});
+
+test('bed whose shared bed conflicts with the local bed exits 2, names the bed, and leaves it as it was', (t) => {
+  const { dir, garden, share } = sharedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' });
+  assert.equal(site(dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
+  const bed = join(garden, 'beds', 'any-type');
+  const work = commit(bed, { 'src/c.ts': 'export const c = 4;\n' });
+  share({ 'src/c.ts': 'export const c = 3;\n' });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /beds[\\/]any-type/);
+  assert.deepEqual(
+    [git(bed, ['rev-parse', 'HEAD']), git(bed, ['status', '--porcelain', '--untracked-files=no'])],
+    [work, ''],
+  );
+});
+
+test('bed whose shared bed conflicts with the base and no local branch exits 2 and leaves the branch at the shared bed', (t) => {
+  const { dir, garden, tip } = sharedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' });
+  commit(dir, { 'src/a.ts': 'export const a: string = "1";\n' });
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /^site: main does not merge into .*beds[\\/]any-type cleanly/);
+  assert.deepEqual(
+    [git(garden, ['rev-parse', 'bed/any-type']), git(join(garden, 'beds', 'any-type'), ['status', '--porcelain'])],
+    [tip, ''],
+  );
+});
+
+test('bed needs no dependencies when the base has no package.json', (t) => {
+  const { dir, garden } = claimed(t);
 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
@@ -214,6 +389,7 @@ function installed(t: TestContext, lockfile = 'package-lock.json'): string {
   mkdirSync(join(dir, 'node_modules'));
   const opened = site(dir, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);
+  claimAnyType(dir);
 
   return dir;
 }
@@ -280,6 +456,7 @@ test('bed names the package.json that is not valid JSON, with its bed path', (t)
   mkdirSync(join(dir, 'node_modules'));
   const opened = site(dir, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);
+  claimAnyType(dir);
 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
@@ -488,6 +665,7 @@ test('bed asks for an install when only the checkout has a lockfile', (t) => {
   mkdirSync(join(dir, 'node_modules'));
   const opened = site(dir, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);
+  claimAnyType(dir);
 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
@@ -500,6 +678,7 @@ test('bed names npm install, not npm ci, for a bed without a lockfile', (t) => {
   commit(dir, { 'package.json': '{ "name": "x" }\n' });
   const opened = site(dir, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);
+  claimAnyType(dir);
 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 

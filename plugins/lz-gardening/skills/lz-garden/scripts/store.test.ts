@@ -437,16 +437,22 @@ test('an add run with GIT_DIR naming another repository lands in the garden log 
   assert.equal(git(garden, ['rev-parse', '--verify', logRef]).length, 40);
 });
 
-test('a git setting passed in GIT_CONFIG_COUNT reaches the commit that adds an event', (t) => {
+test('lzGardening.name and lzGardening.email passed in GIT_CONFIG_COUNT sign the commit that adds an event', (t) => {
   const { dir, garden } = planted(t);
 
   cli(
     dir,
     ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'],
-    configEnv([['user.name', 'Probe']]),
+    configEnv([
+      ['lzGardening.name', 'Probe'],
+      ['lzGardening.email', 'probe@example.com'],
+    ]),
   );
 
-  assert.equal(git(garden, ['log', '-1', '--format=%an', logRef]), 'Probe');
+  assert.equal(
+    git(garden, ['log', '-1', '--format=%an <%ae>|%cn <%ce>', logRef]),
+    'Probe <probe@example.com>|Probe <probe@example.com>',
+  );
 });
 
 test('a site opened from a linked worktree is the one beside the main checkout', (t) => {
@@ -507,11 +513,11 @@ test('a writer id planted during a command is the one that command reads back', 
 });
 
 test('starting a log where one exists is refused and leaves the log as it was', (t) => {
-  const { garden } = planted(t);
+  const { dir, garden } = planted(t);
   const before = git(garden, ['rev-parse', '--verify', logRef]);
 
   assert.throws(() => {
-    startLog(garden);
+    startLog({ path: garden, checkout: dir });
   }, /^Error: git fast-import refs\/garden\/log: warning: not updating refs\/garden\/log .*$/s);
   assert.equal(git(garden, ['rev-parse', '--verify', logRef]), before);
 });
@@ -587,15 +593,39 @@ test('a site folder without a git repository is refused as no garden site', (t) 
   assert.throws(() => openSite(dir), { message: /^no garden site at .*repo\.garden; run site\.ts open first$/ });
 });
 
-test('a git setting passed in GIT_CONFIG_PARAMETERS reaches the commit that adds an event', (t) => {
+test('lzGardening.name without lzGardening.email leaves the commit to lz-gardening with no address', (t) => {
+  const { dir, garden } = planted(t);
+
+  cli(
+    dir,
+    ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'],
+    configEnv([['lzGardening.name', 'Probe']]),
+  );
+
+  assert.equal(identityOfLog(garden), 'lz-gardening <>|lz-gardening <>');
+});
+
+test('lzGardening.name and lzGardening.email passed in GIT_CONFIG_PARAMETERS sign the commit that adds an event', (t) => {
   const { dir, garden } = planted(t);
 
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'], {
     ...process.env,
-    GIT_CONFIG_PARAMETERS: "'user.name'='Probe'",
+    GIT_CONFIG_PARAMETERS: "'lzgardening.name'='Probe' 'lzgardening.email'='probe@example.com'",
   });
 
-  assert.equal(git(garden, ['log', '-1', '--format=%an', logRef]), 'Probe');
+  assert.equal(identityOfLog(garden), 'Probe <probe@example.com>|Probe <probe@example.com>');
+});
+
+function identityOfLog(garden: string): string {
+  return git(garden, ['log', '-1', '--format=%an <%ae>|%cn <%ce>', logRef]);
+}
+
+test('an append commits as lz-gardening with no address, whatever user.name and user.email say', (t) => {
+  const { dir, garden } = planted(t);
+
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+
+  assert.equal(identityOfLog(garden), 'lz-gardening <>|lz-gardening <>');
 });
 
 function appendIn(dir: string, env: NodeJS.ProcessEnv): void {
@@ -605,10 +635,16 @@ function appendIn(dir: string, env: NodeJS.ProcessEnv): void {
 }
 
 function commitTreeOfLastAppend(garden: string, env: NodeJS.ProcessEnv): string {
+  const gardenIdentity = {
+    GIT_AUTHOR_NAME: 'lz-gardening',
+    GIT_AUTHOR_EMAIL: '',
+    GIT_COMMITTER_NAME: 'lz-gardening',
+    GIT_COMMITTER_EMAIL: '',
+  };
   const result = spawnSync('git', ['commit-tree', `${logRef}^{tree}`, '-p', `${logRef}^`, '-m', 'garden: log'], {
     cwd: garden,
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...gardenIdentity, ...env },
   });
   assert.equal(result.status, 0, result.stderr);
 
@@ -624,41 +660,9 @@ test('an append dated by GIT_COMMITTER_DATE in ISO 8601 writes the commit git co
   assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
 });
 
-test('an append run with GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL writes the commit git commit-tree writes', (t) => {
+test('an append run with an author date other than its committer date writes the commit git commit-tree writes', (t) => {
   const { dir, garden } = planted(t);
-  const env = {
-    GIT_AUTHOR_DATE: '1700000000 +0100',
-    GIT_COMMITTER_DATE: '1700000000 +0100',
-    GIT_AUTHOR_NAME: 'Env Name',
-    GIT_AUTHOR_EMAIL: 'env@example.com',
-    GIT_COMMITTER_NAME: 'Env Name',
-    GIT_COMMITTER_EMAIL: 'env@example.com',
-  };
-
-  appendIn(dir, env);
-
-  assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
-});
-
-test('an append run with an author other than its committer writes the commit git commit-tree writes', (t) => {
-  const { dir, garden } = planted(t);
-  const env = {
-    GIT_AUTHOR_DATE: 'Thu, 07 Apr 2005 22:13:13 +0200',
-    GIT_COMMITTER_DATE: '1700000000 +0100',
-    GIT_AUTHOR_NAME: 'Author',
-    GIT_AUTHOR_EMAIL: 'author@example.com',
-  };
-
-  appendIn(dir, env);
-
-  assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
-});
-
-test('an append in a site that sets committer.name and committer.email writes the commit git commit-tree writes', (t) => {
-  const { dir, garden } = planted(t);
-  git(garden, ['config', 'committer.name', 'Config Committer']);
-  git(garden, ['config', 'committer.email', 'committer@example.com']);
-  const env = { GIT_AUTHOR_DATE: '1700000000 +0100', GIT_COMMITTER_DATE: '1700000000 +0100' };
+  const env = { GIT_AUTHOR_DATE: 'Thu, 07 Apr 2005 22:13:13 +0200', GIT_COMMITTER_DATE: '1700000000 +0100' };
 
   appendIn(dir, env);
 
@@ -680,7 +684,7 @@ test('an append with no date in the env is dated now, in the offset git gives th
   );
 });
 
-test('an append in a site that names its author and committer starts git only to read the log and to write it', (t) => {
+test("an append starts git only to read the log, the checkout's settings for who signs it, and to write it", (t) => {
   const { dir } = planted(t);
   const site = openSite(dir);
   const spawned = t.mock.method(childProcess, 'spawnSync');
@@ -698,32 +702,8 @@ test('an append in a site that names its author and committer starts git only to
         ? args.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
         : undefined,
     ),
-    ['rev-parse', 'ls-tree', 'cat-file', 'fast-import'],
+    ['rev-parse', 'ls-tree', 'cat-file', 'config', 'fast-import'],
   );
-});
-
-test('an append in a site with no user.name writes the commit git commit-tree writes with the name git makes up', (t) => {
-  const { dir, garden } = planted(t);
-  git(garden, ['config', '--unset', 'user.name']);
-  const env = { GIT_AUTHOR_DATE: '1700000000 +0100', GIT_COMMITTER_DATE: '1700000000 +0100' };
-
-  appendIn(dir, env);
-
-  assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
-});
-
-test('an append in a site with no user.email writes the commit git commit-tree writes with the address in EMAIL', (t) => {
-  const { dir, garden } = planted(t);
-  git(garden, ['config', '--unset', 'user.email']);
-  const env = {
-    GIT_AUTHOR_DATE: '1700000000 +0100',
-    GIT_COMMITTER_DATE: '1700000000 +0100',
-    EMAIL: 'fallback@example.com',
-  };
-
-  appendIn(dir, env);
-
-  assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
 });
 
 test('a site whose garden log is gone is refused, naming the site and the fix', (t) => {

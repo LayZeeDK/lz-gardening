@@ -1,7 +1,19 @@
 // Run: node --test log.test.ts
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bedCommit, eventPath, parseEvent, planAdd, planClaim, planClose, replay, stamp, weedId } from './log.ts';
+import {
+  bedCommit,
+  eventPath,
+  losingClaims,
+  parseEvent,
+  planAdd,
+  planClaim,
+  planClose,
+  planRelease,
+  replay,
+  stamp,
+  weedId,
+} from './log.ts';
 import type {
   AddEvent,
   AddInput,
@@ -406,11 +418,82 @@ test('a close by the holder also releases every active claim it holds of the cla
 test('a close by the holder releases only its own claims, not a later claim of the class by another writer', () => {
   const events = [add('a1', 1, 'x'), claim('c1', 2, 'writer-a'), claim('c2', 3, 'writer-b')];
 
-  const outcome = planClose(events, { target: { id: 'x' }, ...oneOff }, 'writer-a', now);
+  const outcome = planClose(events, { target: { class: 'any-type' }, ...oneOff }, 'writer-a', now);
 
   assert.deepEqual(outcome.said === 'closed' ? outcome.drafts.slice(1) : null, [
     { op: 'release', class: 'any-type', claim: 'c1' },
   ]);
+});
+
+test('a close by id by the holder writes the close and no release, so the class stays claimed', () => {
+  const events = [add('a1', 1, 'x'), add('a2', 2, 'y'), claim('c1', 3, 'writer-a')];
+
+  const outcome = planClose(events, { target: { id: 'x' }, ...oneOff }, 'writer-a', now);
+
+  assert.deepEqual(outcome.said === 'closed' ? outcome.drafts : null, [
+    { op: 'close', ids: ['x'], class: 'any-type', ...oneOff },
+  ]);
+});
+
+test('an unpushed claim of a class another writer holds in the shared events loses, even with a lower clock', () => {
+  const owner = claim('cb', 5, 'writer-b');
+  const mine = claim('ca', 1, 'writer-a');
+
+  assert.deepEqual(losingClaims([owner], [mine], 'writer-a', now), [{ claim: mine, owner }]);
+});
+
+test('an unpushed renewal of a class this writer owns through a shared claim does not lose', () => {
+  assert.deepEqual(losingClaims([claim('c1', 1, 'writer-a')], [claim('c2', 2, 'writer-a')], 'writer-a', now), []);
+});
+
+test('an unpushed claim of a class no other writer holds does not lose', () => {
+  const shared = [claim('o1', 1, 'writer-b', later, 'other')];
+
+  assert.deepEqual(losingClaims(shared, [claim('c2', 2, 'writer-a')], 'writer-a', now), []);
+});
+
+test("an unpushed claim beside another writer's expired claim does not lose", () => {
+  const expired = claim('cb', 1, 'writer-b', at);
+
+  assert.deepEqual(losingClaims([expired], [claim('c2', 2, 'writer-a')], 'writer-a', now), []);
+});
+
+test("an unpushed claim beside another writer's released claim does not lose", () => {
+  const shared = [claim('cb', 1, 'writer-b'), release('rb', 2, 'cb')];
+
+  assert.deepEqual(losingClaims(shared, [claim('c2', 3, 'writer-a')], 'writer-a', now), []);
+});
+
+test('a release by the holder writes one release per live claim it holds of the class, renewals included', () => {
+  const events = [
+    claim('c0', 1, 'writer-a', at),
+    claim('c1', 2, 'writer-a'),
+    claim('c2', 3, 'writer-a'),
+    claim('o1', 4, 'writer-a', later, 'other'),
+  ];
+
+  assert.deepEqual(planRelease(events, 'any-type', 'writer-a', now), {
+    said: 'released',
+    drafts: [
+      { op: 'release', class: 'any-type', claim: 'c1' },
+      { op: 'release', class: 'any-type', claim: 'c2' },
+    ],
+  });
+});
+
+test('a release by a writer that holds no claim of the class writes nothing and says so', () => {
+  assert.deepEqual(planRelease([claim('cb', 1, 'writer-b')], 'any-type', 'writer-a', now), { said: 'no claim' });
+});
+
+test('a claim of a named class with nothing open says nothing open and writes nothing', () => {
+  assert.deepEqual(planClaim([add('a1', 1, 'x', { class: 'other' })], 'any-type', 'writer-a', 'Ada', now), {
+    said: 'nothing open',
+    class: 'any-type',
+  });
+});
+
+test('a claim of a named class with one open weed is claimed', () => {
+  assert.equal(planClaim([add('a1', 1, 'x')], 'any-type', 'writer-a', 'Ada', now).said, 'claimed');
 });
 
 test('a claim of a class another writer holds is taken', () => {
@@ -420,7 +503,9 @@ test('a claim of a class another writer holds is taken', () => {
 });
 
 test('a claim of a free class is claimed for six hours from now', () => {
-  assert.deepEqual(planClaim([claim('c1', 1, 'writer-b', at)], 'any-type', 'writer-a', 'Ada on laptop', now), {
+  const events = [add('a1', 1, 'x'), add('a2', 2, 'y'), claim('c1', 3, 'writer-b', at)];
+
+  assert.deepEqual(planClaim(events, 'any-type', 'writer-a', 'Ada on laptop', now), {
     said: 'claimed',
     class: 'any-type',
     draft: {
@@ -434,7 +519,9 @@ test('a claim of a free class is claimed for six hours from now', () => {
 });
 
 test('a claim by the writer that holds the class renews it with a fresh until', () => {
-  const outcome = planClaim([claim('c1', 1, 'writer-a')], 'any-type', 'writer-a', 'Ada on laptop', now);
+  const events = [add('a1', 1, 'x'), add('a2', 2, 'y'), claim('c1', 3, 'writer-a')];
+
+  const outcome = planClaim(events, 'any-type', 'writer-a', 'Ada on laptop', now);
 
   assert.deepEqual(
     [outcome.said, outcome.said === 'claimed' ? outcome.draft.until : null],

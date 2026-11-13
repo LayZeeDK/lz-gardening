@@ -68,7 +68,7 @@ export interface ClaimEvent extends EventBase {
   readonly class: string;
   /** The site's writer id. */
   readonly writer: string;
-  /** Display only: `<user.name> on <hostname>`. */
+  /** Display only: the site's `user.name`, or `writer <first 8 of the writer id>` when it has none. */
   readonly holder: string;
   /** at + claimLifetimeMs. */
   readonly until: string;
@@ -148,7 +148,7 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
     return { said: 'kept', id };
   }
 
-  const tend = closes.findLast((close): close is TendedClose => close.kind === 'tended' && close.class === input.class);
+  const tend = latestTendedClose(closes, input.class);
   const draft = (sawTend: string | null): EventDraft<AddEvent> => ({
     op: 'add',
     id,
@@ -162,6 +162,14 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
     : { said: 'regrown', id, draft: draft(tend.uuid), after: tend };
 }
 
+export function latestTendedClose(events: readonly GardenEvent[], weedClass: string): TendedClose | undefined {
+  return events
+    .toSorted(byClock)
+    .findLast(
+      (event): event is TendedClose => event.op === 'close' && event.kind === 'tended' && event.class === weedClass,
+    );
+}
+
 /** The kind and its data travel together, as in a close event. */
 export type CloseRequest = { readonly target: { readonly id: string } | { readonly class: string } } & (
   | { readonly kind: 'tended'; readonly by: string; readonly check: string }
@@ -173,10 +181,6 @@ export type CloseOutcome =
   | { readonly said: 'claimed by another'; readonly claim: ClaimEvent }
   | { readonly said: 'closed' | 'kept'; readonly closed: readonly string[]; readonly drafts: readonly EventDraft[] };
 
-/**
- * close / close-class: one close event for every weed the writer sees open, plus a release when this writer holds
- * the class's claim. Refused while another writer holds an active claim of the class.
- */
 export function planClose(
   events: readonly GardenEvent[],
   request: CloseRequest,
@@ -205,11 +209,24 @@ export function planClose(
     closed,
     drafts: [
       { op: 'close', ids: closed, class: first.class, ...close },
-      ...liveClaims(events, now)
-        .filter((claim) => claim.writer === writer && claim.class === first.class)
-        .map((claim): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid })),
+      ...('class' in target ? releasesOf(events, first.class, writer, now) : []),
     ],
   };
+}
+
+export type ReleasePlan =
+  { readonly said: 'released'; readonly drafts: readonly EventDraft[] } | { readonly said: 'no claim' };
+
+export function planRelease(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): ReleasePlan {
+  const drafts = releasesOf(events, weedClass, writer, now);
+
+  return drafts.length === 0 ? { said: 'no claim' } : { said: 'released', drafts };
+}
+
+function releasesOf(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): EventDraft[] {
+  return liveClaims(events, now)
+    .filter((claim) => claim.writer === writer && claim.class === weedClass)
+    .map((claim): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
 }
 
 /** 6 hours: the GitHub-hosted job limit and GITHUB_TOKEN lifetime, so a crashed CI run's claim ends with it. */
@@ -221,7 +238,8 @@ export const notTendedDirectly: readonly string[] = ['stale-verification', 'repe
 export type ClaimPlan =
   | { readonly said: 'claimed'; readonly class: string; readonly draft: EventDraft<ClaimEvent> }
   | { readonly said: 'taken'; readonly claim: ClaimEvent }
-  | { readonly said: 'nothing ready' };
+  | { readonly said: 'nothing ready' }
+  | { readonly said: 'nothing open'; readonly class: string };
 
 /**
  * Which class to claim. With a class: taken if another writer holds it, else claimed (a holder's claim renews it).
@@ -251,9 +269,33 @@ export function planClaim(
     return { said: 'taken', claim: held };
   }
 
+  if (!garden.open.some((weed) => weed.class === chosen)) {
+    return { said: 'nothing open', class: chosen };
+  }
+
   const until = new Date(now.getTime() + claimLifetimeMs).toISOString();
 
   return { said: 'claimed', class: chosen, draft: { op: 'claim', class: chosen, writer, holder, until } };
+}
+
+export interface LostClaim {
+  readonly claim: ClaimEvent;
+  readonly owner: ClaimEvent;
+}
+
+export function losingClaims(
+  shared: readonly GardenEvent[],
+  mine: readonly ClaimEvent[],
+  writer: string,
+  now: Date,
+): readonly LostClaim[] {
+  const garden = replay(shared, now);
+
+  return mine.flatMap((claim) => {
+    const owner = heldByAnother(garden, claim.class, writer);
+
+    return owner === undefined ? [] : [{ claim, owner }];
+  });
 }
 
 /** The active claim of a class when a writer other than this one owns it. */

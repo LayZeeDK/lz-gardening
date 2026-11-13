@@ -819,6 +819,8 @@ test('the site runs none of the hooks the user set up by name in their git confi
   assert.equal(opened.status, 0, opened.stderr);
   const recorded = site(dir, ['sync', '--census', pendCensus(dir, join(dirname(dir), 'repo.garden')).sha], env);
   assert.equal(recorded.status, 0, recorded.stderr);
+  cli(dir, ['add', '--class', 'probe', '--where', 'src/a.ts:1', '--source', 'census:probe'], env);
+  cli(dir, ['claim', '--class', 'probe'], env);
   const bed = site(dir, ['bed', '--class', 'probe', '--base', 'main'], env);
 
   assert.equal(bed.status, 0, bed.stderr);

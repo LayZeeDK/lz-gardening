@@ -3,8 +3,10 @@
 This plugin uses [Semantic Versioning](https://semver.org/). Its public interface is: the plugin name; the skill
 names and their slash commands; the agent name; who may invoke each skill; the arguments each skill takes; the
 garden site layout (the `refs/garden/log`, `refs/garden/census` and `refs/garden/pending/<sha>` refs, the `garden`
-branch, `.garden/patterns.json`, `bed/<class>` bed branches); the `refs/garden/log` and `refs/garden/census` refs the
-site shares on the repository's `origin`, and the `lzGardening.share` setting; the formats of the event files and
+branch, `.garden/patterns.json`, `bed/<class>` bed branches); the `refs/garden/log`, `refs/garden/census` and
+`refs/garden/beds/<class>` refs the site shares on the repository's `origin`, and the `lzGardening.share`,
+`lzGardening.name` and `lzGardening.email` settings;
+the formats of the event files and
 `garden.json` in `refs/garden/log`, of `census.json` and `patterns.json` in `refs/garden/census`, and of
 `.garden/patterns.json`; and the class ids a queue may hold. A change that makes an existing site, queue or census
 unreadable is a major change.
@@ -34,7 +36,14 @@ First release.
   `git config lzGardening.share false`), `synced`, `offline` (with git's reason; a fetch or push never asks for
   credentials and gives up after a minute), `read-only` (the push was declined, with git's reason) or `behind` (every
   try lost to another push or another sync of the site; the next run pushes the events). `site.ts sync` also prints how many events it shared and
-  the files whose shared content it kept over the site's, and exits 0 in every state.
+  the files whose shared content it kept over the site's, and exits 0 in every state. A `sync --census` deletes the
+  pending censuses of older base commits that an interrupted tick left. The garden log's and the census's commits
+  are signed `lz-gardening <>`, or by `lzGardening.name` and `lzGardening.email` when the checkout's git config sets
+  both. The queue is shared with the repository, so `weeds.ts` takes repository-relative paths only (`--where`, a
+  `lesson:<path>` source, `--check`) and refuses an event whose text holds this machine's home folder, the
+  checkout's path or the site's path. A census, or a bed, whose base commit no branch fetched from `origin` holds
+  stays in the site and is named on stderr, as is a bed that adds a line holding one of those paths. `weeds.ts groups` shows who holds a claim of
+  each class in a last `tending` column (`-` for none).
 - `lz-tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Closes the class in
   the queue as tended, one-off or kept; a tended close records the bed and where its check lives. A class tended
@@ -42,6 +51,18 @@ First release.
   the weeds that came back. Makes the bed with the garden's site script, which links the checkout's Node.js
   dependencies into the bed, or names the command that installs them, for npm, pnpm, Yarn 1, and Yarn 4 or later.
   Carries its own permission rules for reading the `lz-tend` skill and the `lz-garden` references, and for running
-  the garden scripts, and asks you to add the site as a working directory.
+  the garden scripts, and asks you to add the site as a working directory. Claims its class first with
+  `weeds.ts claim [--class <class>]`, so no other clone or run tends it at the same time: the claim lasts six hours,
+  a second claim by its holder renews it, the earliest live claim on `origin` wins, and a claim that lost is given
+  back with a release. A claim names its holder by the site's `user.name` (`writer <first 8 of the writer id>` when
+  there is none). `claim` prints `claimed <class> until <time>` (exit 0), or exits 1 with
+  `taken <class> by <holder> until <time>`, `nothing ready to tend`, `nothing open for <class>` or
+  `cannot claim <class>: <state> (<reason>)`. `weeds.ts release --class <class>` ends a claim
+  (`released <class>; <state>`, or `no claim of <class> held here` and exit 1). `close` and `close-class` sync before
+  they plan and share the close after it, printing `<closed|kept> <n>; <state>`; `close-class` ends this writer's
+  claim of the class, and `close --id` leaves it. A tended close shares its bed as `refs/garden/beds/<class>`, in a
+  push of its own after the log; a bed that does not descend from `origin`'s, or that `origin` refuses, is named on
+  stderr. `site.ts bed` syncs first and exits 1 unless this site holds the claim of the class, and starts from, or
+  merges in, the bed another clone shared.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the
   garden scripts, which keep the queue and the census in the site.

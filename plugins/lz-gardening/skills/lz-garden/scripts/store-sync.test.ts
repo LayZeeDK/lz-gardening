@@ -371,10 +371,26 @@ test('a shared log whose commit holds no garden.json stops the sync with an erro
   assert.throws(() => sync(openSite(second.dir), { attempts: 1 }), { message: notAGardenLog });
 });
 
-test('every push a sync starts names only the garden log and the census as destinations', (t) => {
+test('every push a sync starts names only the garden log, the census or a bed, and never a bed with the log', (t) => {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   addWeed(second.dir, 'src/b.ts:1');
+  const bed = join(second.garden, 'beds', 'any-type');
+  git(second.garden, ['fetch', '-q', 'origin', 'main']);
+  git(second.garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
+  const tip = commit(bed, { 'checks/any-type.mjs': 'export {};\n' });
+  git(second.dir, ['config', 'lzGardening.share', 'false']);
+  const closed = cli(second.dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    `bed/any-type@${tip}`,
+    '--check',
+    'checks/any-type.mjs',
+  ]);
+  assert.equal(closed.code, 0, closed.stderr);
+  git(second.dir, ['config', 'lzGardening.share', 'true']);
   const base = git(second.dir, ['rev-parse', 'HEAD']);
   writePendingCensus(
     second.garden,
@@ -397,13 +413,13 @@ test('every push a sync starts names only the garden log and the census as desti
 
   assert.deepEqual(
     pushes.map((args) => args.slice(args.indexOf('--end-of-options') + 2).map((refspec) => refspec.split(':')[1])),
-    [[logRef], [logRef, censusRef]],
+    [[logRef], [logRef, censusRef], ['refs/garden/beds/any-type']],
   );
 });
 
 const siteScript = fileURLToPath(new URL('site.ts', import.meta.url));
 
-test('a sync whose origin already holds the local log fetches and stops, with no merge and no push', (t) => {
+test('a sync whose origin already holds the local log fetches, lists the beds and stops, with no merge and no push', (t) => {
   const { dir } = planted(t);
   bareRemote(dir);
   sync(openSite(dir), { attempts: 1 });
@@ -427,7 +443,7 @@ test('a sync whose origin already holds the local log fetches and stops, with no
           : undefined,
       ),
     ],
-    ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'fetch', 'cat-file']],
+    ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'fetch', 'cat-file', 'for-each-ref']],
   );
 });
 

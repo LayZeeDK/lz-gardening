@@ -52,23 +52,32 @@ queue and a ref `refs/garden/census` that holds the census.
   beds/<class>/           a tend pass's worktree, on branch bed/<class>
 ```
 
+On `origin`, a tended close also shares its bed as `refs/garden/beds/<class>`.
+
 The queue and the census are shared through the repository's own `origin`, under the same refs: not branches, so
 they never show in `git branch` or a plain clone. Each tick's `site.ts open` and `site.ts sync` fetch them into the
 site, merge the queue with the site's own events, keep the census of the later base commit, and push both back, so
 every clone that runs the gardener, on your machine or another, sees one queue and reads on from the last census any
-clone took. No ref outside `refs/garden/` is pushed, and the checkout itself fetches nothing. A clone that cannot reach `origin`, or
-may not push to it, keeps working on its own copy and shares it on a later tick. To keep the garden local only:
+clone took. A tend pass claims its class in the queue first, so two clones never tend one class at once, and shares
+its close and its bed when it ends. No ref outside `refs/garden/` is pushed, and the checkout itself fetches nothing.
+A clone that cannot reach `origin`, or may not push to it, keeps working on its own copy and shares it on a later
+tick. Whoever can read the repository can read the shared queue: each claim names its holder by your `user.name`,
+and the bed commits carry your `user.name` and `user.email`. The queue's and the census's own commits are signed
+`lz-gardening <>`; to sign them yourself, set both `lzGardening.name` and `lzGardening.email` in the repository's
+git config. To keep the garden local only:
 
 ```bash
 git config lzGardening.share false
 ```
 
-The beds stay in the site. To take a tend pass's change, fetch it from the repository and merge it
-the way you land any work:
+To take a tend pass's change, fetch its bed from the repository and merge it the way you land any work, then delete
+the bed's ref on `origin`:
 
 ```bash
-git fetch ../<repo>.garden bed/<class>
+git fetch origin refs/garden/beds/<class>
 ```
+
+A bed whose close was never shared is only in the site: `git fetch ../<repo>.garden bed/<class>`.
 
 The watch runs in the `lz-gardener` agent. It reads the repository with read-only git commands and writes only
 through its three scripts, which keep the queue and the census in the site. It never edits planning records, agent
@@ -81,8 +90,9 @@ The `lz-garden` skill carries its own permission rules. They pre-approve what a 
 files, running its own scripts and `node --version`, and `git ls-tree` and `git rev-parse`; Claude Code runs the
 read-only `git log` and `git show` a tick also uses without asking anyway. They grant nothing more; any other
 command falls back to your own permission settings, so a tick never needs a broad rule such as `Bash(git *)`,
-which would also allow a push. The site script pushes `refs/garden/log` and `refs/garden/census` itself, and takes no remote, URL or ref
-argument, so its rule cannot be turned into another push; `lzGardening.share false` is the switch for that push. Claude Code asks before it runs a skill with its own rules. Allow it
+which would also allow a push. The site and weeds scripts push `refs/garden/log`, `refs/garden/census` and
+`refs/garden/beds/<class>` themselves, and take no remote, URL or ref argument, so their rules cannot be turned into
+another push; `lzGardening.share false` is the switch for those pushes. Claude Code asks before it runs a skill with its own rules. Allow it
 once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` tick never waits on a prompt:
 
 ```json
