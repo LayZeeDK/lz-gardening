@@ -52,8 +52,18 @@ queue and an orphan branch `garden` that holds the census.
   beds/<class>/           a tend pass's worktree, on branch bed/<class>
 ```
 
-Nothing is pushed. To take a tend pass's change, fetch it from the repository and merge it the way you land any
-work:
+The queue is shared through the repository's own `origin`, under `refs/garden/log`: not a branch, so it never shows
+in `git branch` or a plain clone. Each tick's `site.ts open` and `site.ts sync` fetch it into the site, merge it
+with the site's own events and push it back, so every clone that runs the gardener, on your machine or another, sees
+one queue. No other ref is pushed, and the checkout itself fetches nothing. A clone that cannot reach `origin`, or
+may not push to it, keeps working on its own copy and shares it on a later tick. To keep the garden local only:
+
+```bash
+git config lzGardening.share false
+```
+
+The beds and the census stay in the site. To take a tend pass's change, fetch it from the repository and merge it
+the way you land any work:
 
 ```bash
 git fetch ../<repo>.garden bed/<class>
@@ -70,7 +80,8 @@ The `lz-garden` skill carries its own permission rules. They pre-approve what a 
 files, running its own scripts and `node --version`, and `git ls-tree` and `git rev-parse`; Claude Code runs the
 read-only `git log` and `git show` a tick also uses without asking anyway. They grant nothing more; any other
 command falls back to your own permission settings, so a tick never needs a broad rule such as `Bash(git *)`,
-which would also allow a push. Claude Code asks before it runs a skill with its own rules. Allow it
+which would also allow a push. The site script pushes `refs/garden/log` itself, and takes no remote, URL or ref
+argument, so its rule cannot be turned into another push; `lzGardening.share false` is the switch for that push. Claude Code asks before it runs a skill with its own rules. Allow it
 once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` tick never waits on a prompt:
 
 ```json

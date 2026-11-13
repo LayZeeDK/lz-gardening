@@ -295,6 +295,9 @@ function isStampedTime(text: string): boolean {
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+export const eventPathPattern =
+  /^events\/([0-9a-f]{2})\/\1[0-9a-f]{6}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/;
+
 /** Parses one event file at the trust boundary; anything malformed is a reason string, never a throw. */
 export function parseEvent(path: string, text: string): GardenEvent | string {
   let json: unknown;

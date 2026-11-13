@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from './census.ts';
-import { eventPath, parseEvent, stamp } from './log.ts';
+import { eventPath, eventPathPattern, parseEvent, stamp } from './log.ts';
 import type { EventDraft, GardenEvent } from './log.ts';
 
 interface Run {
@@ -111,16 +111,21 @@ interface GitInput {
   readonly input?: string;
   readonly env?: Readonly<NodeJS.ProcessEnv>;
   readonly readsOnly?: boolean;
+  readonly timeout?: number;
 }
 
 function runGit(
   cwd: string,
   args: readonly string[],
-  { input, env = {}, readsOnly = false }: GitInput = {},
+  { input, env = {}, readsOnly = false, timeout }: GitInput = {},
 ): SpawnSyncReturns<string> {
   const settings = readsOnly ? [] : [...withoutHooksOrSigning, ...namedHooksOff(cwd)];
 
-  return spawnGit(cwd, [...settings, ...args], { ...gitEnv(cwd), ...env }, input);
+  return spawnGit(cwd, [...settings, ...args], { ...gitEnv(cwd), ...env }, input, timeout);
+}
+
+function timedOut(result: SpawnSyncReturns<string>): boolean {
+  return result.error !== undefined && 'code' in result.error && result.error.code === 'ETIMEDOUT';
 }
 
 function spawnGit(
@@ -128,10 +133,11 @@ function spawnGit(
   args: readonly string[],
   env: Readonly<NodeJS.ProcessEnv>,
   input?: string,
+  timeout?: number,
 ): SpawnSyncReturns<string> {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env, input, maxBuffer: Infinity });
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8', env, input, maxBuffer: Infinity, timeout });
 
-  if (result.error !== undefined) {
+  if (result.error !== undefined && !timedOut(result)) {
     throw new Error(`git ${args.join(' ')}: ${result.error.message}`);
   }
 
@@ -200,13 +206,12 @@ function identity(site: string, whose: 'author' | 'committer', now: string): str
   return `${whose} ${name} <${email}> ${env[`${variable}_DATE`] ?? now}\n`;
 }
 
+type LogFile = { readonly path: string; readonly text: string } | { readonly path: string; readonly oid: string };
+
 // fast-import moves the ref only by fast-forward, so a commit planned on the tip lands only while the ref names it,
-// and a first commit lands only where there is no log.
-function writeLogIfStill(
-  site: string,
-  tip: string | null,
-  files: readonly (readonly [path: string, text: string])[],
-): boolean {
+// and a first commit lands only where there is no log. A merge parent adds history, not files: the tree is the tip's
+// plus the files given.
+function writeLogIfStill(site: string, tip: string | null, files: readonly LogFile[], merge?: string): boolean {
   const now = `@${String(Math.floor(Date.now() / 1000))}`;
   const stream = [
     `commit ${logRef}\n`,
@@ -214,7 +219,10 @@ function writeLogIfStill(
     identity(site, 'committer', now),
     data('garden: log\n'),
     ...(tip === null ? [] : [`from ${tip}\n`]),
-    ...files.map(([path, text]) => `M 100644 inline ${path}\n${data(text)}`),
+    ...(merge === undefined ? [] : [`merge ${merge}\n`]),
+    ...files.map((file) =>
+      'oid' in file ? `M 100644 ${file.oid} ${file.path}\n` : `M 100644 inline ${file.path}\n${data(file.text)}`,
+    ),
     'done\n',
   ].join('');
   const imported = runGit(
@@ -244,7 +252,7 @@ function writeLogIfStill(
 export const writerKey = 'lzGardening.writer';
 
 export function startLog(site: string): void {
-  writeLogIfStill(site, null, [['garden.json', JSON.stringify({ format: logFormat })]]);
+  writeLogIfStill(site, null, [{ path: 'garden.json', text: JSON.stringify({ format: logFormat }) }]);
 }
 
 export function plantWriter(site: string): void {
@@ -439,6 +447,241 @@ export function readLog(site: Site): Replica {
   return readReplica(site.path, tip);
 }
 
+export const shareKey = 'lzGardening.share';
+
+const sharedLogRef = 'refs/garden-shared/log';
+
+// git knows the empty tree of either object format without holding it.
+function emptyTreeLike(oid: string): string {
+  return oid.length === 64
+    ? '6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321'
+    : '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+}
+
+interface Change {
+  readonly status: string;
+  readonly sharedOid: string;
+  readonly path: string;
+}
+
+// diff-tree -z prints each change as ":<mode> <mode> <oid> <oid> <status>" and its path, NUL after each.
+function diffTree(site: string, shared: string, local: string): readonly Change[] {
+  const fields = git(site, ['diff-tree', '-r', '--no-renames', '-z', shared, local]).split('\0');
+
+  return Array.from({ length: Math.floor(fields.length / 2) }, (_, index) => {
+    // Stryker disable next-line StringLiteral: diff-tree prints five fields and a path for every change, so no default applies
+    const [meta = '', path = ''] = fields.slice(index * 2, index * 2 + 2);
+    // Stryker disable next-line StringLiteral: as above
+    const [, , sharedOid = '', , status = ''] = meta.split(' ');
+
+    return { status, sharedOid, path };
+  });
+}
+
+export type ShareState = 'local' | 'synced' | 'offline' | 'read-only' | 'behind';
+
+export interface SyncResult {
+  readonly state: ShareState;
+  readonly reason?: string;
+  readonly pushedEvents: number;
+  readonly conflicts: readonly string[];
+  readonly skipped: readonly string[];
+}
+
+export interface SyncOptions {
+  readonly attempts: number;
+  readonly wait?: (ms: number) => void;
+  readonly timeoutMs?: number;
+}
+
+function reasonOf(stderr: string): string {
+  return stderr.trim().split('\n')[0]?.trim() ?? '';
+}
+
+// merge-base says no with exit 1; any other failure is an error, not a no.
+function isAncestor(site: string, ancestor: string, descendant: string): boolean {
+  const args = ['merge-base', '--is-ancestor', ancestor, descendant];
+  const result = runGit(site, args, { readsOnly: true });
+
+  if (result.status !== 0 && result.status !== 1) {
+    throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
+  }
+
+  return result.status === 0;
+}
+
+const nothingShared = { pushedEvents: 0, conflicts: [], skipped: [] } as const;
+
+interface Merged {
+  readonly upToDate: boolean;
+  readonly pushedEvents: number;
+  readonly conflicts: readonly string[];
+  readonly skipped: readonly string[];
+}
+
+function mergeOnce(site: string): Merged | 'lost to another writer' {
+  const [shared, local = '', sharedFormatFile, localFormatFile] = objectIds(site, [
+    sharedLogRef,
+    logRef,
+    `${sharedLogRef}:garden.json`,
+    `${logRef}:garden.json`,
+  ]);
+
+  if (shared !== undefined && sharedFormatFile !== localFormatFile) {
+    const format = formatOf(git(site, ['cat-file', 'blob', sharedFormatFile ?? ''], { readsOnly: true }));
+
+    if (format !== logFormat) {
+      throw new Error(
+        `the shared ${logRef} is in format ${String(format)} and this version reads format ${String(logFormat)}; update lz-gardening`,
+      );
+    }
+  }
+
+  if (shared === local) {
+    return { upToDate: true, ...nothingShared };
+  }
+
+  const changes = diffTree(site, shared ?? emptyTreeLike(local), local);
+  const pushedEvents = changes.filter(({ status, path }) => status === 'A' && eventPathPattern.test(path)).length;
+
+  if (shared === undefined || isAncestor(site, shared, local)) {
+    return { upToDate: false, ...nothingShared, pushedEvents };
+  }
+
+  const fromShared = changes.filter(({ status }) => status !== 'A');
+  const copied = fromShared.filter(({ path }) => path === 'garden.json' || eventPathPattern.test(path));
+  const conflicts = copied.filter(({ status }) => status === 'M').map(({ path }) => path);
+  const skipped = fromShared.filter((change) => !copied.includes(change)).map(({ path }) => path);
+
+  if (copied.length === fromShared.length && !changes.some(({ status }) => status === 'A')) {
+    return moveLogIfStill(site, shared, local)
+      ? { upToDate: true, pushedEvents: 0, conflicts, skipped }
+      : 'lost to another writer';
+  }
+
+  return writeLogIfStill(
+    site,
+    local,
+    copied.map(({ path, sharedOid }) => ({ path, oid: sharedOid })),
+    shared,
+  )
+    ? { upToDate: false, pushedEvents, conflicts, skipped }
+    : 'lost to another writer';
+}
+
+function moveLogIfStill(site: string, to: string, from: string): boolean {
+  const args = ['update-ref', logRef, to, from];
+  const moved = runGit(site, args);
+
+  if (moved.status !== 0 && git(site, ['rev-parse', '--verify', logRef]) === from) {
+    throw new Error(`git ${args.join(' ')}: ${moved.stderr.trim()}`);
+  }
+
+  return moved.status === 0;
+}
+
+// Stryker disable next-line LzJsNumericLiteral: how many tries a merge spends is policy, as with appendTries
+const mergeTries = 50;
+
+function mergeShared(site: string): Merged {
+  for (let attempt = 1; ; attempt += 1) {
+    const merged = mergeOnce(site);
+
+    if (merged !== 'lost to another writer') {
+      return merged;
+    }
+
+    if (attempt >= mergeTries) {
+      throw new Error(`${logRef} kept moving; ${String(mergeTries)} tries to merge the shared log failed`);
+    }
+  }
+}
+
+function sleep(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// A push lost to another writer: a fast-forward refused by this git, or the remote's ref moved or locked under it.
+const lostRace = /\t(?:\[rejected\]|\[remote rejected\] \(.*(?:lock|old value|failed to update))/;
+
+function rejected(porcelain: string): boolean {
+  return porcelain.split('\n').some((line) => line.startsWith('!\t') && lostRace.test(line));
+}
+
+// Stryker disable next-line LzJsNumericLiteral: how long a fetch or push may take is policy; the limit is tested through timeoutMs
+const networkTimeoutMs = 60_000;
+
+// Messages are in English, as the porcelain classification reads them.
+function networkGit(site: string, args: readonly string[], timeoutMs: number): SpawnSyncReturns<string> {
+  return runGit(
+    site,
+    ['-c', 'credential.interactive=false', '-c', `core.filesRefLockTimeout=${String(refLockWaitMs)}`, ...args],
+    { env: { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' }, timeout: timeoutMs },
+  );
+}
+
+export function sync(
+  site: Pick<Site, 'checkout' | 'path'>,
+  { attempts, wait = sleep, timeoutMs = networkTimeoutMs }: SyncOptions,
+): SyncResult {
+  const fetchUrl = optionalGit(site.checkout, ['remote', 'get-url', 'origin'], { readsOnly: true });
+
+  if (
+    fetchUrl === undefined ||
+    git(site.checkout, ['config', '--type=bool', '--default=true', shareKey], { readsOnly: true }) === 'false'
+  ) {
+    return { state: 'local', ...nothingShared };
+  }
+
+  const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const fetched = networkGit(
+      site.path,
+      ['fetch', '--prune', '--no-tags', '--end-of-options', fetchUrl, '+refs/garden/*:refs/garden-shared/*'],
+      timeoutMs,
+    );
+
+    if (timedOut(fetched)) {
+      return { state: 'offline', reason: 'timed out', ...nothingShared };
+    }
+
+    if (fetched.status !== 0) {
+      return { state: 'offline', reason: reasonOf(fetched.stderr), ...nothingShared };
+    }
+
+    const { upToDate, ...merged } = mergeShared(site.path);
+
+    if (upToDate) {
+      return { state: 'synced', ...merged };
+    }
+
+    const pushed = networkGit(
+      site.path,
+      ['push', '--porcelain', '--end-of-options', pushUrl, `${logRef}:${logRef}`],
+      timeoutMs,
+    );
+
+    if (timedOut(pushed)) {
+      return { state: 'offline', reason: 'timed out', ...nothingShared };
+    }
+
+    if (pushed.status === 0) {
+      return { state: 'synced', ...merged };
+    }
+
+    if (!rejected(pushed.stdout)) {
+      return { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0 };
+    }
+
+    if (attempt < attempts) {
+      wait(2 ** (attempt - 1) * 1000 * (0.5 + Math.random()));
+    }
+  }
+
+  return { state: 'behind', ...nothingShared };
+}
+
 // Stryker disable next-line LzJsNumericLiteral: how many tries a writer spends is policy; the bound is tested through append's tries
 const appendTries = 50;
 
@@ -468,7 +711,7 @@ export function append<T>(
       writeLogIfStill(
         site.path,
         replica.tip,
-        events.map((event) => [eventPath(event.uuid), JSON.stringify(event)]),
+        events.map((event) => ({ path: eventPath(event.uuid), text: JSON.stringify(event) })),
       )
     ) {
       return result;

@@ -8,7 +8,7 @@ import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from './census.ts';
 import { run } from './site.ts';
-import { commit, init } from './test-repo.ts';
+import { commit, git, init } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
 
@@ -91,6 +91,27 @@ export function planted(t: TestContext): { readonly dir: string; readonly garden
   );
 
   return { dir, garden };
+}
+
+export function bareRemote(dir: string): string {
+  const remote = join(dirname(dir), 'remote.git');
+  git(dirname(dir), ['init', '-q', '--bare', remote]);
+  git(dir, ['remote', 'add', 'origin', remote]);
+
+  return remote;
+}
+
+export function sharedPair(t: TestContext): {
+  readonly first: { readonly dir: string; readonly garden: string };
+  readonly second: { readonly dir: string; readonly garden: string };
+  readonly remote: string;
+} {
+  const first = planted(t);
+  const remote = bareRemote(first.dir);
+  const second = planted(t);
+  git(second.dir, ['remote', 'add', 'origin', remote]);
+
+  return { first, second, remote };
 }
 
 export function writeCensus(garden: string, sha = 'a'.repeat(40)): void {

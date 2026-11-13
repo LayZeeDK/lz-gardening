@@ -149,6 +149,15 @@ The site's ref `refs/garden/log`, whose commits hold the queue's events, one fil
 `garden.json`. It is a ref, not a branch or a folder, so nothing checks it out.
 _Avoid_: weeds file, queue branch
 
+**Shared log**:
+The garden log on the repository's `origin`, under the same ref. A site syncs with it: fetches it, merges it into its
+own garden log and pushes the result back.
+_Avoid_: remote queue, garden remote
+
+**Share state**:
+What a sync says about the shared log: `local`, `synced`, `offline`, `read-only` or `behind`.
+_Avoid_: sync status
+
 **Bed**:
 A tend pass's working copy and branch in the garden site, holding one proposed change for a human to land. Its
 branch is the bed branch, `bed/<class>`.

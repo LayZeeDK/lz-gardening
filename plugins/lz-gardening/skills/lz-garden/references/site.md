@@ -19,13 +19,22 @@ the checkout, write into a **site** instead: a local clone beside the repository
 
 `garden` is an orphan branch: it holds only `.garden/` and `.gitignore`, never the repository's code, so its history
 is the gardener's record and nothing else. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
-branch beside `garden`) start from the base branch and carry one proposed bed change each. Nothing in the site is
-pushed. A human lands a bed by fetching it into the repository with `git fetch ../<repo>.garden bed/<class>` and
-merging it the way the repository lands work. To keep a copy of the queue for safekeeping, fetch its ref under the
-same name: `git fetch ../<repo>.garden refs/garden/log:refs/garden/log`. `weeds.ts` reads only the site's own ref,
-so a site made again from that copy needs the ref fetched back into the site the same way.
+branch beside `garden`) start from the base branch and carry one proposed bed change each. A human lands a bed by
+fetching it into the repository with `git fetch ../<repo>.garden bed/<class>` and merging it the way the repository
+lands work.
 
-## Open, commit
+The garden log is the one thing the site shares: `site.ts open` and `site.ts sync` fetch the repository's `origin`
+`refs/garden/log` into the site's `refs/garden-shared/log`, merge it with the site's own log, and push the result
+back to `origin` `refs/garden/log`. They read the URLs from the checkout on every run (`git remote get-url origin`
+to fetch, `--push` to push), so the checkout itself fetches nothing and gains no refs, and they push no other ref.
+`git config lzGardening.share false` in the checkout keeps the garden local. Events are never edited or deleted, so
+the merge is the union of both logs' event files: the commit takes the site's log and adds the shared log's files.
+A file both logs hold with different content keeps the shared content and is reported as a conflict; a shared file
+that is not an event file (`events/<xx>/<uuid>.json`) or `garden.json` is not copied and is named on stderr. A shared
+log in a format other than this version's stops the sync with exit 2, naming both formats. Because every site holds
+the whole log, a site made again, or one whose remote ref was deleted, gets the log back on its next sync.
+
+## Open, sync, commit
 
 `scripts/site.ts` does all of the site's git work, run from the repository's checkout. Run from a linked worktree
 of the repository, it uses the one site beside the main checkout:
@@ -34,12 +43,29 @@ of the repository, it uses the one site beside the main checkout:
   `user.name` and `user.email` copied in, and the orphan `garden` branch with one first commit holding
   `.gitignore`, the queue's `refs/garden/log` holding only `garden.json` (the format of its events), and a random
   writer id in the site's `lzGardening.writer` setting. On later runs it plants only what the site lacks of
-  `refs/garden/log` and the writer id, and leaves the rest as it is. It prints JSON with `site`, `created`, `base`
-  and `seeded` (whether the `garden` branch holds a commit past the first one). It exits 2 when the repository has
-  no `user.name` or `user.email`, so the gardener never commits under a default identity, and when a repository at
-  `../<repo>.garden` has no `garden` branch, writing nothing into it.
+  `refs/garden/log` and the writer id, and leaves the rest as it is. Then it syncs the garden log once, with no
+  wait, which also pushes events a run appended but never shared. It prints JSON with `site`, `created`, `base`,
+  `seeded` (whether the `garden` branch holds a commit past the first one) and `shared` (the share state, below). It
+  exits 2 when the repository has no `user.name` or `user.email`, so the gardener never commits under a default
+  identity, and when a repository at `../<repo>.garden` has no `garden` branch, writing nothing into it.
+- `site.ts sync` syncs the garden log, trying up to five times. It prints JSON with `shared` and `events` (how many
+  of the site's events the push shared), plus `reason` (git's message) when there is one and `conflicts` (the files
+  whose shared content it kept) when there are any. It exits 0 in every share state.
 - `site.ts commit --message <text>` stages `.garden/` in the site and commits it on `garden`. It prints JSON with
   `committed`, false when nothing changed.
+
+The share states:
+
+- `local`: the checkout has no `origin`, or sets `lzGardening.share` to false. Nothing was fetched or pushed.
+- `synced`: the site's log and `origin`'s are the same.
+- `offline`: the fetch failed (no network, no access, a URL that asks for credentials) or a fetch or push took longer
+  than a minute; `reason` says which. The site's events stay in the site.
+- `read-only`: the fetch worked but `origin` declined the push, for a reason other than another push landing first;
+  `reason` gives git's message, such as what a server hook said.
+- `behind`: every try lost the race to another push. The site's events stay in the site and the next run pushes them.
+
+Fetch and push never ask for a password or wait for input: a URL that needs credentials git cannot find is
+`offline`. A push another push beat waits 1, 2, 4 and 8 seconds (give or take half) before the next try.
 
 Every git command `site.ts` runs, from the clone to each commit in the site, runs none of the user's git hooks and
 signs nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick
@@ -124,8 +150,8 @@ with: unlink `node_modules` first (`rm "<bed>/node_modules"`, no `-r`; on Window
 `cmd //c rmdir "<bed>\node_modules"`), then `git -C "<site>" worktree remove "<bed>"`, then
 `git -C "<site>" branch -D bed/<class>` only once the change has landed: after
 `git -C "<site>" fetch -q origin <base>`, `git -C "<site>" merge-base --is-ancestor bed/<class> FETCH_HEAD` exits 0,
-or the base holds a commit that carries the same change. Deleting the whole site loses the queue unless a copy of
-`refs/garden/log` was fetched into the repository (see the top of this page).
+or the base holds a commit that carries the same change. Deleting the whole site loses the queue events it never
+shared (a `local` garden shares none of them); the next `site.ts open` brings back the rest from `origin`.
 
 One gardener per site: two sessions looping on one repository both land their queue events, but race on the census
 commits on `garden`.

@@ -1,8 +1,12 @@
 // The garden site: a clone beside the repository. Its `garden` branch holds the census; its refs/garden/log holds the
-// queue (see store.ts).
+// queue (see store.ts), shared with the checkout's origin under the same ref.
 // Usage, from the repository:
 //   node site.ts open [--base <branch>]     create the site if missing, plant the garden log and the writer id if
-//                                           missing, resolve the base; prints {site, created, base, seeded}
+//                                           missing, resolve the base, sync the garden log once; prints
+//                                           {site, created, base, seeded, shared}, shared being the share state:
+//                                           local, synced, offline, read-only or behind
+//   node site.ts sync                       sync the garden log with origin, up to 5 tries; prints {shared, events}
+//                                           and reason and conflicts when there are any; exit 0 in every state
 //   node site.ts commit --message <text>    commit the site's .garden folder; prints {committed}
 //   node site.ts bed --class <kebab> --base <base>
 //                                           fetch the base into the site and make the bed beds/<class> on
@@ -16,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isRecord, readCensus } from './census.ts';
-import { isMainModule, processIo, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { classPattern } from './log.ts';
 import {
@@ -30,6 +34,7 @@ import {
   requireSite,
   siteOf,
   startLog,
+  sync,
   writerKey,
 } from './store.ts';
 
@@ -353,6 +358,7 @@ function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 
 type Command =
   | { command: 'open'; base: string | undefined }
   | { command: 'commit'; message: string }
+  | { command: 'sync' }
   | { command: 'bed'; bedClass: string; base: string };
 
 function parseCommand(
@@ -373,6 +379,10 @@ function parseCommand(
     return { command, message: values.message };
   }
 
+  if (command === 'sync' && values.message === '' && values.base === undefined && values.class === undefined) {
+    return { command };
+  }
+
   if (command === 'bed' && values.class !== undefined && values.base !== undefined && values.message === '') {
     return { command, bedClass: values.class, base: values.base };
   }
@@ -391,7 +401,7 @@ function main(argv: readonly string[], io: Io): number {
 
   if (parsed === undefined) {
     io.err(
-      'usage: site.ts open [--base <branch>] | site.ts commit --message <text> | site.ts bed --class <kebab> --base <base>\n',
+      'usage: site.ts open [--base <branch>] | site.ts sync | site.ts commit --message <text> | site.ts bed --class <kebab> --base <base>\n',
     );
 
     return 2;
@@ -402,11 +412,25 @@ function main(argv: readonly string[], io: Io): number {
 
   switch (parsed.command) {
     case 'open': {
-      summary = openOrPlant(top, site, parsed.base);
+      const opened = openOrPlant(top, site, parsed.base);
+      summary = { ...opened, shared: sync({ checkout: top, path: site }, { attempts: 1 }).state };
       break;
     }
     case 'commit': {
       summary = commitSite(site, parsed.message);
+      break;
+    }
+    case 'sync': {
+      const shared = sync({ checkout: top, path: site }, { attempts: 5 });
+      shared.skipped.forEach((path) => {
+        io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);
+      });
+      summary = {
+        shared: shared.state,
+        events: shared.pushedEvents,
+        reason: shared.reason === undefined ? undefined : escapeUnprintable(shared.reason),
+        conflicts: shared.conflicts.length === 0 ? undefined : shared.conflicts,
+      };
       break;
     }
     case 'bed': {

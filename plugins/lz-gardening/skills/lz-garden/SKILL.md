@@ -40,9 +40,12 @@ and stop. Then:
 node "${CLAUDE_SKILL_DIR}/scripts/site.ts" open $ARGUMENTS
 ```
 
-It creates the site on the first tick and picks the base on every tick. The last line is JSON: `site` (the site's
-path, written `<site>` below), `created`, `base` (the branch to watch, such as `main` or `origin/main`, written
-`<base>`), and `seeded` (false until a seed pass has committed). Done when it exits 0.
+It creates the site on the first tick, picks the base on every tick, and syncs the queue with the repository's
+`origin`. The last line is JSON: `site` (the site's path, written `<site>` below), `created`, `base` (the branch to
+watch, such as `main` or `origin/main`, written `<base>`), `seeded` (false until a seed pass has committed), and
+`shared` (the share state: `local`, `synced`, `offline`, `read-only` or `behind`; see
+`${CLAUDE_SKILL_DIR}/references/site.md`). Any share state is fine: the tick goes on with the site's own queue. Done
+when it exits 0.
 
 ## 2. Take the census
 
@@ -110,7 +113,11 @@ and 3 printed one of those words.
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --min 2
 node "${CLAUDE_SKILL_DIR}/scripts/site.ts" commit --message "garden: watch <short sha>"
+node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync
 ```
+
+`sync` shares the queue's new events with the repository's `origin`. Its last line is JSON: `shared` (the share
+state), `events` (how many events it shared), and `reason` when the state has one.
 
 A class with two or more open weeds is ready to tend: several agents took the same shortcut. Report in this shape,
 and nothing else:
@@ -119,7 +126,9 @@ and nothing else:
 garden: <base> <short previousSha>..<short sha>, <n> commits read, <n> skipped
 queued <n> (<class> x<n>, ...); regrown: <class> (check: <where>[ not on the base]), ... or none
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
+shared: <state> (<reason>)
 ```
 
-Leave out the `ready to tend` line when no class has two open weeds. Done when `site.ts commit` exits 0 and its
-JSON line shows `"committed": true`.
+Leave out the `ready to tend` line when no class has two open weeds, and the `shared` line when `sync` printed
+`synced` or `local`. Done when `site.ts commit` exits 0 with `"committed": true` in its JSON line, and `site.ts sync`
+exits 0.

@@ -24,7 +24,7 @@ import { parseArgs } from 'node:util';
 import { readCensus } from './census.ts';
 import { bedCommit, bedPattern, classPattern, planAdd, planClose, replay, unprintablePattern } from './log.ts';
 import type { AddInput, AddOutcome, CloseRequest, GardenEvent, OpenWeed, TendedClose } from './log.ts';
-import { isMainModule, processIo, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { append, objectIdPattern, openSite, readLog } from './store.ts';
 import type { Replica } from './store.ts';
@@ -264,15 +264,9 @@ function offBaseIn(io: Io, site: string): (tended: TendedClose) => boolean {
   };
 }
 
-const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
-
-function escaped(text: string): string {
-  return text.replace(everyUnprintable, (character) => `\\u{${character.charCodeAt(0).toString(16)}}`);
-}
-
 function eventsReportingSkipped(io: Io, replica: Replica): readonly GardenEvent[] {
   replica.skipped.forEach(({ path, why }) => {
-    io.err(`weeds: skipped ${escaped(path)}: ${escaped(why)}\n`);
+    io.err(`weeds: skipped ${escapeUnprintable(path)}: ${escapeUnprintable(why)}\n`);
   });
 
   return replica.events;

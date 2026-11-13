@@ -8,7 +8,9 @@ import { renameRetrying, resolveBase } from './site.ts';
 import { logRef } from './store.ts';
 import type { BaseFacts } from './site.ts';
 import { commit, git, repo } from './test-repo.ts';
-import { configEnv, planted, writeCensus, site, siteProcess } from './test-site.ts';
+import { writeToLogByHand } from './test-log.ts';
+import { bareRemote, configEnv, planted, sharedPair, writeCensus, site, siteProcess } from './test-site.ts';
+import { cli } from './test-weeds.ts';
 
 // A repository with branches feature/x and main, a hosted origin with no default, nothing recorded and nothing
 // asked for.
@@ -218,6 +220,143 @@ test('open refuses a repository with no user.email and plants no site', (t) => {
   assert.equal(result.status, 2);
   assert.match(result.stderr, /user\.email/);
   assert.equal(existsSync(join(dirname(dir), 'repo.garden')), false);
+});
+
+test('open in a repository with no origin reports the garden as local', (t) => {
+  const { dir } = planted(t);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.deepEqual([result.status, result.summary.get('shared')], [0, 'local'], result.stderr);
+});
+
+test('open pushes the events a run appended but never shared, as after a crash before its sync', (t) => {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+  assert.equal(site(dir, ['sync']).summary.get('shared'), 'synced');
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:x']);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.deepEqual(
+    [result.summary.get('shared'), git(remote, ['rev-parse', logRef])],
+    ['synced', git(garden, ['rev-parse', logRef])],
+  );
+});
+
+test('a site planted from a clone of depth 1 fetches and pushes the garden log', (t) => {
+  const source = repo(t);
+  commit(source, { 'src/a.ts': 'export const a = 1;\n' });
+  commit(source, { 'src/b.ts': 'export const b = 1;\n' });
+  const remote = join(dirname(source), 'remote.git');
+  git(dirname(source), ['clone', '-q', '--bare', source, remote]);
+  const clone = join(dirname(source), 'clone');
+  git(dirname(source), ['clone', '-q', '--depth', '1', `file://${remote.replaceAll('\\', '/')}`, clone]);
+  git(clone, ['config', 'user.name', 'test']);
+  git(clone, ['config', 'user.email', 'test@example.com']);
+  assert.equal(site(clone, ['open']).summary.get('shared'), 'synced');
+  cli(clone, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+
+  const result = site(clone, ['sync']);
+
+  assert.deepEqual(
+    [result.summary.get('shared'), result.summary.get('events'), git(remote, ['rev-parse', logRef])],
+    ['synced', 1, git(join(dirname(source), 'clone.garden'), ['rev-parse', logRef])],
+  );
+});
+
+test('sync in a repository with no origin prints that the garden stays local and that no events were shared', (t) => {
+  const { dir } = planted(t);
+
+  const result = site(dir, ['sync']);
+
+  assert.deepEqual(
+    [result.status, Object.fromEntries(result.summary)],
+    [0, { shared: 'local', events: 0 }],
+    result.stderr,
+  );
+});
+
+test('sync to an origin it cannot reach exits 0 and prints offline with what git said', (t) => {
+  const { dir } = planted(t);
+  git(dir, ['remote', 'add', 'origin', join(dirname(dir), 'missing.git')]);
+
+  const result = site(dir, ['sync']);
+
+  assert.deepEqual(
+    [result.status, result.summary.get('shared'), result.summary.get('events')],
+    [0, 'offline', 0],
+    result.stderr,
+  );
+  assert.match(
+    String(result.summary.get('reason')),
+    /^fatal: '.*missing\.git' does not appear to be a git repository$/,
+  );
+});
+
+test('sync prints the files whose shared content it kept over the local one as conflicts', (t) => {
+  const { first, second } = sharedPair(t);
+  const path = 'events/0f/0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6.json';
+  writeToLogByHand(first.garden, path, '{"from":"first"}');
+  writeToLogByHand(second.garden, path, '{"from":"second"}');
+  assert.equal(site(first.dir, ['sync']).status, 0);
+
+  const result = site(second.dir, ['sync']);
+
+  assert.deepEqual(
+    [result.status, Object.fromEntries(result.summary)],
+    [0, { shared: 'synced', events: 0, conflicts: [path] }],
+    result.stderr,
+  );
+});
+
+test('sync names each shared file it did not copy because it is not an event file, and still exits 0', (t) => {
+  const { first, second } = sharedPair(t);
+  writeToLogByHand(first.garden, 'notes.txt', 'hello');
+  assert.equal(site(first.dir, ['sync']).status, 0);
+
+  const result = site(second.dir, ['sync']);
+
+  assert.deepEqual([result.status, result.stderr], [0, 'site: skipped notes.txt: not an event file\n']);
+});
+
+test('sync names a skipped shared file whose path breaks or reorders a line with those characters escaped', (t) => {
+  const { first, second } = sharedPair(t);
+  writeToLogByHand(first.garden, 'a b‮.txt', 'hello');
+  assert.equal(site(first.dir, ['sync']).status, 0);
+
+  const result = site(second.dir, ['sync']);
+
+  assert.equal(result.stderr, 'site: skipped a\\u{2028}b\\u{202e}.txt: not an event file\n');
+});
+
+test('sync prints a reason whose text reorders a line with that character escaped', (t) => {
+  const { dir } = planted(t);
+  const remote = bareRemote(dir);
+  writeFileSync(join(remote, 'hooks', 'pre-receive'), "#!/bin/sh\nprintf 'closed \\342\\200\\256here\\n'\nexit 1\n", {
+    mode: 0o755,
+  });
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+
+  const result = site(dir, ['sync']);
+
+  assert.deepEqual(
+    [result.summary.get('shared'), result.summary.get('reason')],
+    ['read-only', 'remote: closed \\u{202e}here'],
+  );
+});
+
+test('sync takes no option, so --base, --class and --message are usage errors', (t) => {
+  const { dir } = planted(t);
+
+  const statuses = [
+    site(dir, ['sync', '--base', 'main']),
+    site(dir, ['sync', '--class', 'any-type']),
+    site(dir, ['sync', '--message', 'garden: watch']),
+  ].map(({ status }) => status);
+
+  assert.deepEqual(statuses, [2, 2, 2]);
 });
 
 test('commit records the .garden folder on the garden branch with the given message', (t) => {
@@ -449,7 +588,7 @@ test('open on a planted site reads the base without reading the repository confi
         ? args.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
         : undefined,
     ),
-    ['rev-parse', 'rev-parse', 'remote', 'for-each-ref', 'rev-parse', 'cat-file', 'config'],
+    ['rev-parse', 'rev-parse', 'remote', 'for-each-ref', 'rev-parse', 'cat-file', 'config', 'remote'],
   );
 });
 

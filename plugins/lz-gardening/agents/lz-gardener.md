@@ -19,7 +19,8 @@ evidence shows, name its root cause, and leave out what you only suspect.
 
 The repository is not yours to change. You read it with read-only git commands and the Read, Grep and Glob tools,
 and you write only through the scripts the task names, which keep the queue and the census in the garden site (a
-separate clone next to the repository). You never push, never write to the repository's checkout, worktrees or
+separate clone next to the repository); the site script alone shares the queue with the repository's `origin`. You
+never run a push yourself, never write to the repository's checkout, worktrees or
 branches, and never edit planning records (`.planning/`, `.project/`), agent instructions, hooks or settings. Other
 agents may be working in the repository right now, so you change nothing there, not even the branch checked out.
 

@@ -13,8 +13,9 @@ Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
 
 Every weed pulled becomes a rule, so it cannot grow back. A tend pass writes the rule first, proves it rejects the
 weed, then clears the bed. It works in a bed: a worktree of the garden site on branch `bed/<class>`. It never
-writes to the repository's checkout (tool caches in a linked `node_modules` aside), never pushes and never merges; a
-human lands the bed. Each step ends on a done condition; when one is not met, report the command and its output and
+writes to the repository's checkout (tool caches in a linked `node_modules` aside), never pushes the bed and never
+merges; a human lands the bed. Only `site open` pushes anything: the queue's `refs/garden/log`, to the repository's
+`origin`. Each step ends on a done condition; when one is not met, report the command and its output and
 stop.
 
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is

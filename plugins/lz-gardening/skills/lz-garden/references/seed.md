@@ -53,8 +53,9 @@ weeds are queued.
 
 ## 4. Commit and report
 
-Run the two commands of the tick's step 5, `groups` and `commit`, with the commit message
-`garden: seed <short sha>`. Done when `commit` prints `"committed": true`. Report in this shape, and nothing else:
+Run the three commands of the tick's step 5, `groups`, `commit` and `sync`, with the commit message
+`garden: seed <short sha>`. Done when `commit` prints `"committed": true` and `sync` exits 0. Report in this shape,
+and nothing else:
 
 ```text
 garden: seeded <base> at <short sha>
@@ -62,6 +63,8 @@ census: <pattern> <count>, ... (patterns with hits only)
 queued <n> (<class> x<n>, ...)
 no check behind: <class>, ... (or none)
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
+shared: <state> (<reason>)
 ```
 
-Leave out the `ready to tend` line when no class has two open weeds.
+Leave out the `ready to tend` line when no class has two open weeds, and the `shared` line when `sync` printed
+`synced` or `local`.

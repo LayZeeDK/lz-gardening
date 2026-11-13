@@ -6,7 +6,7 @@ import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { mayPointAtARepository } from './store.ts';
 import { commit, repo } from './test-repo.ts';
-import { planted, siteProcess, writeCensus } from './test-site.ts';
+import { bareRemote, planted, sharedPair, siteProcess, writeCensus } from './test-site.ts';
 import { cliProcess } from './test-weeds.ts';
 
 const startsModule = new URL('test-git-starts.ts', import.meta.url).href;
@@ -31,9 +31,29 @@ function assertCount(starts: readonly string[], count: number): void {
   assert.equal(starts.length, count, starts.join('\n'));
 }
 
-test('open plants a new site with 11 git processes', (t) => {
+test('open plants a new site in a repository with no origin with 12 git processes', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  assertCount(
+    gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
+    12,
+  );
+});
+
+test('open on a planted site in a repository with no origin starts 7 git processes', (t) => {
+  const { dir } = planted(t);
+
+  assertCount(
+    gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
+    7,
+  );
+});
+
+test('open on a planted site whose origin holds its log starts 11 git processes and pushes nothing', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
@@ -41,12 +61,36 @@ test('open plants a new site with 11 git processes', (t) => {
   );
 });
 
-test('open on a planted site starts 6 git processes', (t) => {
+test('sync of a site with an event the origin lacks starts 10 git processes', (t) => {
   const { dir } = planted(t);
+  bareRemote(dir);
+  assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
+  assert.equal(
+    cliProcess(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']).code,
+    0,
+  );
 
   assertCount(
-    gitStarts(t, (env) => siteProcess(dir, ['open', '--base', 'main'], env).status),
-    6,
+    gitStarts(t, (env) => siteProcess(dir, ['sync'], env).status),
+    10,
+  );
+});
+
+test('sync of a site whose events the origin lacks while the origin holds events it lacks starts 11 git processes', (t) => {
+  const { first, second } = sharedPair(t);
+  assert.equal(
+    cliProcess(first.dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']).code,
+    0,
+  );
+  assert.equal(siteProcess(first.dir, ['sync']).summary.get('shared'), 'synced');
+  assert.equal(
+    cliProcess(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:x']).code,
+    0,
+  );
+
+  assertCount(
+    gitStarts(t, (env) => siteProcess(second.dir, ['sync'], env).status),
+    11,
   );
 });
 
