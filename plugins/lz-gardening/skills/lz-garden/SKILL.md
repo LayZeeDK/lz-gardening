@@ -57,9 +57,12 @@ node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base>
 When `seeded` is false, add `--seed` at the end: the output then holds the seed list.
 
 The census compares the base with the garden's census, which every clone shares, and sets the new census aside until
-step 5 records it. The last line of output is a JSON summary: `sha`, `previousSha`, `behind`, `grew`, `newHits`,
-`newDuplicates`. Lines above it starting `+ [<pattern>]` are new hits and lines starting `+ duplicate` are names
-newly defined in a second file. Below, `<short sha>` is `sha` shortened with `git rev-parse --short <sha>`.
+step 5 records it. The last line of output is a JSON summary: `sha`, `previousSha`, `behind`, `commits` (the
+commits from `previousSha` to `sha`, merges left out), `grew`, `newHits`, `newDuplicates`. Lines above it starting
+`+ [<pattern>]` are new hits, each hit's text cut to 200 characters. A line
+`+ duplicate <name>: new <path>, ...[; already <path>, ...]` is a name newly defined in another file: the files
+after `new` define it since the last census, those after `already` defined it before. Below, `<short sha>` is `sha`
+shortened with `git rev-parse --short <sha>`.
 
 - `seeded` was false: run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md` in place of steps 3 to 5,
   whatever the census says; it ends with its own sync and report. A seed pass cut short runs again on the next tick.
@@ -79,7 +82,7 @@ git log --no-merges --format='%h %an %s' <previousSha>..<sha>
 ```
 
 The output lists the newest commit first. Read the diff (`git show <commit>`) of each commit it lists, the first 30
-at most; when more landed, say how many you skipped. Look for the weeds catalogued in
+at most; the report counts the rest as skipped. Look for the weeds catalogued in
 `${CLAUDE_SKILL_DIR}/references/weeds.md`: the census finds the textual ones, and reading finds the rest (a hollow
 test, a copied workaround, a second way to do what the codebase already does, a lesson the records hold twice).
 Read the catalogue before the first diff. A weed is something an agent will copy; a one-off with no sign of
@@ -95,15 +98,21 @@ Queue each weed with `weeds.ts`. The script dedupes, so queueing the same weed t
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>]
 ```
 
-- `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`
-  with one weed per file the name is defined in.
+- `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`.
+  Queue one weed per file after `new` on its `+ duplicate` line, and one per file after `already` that
+  `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-helper` does not show. First read the
+  definition you would keep and each one you would queue, with `git show <sha>:<path>`. A comment or a doc that says
+  why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike) makes that
+  copy no weed.
 - `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
   `~` or one through `..` is refused with exit 2.
 - `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record (the path
   repository-relative, as for `--where`), or
   `census:seed` in the seed pass. For a census hit, the planting commit is
   `git log -n 1 --format=%h -S '<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`, with a space
-  after `-S`.
+  after `-S`; for a duplicate, the piece is the name, and for a file after `already`, the range is `<sha>`.
+  `repeated-lesson` takes a `lesson:` source only, and `weeds.ts` refuses any other: a clean-up in the code that did
+  not hold is queued under the class of the mistake it cleaned up.
 - `--note`: the root cause in one sentence (what the agent was trying to do and which shortcut it took), not the
   symptom. Plain words only: no backticks, `$` or double quotes inside the note, which the shell would run or end.
 - `--layer`: the strongest layer that could stop it growing back, from the catalogue's layer list, when the evidence
@@ -126,15 +135,25 @@ node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>
 later commit, and shares it and the queue's new events with the repository's `origin`. Its last line is JSON:
 `shared` (the share state), `events` (how many events it shared), and `reason` when the state has one.
 
-A class with two or more open weeds is ready to tend: several agents took the same shortcut. Report in this shape,
-and nothing else:
+A class whose open weeds sit in two or more places (files) is ready to tend: several agents took the same shortcut.
+`groups --min 2` prints those classes.
+
+Done when `site.ts sync --census <sha>` exits 0. Then reply with this form, every `<slot>` filled as the list below
+says. The reply is these four lines and ends after the last one; the reason for each weed is in its `--note`.
 
 ```text
-garden: <base> <short previousSha>..<short sha>, <n> commits read, <n> skipped
-queued <n> (<class> x<n>, ...); regrown: <class> (check: <where>[ not on the base]), ... or none
+garden: <base> <short previousSha>..<short sha>, <commits> commits, <read> read, <skipped> skipped
+queued <total> (<class> x<n>, ...); regrown: <class> (check: <where>[ not on the base]), ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)
 ```
 
-Leave out the `ready to tend` line when no class has two open weeds, and the `shared` line when `sync` printed
-`synced` or `local`. Done when `site.ts sync --census <sha>` exits 0.
+- `<commits>`: the census's `commits`, as printed.
+- `<read>`: the commits whose whole diff you read with `git show <commit>`. A `--stat` or a path-limited
+  `git show` is not a read. `<skipped>` is `<commits>` minus `<read>`.
+- `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
+  is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
+  with the check its line named, or reads `regrown: none`.
+- `ready to tend`: one entry per row of `groups --min 2`, its `open` and `places` columns, and the first row's class
+  after `lz-tend`; `ready to tend: none` when it printed no row.
+- `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.

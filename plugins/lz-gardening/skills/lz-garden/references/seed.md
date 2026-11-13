@@ -14,17 +14,20 @@ With `--seed`, the census output prints the seed list above its JSON line:
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Queue one
   weed per line, `--where <path>`, `--source census:seed`, the note naming what the hits have in common (read a few).
   The census keeps at most 1000 hits per pattern, in path order, so for a pattern with more the files are ranked
-  from those 1000; say so in the report when a pattern's count is over 1000.
+  from those 1000.
 - `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
   in the most files first. Files under dot-directories (`.claude/`, `.github/` and other tool folders, often
   deliberate mirrors of each other) are left out of duplicate names, though their pattern hits count. Read the
-  definitions; when they do the same job, queue one `duplicate-helper` weed per file, `--source census:seed`, the
-  note naming the copy to keep. Names that only share a word (two different `parse` functions) are not weeds. A last
-  line `<n> more duplicate names not listed` counts the rest; say how many in the report. Later ticks report only
-  what is new, so the seed list is the one time these are listed.
+  definitions, the copy you would keep among them; when they do the same job, queue one `duplicate-helper` weed per
+  file, `--source census:seed`, the note naming the copy to keep. A comment or a doc that says why a copy must exist
+  (a file that cannot import the shared one, a test that pins the copies alike) makes that copy no weed. Names that
+  only share a word (two different `parse` functions) are not weeds. A last line
+  `<n> more duplicate names not listed` counts the rest. Later ticks report only what is new, so the seed list is the
+  one time these are listed.
 
-Done when every `=` line has its weeds queued. No `=` lines means the census found no hits and no duplicates; say so
-in the report.
+The line after the seed list, `census: <pattern> <count>, ...` or `census: none`, is the report's census line.
+
+Done when every `=` line has its weeds queued.
 
 ## 2. The records
 
@@ -34,9 +37,12 @@ not every plan.
 
 - A lesson, correction or finding that appears twice or more: `repeated-lesson`, `--where` the code it is about,
   `--source lesson:<path>:<line>` of each record (one weed per record).
-- A milestone or phase that cleaned up a repeated mistake: find the class, then check the code at the base for the
-  mistake today. Present again: queue the instances (the hand fix did not hold). Absent: queue nothing, but name
-  the class in the report as one with no check behind it, if no lint rule, type or test now rejects it.
+- A milestone, phase or commit that cleaned up a repeated mistake: find the mistake's class (`duplicate-helper`,
+  `any-type`, ...), then check the code at the base for the mistake today. Present again: the hand fix did not hold.
+  Queue each instance under the mistake's class, `--source commit:<sha>` of the clean-up, and skip the places the
+  seed list already queued under that class. `repeated-lesson` is for records only, and `weeds.ts` refuses it
+  without a `lesson:` source. Absent: queue nothing, but name the class in the report as one with no check behind
+  it, if no lint rule, type or test now rejects it.
 - A rule in agent instructions or a style guide that the code breaks: `rule-in-prose`.
 
 Done when every record folder that exists has been listed and its lesson and summary files read.
@@ -54,17 +60,24 @@ weeds are queued.
 ## 4. Record and report
 
 Run the two commands of the tick's step 5, `groups` and `sync --census <sha>`, with `--seeded` added at the end of
-`sync`. `--seeded` records in the queue that the seed pass ran, so no clone of the repository seeds again. Done when `sync`
-exits 0. Report in this shape, and nothing else:
+`sync`. `--seeded` records in the queue that the seed pass ran, so no clone of the repository seeds again.
+
+Done when `sync` exits 0. Then reply with this form, every `<slot>` filled as the list below says. The reply is these
+six lines and ends after the last one; the reason for each weed is in its `--note`.
 
 ```text
 garden: seeded <base> at <short sha>
-census: <pattern> <count>, ... (patterns with hits only)
-queued <n> (<class> x<n>, ...)
-no check behind: <class>, ... (or none)
+<the census line>
+queued <total> (<class> x<n>, ...); <unlisted> duplicate names not listed
+no check behind: <class>, ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)
 ```
 
-Leave out the `ready to tend` line when no class has two open weeds, and the `shared` line when `sync` printed
-`synced` or `local`.
+- `<the census line>`: the census output's `census:` line, as printed.
+- `queued`: one `<class> x<n>` per class, `<n>` the adds of this seed pass that printed `added`; `<total>` is the
+  sum of the `<n>`, and `queued 0` has no parentheses. `<unlisted>` is the `<n>` of the census's
+  `<n> more duplicate names not listed` line, or 0.
+- `no check behind`: the classes step 2 found cleaned up by hand with nothing that now rejects them, or
+  `no check behind: none`.
+- `ready to tend` and `shared`: as in the tick's report form (step 5 of `SKILL.md`).
