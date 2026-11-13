@@ -6,10 +6,11 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { diffCensus, mergePatternSets, parseGrep, parsePatternSet, run, takeCensus } from './census.ts';
+import { diffCensus, diffDuplicates, mergePatternSets, parseGrep, parsePatternSet, run, takeCensus } from './census.ts';
 import { isRecord } from './log.ts';
 import type { PatternSet } from './census.ts';
 import { censusRef, openSite, parseCensus, pendingCensusRef, sync, writePendingCensus } from './store.ts';
+import type { Census } from './store.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
 
@@ -134,6 +135,33 @@ test('definitions under a dot-directory, such as mirrored agent skills, are not 
   assert.deepEqual(census.duplicates, {});
 });
 
+test('hits in a file with CRLF line ends are counted', async (t) => {
+  const dir = repo(t);
+  git(dir, ['config', 'core.autocrlf', 'false']);
+  commit(dir, {
+    'src/crlf.ts': '// eslint-disable one\r\n// eslint-disable two\r\n',
+    'src/sep.ts': "const s = 'a b'; // eslint-disable\n",
+  });
+  const before = await takeCensus(dir, 'HEAD', set, now);
+  commit(dir, {
+    'src/crlf.ts': '\r\n// eslint-disable one\r\n// eslint-disable two\r\n',
+    'src/sep.ts': "\nconst s = 'a b'; // eslint-disable\n",
+  });
+  const after = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual(
+    [before.hits['eslint-disable'], diffCensus(before, after).find((item) => item.id === 'eslint-disable')?.added],
+    [
+      [
+        'src/crlf.ts:1: // eslint-disable one',
+        'src/crlf.ts:2: // eslint-disable two',
+        "src/sep.ts:1: const s = 'a b'; // eslint-disable",
+      ],
+      [],
+    ],
+  );
+});
+
 test('reads the revision, not the working tree', async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
@@ -193,6 +221,202 @@ test('a malformed pattern set fails loudly', () => {
   assert.throws(() => parsePatternSet({ patterns: [{ id: 'Bad Id', regex: 'x' }] }, 'p'), /kebab/);
   assert.throws(() => parsePatternSet({ patterns: [{ id: 'ok' }] }, 'p'), /regex/);
   assert.equal(parseCensus({ rev: 1 }), null);
+});
+
+function refusalOf(json: unknown): string {
+  try {
+    parsePatternSet(json, 'p');
+  } catch (error: unknown) {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  return 'accepted';
+}
+
+test('each malformed part of a pattern set is refused, naming its source and the part', () => {
+  const malformed: readonly unknown[] = [
+    null,
+    { patterns: 'x' },
+    { patterns: ['x'] },
+    { exclude: 'x' },
+    { exclude: ['a', 1] },
+    { patterns: [{ id: 'kebab-Case', regex: 'x' }] },
+    { patterns: [{ id: 'ok', regex: '' }] },
+    { patterns: [{ id: 'ok', regex: 'x', paths: ['src/**', 1] }] },
+  ];
+
+  assert.deepEqual(malformed.map(refusalOf), [
+    'p: expected an object with "patterns"',
+    'p: "patterns" must be an array',
+    'p: patterns[0] must be an object',
+    'p: "exclude" must be an array of strings',
+    'p: "exclude" must be an array of strings',
+    'p: patterns[0].id must be a kebab-case string',
+    'p: pattern ok needs a non-empty "regex"',
+    'p: pattern ok "paths" must be an array of strings',
+  ]);
+});
+
+test('a pattern set may leave out patterns, excludes, paths and notes', () => {
+  assert.deepEqual(
+    [parsePatternSet({}, 'p'), parsePatternSet({ patterns: [{ id: 'todo', regex: 'TODO', paths: ['src/**'] }] }, 'p')],
+    [
+      { exclude: [], patterns: [] },
+      { exclude: [], patterns: [{ id: 'todo', regex: 'TODO', paths: ['src/**'], note: '' }] },
+    ],
+  );
+});
+
+test('a pattern with more than 1000 hits counts them all and keeps the first 1000', async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/many.ts': '// eslint-disable\n'.repeat(1001) });
+
+  const census = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual(
+    [census.counts['eslint-disable'], census.hits['eslint-disable']?.length, census.hits['eslint-disable']?.at(-1)],
+    [1001, 1000, 'src/many.ts:1000: // eslint-disable'],
+  );
+});
+
+test('only a leading origin/ is dropped from the recorded rev', async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  git(dir, ['branch', 'team/origin/main']);
+
+  const census = await takeCensus(dir, 'team/origin/main', set, now);
+
+  assert.equal(census.rev, 'team/origin/main');
+});
+
+test("an unknown revision's error carries git's own reason", async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'a.ts': '' });
+
+  await assert.rejects(takeCensus(dir, 'no-such-branch', set, now), {
+    message: /^git rev-parse no-such-branch: \S[^\n]*$/,
+  });
+});
+
+test("a git grep that fails is an error that names the search and carries git's reason", async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'function f() {}\n' });
+
+  await assert.rejects(takeCensus(dir, 'HEAD', { exclude: ['../outside'], patterns: [] }, now), {
+    message: /^git grep for definitions: \S[^\n]*$/,
+  });
+});
+
+function censusOf(
+  hits: Readonly<Record<string, readonly string[]>>,
+  duplicates: Readonly<Record<string, readonly string[]>> = {},
+): Census {
+  return {
+    rev: 'main',
+    sha: 'a'.repeat(40),
+    takenAt: now.toISOString(),
+    counts: Object.fromEntries(Object.entries(hits).map(([id, list]) => [id, list.length])),
+    hits,
+    duplicates,
+  };
+}
+
+test('git grep output counts only lines of the revision asked for that carry a line number', () => {
+  assert.deepEqual(parseGrep('abc:a.ts:1:x\nxyz:b.ts:2:y\nabc:no line number\n', 'abc'), ['a.ts:1: x']);
+});
+
+test('the delta matches hits by path and text, wherever the line moved', () => {
+  const delta = diffCensus(censusOf({ p: ['a.ts:3: old'] }), censusOf({ p: ['a.ts:1: new', 'a.ts:12: old'] }));
+
+  assert.deepEqual(delta, [{ id: 'p', before: 1, after: 2, added: ['a.ts:1: new'] }]);
+});
+
+test('a hit that appears once more often than before is new once', () => {
+  const delta = diffCensus(
+    censusOf({ p: ['a.ts:1: x', 'a.ts:2: x'] }),
+    censusOf({ p: ['a.ts:1: x', 'a.ts:2: x', 'a.ts:3: x'] }),
+  );
+
+  assert.deepEqual(delta, [{ id: 'p', before: 2, after: 3, added: ['a.ts:3: x'] }]);
+});
+
+test('a pattern counted without a hit list has no new hits', () => {
+  const delta = diffCensus(censusOf({ p: [] }), { ...censusOf({}), counts: { p: 1 } });
+
+  assert.deepEqual(delta, [{ id: 'p', before: 0, after: 1, added: [] }]);
+});
+
+test('a duplicate is new when it gains a file, and no duplicate is new in a first census', () => {
+  const before = censusOf({}, { f: ['a.ts', 'b.ts'] });
+  const after = censusOf({}, { f: ['a.ts', 'b.ts', 'c.ts'], g: ['a.ts', 'b.ts'] });
+
+  assert.deepEqual([diffDuplicates(null, after), diffDuplicates(before, after)], [[], ['f', 'g']]);
+});
+
+test('definitions in .tsx, .cts, .js and .cjs files count', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.tsx': 'function isRecord() {}\n',
+    'src/b.cts': 'function isRecord() {}\n',
+    'src/c.js': 'const toKey = (x) => x;\n',
+    'src/d.cjs': 'const toKey = (x) => x;\n',
+  });
+
+  const census = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual(census.duplicates, { isRecord: ['src/a.tsx', 'src/b.cts'], toKey: ['src/c.js', 'src/d.cjs'] });
+});
+
+test('duplicate names are listed in alphabetical order', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.ts': 'function zeta() {}\n',
+    'src/b.ts': 'function zeta() {}\n',
+    'src/c.ts': 'function alpha() {}\n',
+    'src/d.ts': 'function alpha() {}\n',
+  });
+
+  const census = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual(Object.keys(census.duplicates), ['alpha', 'zeta']);
+});
+
+test('definitions count however they are spaced, and a function after other code on its line does not', async (t) => {
+  const dir = repo(t);
+  const source = [
+    'export  function spacedExport() {}',
+    'async  function spacedAsync() {}',
+    'function  spacedFunction() {}',
+    'const  spacedConst = () => 1;',
+    'const tight=(x) => x;',
+    'const lazy = async(x) => x;',
+    'const bare =x => x;',
+    'const named = xy => xy;',
+    'const close = x=> x;',
+    'const limit = 1; function inner() {}',
+    '',
+  ].join('\n');
+  commit(dir, { 'src/a.ts': source, 'src/b.ts': source });
+
+  const census = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual(Object.keys(census.duplicates), [
+    'bare',
+    'close',
+    'lazy',
+    'named',
+    'spacedAsync',
+    'spacedConst',
+    'spacedExport',
+    'spacedFunction',
+    'tight',
+  ]);
+});
+
+test('a census in a folder that does not exist fails with the reason git could not start', async (t) => {
+  const dir = repo(t);
+
+  await assert.rejects(takeCensus(join(dir, 'missing'), 'HEAD', set, now), { code: 'ENOENT' });
 });
 
 test('git grep output keeps colons inside the matched text', () => {
@@ -261,7 +485,10 @@ test('the CLI names a helper that became duplicated since the last census, not o
   const summary: unknown = JSON.parse(second.stdout.trim().split('\n').at(-1) ?? '');
   assert.ok(typeof summary === 'object' && summary !== null && 'newDuplicates' in summary);
   assert.deepEqual(summary.newDuplicates, ['isRecord']);
-  assert.match(second.stdout, /^\+ duplicate isRecord: src\/a\.ts, src\/b\.ts$/m);
+  assert.deepEqual(
+    second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
+    ['+ duplicate isRecord: src/a.ts, src/b.ts'],
+  );
 });
 
 test('--seed prints the seed list: files per pattern by hit count, and every duplicate name', async (t) => {
@@ -470,6 +697,25 @@ test('a previous census of a commit this checkout lacks reports no previous sha,
   assert.equal(summaryOf(result.stdout).get('previousSha'), null);
 });
 
+test('malformed patterns carried by the recorded census are refused, naming the census as their source', async (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  writePendingCensus(
+    garden,
+    sha,
+    JSON.stringify({ rev: 'main', sha, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {} }),
+    '{"patterns": "x"}\n',
+  );
+  git(garden, ['update-ref', censusRef, pendingCensusRef(sha)]);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual(
+    [result.status, result.stderr],
+    [2, 'census: refs/garden/census:patterns.json: "patterns" must be an array\n'],
+  );
+});
+
 test('a census in a repository with no garden site is refused, saying to open the site first', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
@@ -507,20 +753,20 @@ test('a census of origin/main records the base as main, for each clone to resolv
 test('the seed list names at most 30 duplicate names, the most widely defined first, and counts the rest', async (t) => {
   const { dir } = planted(t);
   const files = Object.fromEntries(
-    Array.from({ length: 32 }, (_, index) => index).flatMap((index) => [
+    Array.from({ length: 31 }, (_, index) => index).flatMap((index) => [
       [`src/a${String(index)}.ts`, `function helper${String(index)}() {}\n`] as const,
       [`src/b${String(index)}.ts`, `function helper${String(index)}() {}\n`] as const,
     ]),
   );
-  commit(dir, { ...files, 'src/c.ts': 'function helper31() {}\n' });
+  commit(dir, { ...files, 'src/c.ts': 'function helper30() {}\n' });
 
   const result = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const listed = result.stdout.split('\n').filter((line) => line.startsWith('= duplicate '));
   assert.equal(listed.length, 30);
-  assert.equal(listed[0], '= duplicate helper31: src/a31.ts, src/b31.ts, src/c.ts');
-  assert.match(result.stdout, /^2 more duplicate names not listed$/m);
+  assert.equal(listed[0], '= duplicate helper30: src/a30.ts, src/b30.ts, src/c.ts');
+  assert.match(result.stdout, /^1 more duplicate names not listed$/m);
 });
 
 test('--seed prints the seed list even when a census was recorded before, and only then', async (t) => {
@@ -548,4 +794,72 @@ test('the CLI writes the census, and a second run reports what grew', async (t) 
   assert.ok(typeof summary === 'object' && summary !== null && 'grew' in summary);
   assert.ok(Array.isArray(summary.grew) && summary.grew.includes('eslint-disable'));
   assert.match(second.stdout, /\+ \[eslint-disable\] src\/a\.ts:1:/);
+});
+
+test('the table shows each count and its change in fixed columns, then the new hits, and the summary counts them', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/a.ts': '// eslint-disable\n// eslint-disable\n', 'src/t.ts': '// TODO one\n' });
+  await takeAndRecord(dir);
+  commit(dir, { 'src/a.ts': '// eslint-disable\n', 'src/t.ts': '// TODO one\n// TODO two\n' });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  const lines = second.stdout.split('\n');
+  const summary = summaryOf(second.stdout);
+  assert.deepEqual(
+    [
+      lines[0],
+      lines.find((line) => line.startsWith('eslint-disable ')),
+      lines.find((line) => line.startsWith('todo-marker ')),
+      lines[lines.indexOf('+ [todo-marker] src/t.ts:2: // TODO two') - 1],
+      summary.get('grew'),
+      summary.get('newHits'),
+    ],
+    [
+      `pattern${' '.repeat(25)}count  change`,
+      `eslint-disable${' '.repeat(22)}1  -1`,
+      `todo-marker${' '.repeat(25)}2  +1`,
+      '',
+      ['todo-marker'],
+      1,
+    ],
+  );
+});
+
+test('a first census is written, with nothing grown, no new duplicate and no previous commit to be behind', async (t) => {
+  const { dir, garden } = planted(t);
+  git(garden, ['update-ref', '-d', censusRef]);
+  const older = commit(dir, {
+    'src/a.ts': '// eslint-disable\n',
+    'src/x.ts': 'function f() {}\n',
+    'src/y.ts': 'function f() {}\n',
+  });
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  git(dir, ['branch', 'null']);
+
+  const result = await census(dir, ['--rev', older]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const summary = summaryOf(result.stdout);
+  assert.deepEqual(
+    [
+      git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending']),
+      summary.get('grew'),
+      summary.get('newDuplicates'),
+      summary.get('previousSha'),
+      summary.get('behind'),
+    ],
+    [pendingCensusRef(older), [], [], null, false],
+  );
+});
+
+test('a census of the commit the garden recorded is not behind it', async (t) => {
+  const { dir } = planted(t);
+  await takeAndRecord(dir);
+
+  const again = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(summaryOf(again.stdout).get('behind'), false);
 });

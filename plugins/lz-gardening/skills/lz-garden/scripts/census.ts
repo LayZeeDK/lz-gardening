@@ -137,14 +137,16 @@ async function hasCommit(cwd: string, sha: string): Promise<boolean> {
 
 function gitAsync(args: readonly string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn('git', args, { cwd });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
     child.on('error', reject);
+    // Stryker disable next-line LzNodeEventName: exit differs from close only when it fires before stdout is fully read, which no test can force
     child.on('close', (code) => {
       resolvePromise({
+        // Stryker disable next-line LzJsNumericLiteral: a code is null only when a signal ends git, which no input to the census causes
         code: code ?? 2,
         stdout: Buffer.concat(out).toString('utf8'),
         stderr: Buffer.concat(err).toString('utf8'),
@@ -154,9 +156,7 @@ function gitAsync(args: readonly string[], cwd: string): Promise<{ code: number;
 }
 
 function pathspecs(paths: readonly string[], exclude: readonly string[]): string[] {
-  const include = paths.length > 0 ? paths.map((glob) => `:(glob)${glob}`) : ['.'];
-
-  return [...include, ...exclude.map((glob) => `:(exclude,glob)${glob}`)];
+  return [...paths.map((glob) => `:(glob)${glob}`), ...exclude.map((glob) => `:(exclude,glob)${glob}`)];
 }
 
 /** One hit as `path:line: text`; the delta compares hits by path and text, so moved lines are not new. */
@@ -168,12 +168,13 @@ export function parseGrep(stdout: string, sha: string): string[] {
     .filter((line) => line.startsWith(prefix))
     .map((line) => line.slice(prefix.length))
     .flatMap((line) => {
-      const match = /^(.*?):(\d+):(.*)$/.exec(line);
+      const match = /(.*?):(\d+):(.*)/s.exec(line);
 
       if (match === null) {
         return [];
       }
 
+      // Stryker disable next-line StringLiteral: a match fills every group, so no default applies
       const [, path = '', lineNo = '', text = ''] = match;
 
       return [`${path}:${lineNo}: ${text.trim()}`];
@@ -181,8 +182,9 @@ export function parseGrep(stdout: string, sha: string): string[] {
 }
 
 function splitHit(hit: string): { readonly path: string; readonly text: string } | null {
-  const match = /^(.*?):\d+: (.*)$/.exec(hit);
+  const match = /(.*?):\d+: (.*)/s.exec(hit);
 
+  // Stryker disable next-line StringLiteral: a match fills both groups, so no default applies
   return match === null ? null : { path: match[1] ?? '', text: match[2] ?? '' };
 }
 
@@ -202,6 +204,7 @@ async function grepRevision(
   const grep = await gitAsync(['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], cwd);
 
   // git grep exits 1 when nothing matches; anything else above 0 is an error.
+  // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
   if (grep.code > 1) {
     throw new Error(`git grep for ${what}: ${grep.stderr.trim()}`);
   }
@@ -243,6 +246,7 @@ const definition =
   /^\s*(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
 // git grep takes POSIX extended regex, which has no \s or (?:), so it prefilters and `definition` names the match.
 const definitionPrefilter =
+  // Stryker disable next-line StringLiteral: the prefilter only narrows what git returns, and the definition regex decides every match; they differ only on non-ASCII whitespace such as a no-break space, which no rule depends on
   '^[[:space:]]*(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
 
 const dotDirectories = '**/.*/**';
@@ -253,6 +257,7 @@ async function findDuplicates(cwd: string, sha: string, exclude: readonly string
   const hits = await grepRevision(cwd, sha, definitionPrefilter, specs, 'definitions');
   const definitions = hits.flatMap((hit) => {
     const parts = splitHit(hit);
+    // Stryker disable next-line StringLiteral: every hit has the path:line: text shape, and neither default is a definition
     const match = definition.exec(parts?.text ?? '');
     const name = match?.[1] ?? match?.[2];
 
@@ -273,16 +278,20 @@ export function diffDuplicates(before: Census | null, after: Census): string[] {
     return [];
   }
 
-  return Object.entries(after.duplicates)
-    .filter(([name, paths]) => paths.some((path) => !(before.duplicates[name] ?? []).includes(path)))
-    .map(([name]) => name);
+  return (
+    Object.entries(after.duplicates)
+      // Stryker disable next-line ArrayDeclaration: a duplicate's paths are source files, so no invented path matches one
+      .filter(([name, paths]) => paths.some((path) => !(before.duplicates[name] ?? []).includes(path)))
+      .map(([name]) => name)
+  );
 }
 
 export function diffCensus(before: Census | null, after: Census): PatternDelta[] {
-  return Object.keys(after.counts).map((id) => {
+  return Object.entries(after.counts).map(([id, count]) => {
     const previous = before?.hits[id];
     const seen = new Map<string, number>();
 
+    // Stryker disable next-line ArrayDeclaration: with no previous hits, added is replaced by [] below
     for (const hit of previous ?? []) {
       const key = hitKey(hit);
       seen.set(key, (seen.get(key) ?? 0) + 1);
@@ -290,6 +299,7 @@ export function diffCensus(before: Census | null, after: Census): PatternDelta[]
 
     const added = (after.hits[id] ?? []).filter((hit) => {
       const key = hitKey(hit);
+      // Stryker disable next-line LzJsNumericLiteral: an unseen key fails left > 0 at -1 as at 0
       const left = seen.get(key) ?? 0;
 
       if (left > 0) {
@@ -304,7 +314,7 @@ export function diffCensus(before: Census | null, after: Census): PatternDelta[]
     return {
       id,
       before: before?.counts[id] ?? null,
-      after: after.counts[id] ?? 0,
+      after: count,
       added: previous === undefined ? [] : added,
     };
   });
@@ -378,10 +388,11 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   }
 
   const { site, recorded, extraFile } = inRun(io.env, () => readSite(io.cwd));
-  const here = dirname(fileURLToPath(import.meta.url));
+  const bundled = join(dirname(fileURLToPath(import.meta.url)), 'patterns.json');
   const before = recorded?.census ?? null;
   const extra = extraFile === undefined ? null : parsePatternSet(JSON.parse(extraFile.text), extraFile.source);
-  const set = mergePatternSets(parsePatternSet(readJson(join(here, 'patterns.json')), 'patterns.json'), extra);
+  // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message
+  const set = mergePatternSets(parsePatternSet(readJson(bundled), 'patterns.json'), extra);
   const after = await takeCensus(io.cwd, rev, set, new Date());
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
@@ -397,9 +408,9 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
   const newDuplicates = diffDuplicates(before, after);
-  const duplicateLines = newDuplicates.map(
-    (name) => `+ duplicate ${name}: ${(after.duplicates[name] ?? []).join(', ')}`,
-  );
+  const duplicateLines = Object.entries(after.duplicates)
+    .filter(([name]) => newDuplicates.includes(name))
+    .map(([name, paths]) => `+ duplicate ${name}: ${paths.join(', ')}`);
   const summary = {
     sha: after.sha,
     previousSha,
