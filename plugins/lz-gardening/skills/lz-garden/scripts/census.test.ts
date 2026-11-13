@@ -863,3 +863,27 @@ test('a census of the commit the garden recorded is not behind it', async (t) =>
   assert.equal(again.status, 0, again.stderr);
   assert.equal(summaryOf(again.stdout).get('behind'), false);
 });
+
+test('a census that differs from the recorded one is left pending for its commit', async (t) => {
+  const { dir, garden } = planted(t);
+  await takeAndRecord(dir);
+  const later = commit(dir, { 'src/t.ts': '// TODO: one\n' });
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending']), pendingCensusRef(later));
+});
+
+test('a census of a commit that descends from the recorded one is not behind the garden', async (t) => {
+  const { dir } = planted(t);
+  const recorded = git(dir, ['rev-parse', 'HEAD']);
+  await takeAndRecord(dir);
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  const summary = summaryOf(result.stdout);
+  assert.deepEqual([summary.get('previousSha'), summary.get('behind')], [recorded, false]);
+});
