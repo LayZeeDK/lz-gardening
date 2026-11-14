@@ -54,8 +54,36 @@ function emails(text: string): string[] {
   return text.match(emailShape) ?? [];
 }
 
+const trailerName = /^[\w-]+:\s*(.*?)\s*<[^<>]+>\s*$/;
+
+// A trailer naming someone else (Co-authored-by and the like) holds their address, which is theirs to choose.
+function messageLeaks(message: string): string[] {
+  return message.split('\n').flatMap((line) => {
+    const name = trailerName.exec(line)?.[1];
+
+    return name === undefined || name === maintainer ? emails(line).filter((email) => !isAllowedEmail(email)) : [];
+  });
+}
+
 test('the email scan finds addresses and skips package versions', () => {
   assert.deepEqual(emails('mail x.y@mail.example.com, not pkg@1.2.3'), ['x.y@mail.example.com']);
+});
+
+// Built at run time so the repository scan does not report the fixture itself.
+const contributorEmail = ['ada', 'example.org'].join('@');
+
+test("a contributor's co-author trailer in the maintainer's commit is theirs to choose", () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: Ada Contributor <${contributorEmail}>\n`), []);
+});
+
+test('a co-author trailer naming the maintainer must carry the public address', () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: ${maintainer} <${contributorEmail}>`), [
+    contributorEmail,
+  ]);
+});
+
+test('an address in the message text is reported', () => {
+  assert.deepEqual(messageLeaks(`fix: write to ${contributorEmail}`), [contributorEmail]);
 });
 
 test('the only email address in the repository is the public one, apart from reserved examples', () => {
@@ -82,9 +110,7 @@ test("the maintainer's commits carry only the public address", (t) => {
       ...(author === maintainer && authorEmail !== publicEmail ? [`${sha} author: ${authorEmail}`] : []),
       ...(committer === maintainer && committerEmail !== publicEmail ? [`${sha} committer: ${committerEmail}`] : []),
       ...(author === maintainer || committer === maintainer
-        ? emails(body)
-            .filter((email) => !isAllowedEmail(email))
-            .map((email) => `${sha} message: ${email}`)
+        ? messageLeaks(body).map((email) => `${sha} message: ${email}`)
         : []),
     ]);
 
