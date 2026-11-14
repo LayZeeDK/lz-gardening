@@ -1,0 +1,88 @@
+// The census tests' shared utilities: the command line run in this process or as a child, the patterns and censuses
+// the tests build, and a census recorded by a sync or by hand.
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { run } from './census.ts';
+import type { PatternSet } from './census.ts';
+import { isRecord } from './log.ts';
+import { openSite } from './store-log.ts';
+import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
+import type { Census } from './store-census.ts';
+import { sync } from './store-sync.ts';
+import { capturingIo, git } from './test-repo.ts';
+
+export const script = join(dirname(fileURLToPath(import.meta.url)), 'census.ts');
+
+export const now = new Date('2026-11-07T12:00:00.000Z');
+
+export interface Ran {
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+export function censusCli(dir: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): Ran {
+  return spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: 'utf8', env });
+}
+
+export async function census(dir: string, args: readonly string[]): Promise<Ran> {
+  const captured = capturingIo(dir, process.env);
+  const status = await run(args, captured.io);
+
+  return { status, stdout: captured.stdout(), stderr: captured.stderr() };
+}
+
+export const set: PatternSet = {
+  exclude: ['**/*.md'],
+  patterns: [
+    { id: 'eslint-disable', regex: 'eslint-disable', paths: [], note: '' },
+    { id: 'any-type', regex: '(: any\\b|\\bas any\\b)', paths: ['**/*.ts'], note: '' },
+  ],
+};
+
+export function censusOf(
+  hits: Readonly<Record<string, readonly string[]>>,
+  duplicates: Readonly<Record<string, readonly string[]>> = {},
+): Census {
+  return {
+    rev: 'main',
+    sha: 'a'.repeat(40),
+    takenAt: now.toISOString(),
+    counts: Object.fromEntries(Object.entries(hits).map(([id, list]) => [id, list.length])),
+    hits,
+    duplicates,
+  };
+}
+
+export function summaryOf(stdout: string): ReadonlyMap<string, unknown> {
+  const parsed: unknown = JSON.parse(stdout.trim().split('\n').at(-1) ?? '');
+
+  return new Map(isRecord(parsed) ? Object.entries(parsed) : []);
+}
+
+export async function takeAndRecord(dir: string, args: readonly string[] = []): Promise<Ran> {
+  const result = await census(dir, ['--rev', 'HEAD', ...args]);
+  assert.equal(result.status, 0, result.stderr);
+  const sha = summaryOf(result.stdout).get('sha');
+  assert.equal(typeof sha, 'string');
+  sync(openSite(dir), { attempts: 1, census: String(sha) });
+
+  return result;
+}
+
+export const todoPatterns = `${JSON.stringify({ patterns: [{ id: 'todo', regex: 'TODO' }] })}\n`;
+
+export function writeSitePatterns(garden: string, text = todoPatterns): void {
+  mkdirSync(join(garden, '.garden'), { recursive: true });
+  writeFileSync(join(garden, '.garden', 'patterns.json'), text);
+}
+
+export function recordByHand(garden: string, sha: string, text: string): void {
+  // The commit's identity is not under test, so it reads the site's config.
+  writePendingCensus({ path: garden, checkout: garden }, sha, text);
+  git(garden, ['update-ref', censusRef, pendingCensusRef(sha)]);
+  git(garden, ['update-ref', '-d', pendingCensusRef(sha)]);
+}
