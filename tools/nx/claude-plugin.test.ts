@@ -222,6 +222,7 @@ test("a plugin's lockfile target checks its package.json against its lockfile, c
         '{projectRoot}/package-lock.json',
         '{workspaceRoot}/tools/nx/claude-plugin.ts',
         '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/log.ts',
+        '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/store-git.ts',
         { runtime: 'npm --version' },
       ],
       outputs: [],

@@ -137,6 +137,7 @@ function pluginTargets(root: string, scriptNames: readonly string[]): Record<str
         '{projectRoot}/package-lock.json',
         '{workspaceRoot}/tools/nx/claude-plugin.ts',
         '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/log.ts',
+        '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/store-git.ts',
         { runtime: 'npm --version' },
       ],
       outputs: [],
