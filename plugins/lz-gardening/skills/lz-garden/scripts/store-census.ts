@@ -1,5 +1,6 @@
 // The census refs: the census a site holds (refs/garden/census), the census a run took and left pending
 // (refs/garden/pending/<sha>), and which of them, or of origin's, the site keeps.
+import { z } from 'zod';
 import { isRecord, isStampedTime } from './log.ts';
 import {
   catFileBatch,
@@ -35,56 +36,28 @@ export interface Census {
   readonly duplicates: Readonly<Record<string, readonly string[]>>;
 }
 
+// A record parsed as its entries: z.record drops a "__proto__" key, and a duplicated function can have that name.
+function recordOf<TValue>(value: z.ZodType<TValue>): z.ZodType<Readonly<Record<string, TValue>>> {
+  return z
+    .preprocess((input) => (isRecord(input) ? Object.entries(input) : null), z.array(z.tuple([z.string(), value])))
+    .transform((entries) => Object.fromEntries(entries));
+}
+
+const censusSchema = z
+  .object({
+    rev: z.string(),
+    sha: z.string().regex(objectIdPattern),
+    takenAt: z.string().refine(isStampedTime),
+    counts: recordOf(z.int().nonnegative()),
+    hits: recordOf(z.array(z.string())),
+    duplicates: recordOf(z.array(z.string())),
+  })
+  .refine(({ counts, hits }) => Object.keys(counts).every((id) => Object.hasOwn(hits, id)));
+
 export function parseCensus(json: unknown): Census | null {
-  if (!isRecord(json)) {
-    return null;
-  }
+  const parsed = censusSchema.safeParse(json);
 
-  const { rev, sha, takenAt } = json;
-
-  if (
-    typeof rev !== 'string' ||
-    typeof sha !== 'string' ||
-    !objectIdPattern.test(sha) ||
-    typeof takenAt !== 'string' ||
-    !isStampedTime(takenAt)
-  ) {
-    return null;
-  }
-
-  const counts = recordOf(json['counts'], isCount);
-  const hits = recordOf(json['hits'], isStringList);
-  const duplicates = recordOf(json['duplicates'], isStringList);
-
-  if (
-    counts === null ||
-    hits === null ||
-    duplicates === null ||
-    !Object.keys(counts).every((id) => Object.hasOwn(hits, id))
-  ) {
-    return null;
-  }
-
-  return { rev, sha, takenAt, counts, hits, duplicates };
-}
-
-// The record when every value passes the check, else null: a census with one malformed entry is not a census.
-function recordOf<T>(value: unknown, isT: (entry: unknown) => entry is T): Readonly<Record<string, T>> | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const entries = Object.entries(value).flatMap(([key, entry]) => (isT(entry) ? [[key, entry] as const] : []));
-
-  return entries.length === Object.keys(value).length ? Object.fromEntries(entries) : null;
-}
-
-function isCount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-}
-
-function isStringList(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+  return parsed.success ? parsed.data : null;
 }
 
 export interface StoredCensus {

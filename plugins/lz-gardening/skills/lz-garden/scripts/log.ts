@@ -2,6 +2,7 @@
 // statuses. Every clone holds a replica; replicas merge by union, so the replay must not depend on the order the
 // events arrive in. No I/O here: the store reads and writes the events.
 import { createHash, randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { objectIdPattern } from './store-git.ts';
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -476,42 +477,120 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 export const eventPathPattern =
   /^events\/([0-9a-f]{2})\/\1[0-9a-f]{6}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/;
 
-/** Parses one event file at the trust boundary; anything malformed is a reason string, never a throw. */
-export function parseEvent(path: string, text: string): GardenEvent | string {
-  let json: unknown;
+// Any number JSON reads, Infinity from 1e400 included, which z.number() refuses; a range check then reports it.
+function jsonNumber(params: { readonly error: string }): z.ZodType<number> {
+  return z.custom<number>((value) => typeof value === 'number', params);
+}
 
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return 'not JSON';
-  }
+const missingEnvelope = { error: 'missing uuid, clock or at' };
 
-  if (!isRecord(json)) {
-    return 'not an object';
-  }
+// The fields every event carries. Each schema's refines run in the order their reasons are reported, and only once
+// its fields have their types.
+const envelopeSchema = z
+  .looseObject(
+    {
+      uuid: z.string(missingEnvelope),
+      clock: jsonNumber(missingEnvelope),
+      at: z.string(missingEnvelope),
+    },
+    { error: 'not an object' },
+  )
+  .refine(({ clock }) => Number.isSafeInteger(clock) && clock >= 0, 'clock is not a whole number from 0')
+  .refine(({ at }) => isStampedTime(at), 'at is not a date')
+  .refine(({ uuid }) => uuidPattern.test(uuid), 'uuid is not a UUID');
 
-  const { uuid, clock, at } = json;
+const malformedAdd = { error: 'malformed add' };
 
-  if (typeof uuid !== 'string' || typeof clock !== 'number' || typeof at !== 'string') {
-    return 'missing uuid, clock or at';
-  }
+const addSchema = z
+  .object({
+    op: z.literal('add'),
+    id: z.string(malformedAdd),
+    class: z.string(malformedAdd),
+    where: z.string(malformedAdd),
+    source: z.string(malformedAdd),
+    note: z.string(malformedAdd),
+    layer: jsonNumber(malformedAdd).nullable(),
+    sawCloses: z.array(z.string(malformedAdd), malformedAdd),
+    sawTend: z.string(malformedAdd).nullable(),
+  })
+  .refine(({ where }) => hasText(where), 'where is blank')
+  .refine(({ source }) => sourcePattern.test(source), 'source is not <kind>:<ref>')
+  .refine(({ layer }) => layer === null || isLayer(layer), 'layer is not a whole number from 1 to 6')
+  .refine(
+    (add) => add.id === weedId(add.class, add.where, add.source),
+    'id is not the weed id of its class, where and source',
+  );
 
-  if (!Number.isSafeInteger(clock) || clock < 0) {
-    return 'clock is not a whole number from 0';
-  }
+const malformedClose = { error: 'malformed close' };
 
-  if (!isStampedTime(at)) {
-    return 'at is not a date';
-  }
+const closeFields = {
+  op: z.literal('close'),
+  ids: z.array(z.string(malformedClose), malformedClose),
+  class: z.string(malformedClose),
+  by: z.string(malformedClose),
+};
 
-  if (!uuidPattern.test(uuid)) {
-    return 'uuid is not a UUID';
-  }
+const closeSchema = z
+  .looseObject(closeFields)
+  .refine(({ ids }) => ids.length > 0, 'close names no weed')
+  .refine(({ ids }) => ids.every((id) => weedIdPattern.test(id)), 'close names something other than a weed id')
+  .refine(({ by }) => hasText(by), 'by is blank')
+  .pipe(
+    z.discriminatedUnion(
+      'kind',
+      [
+        z
+          .object({ ...closeFields, kind: z.literal('tended'), check: z.string(malformedClose) })
+          .refine(({ check }) => hasText(check), 'check is blank')
+          .refine(
+            (close) => bedPattern.exec(close.by)?.[1] === close.class,
+            'tend close names no bed/<class>@<commit>',
+          ),
+        z.object({ ...closeFields, kind: z.enum(['one-off', 'kept']), check: z.null(malformedClose) }),
+      ],
+      malformedClose,
+    ),
+  );
 
-  if (eventPath(uuid) !== path) {
-    return 'uuid is not its file name';
-  }
+const malformedClaim = { error: 'malformed claim' };
 
+const claimSchema = z
+  .object({
+    op: z.literal('claim'),
+    at: z.string(malformedClaim),
+    class: z.string(malformedClaim),
+    writer: z.string(malformedClaim),
+    holder: z.string(malformedClaim),
+    until: z.string(malformedClaim),
+  })
+  .refine(({ until }) => isStampedTime(until), 'until is not a date')
+  .refine(
+    ({ at, until }) => Date.parse(until) - Date.parse(at) <= claimLifetimeMs,
+    "until is more than a claim's lifetime after at",
+  );
+
+const malformedRelease = { error: 'malformed release' };
+
+const releaseSchema = z
+  .object({ op: z.literal('release'), class: z.string(malformedRelease), claim: z.string(malformedRelease) })
+  .refine(({ claim }) => uuidPattern.test(claim), 'claim is not a UUID');
+
+const seedSchema = z
+  .object({ op: z.literal('seed'), sha: z.string({ error: 'malformed seed' }) })
+  .refine(({ sha }) => objectIdPattern.test(sha), 'sha is not a full commit id');
+
+type Body<TEvent> = TEvent extends GardenEvent ? Omit<TEvent, keyof EventBase> : never;
+
+const bodySchemas = new Map<unknown, z.ZodType<Body<GardenEvent>>>([
+  ['add', addSchema],
+  ['close', closeSchema],
+  ['claim', claimSchema],
+  ['release', releaseSchema],
+  ['seed', seedSchema],
+]);
+
+// The checks every op takes, whatever fields it has: a class id, and the printed fields.
+function sharedFieldFault(json: Readonly<Record<string, unknown>>): string | undefined {
   const weedClass = json['class'];
 
   if (typeof weedClass === 'string' && !classPattern.test(weedClass)) {
@@ -524,156 +603,52 @@ export function parseEvent(path: string, text: string): GardenEvent | string {
     return typeof value === 'string' && unprintablePattern.test(value);
   });
 
-  if (unprintable !== undefined) {
-    return `${unprintable} holds a line break or control character`;
-  }
-
-  const base = { uuid, clock, at };
-
-  switch (json['op']) {
-    case 'close': {
-      return parseClose(json, base);
-    }
-    case 'claim': {
-      return parseClaim(json, base);
-    }
-    case 'release': {
-      return parseRelease(json, base);
-    }
-    case 'seed': {
-      return parseSeed(json, base);
-    }
-    case 'add': {
-      return parseAdd(json, base);
-    }
-    default: {
-      return `unknown op ${JSON.stringify(json['op'])}`;
-    }
-  }
+  return unprintable === undefined ? undefined : `${unprintable} holds a line break or control character`;
 }
 
-function parseRelease(json: Record<string, unknown>, base: EventBase): ReleaseEvent | string {
-  const weedClass = json['class'];
-  const claimed = json['claim'];
-
-  if (typeof weedClass !== 'string' || typeof claimed !== 'string') {
-    return 'malformed release';
-  }
-
-  return uuidPattern.test(claimed)
-    ? { op: 'release', ...base, class: weedClass, claim: claimed }
-    : 'claim is not a UUID';
+function firstReason(error: z.ZodError): string {
+  // Stryker disable next-line OptionalChaining,LogicalOperator: a failed parse has at least one issue
+  return error.issues[0]?.message ?? error.message;
 }
 
-function parseSeed(json: Record<string, unknown>, base: EventBase): SeedEvent | string {
-  const { sha } = json;
+/** Parses one event file at the trust boundary; anything malformed is a reason string, never a throw. */
+export function parseEvent(path: string, text: string): GardenEvent | string {
+  let json: unknown;
 
-  if (typeof sha !== 'string') {
-    return 'malformed seed';
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return 'not JSON';
   }
 
-  return objectIdPattern.test(sha) ? { op: 'seed', ...base, sha } : 'sha is not a full commit id';
-}
+  const envelope = envelopeSchema.safeParse(json);
 
-function parseClaim(json: Record<string, unknown>, base: EventBase): ClaimEvent | string {
-  const { writer, holder, until } = json;
-  const weedClass = json['class'];
-
-  if (
-    typeof weedClass !== 'string' ||
-    typeof writer !== 'string' ||
-    typeof holder !== 'string' ||
-    typeof until !== 'string'
-  ) {
-    return 'malformed claim';
+  if (!envelope.success) {
+    return firstReason(envelope.error);
   }
 
-  if (!isStampedTime(until)) {
-    return 'until is not a date';
+  const { uuid, clock, at } = envelope.data;
+
+  if (eventPath(uuid) !== path) {
+    return 'uuid is not its file name';
   }
 
-  if (Date.parse(until) - Date.parse(base.at) > claimLifetimeMs) {
-    return "until is more than a claim's lifetime after at";
+  const fault = sharedFieldFault(envelope.data);
+
+  if (fault !== undefined) {
+    return fault;
   }
 
-  return { op: 'claim', ...base, class: weedClass, writer, holder, until };
-}
+  const op = envelope.data['op'];
+  const bodySchema = bodySchemas.get(op);
 
-function parseClose(json: Record<string, unknown>, base: EventBase): CloseEvent | string {
-  const { ids, kind, by, check } = json;
-  const weedClass = json['class'];
-
-  if (!isStringArray(ids) || typeof weedClass !== 'string' || typeof by !== 'string') {
-    return 'malformed close';
+  if (bodySchema === undefined) {
+    return `unknown op ${JSON.stringify(op)}`;
   }
 
-  if (ids.length === 0) {
-    return 'close names no weed';
-  }
+  const body = bodySchema.safeParse(envelope.data);
 
-  if (!ids.every((id) => weedIdPattern.test(id))) {
-    return 'close names something other than a weed id';
-  }
-
-  if (!hasText(by)) {
-    return 'by is blank';
-  }
-
-  if (kind === 'tended' && typeof check === 'string') {
-    if (!hasText(check)) {
-      return 'check is blank';
-    }
-
-    return bedPattern.exec(by)?.[1] === weedClass
-      ? { op: 'close', ...base, ids, class: weedClass, kind, by, check }
-      : 'tend close names no bed/<class>@<commit>';
-  }
-
-  if ((kind === 'one-off' || kind === 'kept') && check === null) {
-    return { op: 'close', ...base, ids, class: weedClass, kind, by, check };
-  }
-
-  return 'malformed close';
-}
-
-function parseAdd(json: Record<string, unknown>, base: EventBase): AddEvent | string {
-  const { id, where, source, note, layer, sawCloses, sawTend } = json;
-  const weedClass = json['class'];
-
-  if (
-    typeof id !== 'string' ||
-    typeof weedClass !== 'string' ||
-    typeof where !== 'string' ||
-    typeof source !== 'string' ||
-    typeof note !== 'string' ||
-    !(typeof layer === 'number' || layer === null) ||
-    !isStringArray(sawCloses) ||
-    !(typeof sawTend === 'string' || sawTend === null)
-  ) {
-    return 'malformed add';
-  }
-
-  if (!hasText(where)) {
-    return 'where is blank';
-  }
-
-  if (!sourcePattern.test(source)) {
-    return 'source is not <kind>:<ref>';
-  }
-
-  if (layer !== null && !isLayer(layer)) {
-    return 'layer is not a whole number from 1 to 6';
-  }
-
-  if (id !== weedId(weedClass, where, source)) {
-    return 'id is not the weed id of its class, where and source';
-  }
-
-  return { op: 'add', ...base, id, class: weedClass, where, source, note, layer, sawCloses, sawTend };
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+  return body.success ? { ...body.data, uuid, clock, at } : firstReason(body.error);
 }
 
 /** The (clock, uuid) order that "earliest" and "latest" mean on every replica. */
