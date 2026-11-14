@@ -215,6 +215,11 @@ function rejected(porcelain: string): boolean {
   return [...pushReport(porcelain).values()].some(({ summary }) => lostRace.test(summary));
 }
 
+// origin answered and left a ref as it was; a push that never reached it reports no ref.
+function declined(porcelain: string): boolean {
+  return [...pushReport(porcelain).values()].some(({ flag }) => flag === '!');
+}
+
 // A fetch lost to another sync of this site, which held or moved the shared ref first.
 const lostSharedRefLock = /cannot lock ref 'refs\/garden-shared\//;
 
@@ -399,7 +404,11 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     return { state: 'synced', ...merged, divergedBeds: pushBeds(site, beds, attempt), recorded };
   }
 
-  return rejected(pushed.stdout)
-    ? { state: 'behind', ...nothingShared, yielded: given.lost, recorded }
-    : { state: 'read-only', reason: gitReason(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded };
+  if (rejected(pushed.stdout)) {
+    return { state: 'behind', ...nothingShared, yielded: given.lost, recorded };
+  }
+
+  return declined(pushed.stdout)
+    ? { state: 'read-only', reason: gitReason(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded }
+    : { state: 'offline', reason: gitReason(pushed.stderr), ...nothingShared, yielded: given.lost, recorded };
 }

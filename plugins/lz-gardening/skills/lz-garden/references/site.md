@@ -123,10 +123,10 @@ The share states:
 
 - `local`: the checkout has no `origin`, or sets `lzGardening.share` to false. Nothing was fetched or pushed.
 - `synced`: the site's log and `origin`'s are the same.
-- `offline`: the fetch failed (no network, no access, a URL that asks for credentials) or a fetch or push took longer
-  than a minute; `reason` says which. The site's events stay in the site.
-- `read-only`: the fetch worked but `origin` declined the push, for a reason other than another push landing first;
-  `reason` gives git's message, such as what a server hook said.
+- `offline`: the fetch or the push did not reach `origin` (no network, no access, a URL that asks for credentials, a
+  server error), or took longer than a minute; `reason` says which. The site's events stay in the site.
+- `read-only`: the fetch worked but `origin` declined to update a ref the push named, for a reason other than another
+  push landing first; `reason` gives git's message, such as what a server hook said.
 - `behind`: every try lost the race to another push, or to another sync of the same site. The site's events stay in the
   site and the next run pushes them. When the last try could not lock a ref the fetch writes, `reason` gives git's
   message; a lock a killed run left in the site's `.git/refs/garden-shared/` reads that way on every run until it is

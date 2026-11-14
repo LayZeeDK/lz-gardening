@@ -254,8 +254,8 @@ function holdsSummary(fields: string[]): fields is [string, string, string, ...s
   return fields[2] !== undefined;
 }
 
-// git push --porcelain prints a line per ref, "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as
-// it was; its other lines hold no tab. Each ref's flag and summary, by the ref it pushed to.
+// git push --porcelain prints a line per ref, "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push could not
+// update; its other lines hold no tab. Each ref's flag and summary, by the ref it pushed to.
 export function pushReport(porcelain: string): ReadonlyMap<string, PushedRef> {
   return new Map(
     porcelain

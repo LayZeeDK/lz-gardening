@@ -318,6 +318,20 @@ test('a push URL that takes the connection and never answers leaves the site off
   assert.deepEqual([result.state, result.reason, Date.now() - started < 10_000], ['offline', 'timed out', true]);
 });
 
+test('a push URL nobody listens on leaves the site offline with what git said, not read-only', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['remote', 'set-url', '--push', 'origin', 'http://127.0.0.1:9/repo.git']);
+  addWeed(dir, 'src/a.ts:1');
+
+  const result = sync(openSite(dir), { attempts: 1, timeoutMs: 10_000 });
+
+  assert.deepEqual(
+    [result.state, result.reason?.startsWith("fatal: unable to access 'http://127.0.0.1:9/repo.git/': ")],
+    ['offline', true],
+  );
+});
+
 test('an origin that asks for credentials leaves the site offline with what git said, without waiting for input', async (t) => {
   const { dir } = planted(t);
   const port = await serve(
