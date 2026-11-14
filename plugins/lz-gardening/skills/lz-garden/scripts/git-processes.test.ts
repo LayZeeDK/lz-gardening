@@ -119,6 +119,18 @@ test('sync --census that records the census and pushes it, with no other pending
   );
 });
 
+test('sync --census --seeded of a census already recorded, with no pending census left, starts 12 git processes', (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
+  assert.equal(siteProcess(dir, ['sync', '--census', sha, '--seeded']).status, 0);
+
+  assertCount(
+    gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha, '--seeded'], env).status),
+    12,
+  );
+});
+
 test('bed makes a new bed for a claimed class in a garden with no origin with 9 git processes', (t) => {
   const { dir } = planted(t);
   addWeed(dir, 'src/a.ts:1');

@@ -238,10 +238,12 @@ export function finishPendingCensus(
 
     return sha === pendingSha || (recorded.sha !== undefined && isKnownAncestor(site.checkout, sha, recorded.sha));
   });
-  // Another sync of this site may delete them first, failing these deletes; what either leaves, a later sync deletes.
-  gitSucceeds(site.path, ['update-ref', '--stdin'], {
-    input: deletes.map(([name, oid]) => `delete ${name} ${oid}\n`).join(''),
-  });
+  if (deletes.length > 0) {
+    // Another sync of this site may delete them first, failing these deletes; what either leaves, a later sync deletes.
+    gitSucceeds(site.path, ['update-ref', '--stdin'], {
+      input: deletes.map(([name, oid]) => `delete ${name} ${oid}\n`).join(''),
+    });
+  }
 
   return undefined;
 }
