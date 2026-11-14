@@ -206,8 +206,8 @@ test('each malformed part of a pattern set is refused, naming its source and the
     'p: "exclude" must be an array of strings',
     'p: "exclude" must be an array of strings',
     'p: patterns[0].id must be a kebab-case string',
-    'p: pattern ok needs a non-empty "regex"',
-    'p: pattern ok "paths" must be an array of strings',
+    'p: patterns[0].regex must be a non-empty string',
+    'p: patterns[0].paths must be an array of strings',
   ]);
 });
 

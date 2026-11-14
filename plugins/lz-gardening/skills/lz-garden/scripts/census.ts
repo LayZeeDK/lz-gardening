@@ -18,9 +18,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { z } from 'zod';
 import { escapeUnprintable, isMainModule, processIo } from './cli.ts';
 import type { Io } from './cli.ts';
-import { isRecord } from './log.ts';
+import { classPattern, firstReason } from './log.ts';
 import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
 import { openSite } from './store-log.ts';
 import type { Site } from './store-log.ts';
@@ -54,54 +55,56 @@ const hitCap = 1000;
 // The files duplicate helpers are looked for in, and those a pattern without paths searches.
 const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 
-function stringArray(value: unknown, what: string): string[] {
-  if (value === undefined) {
-    return [];
-  }
+// A pattern set's schema names its source in every reason. "patterns" is checked as an array before "exclude", and
+// its entries after "exclude".
+function patternSetSchema(source: string): z.ZodType<PatternSet> {
+  const entryFault = (
+    fault: string,
+  ): { readonly error: (issue: { readonly path?: PropertyKey[] | undefined }) => string } => ({
+    error: (issue) => `${source}: patterns[${String(issue.path?.[1])}]${fault}`,
+  });
+  const notStrings = { error: `${source}: "exclude" must be an array of strings` };
+  const id = entryFault('.id must be a kebab-case string');
+  const regex = entryFault('.regex must be a non-empty string');
+  const paths = entryFault('.paths must be an array of strings');
 
-  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === 'string')) {
-    throw new Error(`${what} must be an array of strings`);
-  }
-
-  return value;
+  return z
+    .object(
+      {
+        patterns: z
+          .array(z.unknown(), { error: `${source}: "patterns" must be an array` })
+          .nullish()
+          .transform((patterns) => patterns ?? []),
+        exclude: z.array(z.string(notStrings), notStrings).default([]),
+      },
+      { error: `${source}: expected an object with "patterns"` },
+    )
+    .pipe(
+      z.object({
+        exclude: z.array(z.string()),
+        patterns: z.array(
+          z.object(
+            {
+              id: z.string(id).regex(classPattern, id),
+              regex: z.string(regex).min(1, regex),
+              paths: z.array(z.string(paths), paths).default([]),
+              note: z.string().catch(''),
+            },
+            entryFault(' must be an object'),
+          ),
+        ),
+      }),
+    );
 }
 
 export function parsePatternSet(json: unknown, source: string): PatternSet {
-  if (!isRecord(json)) {
-    throw new Error(`${source}: expected an object with "patterns"`);
+  const parsed = patternSetSchema(source).safeParse(json);
+
+  if (!parsed.success) {
+    throw new Error(firstReason(parsed.error));
   }
 
-  const patterns = json['patterns'] ?? [];
-
-  if (!Array.isArray(patterns)) {
-    throw new Error(`${source}: "patterns" must be an array`);
-  }
-
-  return {
-    exclude: stringArray(json['exclude'], `${source}: "exclude"`),
-    patterns: patterns.map((entry: unknown, index): Pattern => {
-      if (!isRecord(entry)) {
-        throw new Error(`${source}: patterns[${String(index)}] must be an object`);
-      }
-
-      const { id, regex, note } = entry;
-
-      if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(id)) {
-        throw new Error(`${source}: patterns[${String(index)}].id must be a kebab-case string`);
-      }
-
-      if (typeof regex !== 'string' || regex === '') {
-        throw new Error(`${source}: pattern ${id} needs a non-empty "regex"`);
-      }
-
-      return {
-        id,
-        regex,
-        paths: stringArray(entry['paths'], `${source}: pattern ${id} "paths"`),
-        note: typeof note === 'string' ? note : '',
-      };
-    }),
-  };
+  return parsed.data;
 }
 
 export function mergePatternSets(base: PatternSet, extra: PatternSet | null): PatternSet {

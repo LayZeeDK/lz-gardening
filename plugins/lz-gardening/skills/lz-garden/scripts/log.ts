@@ -606,7 +606,8 @@ function sharedFieldFault(json: Readonly<Record<string, unknown>>): string | und
   return unprintable === undefined ? undefined : `${unprintable} holds a line break or control character`;
 }
 
-function firstReason(error: z.ZodError): string {
+/** The reason a parse failed, from its first issue: schemas list their checks in the order to report them. */
+export function firstReason(error: z.ZodError): string {
   // Stryker disable next-line OptionalChaining,LogicalOperator: a failed parse has at least one issue
   return error.issues[0]?.message ?? error.message;
 }
