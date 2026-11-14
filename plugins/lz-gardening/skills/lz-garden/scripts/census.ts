@@ -59,7 +59,7 @@ const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'].map((
 function patternSetSchema(source: string): z.ZodType<PatternSet> {
   const entryFault = (
     fault: string,
-  ): { readonly error: (issue: { readonly path?: PropertyKey[] | undefined }) => string } => ({
+  ): { readonly error: (issue: { readonly path?: readonly PropertyKey[] | undefined }) => string } => ({
     error: (issue) => `${source}: patterns[${String(issue.path?.[1])}]${fault}`,
   });
   const notStrings = { error: `${source}: "exclude" must be an array of strings` };
@@ -117,7 +117,13 @@ export function mergePatternSets(base: PatternSet, extra: PatternSet | null): Pa
   return { exclude: [...new Set([...base.exclude, ...extra.exclude])], patterns: [...byId.values()] };
 }
 
-function parseNamed(file: { readonly text: string; readonly source: string }): unknown {
+/** A patterns file's text and where it was read from. */
+interface PatternsFile {
+  readonly text: string;
+  readonly source: string;
+}
+
+function parseNamed(file: PatternsFile): unknown {
   try {
     return JSON.parse(file.text);
   } catch (error: unknown) {
@@ -125,10 +131,7 @@ function parseNamed(file: { readonly text: string; readonly source: string }): u
   }
 }
 
-function extraPatterns(
-  site: string,
-  recorded: StoredCensus | null,
-): { readonly text: string; readonly source: string } | undefined {
+function extraPatterns(site: string, recorded: StoredCensus | null): PatternsFile | undefined {
   const siteFile = join(site, '.garden', 'patterns.json');
 
   if (existsSync(siteFile)) {
@@ -449,7 +452,7 @@ function formatDelta(deltas: readonly PatternDelta[]): readonly string[] {
 function readSite(cwd: string): {
   readonly site: Site;
   readonly recorded: StoredCensus | null;
-  readonly extraFile: { readonly text: string; readonly source: string } | undefined;
+  readonly extraFile: PatternsFile | undefined;
 } {
   const site = openSite(cwd);
   const read = readCensusAt(site.path, censusRef);
