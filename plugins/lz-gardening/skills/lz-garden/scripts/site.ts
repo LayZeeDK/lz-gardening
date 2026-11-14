@@ -544,59 +544,70 @@ function main(argv: readonly string[], io: Io): number {
     return 2;
   }
 
-  const { checkout: top, path: site } = siteOf(io.cwd);
-  let summary: OpenSummary | SyncSummary | BedSummary;
+  const located = siteOf(io.cwd);
 
   switch (parsed.command) {
     case 'open': {
-      const opened = openOrPlant(top, site, parsed.base);
-      const shared = sync(withWriter({ checkout: top, path: site }), { attempts: syncTries.quick });
-      reportSync(io, shared);
-      const seeded = replay(readLog({ path: site }).events, new Date()).seeded;
-      // Without --base, the base can come from the census this sync just fetched.
-      const base = parsed.base === undefined ? checkedBase(top, site, undefined) : opened.base;
-      summary = { ...opened, base, seeded, shared: shared.state, reason: printableReason(shared) };
-      break;
+      return printSummary(io, openCommand(io, located, parsed.base));
     }
     case 'sync': {
-      if (parsed.seeded && parsed.census !== undefined) {
-        recordSeed(io.cwd, parsed.census);
-      }
-
-      const shared = sync(withWriter({ checkout: top, path: site }), {
-        attempts: syncTries.sharing,
-        census: parsed.census,
-      });
-      reportSync(io, shared);
-      shared.skipped.forEach((path) => {
-        io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);
-      });
-      summary = {
-        shared: shared.state,
-        events: shared.pushedEvents,
-        reason: printableReason(shared),
-        conflicts: shared.conflicts.length === 0 ? undefined : shared.conflicts,
-      };
-      break;
+      return printSummary(io, syncCommand(io, located, parsed.census, parsed.seeded));
     }
     case 'bed': {
-      checkBed(site, parsed.bedClass, parsed.base);
-      const refusal = bedRefusal(io, withWriter({ checkout: top, path: site }), parsed.bedClass);
-
-      if (refusal !== undefined) {
-        io.err(`site: bed: ${refusal}\n`);
-
-        return 1;
-      }
-
-      summary = makeBed(top, site, parsed.bedClass, parsed.base);
-      break;
+      return bedCommand(io, located, parsed.bedClass, parsed.base);
     }
   }
+}
 
+type Located = ReturnType<typeof siteOf>;
+
+function printSummary(io: Io, summary: OpenSummary | SyncSummary | BedSummary): number {
   io.out(`${JSON.stringify(summary)}\n`);
 
   return 0;
+}
+
+function openCommand(io: Io, located: Located, requested: string | undefined): OpenSummary {
+  const opened = openOrPlant(located.checkout, located.path, requested);
+  const shared = sync(withWriter(located), { attempts: syncTries.quick });
+  reportSync(io, shared);
+  const seeded = replay(readLog(located).events, new Date()).seeded;
+  // Without --base, the base can come from the census this sync just fetched.
+  const base = requested === undefined ? checkedBase(located.checkout, located.path, undefined) : opened.base;
+
+  return { ...opened, base, seeded, shared: shared.state, reason: printableReason(shared) };
+}
+
+function syncCommand(io: Io, located: Located, census: string | undefined, seeded: boolean): SyncSummary {
+  if (seeded && census !== undefined) {
+    recordSeed(io.cwd, census);
+  }
+
+  const shared = sync(withWriter(located), { attempts: syncTries.sharing, census });
+  reportSync(io, shared);
+  shared.skipped.forEach((path) => {
+    io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);
+  });
+
+  return {
+    shared: shared.state,
+    events: shared.pushedEvents,
+    reason: printableReason(shared),
+    conflicts: shared.conflicts.length === 0 ? undefined : shared.conflicts,
+  };
+}
+
+function bedCommand(io: Io, located: Located, bedClass: string, base: string): number {
+  checkBed(located.path, bedClass, base);
+  const refusal = bedRefusal(io, withWriter(located), bedClass);
+
+  if (refusal !== undefined) {
+    io.err(`site: bed: ${refusal}\n`);
+
+    return 1;
+  }
+
+  return printSummary(io, makeBed(located.checkout, located.path, bedClass, base));
 }
 
 export function run(argv: readonly string[], io: Io): number {
