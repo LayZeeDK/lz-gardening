@@ -24,7 +24,16 @@ import {
   pushReport,
   timedOut,
 } from './store-git.ts';
-import { append, formatOf, logFormat, logRef, moveLogIfStill, readReplica, writeLogIfStill } from './store-log.ts';
+import {
+  append,
+  formatOf,
+  logFormat,
+  logRef,
+  moveLogIfStill,
+  noLogAt,
+  readReplica,
+  writeLogIfStill,
+} from './store-log.ts';
 import type { Site } from './store-log.ts';
 
 export const shareKey = 'lzGardening.share';
@@ -184,7 +193,7 @@ function mergeShared(
   site: Pick<Site, 'path' | 'checkout'>,
 ): Merged & { readonly census: CensusTips; readonly sharedTip: string | undefined } {
   for (let attempt = 1; ; attempt += 1) {
-    const [shared, local = '', sharedFormatFile, localFormatFile, localCensus, sharedCensus] = objectIds(site.path, [
+    const [shared, local, sharedFormatFile, localFormatFile, localCensus, sharedCensus] = objectIds(site.path, [
       sharedLogRef,
       logRef,
       `${sharedLogRef}^{commit}:garden.json`,
@@ -192,6 +201,11 @@ function mergeShared(
       censusRef,
       sharedCensusRef,
     ]);
+
+    if (local === undefined) {
+      throw noLogAt(site.path);
+    }
+
     const merged = mergeOnce(site, { shared, local, sharedFormatFile, localFormatFile });
 
     if (merged !== 'lost to another writer') {

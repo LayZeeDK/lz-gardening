@@ -144,6 +144,16 @@ function preReceive(remote: string, body: string): void {
   writeFileSync(join(remote, 'hooks', 'pre-receive'), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
 }
 
+test('a site whose garden log is gone is refused by a sync, naming the site and the fix', (t) => {
+  const { dir, garden } = planted(t);
+  bareRemote(dir);
+  git(garden, ['update-ref', '-d', logRef]);
+
+  assert.throws(() => sync(openSite(dir), { attempts: 1 }), {
+    message: /^no garden log at .*repo\.garden; run site\.ts open first$/,
+  });
+});
+
 test('an origin whose hook declines the push leaves the site read-only, with what the hook said', (t) => {
   const { dir } = planted(t);
   const remote = bareRemote(dir);

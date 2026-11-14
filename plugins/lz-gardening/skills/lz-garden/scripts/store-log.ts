@@ -253,11 +253,15 @@ export function readReplica(site: string, tip: string): Replica {
   };
 }
 
+export function noLogAt(site: string): Error {
+  return new Error(`no garden log at ${site}; run site.ts open first`);
+}
+
 export function readLog(site: Pick<Site, 'path'>): Replica {
   const tip = optionalGit(site.path, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true });
 
   if (tip === undefined) {
-    throw new Error(`no garden log at ${site.path}; run site.ts open first`);
+    throw noLogAt(site.path);
   }
 
   return readReplica(site.path, tip);
