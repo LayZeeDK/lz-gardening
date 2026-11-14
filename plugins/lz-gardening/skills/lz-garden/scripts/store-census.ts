@@ -8,6 +8,7 @@ import {
   isKnownAncestor,
   objectIds,
   optionalGit,
+  refsUnder,
   runGit,
   waitForRefLocks,
 } from './store-git.ts';
@@ -207,20 +208,14 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
 export function finishPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): void {
   const recorded = recordPendingCensus(site, pendingSha);
   const pendingPrefix = pendingCensusRef('');
-  const leftovers = git(site.path, ['for-each-ref', '--format=%(refname) %(objectname)', pendingPrefix], {
-    readsOnly: true,
-  })
-    .split('\n')
-    .filter((line) => line !== '')
-    .map((line) => line.split(' '));
-  const deletes = leftovers.filter(([name = '']) => {
+  const deletes = [...refsUnder(site.path, [pendingPrefix])].filter(([name]) => {
     const sha = name.slice(pendingPrefix.length);
 
     return sha === pendingSha || (recorded.sha !== undefined && isKnownAncestor(site.checkout, sha, recorded.sha));
   });
   // Another sync of this site may delete them first, failing these deletes; what either leaves, a later sync deletes.
   gitSucceeds(site.path, ['update-ref', '--stdin'], {
-    input: deletes.map(([name = '', oid = '']) => `delete ${name} ${oid}\n`).join(''),
+    input: deletes.map(([name, oid]) => `delete ${name} ${oid}\n`).join(''),
   });
 }
 

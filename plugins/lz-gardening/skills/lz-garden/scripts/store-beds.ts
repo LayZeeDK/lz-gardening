@@ -1,7 +1,7 @@
 // The shared beds: which bed branches a sync pushes to origin as refs/garden/beds/<class>, which stay local and why.
 import { join } from 'node:path';
 import { bedCommit, eventPath, latestTendedClose } from './log.ts';
-import { git, isAncestor, networkGit, objectIdPattern, reasonOf } from './store-git.ts';
+import { git, isAncestor, networkGit, objectIdPattern, reasonOf, refsUnder } from './store-git.ts';
 import { logRef, machinePathTest, readReplica } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
@@ -109,17 +109,9 @@ export function pushBeds(
   leaving: readonly { readonly path: string }[],
   { pushUrl, timeoutMs }: { readonly pushUrl: string; readonly timeoutMs: number },
 ): readonly string[] {
-  const tips = git(
-    site.path,
-    ['for-each-ref', '--format=%(refname) %(objectname)', bedBranches, sharedBeds, unpushedBeds],
-    { readsOnly: true },
-  )
-    .split('\n')
-    .filter((line) => line !== '')
-    .map((line) => line.split(' '));
-  const tipOf = (prefix: string, weedClass: string): string | undefined =>
-    tips.find(([name]) => name === `${prefix}${weedClass}`)?.[1];
-  const candidates = tips.flatMap(([name = '', oid = '']) => {
+  const tips = refsUnder(site.path, [bedBranches, sharedBeds, unpushedBeds]);
+  const tipOf = (prefix: string, weedClass: string): string | undefined => tips.get(`${prefix}${weedClass}`);
+  const candidates = [...tips].flatMap(([name, oid]) => {
     const weedClass = name.slice(bedBranches.length);
 
     return name.startsWith(bedBranches) && tipOf(sharedBeds, weedClass) !== oid ? [{ weedClass, tip: oid }] : [];

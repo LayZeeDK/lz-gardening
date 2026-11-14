@@ -205,6 +205,16 @@ export function mainCheckout(cwd: string): string {
 
 export const objectIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
+// The refs under the prefixes given, each name with the object it names. A ref name holds no space.
+export function refsUnder(cwd: string, prefixes: readonly string[]): ReadonlyMap<string, string> {
+  return new Map(
+    git(cwd, ['for-each-ref', '--format=%(refname) %(objectname)', ...prefixes], { readsOnly: true })
+      .split('\n')
+      .filter((line) => line !== '')
+      .map((line) => [line.slice(0, line.indexOf(' ')), line.slice(line.indexOf(' ') + 1)] as const),
+  );
+}
+
 export function objectIds(cwd: string, names: readonly string[]): readonly (string | undefined)[] {
   return git(cwd, ['cat-file', '--batch-check=%(objectname)'], {
     input: names.map((name) => `${name}\n`).join(''),
