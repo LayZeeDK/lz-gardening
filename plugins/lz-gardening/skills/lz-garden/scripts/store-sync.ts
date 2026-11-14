@@ -69,24 +69,25 @@ interface Outcome {
   readonly divergedBeds: readonly string[];
 }
 
-// Only a sync that merged origin's log settled the census.
-interface BeforeMerge extends Outcome {
+// Only a read-only or synced result reports the census.
+interface WithoutCensusNotes extends Outcome {
   readonly sharedCensusIgnored?: undefined;
   readonly censusKeptLocal?: undefined;
 }
 
-interface AfterMerge extends Outcome {
+interface WithCensusNotes extends Outcome {
   readonly sharedCensusIgnored?: boolean;
   readonly censusKeptLocal?: string;
 }
 
-// git's reason comes with every offline and read-only result, and with a behind one lost to a ref lock.
+// A reason comes with every offline result (git's, or that the time ran out) and read-only one, and with a behind
+// one lost to a ref lock.
 export type SyncResult =
-  | (BeforeMerge & { readonly state: 'local'; readonly reason?: undefined })
-  | (BeforeMerge & { readonly state: 'behind'; readonly reason?: string })
-  | (BeforeMerge & { readonly state: 'offline'; readonly reason: string })
-  | (AfterMerge & { readonly state: 'read-only'; readonly reason: string })
-  | (AfterMerge & { readonly state: 'synced'; readonly reason?: undefined });
+  | (WithoutCensusNotes & { readonly state: 'local'; readonly reason?: undefined })
+  | (WithoutCensusNotes & { readonly state: 'behind'; readonly reason?: string })
+  | (WithoutCensusNotes & { readonly state: 'offline'; readonly reason: string })
+  | (WithCensusNotes & { readonly state: 'read-only'; readonly reason: string })
+  | (WithCensusNotes & { readonly state: 'synced'; readonly reason?: undefined });
 
 export type ShareState = SyncResult['state'];
 
@@ -270,13 +271,18 @@ function syncWithOrigin(
 
   const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
   let yielded: readonly LostClaim[] = [];
+  let conflicts: readonly string[] = [];
+  let skipped: readonly string[] = [];
 
   for (let attempt = 1; ; attempt += 1) {
     const { recorded, ...result } = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
     yielded = [...yielded, ...result.yielded];
+    conflicts = [...conflicts, ...result.conflicts];
+    // A file origin holds that is not an event file stays there, so each try that merges skips it again.
+    skipped = [...new Set([...skipped, ...result.skipped])];
 
     if (result.state !== 'behind' || attempt >= attempts) {
-      return { result: { ...result, yielded }, recorded };
+      return { result: { ...result, yielded, conflicts, skipped }, recorded };
     }
 
     wait(2 ** (attempt - 1) * 1000 * (0.5 + Math.random()));
@@ -356,10 +362,12 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
   const given = giveBackLosingClaims(site, sharedTip, leaving, attempt.now);
+  // What the merge found, which a try reports whether or not it shares.
+  const found = { conflicts: mergedLog.conflicts, skipped: mergedLog.skipped, yielded: given.lost };
   const settledCensus = settleCensus(site, censusTips, pendingSha);
 
   if (settledCensus === 'lost to another writer') {
-    return { state: 'behind', ...nothingShared, yielded: given.lost };
+    return { state: 'behind', ...nothingShared, ...found };
   }
 
   const { recorded, ...settled } = settledCensus;
@@ -369,8 +377,8 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   const censusAhead = newerCensus !== undefined && keptLocal === undefined;
   const merged = {
     ...mergedLog,
+    ...found,
     pushedEvents,
-    yielded: given.lost,
     ...(settled.ignored ? { sharedCensusIgnored: true } : {}),
     ...(keptLocal === undefined ? {} : { censusKeptLocal: keptLocal }),
   };
@@ -396,8 +404,10 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     timeoutMs,
   );
 
+  const unshared = { ...nothingShared, ...found, recorded };
+
   if (timedOut(pushed)) {
-    return { state: 'offline', reason: 'timed out', ...nothingShared, yielded: given.lost, recorded };
+    return { state: 'offline', reason: 'timed out', ...unshared };
   }
 
   if (pushed.status === 0) {
@@ -405,10 +415,10 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   }
 
   if (rejected(pushed.stdout)) {
-    return { state: 'behind', ...nothingShared, yielded: given.lost, recorded };
+    return { state: 'behind', ...unshared };
   }
 
   return declined(pushed.stdout)
     ? { state: 'read-only', reason: gitReason(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded }
-    : { state: 'offline', reason: gitReason(pushed.stderr), ...nothingShared, yielded: given.lost, recorded };
+    : { state: 'offline', reason: gitReason(pushed.stderr), ...unshared };
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -239,6 +239,116 @@ test('a push the origin refuses because another push moved the log first is trie
   const result = sync(openSite(dir), { attempts: 2, wait: () => undefined });
 
   assert.deepEqual([result.state, git(remote, ['rev-parse', logRef])], ['synced', git(garden, ['rev-parse', logRef])]);
+});
+
+// A path both sites hold with different content, a file the shared log holds that is not an event file, a shared
+// census, and a second site with an event to push, on an origin whose log the next push moves first.
+function conflictBeforeARace(t: TestContext): {
+  readonly second: { readonly dir: string; readonly garden: string };
+  readonly remote: string;
+  readonly path: string;
+  readonly stray: string;
+} {
+  const { first, second, remote } = sharedPair(t);
+  const path = eventPath('0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6');
+  const stray = 'events/0f/not-an-event.json';
+  writeToLogByHand(first.garden, path, '{"from":"first"}');
+  writeToLogByHand(first.garden, stray, '{}');
+  writeToLogByHand(second.garden, path, '{"from":"second"}');
+  writeCensus(first.garden, git(first.dir, ['rev-parse', 'main']));
+  sync(openSite(first.dir), { attempts: 1 });
+  addWeed(second.dir, 'src/b.ts:1');
+  moveWhileMarked(remote, 'moving', true);
+
+  return { second, remote, path, stray };
+}
+
+test('a try that ends behind still reports the file it skipped', (t) => {
+  const { second, stray } = conflictBeforeARace(t);
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.skipped], ['behind', [stray]]);
+});
+
+test('a file skipped on a try that ended behind is reported when the next try cannot reach origin', (t) => {
+  const { second, remote, stray } = conflictBeforeARace(t);
+
+  const result = sync(openSite(second.dir), {
+    attempts: 2,
+    wait: () => {
+      renameSync(remote, `${remote}.away`);
+    },
+  });
+
+  assert.deepEqual([result.state, result.skipped], ['offline', [stray]]);
+});
+
+test('a file skipped on a try that ended behind and again on the try that lands is reported once', (t) => {
+  const { second, stray } = conflictBeforeARace(t);
+
+  const result = sync(openSite(second.dir), { attempts: 2, wait: () => undefined });
+
+  assert.deepEqual([result.state, result.skipped], ['synced', [stray]]);
+});
+
+test('a try whose push takes longer than the time allowed still reports what its merge found', async (t) => {
+  const { second, path, stray } = conflictBeforeARace(t);
+  const port = await serve(t, silentServer);
+  git(second.dir, ['remote', 'set-url', '--push', 'origin', `git://127.0.0.1:${port}/repo.git`]);
+
+  const result = sync(openSite(second.dir), { attempts: 1, timeoutMs: 1000 });
+
+  assert.deepEqual([result.state, result.conflicts, result.skipped], ['offline', [path], [stray]]);
+});
+
+test('a try whose census another sync of the site moved first still reports what its merge found', (t) => {
+  const { second, path, stray } = conflictBeforeARace(t);
+  const theirs = git(second.garden, ['rev-parse', `${logRef}^{commit}`]);
+  const { spawnSync } = childProcess;
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const [, gitArgs] = args;
+
+    if (Array.isArray(gitArgs) && gitArgs.includes('update-ref') && gitArgs.includes(censusRef)) {
+      spawnSync('git', ['update-ref', censusRef, theirs], { cwd: second.garden });
+    }
+
+    return Reflect.apply(spawnSync, childProcess, args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.conflicts, result.skipped], ['behind', [path], [stray]]);
+});
+
+test('a try whose push fails before it reaches origin still reports what its merge found', (t) => {
+  const { second, path, stray } = conflictBeforeARace(t);
+  git(second.dir, ['remote', 'set-url', '--push', 'origin', 'http://127.0.0.1:9/repo.git']);
+
+  const result = sync(openSite(second.dir), { attempts: 1, timeoutMs: 10_000 });
+
+  assert.deepEqual([result.state, result.conflicts, result.skipped], ['offline', [path], [stray]]);
+});
+
+test('a try that ends behind still reports the conflict its merge found', (t) => {
+  const { second, path } = conflictBeforeARace(t);
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.conflicts], ['behind', [path]]);
+});
+
+test('a conflict found on a try that ended behind is reported by the try that lands', (t) => {
+  const { second, path } = conflictBeforeARace(t);
+
+  const result = sync(openSite(second.dir), { attempts: 2, wait: () => undefined });
+
+  assert.deepEqual([result.state, result.conflicts], ['synced', [path]]);
 });
 
 test('a site whose origin keeps moving is behind after its attempts, and one sync after the race holds every event', (t) => {
