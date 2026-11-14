@@ -129,27 +129,34 @@ interface Tips {
   readonly localFormatFile: string | undefined;
 }
 
-function mergeOnce(
-  { path: site, checkout }: Pick<Site, 'path' | 'checkout'>,
-  { shared, local, sharedFormatFile, localFormatFile }: Tips,
-): Merged | 'lost to another writer' {
-  if (shared !== undefined) {
-    if (sharedFormatFile === undefined) {
+function refuseUnreadableSharedLog(site: string, { shared, sharedFormatFile, localFormatFile }: Tips): void {
+  if (shared === undefined) {
+    return;
+  }
+
+  if (sharedFormatFile === undefined) {
+    throw new Error(
+      `the shared ${logRef} on origin is not a garden log (a commit holding garden.json); delete or fix it on origin`,
+    );
+  }
+
+  if (sharedFormatFile !== localFormatFile) {
+    const format = formatOf(git(site, ['cat-file', 'blob', sharedFormatFile], { readsOnly: true }));
+
+    if (format !== logFormat) {
       throw new Error(
-        `the shared ${logRef} on origin is not a garden log (a commit holding garden.json); delete or fix it on origin`,
+        `the shared ${logRef} is in format ${String(format)} and this version reads format ${String(logFormat)}; update lz-gardening`,
       );
     }
-
-    if (sharedFormatFile !== localFormatFile) {
-      const format = formatOf(git(site, ['cat-file', 'blob', sharedFormatFile], { readsOnly: true }));
-
-      if (format !== logFormat) {
-        throw new Error(
-          `the shared ${logRef} is in format ${String(format)} and this version reads format ${String(logFormat)}; update lz-gardening`,
-        );
-      }
-    }
   }
+}
+
+function mergeOnce(
+  { path: site, checkout }: Pick<Site, 'path' | 'checkout'>,
+  tips: Tips,
+): Merged | 'lost to another writer' {
+  refuseUnreadableSharedLog(site, tips);
+  const { shared, local } = tips;
 
   if (shared === local) {
     return { upToDate: true, ...nothingShared, leaving: [] };
@@ -169,8 +176,9 @@ function mergeOnce(
   const copied = fromShared.filter(({ path }) => path === 'garden.json' || eventPathPattern.test(path));
   const conflicts = copied.filter(({ status }) => status === 'M').map(({ path }) => path);
   const skipped = fromShared.filter((change) => !copied.includes(change)).map(({ path }) => path);
+  const localAddsNothing = !changes.some(({ status }) => status === 'A');
 
-  if (copied.length === fromShared.length && !changes.some(({ status }) => status === 'A')) {
+  if (copied.length === fromShared.length && localAddsNothing) {
     return moveLogIfStill(site, shared, local)
       ? { upToDate: true, pushedEvents: 0, conflicts, skipped, leaving: [] }
       : 'lost to another writer';
