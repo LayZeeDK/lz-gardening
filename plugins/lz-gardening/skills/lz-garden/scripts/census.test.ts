@@ -430,6 +430,18 @@ test('definitions in .tsx, .cts, .js and .cjs files count', async (t) => {
   assert.deepEqual(census.duplicates, { isRecord: ['src/a.tsx', 'src/b.cts'], toKey: ['src/c.js', 'src/d.cjs'] });
 });
 
+test('.jsx files are source files: their hits and definitions count', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.jsx': 'function Button() {} // eslint-disable-line\n',
+    'src/b.jsx': 'function Button() {}\n',
+  });
+
+  const census = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual([census.counts['eslint-disable'], census.duplicates], [1, { Button: ['src/a.jsx', 'src/b.jsx'] }]);
+});
+
 test('duplicate names are listed in alphabetical order', async (t) => {
   const dir = repo(t);
   commit(dir, {
@@ -755,6 +767,19 @@ test("the census counts the extra patterns in the site's .garden/patterns.json",
   assert.match(result.stdout, /^todo +1 {2}new$/m);
 });
 
+test("a site's .garden/patterns.json that is not JSON is refused, naming the file", async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden, '{ "patterns": [\n');
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual(
+    [result.status, /^census: .*[\\/]\.garden[\\/]patterns\.json: /.test(result.stderr)],
+    [2, true],
+    result.stderr,
+  );
+});
+
 test("a census taken with the site's extra patterns carries them, so a clone without the file counts the same", async (t) => {
   const { dir, garden } = planted(t);
   writeSitePatterns(garden);
@@ -787,6 +812,24 @@ test('a census that differs from the recorded one in nothing but the time taken 
 
   assert.equal(again.status, 0, again.stderr);
   assert.equal(git(garden, ['for-each-ref', 'refs/garden/pending']), '');
+});
+
+test("a census taken after the site's patterns changed is left pending, though every hit is the same", async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden);
+  await takeAndRecord(dir);
+  writeSitePatterns(
+    garden,
+    `${JSON.stringify({ patterns: [{ id: 'todo', regex: 'TODO', note: 'name an owner' }] })}\n`,
+  );
+
+  const again = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(
+    git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending']),
+    pendingCensusRef(git(dir, ['rev-parse', 'HEAD'])),
+  );
 });
 
 test('a first census is not behind the garden', async (t) => {

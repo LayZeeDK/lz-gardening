@@ -38,9 +38,9 @@ the session's working directories (the session's environment lists any added one
   `npm --prefix "<bed>" exec -- <tool> <args>`, which takes the bed's installed tool but runs in the checkout, so
   give it the bed's files by full path, and use it only for a tool that finds its config beside the files it reads
   (Prettier, say). `site` finds the site from the checkout.
-- When nothing above fits, run `cd "<bed>" && <command>` with nothing after the command, then `cd "<checkout>"` as a
-  call of its own before the next `site` or `weeds` call. Never put git after a `cd`: Claude Code refuses such a
-  chain, whatever the allow list says.
+- When nothing above fits, run `cd "<bed>" && <command>` with nothing after the command, and send `cd "<checkout>"`
+  as your very next call: the shell stays in the bed after a `cd`, and the commands above expect the checkout. Never
+  put git after a `cd`: Claude Code refuses such a chain, whatever the allow list says.
 - Send each command bare: no pipe (`| tail`, `| head`, `| node -e`), no redirect (`>`, `2>&1`) and no second command
   after `;` or `&&` (the `cd "<bed>" &&` above aside). Claude Code refuses those forms in the bed and the site. Read
   the summary lines in the tool result; when a command prints more than the result shows, run a narrower one (one
@@ -48,9 +48,10 @@ the session's working directories (the session's environment lists any added one
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
-- When a command is refused, report it and stop the tend pass, as when a step's done condition is not met. The
-  refusal is the user's answer: reach the same result with no other command or tool (`rm` for a refused `git rm`,
-  the Edit tool for a refused `sed`, a pipe for a refused redirect).
+- Stop at a refused command: report it and end the tend pass, as when a step's done condition is not met. The
+  refusal is the user's answer, so the pass ends there. A refused `git rm` is not run as `rm`, a refused `sed` is
+  not done with the Edit tool, a refused redirect is not turned into a pipe, and a refused command is not sent again
+  in another form, the forms above included.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.
@@ -69,7 +70,10 @@ claim is yours and shared. Exit 1 stops the pass: report its line as it is (`tak
 ## 2. Find the root cause
 
 Read every open weed at the base (`git show <base>:<path>`) and the commit that planted it (`--source`).
-Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? A class
+Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? For
+copies (a helper defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that
+pins the copies alike can say a copy must stay (a file loaded or copied alone, which cannot import the shared one).
+Such a copy is kept, not removed, and the check pins the copies instead. A class
 whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
 each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule too narrow, a
 suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
@@ -126,6 +130,9 @@ instructions, and run in the bed:
   `cd "<bed>" && npx nx run-many -t test -p <project>,<project>` (Nx finds its workspace from the directory it runs
   in, so it needs the `cd`). Run the whole suite only when the repository's done check requires it (CI,
   `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes, report it as not run.
+- the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
+  the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
+  file (a root `node --test` suite that loads a module alone, say). A project's test script often leaves these out.
 
 Keep each command and its summary lines. Step 6 runs the same commands. Done when each has run before any edit.
 
@@ -144,9 +151,11 @@ risky for one pass, record the rest in a baseline that can only shrink (the tool
 file, or a count the check enforces as a maximum) and never raise one. Every exception left in the code names its
 rule and a reason.
 
-Then run every command of step 4's starting results again in the bed, and the tests of any project the change
-touched that step 4 did not run. Done when each passes, apart from the same failures as in the starting results.
-Quote their summary lines.
+Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
+file the change touched that step 4 did not run. Done when each has run again and passes, apart from the same
+failures as in the starting results. Quote their summary lines. A command that fails after the change and has no
+starting result may be a failure your change caused: stop before step 7 and report it with its output, so a human
+judges it. The class stays open and the bed stays as it is.
 
 ## 7. Commit and close
 
@@ -169,7 +178,9 @@ weed of `weeds list --class <class>` that the check does not hold (a function th
 say): `weeds close --id <id> --keep "<reason>"` when it is deliberate or not this class's mistake, else
 `weeds close --id <id> --one-off "<reason>"`. Name each in the report. Then close the class:
 `weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
-check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). Like the keep and
+check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). `<short sha>` is
+the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your last commit: the close shares
+the bed only when it names the bed's tip; with any other commit the bed stays in the site. Like the keep and
 one-off closes, it exits 1 and closes nothing when its first sync is not `synced` or `local` or the claim is no
 longer this site's: stop and report its line; the bed stays for the next pass. It prints `closed <n>; <state>`: the
 close and the end of the claim land in the site's queue and, when the state is `synced`, on `origin`, followed by
@@ -186,6 +197,7 @@ later weed of the class, anywhere, is then queued as `regrown` and names this be
 - The lint, type-check and test commands run in the bed, with their summary lines from step 4's starting results
   and from after the change.
 - A layer 3 proposal, if one would help, described but not built.
-- How to land it, from the repository: `git fetch origin refs/garden/beds/<class>` (or
-  `git fetch ../<repo>.garden bed/<class>` when the close was not shared), then review and merge the fetched commit
-  the way the repository lands work, and delete `refs/garden/beds/<class>` on `origin` once it has landed.
+- How to land it, from the repository: `git fetch origin refs/garden/beds/<class>` when the bed was shared, or
+  `git fetch ../<repo>.garden bed/<class>` when it was not (the close did not end `synced`, or a line on stderr named
+  the bed); say which applies. Then review and merge the fetched commit the way the repository lands work, and
+  delete `refs/garden/beds/<class>` on `origin` once it has landed.

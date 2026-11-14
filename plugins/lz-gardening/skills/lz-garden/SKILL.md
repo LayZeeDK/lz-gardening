@@ -20,16 +20,22 @@ A tick watches what landed on the base branch since the last tick and queues eac
 fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:lz-tend`). Every step below ends on a done
 condition; when one is not met, report the command and its output and stop.
 
+Two rules hold for the whole tick:
+
+- **Search with the Grep tool, list files with the Glob tool.** These two tools are the tick's only search and
+  listing; `git grep`, `rg`, `find` and `ls` are outside the tick, since a shell search can start other programs.
+- **A refused command ends the tick.** Report the command and its refusal, and stop. The refusal is the user's
+  answer, so the tick reaches the same result no other way, with a tool or with another command.
+
 Stay in the repository's working directory for the whole tick and run every command as written below, quotes
 included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read
 the repository with the git commands below and the Read, Grep and Glob tools. Claude Code runs `git log` and
-`git show` without asking only in read-only forms like the ones below; add no other options to them. To search, use
-the Grep tool (`git grep` is not allowed: it can start other programs), and read a file as it is on the base with
-`git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often another branch than
-`<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through the three
-scripts, which keep the queue and the census in the garden site beside the repository. Anything else (another
-command, `cd`, a file write, a redirect) falls back to the user's permission settings; a tick cannot stop to ask, so
-what those settings do not allow is refused, and a refusal stops the tick.
+`git show` without asking only in read-only forms like the ones below; add no other options to them. Read a file as
+it is on the base with `git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often
+another branch than `<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through
+the three scripts, which keep the queue and the census in the garden site beside the repository. Anything else
+(another command, `cd`, a file write, a redirect) falls back to the user's permission settings; a tick cannot stop
+to ask, so what those settings do not allow is refused.
 
 ## 1. Open the site
 
@@ -82,7 +88,8 @@ git log --no-merges --format='%h %an %s' <previousSha>..<sha>
 ```
 
 The output lists the newest commit first. Read the diff (`git show <commit>`) of each commit it lists, the first 30
-at most; the report counts the rest as skipped. Look for the weeds catalogued in
+at most; the report counts the rest as skipped. When the tool result says the output was saved to a file, Read that
+file to its end, in parts when it is long: the commit counts as read only then. Look for the weeds catalogued in
 `${CLAUDE_SKILL_DIR}/references/weeds.md`: the census finds the textual ones, and reading finds the rest (a hollow
 test, a copied workaround, a second way to do what the codebase already does, a lesson the records hold twice).
 Read the catalogue before the first diff. A weed is something an agent will copy; a one-off with no sign of
@@ -101,9 +108,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`.
   Queue one weed per file after `new` on its `+ duplicate` line, and one per file after `already` that
   `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-helper` does not show. First read the
-  definition you would keep and each one you would queue, with `git show <sha>:<path>`. A comment or a doc that says
-  why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike) makes that
-  copy no weed.
+  definition you would keep and each file's own, with `git show <sha>:<path>`, every one of those files. A comment or
+  a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
+  makes that copy no weed. Each of those files ends either queued or on the reply's `left out:` line with its reason.
 - `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
   `~` or one through `..` is refused with exit 2.
 - `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record (the path
@@ -120,9 +127,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
-`(check: <where> not on the base)`, the bed's change to that check is not on the base: the bed has not landed, or the
-check's file is gone from the base. Report it that way, not as a check that failed. Done when every weed from steps 2
-and 3 printed one of those words.
+`(check: <where> not on the base)`, the bed's change to that check was not on the base as of the garden's last
+census, the one recorded before this tick: the bed had not landed by then, or the check's file is gone from the base.
+The bed may have landed in this tick's range. Report it that way, not as a check that failed. Done when every weed
+from steps 2 and 3 printed one of those words.
 
 ## 5. Group, record, report
 
@@ -140,21 +148,26 @@ A class whose open weeds sit in two or more places (files) is ready to tend: sev
 and claimed by no other clone.
 
 Done when `site.ts sync --census <sha>` exits 0. Then reply with this form, every `<slot>` filled as the list below
-says. The reply is these four lines and ends after the last one; the reason for each weed is in its `--note`.
+says. The reply is exactly these five lines: the last character of the reply ends the `shared:` line. The reason for
+each weed is in its `--note`, what was not read is in the counts, and what was not queued is on `left out:`; the
+reply holds nothing the form has no line for.
 
 ```text
 garden: <base> <short previousSha>..<short sha>, <commits> commits, <read> read, <skipped> skipped
 queued <total> (<class> x<n>, ...); regrown: <class> (check: <where>[ not on the base]), ...
+left out: <path> (<reason>), ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)
 ```
 
 - `<commits>`: the census's `commits`, as printed.
-- `<read>`: the commits whose whole diff you read with `git show <commit>`. A `--stat` or a path-limited
-  `git show` is not a read. `<skipped>` is `<commits>` minus `<read>`.
+- `<read>`: the commits whose whole diff you read with `git show <commit>`, a diff saved to a file only once you
+  read that file to its end. A `--stat` or a path-limited `git show` is not a read. `<skipped>` is `<commits>` minus `<read>`.
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
+- `left out`: each file of a new duplicate (step 4) you did not queue, with its reason in a few words, such as
+  `extension/a.js (documented copy: no imports)`; `left out: none` when there is none.
 - `ready to tend`: one entry per row of `groups --ready`, its `open` and `places` columns, and the first row's class
   after `lz-tend`; `ready to tend: none` when it printed no row.
 - `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.

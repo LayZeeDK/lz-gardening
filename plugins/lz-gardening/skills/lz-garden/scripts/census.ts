@@ -8,8 +8,9 @@
 //     --seed, the seed list (`= ` lines) and `census: <id> <count>, ...` (or `census: none`), then one JSON summary
 //     line: sha, previousSha (null when there is no census or this checkout lacks its commit), behind (the census's
 //     commit descends from sha), commits (non-merge commits from previousSha to sha, or null), grew, newHits and
-//     newDuplicates. When the new census differs from the site's in more than the time taken, it is written to
-//     refs/garden/pending/<sha>, named by the commit rev-parse gives; site.ts sync --census <sha> records it.
+//     newDuplicates. When the new census differs from the site's in more than the time taken, or carries other
+//     patterns, it is written to refs/garden/pending/<sha>, named by the commit rev-parse gives; site.ts sync
+//     --census <sha> records it.
 //     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
 // or, when the site has none, by the patterns the site's census carries. A pattern without paths searches sourceGlobs.
@@ -52,7 +53,7 @@ export interface PatternDelta {
 const hitCap = 1000;
 
 // The files duplicate helpers are looked for in, and those a pattern without paths searches.
-const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
+const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 
 function stringArray(value: unknown, what: string): string[] {
   if (value === undefined) {
@@ -120,6 +121,14 @@ export function mergePatternSets(base: PatternSet, extra: PatternSet | null): Pa
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function parseNamed(file: { readonly text: string; readonly source: string }): unknown {
+  try {
+    return JSON.parse(file.text);
+  } catch (error: unknown) {
+    throw new Error(`${file.source}: ${String(error)}`);
+  }
 }
 
 function extraPatterns(
@@ -347,6 +356,30 @@ export function diffDuplicates(before: Census | null, after: Census): string[] {
     .map(([name]) => name);
 }
 
+/**
+ * One `+ duplicate` line per new duplicate: its files that define the name since the previous census apart from
+ * those that did before, by the previous census or, for a name it did not list, by the definitions at its commit.
+ */
+function duplicateLines(
+  before: Census | null,
+  after: Census,
+  newDuplicates: readonly string[],
+  earlier: readonly Definition[],
+): readonly string[] {
+  return Object.entries(after.duplicates)
+    .filter(([name]) => newDuplicates.includes(name))
+    .map(([name, paths]) => {
+      const already = paths.filter(
+        (path) =>
+          before?.duplicates[name]?.includes(path) === true ||
+          earlier.some((item) => item.name === name && item.path === path),
+      );
+      const added = paths.filter((path) => !already.includes(path));
+
+      return `+ duplicate ${name}: new ${added.join(', ')}${already.length === 0 ? '' : `; already ${already.join(', ')}`}`;
+    });
+}
+
 export function diffCensus(before: Census | null, after: Census): PatternDelta[] {
   return Object.entries(after.counts).map(([id, count]) => {
     const previous = before?.hits[id];
@@ -459,13 +492,16 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const { site, recorded, extraFile, env } = inRun(io.env, () => ({ ...readSite(io.cwd), env: gitEnv(io.cwd) }));
   const bundled = join(dirname(fileURLToPath(import.meta.url)), 'patterns.json');
   const before = recorded?.census ?? null;
-  const extra = extraFile === undefined ? null : parsePatternSet(JSON.parse(extraFile.text), extraFile.source);
+  const extra = extraFile === undefined ? null : parsePatternSet(parseNamed(extraFile), extraFile.source);
   // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message
   const set = mergePatternSets(parsePatternSet(readJson(bundled), 'patterns.json'), extra);
   const after = await takeCensus(io.cwd, rev, set, new Date(), env);
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
-  const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
+  const changed =
+    recorded === null ||
+    extraFile?.text !== recorded.patterns ||
+    serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
 
   if (changed) {
     inRun(io.env, () => {
@@ -482,18 +518,6 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     previousSha === null || newDuplicates.length === 0
       ? []
       : await definitionsAt(io.cwd, env, previousSha, set.exclude);
-  const duplicateLines = Object.entries(after.duplicates)
-    .filter(([name]) => newDuplicates.includes(name))
-    .map(([name, paths]) => {
-      const already = paths.filter(
-        (path) =>
-          before?.duplicates[name]?.includes(path) === true ||
-          earlier.some((item) => item.name === name && item.path === path),
-      );
-      const added = paths.filter((path) => !already.includes(path));
-
-      return `+ duplicate ${name}: new ${added.join(', ')}${already.length === 0 ? '' : `; already ${already.join(', ')}`}`;
-    });
   const summary = {
     sha: after.sha,
     previousSha,
@@ -513,7 +537,9 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     newDuplicates,
   };
   const seed = values.seed ? seedList(after) : [];
-  io.out(`${[formatDelta(deltas), ...duplicateLines, ...seed].join('\n')}\n${JSON.stringify(summary)}\n`);
+  io.out(
+    `${[formatDelta(deltas), ...duplicateLines(before, after, newDuplicates, earlier), ...seed].join('\n')}\n${JSON.stringify(summary)}\n`,
+  );
 
   return 0;
 }

@@ -67,11 +67,11 @@ story a test that can fail.
 
 ## Records (layers 2 and 4)
 
-| Class                | Check                                                                                                                                                                                                      |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claim-as-evidence`  | A verification step that runs the check and records its output, so "done" carries evidence. When the repository's workflow framework has a verification gate, use it; otherwise propose one in the report. |
-| `rule-in-prose`      | Move the rule to the check that enforces it, then cut the prose to one line naming the check, or delete it.                                                                                                |
-| `stale-verification` | Not tended here: refreshing a verification skill or feature map is its own job. Close with `--one-off "verification refresh"` once someone has done it.                                                    |
+| Class                | Check                                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claim-as-evidence`  | A verification step that runs the check and records its output, so "done" carries evidence. When the repository's workflow framework has a verification gate, use it; otherwise propose one in the report.          |
+| `rule-in-prose`      | Move the rule to the check that enforces it, then cut the prose to one line naming the check, or delete it.                                                                                                         |
+| `stale-verification` | Not tended here: refreshing a verification skill or feature map is its own job. Once someone has refreshed it, close each weed with `weeds close --id <id> --one-off "verification refresh"`, which needs no claim. |
 
 ## Layer 3 (propose only)
 

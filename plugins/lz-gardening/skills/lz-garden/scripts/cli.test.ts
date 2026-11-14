@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { processIo, runCommand } from './cli.ts';
+import { isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 
 test('a command whose folder cannot be read, as after the folder was deleted, exits 2 naming the error', () => {
@@ -29,4 +29,14 @@ test("the process's own io reads the folder only when the command asks for it", 
   const io = processIo();
 
   assert.throws(() => io.cwd, /uv_cwd/);
+});
+
+test('a process whose argument names no file, as under node -e, runs no script as its main module', (t) => {
+  const argv = process.argv;
+  process.argv = [process.execPath, 'no-such-file'];
+  t.after(() => {
+    process.argv = argv;
+  });
+
+  assert.equal(isMainModule(import.meta.url), false);
 });

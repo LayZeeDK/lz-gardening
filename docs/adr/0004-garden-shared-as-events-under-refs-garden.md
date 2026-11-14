@@ -26,9 +26,9 @@ file order or a logical clock, gives the wrong status for an add made beside a c
 
 ## Consequences
 
-- Something is pushed: the garden's own refs, never the repository's branches. The scripts take no remote, ref or
-  path argument, so a skill's existing rule for them cannot push anything else. `git config lzGardening.share false`
-  keeps a repository's garden local.
+- Something is pushed: the garden's own refs, never the repository's branches. No argument names a remote, a URL or
+  a ref to push: the scripts push only their fixed `refs/garden/*` refs, so a skill's existing rule for them cannot
+  push anything else. `git config lzGardening.share false` keeps a repository's garden local.
 - Nothing on GitHub can protect `refs/garden/*` from deletion; every site holds a full copy, and the next sync of any
   clone puts a deleted ref back. Resetting a garden therefore means deleting it in every site too.
 - A mistaken event is never removed, only answered by a later one, as a close answers an add. Sync depends on it:

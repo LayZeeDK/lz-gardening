@@ -27,8 +27,9 @@ the checkout, write into a **site** instead: a local clone beside the repository
 census is its own commit with no parent, written to `refs/garden/census`. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
 branch beside `garden`) start from the base branch and carry one proposed bed change each. A tended close shares
 its bed on `origin` as `refs/garden/beds/<class>`. A human lands a bed by fetching it into the repository with
-`git fetch origin refs/garden/beds/<class>` (or `git fetch ../<repo>.garden bed/<class>` when its close was never
-shared) and merging it the way the repository lands work.
+`git fetch origin refs/garden/beds/<class>` (or `git fetch ../<repo>.garden bed/<class>` when the bed was not
+shared: its close did not end `synced`, or the sync named the bed on stderr) and merging it the way the repository
+lands work.
 
 The site shares two refs, the garden log and the census: `site.ts open` and `site.ts sync` fetch the repository's
 `origin` `refs/garden/log` and `refs/garden/census` into the site's `refs/garden-shared/`, merge the log with the
@@ -59,10 +60,10 @@ A census is shared only while a branch the checkout fetched from `origin` (`refs
 commit. Otherwise it stays in the site, and `site.ts` says so on stderr; a later sync, once that commit is pushed and
 fetched, shares it.
 
-The garden log's and the census's commits are signed `lz-gardening <>`, with no one's name or address, unless the
-checkout's git config, in any scope, sets both `lzGardening.name` and `lzGardening.email`: then those are the
-author and committer. With only one of the two set, the commits keep `lz-gardening <>`. Bed commits are code for
-review and carry the identity of whoever commits them.
+The garden log's and the census's commits are authored and committed as `lz-gardening <>`, with no one's name or
+address, unless the checkout's git config, in any scope, sets both `lzGardening.name` and `lzGardening.email`: then
+those are the author and committer. With only one of the two set, the commits keep `lz-gardening <>`. Bed commits
+are code for review and carry the identity of whoever commits them.
 
 The queue is as public as the repository: whoever can read `origin` can read every event. So paths in events are
 repository-relative, and `weeds.ts` refuses, with exit 2, an event whose text holds this machine's home folder, the
@@ -102,9 +103,11 @@ of the repository, it uses the one site beside the main checkout:
   `refs/garden/log` and the writer id, and leaves the rest as it is. Then it syncs the garden log once, with no
   wait, which also pushes events a run appended but never shared. It prints JSON with `site`, `created`, `base`,
   `seeded` (whether the queue holds the event a seed pass records, after the sync) and `shared` (the share state,
-  below). It
-  exits 2 when the repository has no `user.name` or `user.email`, so the gardener never commits under a default
-  identity, and when a repository at `../<repo>.garden` has no `garden` branch, writing nothing into it.
+  below). When it creates the site, it exits 2 if the repository has no `user.name` or `user.email`, so the gardener
+  never commits under a default identity. The site keeps the identity it copied: a later change to the repository's
+  `user.name` or `user.email` does not reach bed commits; set it in the site too (`git -C "<site>" config user.email
+  <address>`). It also exits 2 when a repository at `../<repo>.garden` has no `garden` branch, writing nothing into
+  it.
 - `site.ts sync [--census <sha> [--seeded]]` syncs the garden log and census, trying up to five times. With
   `--census`, it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares
   nothing (a `local` or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once. It
