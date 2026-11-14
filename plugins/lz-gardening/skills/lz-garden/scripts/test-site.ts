@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,24 +31,6 @@ export function siteProcess(cwd: string, args: readonly string[], env: NodeJS.Pr
   const result = scriptRun(siteScript, cwd, args, env);
 
   return siteRun(result.status, result.stdout, result.stderr);
-}
-
-export function scriptProcess(
-  script: string,
-  cwd: string,
-  args: readonly string[],
-): Promise<{ readonly status: number | null; readonly stdout: string }> {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    const child = spawn(process.execPath, [script, ...args], { cwd, stdio: ['ignore', 'pipe', 'inherit'] });
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      stdout += chunk;
-    });
-    child.on('error', reject).on('close', (status) => {
-      resolve({ status, stdout });
-    });
-  });
 }
 
 // A repository with one commit on main and its site, planted once per test process and outside every test. A child

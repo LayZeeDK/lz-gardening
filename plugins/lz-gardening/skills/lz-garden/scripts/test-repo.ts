@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -40,6 +40,24 @@ export function scriptRun(
   env: NodeJS.ProcessEnv = process.env,
 ): ScriptRun {
   return spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env });
+}
+
+export function scriptProcess(
+  script: string,
+  cwd: string,
+  args: readonly string[],
+): Promise<{ readonly status: number | null; readonly stdout: string }> {
+  return new Promise((resolve, reject) => {
+    let stdout = '';
+    const child = spawn(process.execPath, [script, ...args], { cwd, stdio: ['ignore', 'pipe', 'inherit'] });
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.on('error', reject).on('close', (status) => {
+      resolve({ status, stdout });
+    });
+  });
 }
 
 export interface CapturingIo {

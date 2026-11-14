@@ -31,8 +31,8 @@ import {
   treeEntries,
 } from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
-import { commit, git, now, repo } from './test-repo.ts';
-import { configEnv, planted, scriptProcess } from './test-site.ts';
+import { commit, git, now, repo, scriptProcess } from './test-repo.ts';
+import { configEnv, planted } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { cli, cliProcess, script } from './test-weeds.ts';
 

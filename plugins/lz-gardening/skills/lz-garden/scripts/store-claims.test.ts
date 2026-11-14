@@ -7,8 +7,8 @@ import { claimLifetimeMs } from './log.ts';
 import { append, openSite } from './store-log.ts';
 import { sync } from './store-sync.ts';
 import { logFiles } from './test-log.ts';
-import { git, now } from './test-repo.ts';
-import { planted, scriptProcess, sharedPair, site } from './test-site.ts';
+import { git, now, scriptProcess } from './test-repo.ts';
+import { planted, sharedPair, site } from './test-site.ts';
 import { addWeed, cli, cliWith as claimWith, script } from './test-weeds.ts';
 
 function liveClaimWriters(gitDir: string, reader = now): readonly unknown[] {
