@@ -9,6 +9,7 @@ import { censusRef, parseCensus, pendingCensusRef, writePendingCensus } from './
 import {
   census,
   censusCli,
+  censusText,
   recordByHand,
   summaryOf,
   takeAndRecord,
@@ -282,11 +283,7 @@ test('a census of a commit the recorded census descends from is behind the garde
 test('a previous census of a commit this checkout lacks reports no previous sha, so the tick reads no range', async (t) => {
   const { dir, garden } = planted(t);
   const unknown = 'f'.repeat(40);
-  recordByHand(
-    garden,
-    unknown,
-    JSON.stringify({ rev: 'main', sha: unknown, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {} }),
-  );
+  recordByHand(garden, unknown, censusText(unknown));
 
   const result = await census(dir, ['--rev', 'HEAD']);
 
@@ -297,12 +294,7 @@ test('a previous census of a commit this checkout lacks reports no previous sha,
 test('malformed patterns carried by the recorded census are refused, naming the census as their source', async (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(
-    { path: garden, checkout: dir },
-    sha,
-    JSON.stringify({ rev: 'main', sha, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {} }),
-    '{"patterns": "x"}\n',
-  );
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha), '{"patterns": "x"}\n');
   git(garden, ['update-ref', censusRef, pendingCensusRef(sha)]);
 
   const result = await census(dir, ['--rev', 'HEAD']);

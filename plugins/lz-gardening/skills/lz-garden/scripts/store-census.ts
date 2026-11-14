@@ -1,6 +1,6 @@
 // The census refs: the census a site holds (refs/garden/census), the census a run took and left pending
 // (refs/garden/pending/<sha>), and which of them, or of origin's, the site keeps.
-import { isRecord } from './log.ts';
+import { isRecord, isStampedTime } from './log.ts';
 import {
   catFileBatch,
   git,
@@ -35,44 +35,55 @@ export interface Census {
 }
 
 export function parseCensus(json: unknown): Census | null {
-  if (!isRecord(json) || !isRecord(json['counts']) || !isRecord(json['hits'])) {
+  if (!isRecord(json)) {
     return null;
   }
 
   const { rev, sha, takenAt } = json;
 
-  if (typeof rev !== 'string' || typeof sha !== 'string' || !objectIdPattern.test(sha) || typeof takenAt !== 'string') {
+  if (
+    typeof rev !== 'string' ||
+    typeof sha !== 'string' ||
+    !objectIdPattern.test(sha) ||
+    typeof takenAt !== 'string' ||
+    !isStampedTime(takenAt)
+  ) {
     return null;
   }
 
-  const counts: Record<string, number> = {};
+  const counts = recordOf(json['counts'], isCount);
+  const hits = recordOf(json['hits'], isStringList);
+  const duplicates = recordOf(json['duplicates'], isStringList);
 
-  for (const [id, count] of Object.entries(json['counts'])) {
-    if (typeof count === 'number') {
-      counts[id] = count;
-    }
+  if (
+    counts === null ||
+    hits === null ||
+    duplicates === null ||
+    !Object.keys(counts).every((id) => Object.hasOwn(hits, id))
+  ) {
+    return null;
   }
 
-  return {
-    rev,
-    sha,
-    takenAt,
-    counts,
-    hits: stringLists(json['hits']),
-    duplicates: stringLists(json['duplicates']),
-  };
+  return { rev, sha, takenAt, counts, hits, duplicates };
 }
 
-function stringLists(value: unknown): Readonly<Record<string, readonly string[]>> {
+// The record when every value passes the check, else null: a census with one malformed entry is not a census.
+function recordOf<T>(value: unknown, isT: (entry: unknown) => entry is T): Readonly<Record<string, T>> | null {
   if (!isRecord(value)) {
-    return {};
+    return null;
   }
 
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([key, list]) =>
-      Array.isArray(list) ? [[key, list.filter((item): item is string => typeof item === 'string')] as const] : [],
-    ),
-  );
+  const entries = Object.entries(value).flatMap(([key, entry]) => (isT(entry) ? [[key, entry] as const] : []));
+
+  return entries.length === Object.keys(value).length ? Object.fromEntries(entries) : null;
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isStringList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
 export interface StoredCensus {

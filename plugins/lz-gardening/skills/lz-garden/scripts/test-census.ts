@@ -69,6 +69,21 @@ export function censusOf(
   };
 }
 
+/** A census.json text of a commit with no hits, as census.ts writes it; extra replaces its fields. */
+export function censusText(sha: string, extra: Readonly<Record<string, unknown>> = {}): string {
+  const census = {
+    rev: 'main',
+    sha,
+    takenAt: '2026-11-13T00:00:00.000Z',
+    counts: {},
+    hits: {},
+    duplicates: {},
+    ...extra,
+  };
+
+  return `${JSON.stringify(census, null, 2)}\n`;
+}
+
 export function summaryOf(stdout: string): ReadonlyMap<string, unknown> {
   const parsed: unknown = JSON.parse(stdout.trim().split('\n').at(-1) ?? '');
 

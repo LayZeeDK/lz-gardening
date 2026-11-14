@@ -11,6 +11,7 @@ import { logRef, openSite } from './store-log.ts';
 import { censusRef, writePendingCensus } from './store-census.ts';
 import { mergeShared, rejected, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
+import { censusText } from './test-census.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
 import { bareRemote, planted, scriptProcess, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
@@ -587,11 +588,7 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   assert.equal(closed.code, 0, closed.stderr);
   git(second.dir, ['config', 'lzGardening.share', 'true']);
   const base = git(second.dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(
-    { path: second.garden, checkout: second.dir },
-    base,
-    `${JSON.stringify({ rev: 'main', sha: base, takenAt: '', counts: {}, hits: {} })}\n`,
-  );
+  writePendingCensus({ path: second.garden, checkout: second.dir }, base, censusText(base));
   const spawned = t.mock.method(childProcess, 'spawnSync');
   syncBuiltinESMExports();
   t.after(() => {
@@ -757,11 +754,7 @@ test('syncs of one site at once that each adopt the shared census all exit 0', a
 test('syncs of one site at once that each record the same pending census all exit 0', async (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(
-    { path: garden, checkout: dir },
-    sha,
-    JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }),
-  );
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
   const pending = git(garden, ['rev-parse', `refs/garden/pending/${sha}`]);
 
   const runs = await Promise.all(Array.from({ length: 4 }, () => syncProcess(dir, ['--census', sha])));

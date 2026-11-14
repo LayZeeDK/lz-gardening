@@ -461,7 +461,7 @@ export function eventPath(uuid: string): string {
   return `events/${uuid.slice(0, 2)}/${uuid}.json`;
 }
 
-function isStampedTime(text: string): boolean {
+export function isStampedTime(text: string): boolean {
   const time = Date.parse(text);
 
   return /^\d{4}-/.test(text) && !Number.isNaN(time) && new Date(time).toISOString() === text;

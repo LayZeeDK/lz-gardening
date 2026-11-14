@@ -6,25 +6,12 @@ import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { openSite } from './store-log.ts';
-import { censusRef, pendingCensusRef, readCensusAt, writePendingCensus } from './store-census.ts';
+import { censusRef, parseCensus, pendingCensusRef, readCensusAt, writePendingCensus } from './store-census.ts';
 import type { StoredCensus } from './store-census.ts';
 import { sync } from './store-sync.ts';
+import { censusText } from './test-census.ts';
 import { commit, git } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
-
-function censusText(sha: string, extra: Readonly<Record<string, unknown>> = {}): string {
-  const census = {
-    rev: 'main',
-    sha,
-    takenAt: '2026-11-13T00:00:00.000Z',
-    counts: {},
-    hits: {},
-    duplicates: {},
-    ...extra,
-  };
-
-  return `${JSON.stringify(census, null, 2)}\n`;
-}
 
 function storedAt(garden: string, ref: string): StoredCensus {
   const read = readCensusAt(garden, ref);
@@ -91,6 +78,32 @@ test('a census ref whose census.json is not JSON reads as not a census', (t) => 
   writePendingCensus({ path: garden, checkout: dir }, sha, 'not json\n');
 
   assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
+});
+
+test('each malformed part of a census reads as not a census', () => {
+  const good = {
+    rev: 'main',
+    sha: 'a'.repeat(40),
+    takenAt: '2026-11-13T00:00:00.000Z',
+    counts: { a: 1 },
+    hits: { a: ['x.ts:1: a'] },
+    duplicates: {},
+  };
+  const malformed: readonly Readonly<Record<string, unknown>>[] = [
+    { counts: { a: 'many' } },
+    { counts: { a: -1 } },
+    { counts: { a: 1.5 } },
+    { hits: { a: ['x.ts:1: a', 7] } },
+    { hits: {} },
+    { takenAt: 'yesterday' },
+    { duplicates: 'none' },
+  ];
+
+  assert.notEqual(parseCensus(good), null);
+  assert.deepEqual(
+    malformed.map((part) => parseCensus({ ...good, ...part })),
+    malformed.map(() => null),
+  );
 });
 
 test('a census whose sha is a revision expression rather than a commit id reads as not a census', (t) => {
