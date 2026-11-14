@@ -224,7 +224,7 @@ interface SyncSummary {
   readonly conflicts: readonly string[] | undefined;
 }
 
-function openOrPlant(top: string, site: string, requested: string | undefined): Opened {
+function checkedBase(top: string, site: string, requested: string | undefined): string {
   const base = resolveBase(baseFacts(top, site, requested));
 
   if (!shellSafeRef.test(base)) {
@@ -234,6 +234,12 @@ function openOrPlant(top: string, site: string, requested: string | undefined): 
   if (!gitSucceeds(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`], { readsOnly: true })) {
     throw new Error(`the base ${base} names no branch or commit in the repository; pass --base <branch>`);
   }
+
+  return base;
+}
+
+function openOrPlant(top: string, site: string, requested: string | undefined): Opened {
+  const base = checkedBase(top, site, requested);
 
   if (!existsSync(join(site, '.git'))) {
     plant(top, site);
@@ -543,7 +549,9 @@ function main(argv: readonly string[], io: Io): number {
       const shared = sync(withWriter({ checkout: top, path: site }), { attempts: syncTries.quick });
       reportSync(io, shared);
       const seeded = replay(readLog({ path: site }).events, new Date()).seeded;
-      summary = { ...opened, seeded, shared: shared.state, reason: printableReason(shared) };
+      // Without --base, the base can come from the census this sync just fetched.
+      const base = parsed.base === undefined ? checkedBase(top, site, undefined) : opened.base;
+      summary = { ...opened, base, seeded, shared: shared.state, reason: printableReason(shared) };
       break;
     }
     case 'sync': {

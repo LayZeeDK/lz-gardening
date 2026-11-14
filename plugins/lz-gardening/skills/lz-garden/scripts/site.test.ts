@@ -152,6 +152,20 @@ test('open without a base reports the base the last census recorded', (t) => {
   assert.equal(result.summary.get('base'), 'release');
 });
 
+test('open without a base reports the base of the census its sync just fetched from origin', (t) => {
+  const { first, second } = sharedPair(t);
+  git(first.dir, ['branch', 'release']);
+  git(first.dir, ['push', '-q', 'origin', 'release']);
+  writeCensus(first.garden, git(first.dir, ['rev-parse', 'release']), 'release');
+  assert.equal(site(first.dir, ['sync']).summary.get('shared'), 'synced');
+  git(second.dir, ['fetch', '-q', 'origin']);
+
+  const result = site(second.dir, ['open']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.summary.get('base'), 'origin/release');
+});
+
 test('open plants the garden log, holding only its format file', (t) => {
   const { garden } = planted(t);
 
