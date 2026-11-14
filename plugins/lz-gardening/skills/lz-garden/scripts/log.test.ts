@@ -13,6 +13,7 @@ import {
   planClose,
   planRelease,
   releasesOfClaim,
+  releasesOfLostClaims,
   replay,
   stamp,
   weedId,
@@ -536,6 +537,16 @@ test('the releases of a planned claim name each claim of its writer, class and u
   const planned = { op: 'claim', class: 'any-type', writer: 'writer-a', holder: 'Ada', until: later } as const;
 
   assert.deepEqual(releasesOfClaim(events, planned), [{ op: 'release', class: 'any-type', claim: 'c1' }]);
+});
+
+test('a lost claim the events already release is not released again, so a second give-back writes nothing', () => {
+  const owner = claim('cb', 1, 'writer-b');
+  const lost = [{ claim: claim('ca', 2, 'writer-a'), owner }];
+
+  assert.deepEqual(
+    [releasesOfLostClaims([owner], lost), releasesOfLostClaims([owner, release('ra', 3, 'ca')], lost)],
+    [[{ op: 'release', class: 'any-type', claim: 'ca' }], []],
+  );
 });
 
 test('a release by a writer that holds no claim of the class writes nothing and says so', () => {
