@@ -40,7 +40,7 @@ function readBedLog(log: string): { readonly commits: readonly string[]; readonl
   const commits: string[] = [];
   const added: string[] = [];
   let inMessage = false;
-  let parents = 1;
+  let parents: number;
   let left = 0;
 
   log.split('\n').forEach((line) => {
