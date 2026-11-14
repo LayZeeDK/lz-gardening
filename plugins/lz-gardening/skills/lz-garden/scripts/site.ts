@@ -257,16 +257,22 @@ function openOrPlant(top: string, site: string, requested: string | undefined): 
 }
 
 const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
-  ['pnpm-lock.yaml', (bed) => `pnpm -C "${bed}" install --frozen-lockfile`],
-  ['yarn.lock', (bed) => `yarn --cwd "${bed}" install --frozen-lockfile`],
-  ['package-lock.json', (bed) => `npm --prefix "${bed}" ci`],
+  ['pnpm-lock.yaml', (bed) => `pnpm -C ${bed} install --frozen-lockfile`],
+  ['yarn.lock', (bed) => `yarn --cwd ${bed} install --frozen-lockfile`],
+  ['package-lock.json', (bed) => `npm --prefix ${bed} ci`],
 ];
 const lockfiles = installs.map(([lockfile]) => lockfile);
 
+// The skills run the command through a POSIX shell, which takes text in single quotes literally.
+function shellQuoted(text: string): string {
+  return `'${text.replaceAll("'", "'\\''")}'`;
+}
+
 function installCommand(bed: string): string {
   const found = installs.find(([lockfile]) => existsSync(join(bed, lockfile)));
+  const quoted = shellQuoted(bed);
 
-  return found === undefined ? `npm --prefix "${bed}" install` : found[1](bed);
+  return found === undefined ? `npm --prefix ${quoted} install` : found[1](quoted);
 }
 
 // The bed's lockfile comes from the base, so only a plain file is read: a link can name any file, a FIFO hangs.

@@ -217,8 +217,9 @@ is not valid JSON (the message names the file).
   while a lockfile still has the same bytes as the checkout's; when the merged base changed it, `bed` removes the link
   (never the checkout's folder) and reports `install`.
 - `install`: run the command `bed` prints as `install`. It installs with the package manager of the bed's lockfile,
-  pointed at the bed: `npm --prefix "<bed>" ci`, `pnpm -C "<bed>" install --frozen-lockfile` or
-  `yarn --cwd "<bed>" install --frozen-lockfile`; with no lockfile, `npm --prefix "<bed>" install`. Yarn 1 refuses to
+  pointed at the bed: `npm --prefix '<bed>' ci`, `pnpm -C '<bed>' install --frozen-lockfile` or
+  `yarn --cwd '<bed>' install --frozen-lockfile`; with no lockfile, `npm --prefix '<bed>' install`. The bed path is in
+  single quotes, with each `'` in it written `'\''`, so a POSIX shell expands nothing in it. Yarn 1 refuses to
   change the lockfile only under `--frozen-lockfile`, and Yarn 4 still takes that flag, with a deprecation notice.
 - `installed`: the bed already has its own install, a `node_modules` folder or the `.pnp.cjs` file of a Yarn Plug'n'Play
   install.

@@ -3,17 +3,19 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { writeToLogByHand } from './test-log.ts';
-import { commit, git, repo } from './test-repo.ts';
+import { commit, git, init, repo } from './test-repo.ts';
 import { logRef } from './store-log.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 import { cli } from './test-weeds.ts';
@@ -532,7 +534,7 @@ test('bed on an existing bed that was never installed names the install command 
 
   assert.equal(again.status, 0, again.stderr);
   assert.equal(again.summary.get('created'), false);
-  assert.equal(again.summary.get('install'), `npm --prefix "${bedOf(again.summary)}" ci`);
+  assert.equal(again.summary.get('install'), `npm --prefix '${bedOf(again.summary)}' ci`);
 });
 
 test('bed asks for an install, and links nothing, when the bed lockfile is a link to the checkout lockfile', (t) => {
@@ -623,7 +625,25 @@ test('bed names the npm command that installs the bed from its npm lockfile', (t
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.summary.get('deps'), 'install');
-  assert.equal(result.summary.get('install'), `npm --prefix "${bedOf(result.summary)}" ci`);
+  assert.equal(result.summary.get('install'), `npm --prefix '${bedOf(result.summary)}' ci`);
+});
+
+test('bed quotes the bed path in the install command so a shell expands nothing in it', (t) => {
+  const parent = mkdtempSync(join(tmpdir(), 'garden-'));
+  t.after(() => {
+    rmSync(parent, { recursive: true, force: true });
+  });
+  const dir = join(parent, "it's $HOME `x`");
+  init(dir);
+  commit(dir, { 'package.json': '{ "name": "x" }\n', 'package-lock.json': 'lockfileVersion: 3\n' });
+  assert.equal(site(dir, ['open', '--base', 'main']).status, 0);
+  claimAnyType(dir);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  const bed = bedOf(result.summary);
+  assert.equal(result.summary.get('install'), `npm --prefix '${bed.replaceAll("'", "'\\''")}' ci`);
 });
 
 test('bed names the pnpm command that installs the bed from its pnpm lockfile', (t) => {
@@ -633,7 +653,7 @@ test('bed names the pnpm command that installs the bed from its pnpm lockfile', 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.summary.get('install'), `pnpm -C "${bedOf(result.summary)}" install --frozen-lockfile`);
+  assert.equal(result.summary.get('install'), `pnpm -C '${bedOf(result.summary)}' install --frozen-lockfile`);
 });
 
 test('bed names the yarn command that installs the bed from its yarn lockfile with the flag Yarn 1 honours too', (t) => {
@@ -643,7 +663,7 @@ test('bed names the yarn command that installs the bed from its yarn lockfile wi
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.summary.get('install'), `yarn --cwd "${bedOf(result.summary)}" install --frozen-lockfile`);
+  assert.equal(result.summary.get('install'), `yarn --cwd '${bedOf(result.summary)}' install --frozen-lockfile`);
 });
 
 test('bed asks for an install, and links nothing, when package.json declares workspaces', (t) => {
@@ -717,7 +737,7 @@ test('bed names npm install, not npm ci, for a bed without a lockfile', (t) => {
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.summary.get('install'), `npm --prefix "${bedOf(result.summary)}" install`);
+  assert.equal(result.summary.get('install'), `npm --prefix '${bedOf(result.summary)}' install`);
 });
 
 test('bed refuses a base that git would read as an option and runs nothing it names', (t) => {
