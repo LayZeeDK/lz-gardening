@@ -141,21 +141,20 @@ export function pushBeds(
 
     if (shared === undefined) {
       return leavingPaths.has(eventPath(close.uuid)) || tipOf(unpushedBeds, bed.weedClass) === bed.tip
-        ? [{ ...bed, descends: true }]
+        ? [{ ...bed, why: bedStaysLocal(site, bed.tip, shared) }]
         : [];
     }
 
-    return [{ ...bed, descends: isAncestor(site.path, shared, bed.tip) }];
-  });
-  const kept = judged.flatMap((bed) => {
-    const why = bed.descends
-      ? bedStaysLocal(site, bed.tip, tipOf(sharedBeds, bed.weedClass))
+    const why = isAncestor(site.path, shared, bed.tip)
+      ? bedStaysLocal(site, bed.tip, shared)
       : `does not descend from origin's bed`;
 
-    return why === undefined ? [] : [{ ...bed, why }];
+    return [{ ...bed, why }];
   });
-  const pushing = judged.filter((bed) => !kept.some(({ weedClass }) => weedClass === bed.weedClass));
-  const diverged = kept.map(({ weedClass, why }) => `${weedClass}: bed/${weedClass} ${why}`);
+  const pushing = judged.filter(({ why }) => why === undefined);
+  const diverged = judged.flatMap(({ weedClass, why }) =>
+    why === undefined ? [] : [`${weedClass}: bed/${weedClass} ${why}`],
+  );
 
   if (pushing.length === 0) {
     return diverged;
