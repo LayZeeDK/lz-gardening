@@ -62,19 +62,34 @@ function diffTree(site: string, shared: string, local: string): readonly Change[
   });
 }
 
-export type ShareState = 'local' | 'synced' | 'offline' | 'read-only' | 'behind';
-
-export interface SyncResult {
-  readonly state: ShareState;
-  readonly reason?: string;
+interface Outcome {
   readonly pushedEvents: number;
   readonly conflicts: readonly string[];
   readonly skipped: readonly string[];
-  readonly sharedCensusIgnored?: boolean;
   readonly yielded: readonly LostClaim[];
   readonly divergedBeds: readonly string[];
+}
+
+// Only a sync that merged origin's log settled the census.
+interface BeforeMerge extends Outcome {
+  readonly sharedCensusIgnored?: undefined;
+  readonly censusKeptLocal?: undefined;
+}
+
+interface AfterMerge extends Outcome {
+  readonly sharedCensusIgnored?: boolean;
   readonly censusKeptLocal?: string;
 }
+
+// git's reason comes with every offline and read-only result, and with a behind one lost to a ref lock.
+export type SyncResult =
+  | (BeforeMerge & { readonly state: 'local'; readonly reason?: undefined })
+  | (BeforeMerge & { readonly state: 'behind'; readonly reason?: string })
+  | (BeforeMerge & { readonly state: 'offline'; readonly reason: string })
+  | (AfterMerge & { readonly state: 'read-only'; readonly reason: string })
+  | (AfterMerge & { readonly state: 'synced'; readonly reason?: undefined });
+
+export type ShareState = SyncResult['state'];
 
 export interface SyncOptions {
   readonly attempts: number;
