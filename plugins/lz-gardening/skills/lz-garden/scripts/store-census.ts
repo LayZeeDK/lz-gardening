@@ -4,6 +4,7 @@ import { isRecord, isStampedTime } from './log.ts';
 import {
   catFileBatch,
   git,
+  gitFailed,
   gitSucceeds,
   isKnownAncestor,
   objectIdPattern,
@@ -240,7 +241,7 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
   const now = optionalGit(site, ['rev-parse', '--verify', '--quiet', censusRef], { readsOnly: true });
 
   if (now === from) {
-    throw new Error(`git ${args.join(' ')}: ${moved.stderr.trim()}`);
+    throw gitFailed(args, moved.stderr);
   }
 
   return now === to;
