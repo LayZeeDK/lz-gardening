@@ -410,6 +410,11 @@ function parseFlags(argv: readonly string[]) {
 
 type Flags = ReturnType<typeof parseFlags>['values'];
 
+// Number() also reads hex, exponents and padding; a flag that is not plain digits reads as NaN, which no check takes.
+function wholeNumber(text: string): number {
+  return /^\d+$/.test(text) ? Number(text) : Number.NaN;
+}
+
 function writeLine(io: Io, line: string): void {
   io.out(`${line}\n`);
 }
@@ -421,7 +426,7 @@ function add(io: Io, flags: Flags, now: Date): number {
     where: flags.where,
     source: flags.source,
     note: flags.note,
-    layer: flags.layer === undefined ? null : Number(flags.layer),
+    layer: flags.layer === undefined ? null : wholeNumber(flags.layer),
   };
   const problem =
     flags.census === undefined || objectIdPattern.test(flags.census)
@@ -562,7 +567,7 @@ function groups(io: Io, flags: Flags, now: Date): number {
   }
 
   const minText = flags.min ?? '1';
-  const min = Number(minText);
+  const min = wholeNumber(minText);
 
   if (!Number.isInteger(min) || min < 1) {
     io.err(`weeds groups: --min must be a whole number of at least 1, got ${minText}\n`);

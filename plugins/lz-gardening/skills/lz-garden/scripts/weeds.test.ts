@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, parse, sep } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
@@ -136,6 +136,26 @@ test('validation refuses an absolute --where, so no machine path reaches the sha
       '\\\\server\\share\\a.ts',
     ].map((where) => validateAdd(input({ where }))),
     Array.from({ length: 4 }, () => '--where must be a repository-relative path'),
+  );
+});
+
+test('add refuses a layer written other than as plain digits, as hex or with spaces', () => {
+  const results = ['0x3', ' 2 '].map((layer) =>
+    cli(tmpdir(), ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x', '--layer', layer]),
+  );
+
+  assert.deepEqual(
+    results.map((result) => [result.code, result.stderr]),
+    Array.from({ length: 2 }, () => [2, 'weeds add: --layer must be an integer from 1 to 6\n']),
+  );
+});
+
+test('groups refuses a --min written other than as plain digits, as an exponent', () => {
+  const result = cli(tmpdir(), ['groups', '--min', '1e0']);
+
+  assert.deepEqual(
+    [result.code, result.stderr],
+    [2, 'weeds groups: --min must be a whole number of at least 1, got 1e0\n'],
   );
 });
 
