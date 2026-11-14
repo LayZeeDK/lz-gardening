@@ -53,11 +53,12 @@ or an earlier sync set out to push that commit and did not see it land. The sync
 log and marks each one it will push until it sees that bed land, so a sync that ends after its log lands (a push that
 timed out, a process stopped) leaves the bed to the next sync. A bed that does not descend from `origin`'s is named on
 stderr and left in the site. So is a bed `origin` refuses or whose push fails, with git's reason (`timed out` for a push
-that took longer than a minute), and the next sync pushes it again. The only commits a bed may bring `origin` are its own, made in the site: a
-bed that would bring any commit the checkout holds (a base on an unpushed branch, a tag, a detached commit or another
-remote's branch) stays in the site and is named too. So is a bed whose commits add a line, or hold a message, with this
-machine's home folder, the checkout's path or the site's path in it, spelled as the event check below reads them; merges
-and files git reads as binary count. A bed ref deleted on `origin` after its close was shared stays deleted.
+that took longer than a minute), and the next sync pushes it again. The only commits a bed may bring `origin` are its
+own, made in the site: a bed that would bring any commit the checkout holds (a base on an unpushed branch, a tag, a
+detached commit or another remote's branch) stays in the site and is named too. So is a bed whose commits add a line,
+or hold a message, with this machine's home folder, the checkout's path or the site's path in it, spelled as the event
+check below reads them; merges and files git reads as binary count. A bed ref deleted on `origin` after its close was
+shared stays deleted.
 
 A census is shared only while a branch the checkout fetched from `origin` (`refs/remotes/origin/*`) holds its base
 commit. Otherwise it stays in the site, and `site.ts` says so on stderr; a later sync, once that commit is pushed and
@@ -84,9 +85,16 @@ needs no credentials of its own and keeps no copy of the token.
 Claims decide who tends a class. A sync that shares a claim of this writer's checks it against `origin`'s log: when
 another writer's claim of the class came first, it gives the claim back with a release, pushed in the same sync; a
 `site.ts` command's sync (`open`, `sync` or `bed`) names the class and the holder on stderr, and a `weeds.ts`
-command's sync gives the claim back without a word. `weeds.ts close-class` and `site.ts bed` share one precondition: each syncs first and acts only when that sync is
-`synced` or `local` and this writer then holds a live claim of the class; otherwise each exits 1 and changes nothing.
-`close --id` needs no claim, and exits 1, closing nothing, while another writer holds a claim of the weed's class.
+command's sync gives the claim back without a word. `weeds.ts close-class` and `site.ts bed` share one precondition:
+each syncs first and acts only when that sync is `synced` or `local` and this writer then holds a live claim of the
+class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
+another writer holds a claim of the weed's class; when its first sync is not `synced` or `local`, it closes and says
+`planned <state>` on stderr.
+
+A claim's `until` is six hours after its writer's clock. A reader counts the claim live while `until` is ahead of its
+own clock by at most seven hours, which allows one hour of clock skew between machines. A claim from a writer whose
+clock runs more than an hour ahead of a reader's holds nothing for that reader, so that writer holds its claims only
+in its own replay.
 
 The census is decided by the ancestry of its base commit, read in the checkout. A sync takes the shared census over the
 site's unless the site's census is of a commit that descends from the shared one's; a shared census that is not a census
@@ -109,12 +117,11 @@ repository, it uses the one site beside the main checkout:
   and leaves the rest as it is. Then it syncs the garden log once, with no wait, which also pushes events a run appended
   but never shared. It prints JSON with `site`, `created`, `base`, `seeded` (whether the queue holds the event a seed
   pass records, after the sync) and `shared` (the share state, below), plus `reason` (git's message) when there is
-  one. When it creates the site, it exits 2 if the
-  repository has no `user.name` or `user.email`, so the gardener never commits under a default identity. The site keeps
-  the identity it copied: a later change to the repository's `user.name` or `user.email` does not reach bed commits; set
-  it in the site too (`git -C "<site>" config user.email
-  <address>`). It also exits 2 when a repository at `../<repo>.garden` has no `garden` branch, writing nothing into
-  it.
+  one. When it creates the site, it exits 2 if the repository has no `user.name` or `user.email`, so the gardener
+  never commits under a default identity. The site keeps the identity it copied: a later change to the repository's
+  `user.name` or `user.email` does not reach bed commits; set it in the site too
+  (`git -C "<site>" config user.email <address>`). It also exits 2 when a repository at `../<repo>.garden` has no
+  `garden` branch, writing nothing into it.
 - `site.ts sync [--census <sha> [--seeded]]` syncs the garden log and census, trying up to five times. With `--census`,
   it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares nothing (a `local`
   or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once. It prints JSON with
@@ -152,13 +159,17 @@ the next census at a new commit, which carries the new patterns. A `refs/garden/
 with exit 2, naming the command that deletes it. `weeds.ts`, run from the repository's checkout, finds the site beside
 it and appends events to `refs/garden/log` with git plumbing only: a commit per command, moved onto the ref only if no
 other run moved it first, so two runs on one machine both land. An entry in the log it cannot read (an event file that
-does not parse or whose text holds a line break or control character, an event the scripts would not write, an object
-the site lacks, a submodule entry) is skipped and named on stderr. The scripts would not write an add whose id is not
-the weed id of its class, where and source, or whose layer is not 1 to 6, whose where is blank or whose source names
-no kind; a close that names no weed, names something other than a weed id, or gives a blank reason or check; a claim that ends more than six hours after
-it was taken; a release that names no event; or a seed of anything but a full commit id. A close ends only the weeds
-of its own class. A `garden.json` in a newer format stops it with exit 2 (update lz-gardening); one that is
-missing, is not JSON or names no format stops it with exit 2, naming the file.
+is not JSON, an event the scripts would not write, an object the site lacks, a submodule entry) is skipped and named on
+stderr with the reason. Among the events the scripts would not write: one with no `uuid`, `clock` or `at`, or whose
+`uuid` is not its file name; one of an unknown `op`, of a class that is not a kebab-case class id, or with a line break
+or control character in a field the scripts print; an add whose id is not the weed id of its class, `where` and
+source, whose layer is not 1 to 6, whose `where` is blank or whose source names no kind; a close whose `ids` list is
+empty or holds something other than a weed id, whose `by` or check is blank, or a tended close whose `by` names no
+`bed/<class>@<commit>` of its own class; a claim whose `until` is not a date or ends more than six hours after it was
+taken; a release whose `claim` is not a UUID; and a seed of anything but a full commit id. The first fault an event
+has is the reason named. A close ends only the weeds of its own class. A `garden.json` in a newer format stops it with
+exit 2 (update lz-gardening); one that is missing, is not JSON or names no format stops it with exit 2, naming the
+file.
 
 ## The base branch
 
@@ -215,9 +226,9 @@ is not valid JSON (the message names the file).
   checkout has a `node_modules`; the bed's `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` is a plain file, not a
   link, with the same bytes as the checkout's; and the bed is not a workspace, so its `package.json`, a plain file and
   not a link, declares no `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a
-  linked `node_modules` to the repository's checkout, so the bed would test the other checkout's code. On a bed that exists, the link stays only
-  while a lockfile still has the same bytes as the checkout's; when the merged base changed it, `bed` removes the link
-  (never the checkout's folder) and reports `install`.
+  linked `node_modules` to the repository's checkout, so the bed would test the other checkout's code. On a bed that
+  exists, the link stays only while a lockfile still has the same bytes as the checkout's; when the merged base
+  changed it, `bed` removes the link (never the checkout's folder) and reports `install`.
 - `install`: run the command `bed` prints as `install`. It installs with the package manager of the bed's lockfile,
   pointed at the bed: `npm --prefix '<bed>' ci`, `pnpm -C '<bed>' install --frozen-lockfile` or
   `yarn --cwd '<bed>' install --frozen-lockfile`; with no lockfile, `npm --prefix '<bed>' install`. The bed path is in

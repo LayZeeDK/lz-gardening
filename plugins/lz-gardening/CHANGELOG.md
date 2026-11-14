@@ -26,8 +26,9 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     `.js`, `.jsx`, `.mjs`, `.cjs`).
   - Share: the queue (`refs/garden/log`) and the census (`refs/garden/census`) are shared through the repository's
     `origin`. No ref outside `refs/garden/` is pushed. `git config lzGardening.share false` keeps the garden local.
-    An event in the queue that the scripts would not write, such as an add whose id does not match its class, place
-    and source, is skipped and named on stderr, and a close ends only the weeds of its own class.
+    An event in the queue that the scripts would not write, such as an add whose id does not match its class,
+    `where` (line included) and source, is skipped and named on stderr, and a close ends only the weeds of its own
+    class.
   - Privacy: events take repository-relative paths only, and an event that holds this machine's paths is refused. A
     bed that holds them, or that would bring `origin` a commit other than its own, stays in the site, as does a
     census of a commit no branch on `origin` holds. Each census carries the site's `.garden/patterns.json` as it
@@ -40,14 +41,14 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   - Claim: claims its class first, so no other clone tends it at the same time. A claim lasts six hours, and the
     earliest live claim on `origin` wins. A claim that would end more than six hours after it was taken, or more
     than seven hours after the reader's clock, holds nothing. A claim names its holder by `lzGardening.name`, else by
-    `writer` and the
-    first 8 characters of the site's random writer id, never by `user.name`.
+    `writer` and the first 8 characters of the site's random writer id, never by `user.name`.
   - Bed: works in a bed, a worktree of the site on branch `bed/<class>`, with the checkout's Node.js dependencies
     linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). A class tended again before its bed
     lands is tended in the same bed.
   - Close: closes the class as tended, one-off or kept. A tended close names the bed and where its check lives, and
     shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a bed a sync did not see
-    land (a failed or timed-out push, or a sync stopped once its log landed) is pushed again by the next sync. Bed commits carry the identity of whoever commits them.
+    land (a failed or timed-out push, or a sync stopped once its log landed) is pushed again by the next sync. Bed
+    commits carry the identity of whoever commits them.
   - Permissions: carries its own rules for reading the `lz-tend` skill and the `lz-garden` references and for running
     the site and weeds scripts, and asks you to add the site as a working directory.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the

@@ -36,8 +36,8 @@ keep.
   a log whose commit already contains the other's, or that holds every event file of the other, has nothing to
   merge. Removing an event would let the next sync drop it silently.
 - Any clone can write an event and none can remove one, so readers keep the writers' rules: an event the scripts
-  would not write (an add whose id is not its weed id, a close of no weed, a blank reason or check, a layer outside 1
-  to 6, and the rest site.md lists) is skipped and named, and a close ends only the weeds of its own class. Each write
+  would not write (an add whose id is not its weed id, a close whose `ids` list is empty, a blank reason or check, a
+  layer outside 1 to 6, and the rest site.md lists) is skipped and named, and a close ends only the weeds of its own class. Each write
   is read back through the same parser first, so a writer never shares an event every reader skips.
 - An event file that holds different content in two copies keeps the remote's content, and sync names it. A file in
   the remote's log that is neither `garden.json` nor an event file is named and left out of the merge, so the next
