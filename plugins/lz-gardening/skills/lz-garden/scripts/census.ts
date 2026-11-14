@@ -314,7 +314,7 @@ export function diffDuplicates(before: Census | null, after: Census): readonly s
   }
 
   return Object.entries(after.duplicates)
-    .filter(([name, paths]) => paths.some((path) => before.duplicates[name]?.includes(path) !== true))
+    .filter(([name, paths]) => paths.some((path) => ownEntry(before.duplicates, name)?.includes(path) !== true))
     .map(([name]) => name);
 }
 
@@ -333,7 +333,7 @@ function duplicateLines(
     .map(([name, paths]) => {
       const already = paths.filter(
         (path) =>
-          before?.duplicates[name]?.includes(path) === true ||
+          ownEntry(before?.duplicates, name)?.includes(path) === true ||
           earlier.some((item) => item.name === name && item.path === path),
       );
       const added = paths.filter((path) => !already.includes(path));
@@ -342,9 +342,14 @@ function duplicateLines(
     });
 }
 
+// A census's keys are pattern ids and function names, which may name a method every object inherits (toString).
+function ownEntry<T>(record: Readonly<Record<string, T>> | undefined, key: string): T | undefined {
+  return record !== undefined && Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 export function diffCensus(before: Census | null, after: Census): readonly PatternDelta[] {
   return Object.entries(after.counts).map(([id, count]) => {
-    const previous = before?.hits[id];
+    const previous = ownEntry(before?.hits, id);
     const seen = new Map<string, number>();
 
     // Stryker disable next-line ArrayDeclaration: with no previous hits, added is replaced by [] below
@@ -353,7 +358,7 @@ export function diffCensus(before: Census | null, after: Census): readonly Patte
       seen.set(key, (seen.get(key) ?? 0) + 1);
     }
 
-    const added = (after.hits[id] ?? []).filter((hit) => {
+    const added = (ownEntry(after.hits, id) ?? []).filter((hit) => {
       const key = hitKey(hit);
       // Stryker disable next-line LzJsNumericLiteral: an unseen key fails left > 0 at -1 as at 0
       const left = seen.get(key) ?? 0;
@@ -369,7 +374,7 @@ export function diffCensus(before: Census | null, after: Census): readonly Patte
 
     return {
       id,
-      before: before?.counts[id] ?? null,
+      before: ownEntry(before?.counts, id) ?? null,
       after: count,
       added: previous === undefined ? [] : added,
     };

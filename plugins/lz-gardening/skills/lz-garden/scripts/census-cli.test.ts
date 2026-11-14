@@ -409,6 +409,19 @@ test('a new hit holding a terminal control character prints it escaped', async (
   assert.ok(second.stdout.split('\n').includes('+ [todo-marker] src/t.ts:1: // TODO \\u{1b}[31mred'), second.stdout);
 });
 
+test('a function named after a method every object has prints as a new duplicate', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/a.ts': 'const a = 1;\n' });
+  await takeAndRecord(dir);
+  const body = 'export function toString() {\n  return "";\n}\n';
+  commit(dir, { 'src/a.ts': body, 'src/b.ts': body });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.ok(second.stdout.split('\n').includes('+ duplicate toString: new src/a.ts, src/b.ts'), second.stdout);
+});
+
 test('the table shows each count and its change in fixed columns, then the new hits, and the summary counts them', async (t) => {
   const { dir } = planted(t);
   commit(dir, { 'src/a.ts': '// eslint-disable\n// eslint-disable\n', 'src/t.ts': '// TODO one\n' });

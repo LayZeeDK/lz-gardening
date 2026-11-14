@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { diffCensus, mergePatternSets, parseGrep, parsePatternSet, takeCensus } from './census.ts';
+import { diffCensus, diffDuplicates, mergePatternSets, parseGrep, parsePatternSet, takeCensus } from './census.ts';
 import { parseCensus } from './store-census.ts';
 import { gitEnv, inRun } from './store-git.ts';
 import { censusOf, now, script, set, takeCensusInRun } from './test-census.ts';
@@ -278,6 +278,18 @@ test('a hit that appears once more often than before is new once', () => {
   );
 
   assert.deepEqual(delta, [{ id: 'p', before: 2, after: 3, added: ['a.ts:3: x'] }]);
+});
+
+test('a function named after a method every object has is a new duplicate like any other', () => {
+  const after = censusOf({}, { toString: ['a.ts', 'b.ts'] });
+
+  assert.deepEqual(diffDuplicates(censusOf({}), after), ['toString']);
+});
+
+test('a pattern whose id names a method every object has is new when the previous census lacks it', () => {
+  const delta = diffCensus(censusOf({}), censusOf({ constructor: ['a.ts:1: x'] }));
+
+  assert.deepEqual(delta, [{ id: 'constructor', before: null, after: 1, added: [] }]);
 });
 
 test('a pattern counted without a hit list has no new hits', () => {
