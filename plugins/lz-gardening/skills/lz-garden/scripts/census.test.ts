@@ -1,5 +1,5 @@
 // Run: node --test census.test.ts
-// Each test builds a throwaway git repository and counts weeds at one of its commits, or checks the pure functions
+// Each test builds a throwaway git repository and counts hits at one of its commits, or checks the pure functions
 // that read and compare censuses.
 import assert from 'node:assert/strict';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';

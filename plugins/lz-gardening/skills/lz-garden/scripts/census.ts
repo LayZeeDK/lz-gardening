@@ -9,7 +9,7 @@
 //     line: sha, previousSha (null when there is no census or this checkout lacks its commit), behind (the census's
 //     commit descends from sha), commits (non-merge commits from previousSha to sha, or null), grew, newHits and
 //     newDuplicates. When the new census differs from the site's in more than the time taken, it is written to
-//     refs/garden/pending/<sha>, named by the commit rev-parse gives, with the patterns it used; site.ts sync
+//     refs/garden/pending/<sha>, named by the commit rev-parse gives, with the site's extra patterns; site.ts sync
 //     --census <sha> records it. A patterns change that changes no count or hit
 //     writes nothing: the next census at a new commit carries it.
 //     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
@@ -290,7 +290,7 @@ interface Definition {
   readonly path: string;
 }
 
-/** Every top-level function definition in the source files of a commit. */
+/** Every function definition in the source files of a commit. */
 async function definitionsAt(
   cwd: string,
   env: Env,
@@ -310,7 +310,7 @@ async function definitionsAt(
   });
 }
 
-/** Top-level function names defined in two or more files, each with its sorted file list. */
+/** Function names defined in two or more files, each with its sorted file list. */
 async function findDuplicates(
   cwd: string,
   env: Env,
