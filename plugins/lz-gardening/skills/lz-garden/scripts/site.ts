@@ -316,10 +316,12 @@ function checkBed(site: string, bedClass: string, base: string): void {
   requireSite(site);
 }
 
-function bedRefusal(site: Site, bedClass: string): string | undefined {
+function bedRefusal(io: Io, site: Site, bedClass: string): string | undefined {
   const now = new Date();
+  const shared = sync(site, { attempts: syncTries.quick }, now);
+  reportSync(io, shared);
 
-  return claimRefusalLine(site, bedClass, sync(site, { attempts: syncTries.quick }, now), now);
+  return claimRefusalLine(site, bedClass, shared, now);
 }
 
 function mergeInto(bed: string, commitId: string, name: string): void {
@@ -577,7 +579,7 @@ function main(argv: readonly string[], io: Io): number {
     }
     case 'bed': {
       checkBed(site, parsed.bedClass, parsed.base);
-      const refusal = bedRefusal(withWriter({ checkout: top, path: site }), parsed.bedClass);
+      const refusal = bedRefusal(io, withWriter({ checkout: top, path: site }), parsed.bedClass);
 
       if (refusal !== undefined) {
         io.err(`site: bed: ${refusal}\n`);

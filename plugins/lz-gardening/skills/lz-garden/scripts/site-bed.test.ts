@@ -17,6 +17,7 @@ import type { TestContext } from 'node:test';
 import { writeToLogByHand } from './test-log.ts';
 import { commit, git, init, repo } from './test-repo.ts';
 import { logRef } from './store-log.ts';
+import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 import { cli } from './test-weeds.ts';
 
@@ -32,6 +33,19 @@ function claimed(t: TestContext): { readonly dir: string; readonly garden: strin
 
   return garden;
 }
+
+test('bed names what its sync left out, as open and sync do', (t) => {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+  claimAnyType(dir);
+  writePendingCensus({ path: garden, checkout: dir }, 'bad', '{"rev":"main"}\n');
+  git(garden, ['push', '-q', remote, `${pendingCensusRef('bad')}:${censusRef}`]);
+  git(garden, ['update-ref', '-d', pendingCensusRef('bad')]);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.deepEqual([result.status, /refs\/garden\/census on origin is not a census/.test(result.stderr)], [0, true]);
+});
 
 test('bed makes a worktree on bed/<class> from the base as the repository has it now', (t) => {
   const { dir, garden } = claimed(t);
