@@ -4,6 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import type { TestContext } from 'node:test';
 import { eventPath } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
 import { logRef, openSite } from './store-log.ts';
@@ -448,6 +449,56 @@ test('a sync whose origin already holds the local log fetches, lists the beds an
     ],
     ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'fetch', 'cat-file', 'for-each-ref']],
   );
+});
+
+// The arguments of the fetch a sync starts, run in env.
+function fetchArgs(t: TestContext, dir: string, env: NodeJS.ProcessEnv): readonly string[] {
+  const spawned = t.mock.method(childProcess, 'spawnSync');
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  inRun(env, () => sync(openSite(dir), { attempts: 1 }));
+
+  return (
+    spawned.mock.calls
+      .map(({ arguments: [, args] }) => (Array.isArray(args) ? args.filter((arg) => typeof arg === 'string') : []))
+      .find((args) => args.includes('fetch')) ?? []
+  );
+}
+
+const sshInBatchMode = 'core.sshCommand=ssh -o BatchMode=yes';
+
+test('a fetch with no ssh command of the user runs ssh in batch mode, so ssh asks for no passphrase or host key', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+
+  assert.ok(fetchArgs(t, dir, process.env).includes(sshInBatchMode));
+});
+
+test('a fetch for a user who set core.sshCommand runs their ssh command as it is', (t) => {
+  const { dir, garden } = planted(t);
+  bareRemote(dir);
+  git(garden, ['config', 'core.sshCommand', 'ssh -i ~/.ssh/garden']);
+
+  assert.ok(!fetchArgs(t, dir, process.env).includes(sshInBatchMode));
+});
+
+test('a fetch for a user who set GIT_SSH_COMMAND runs their ssh command as it is', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+
+  assert.ok(!fetchArgs(t, dir, { ...process.env, GIT_SSH_COMMAND: 'ssh -i ~/.ssh/garden' }).includes(sshInBatchMode));
+});
+
+// core.sshCommand outranks GIT_SSH, so setting it would drop the user's program.
+test('a fetch for a user who set GIT_SSH runs their ssh program as it is', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+
+  assert.ok(!fetchArgs(t, dir, { ...process.env, GIT_SSH: 'plink' }).includes(sshInBatchMode));
 });
 
 function syncProcess(

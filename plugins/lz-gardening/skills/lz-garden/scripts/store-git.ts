@@ -234,11 +234,18 @@ const tracing = /^GIT_(?:TRACE|CURL_VERBOSE$)/;
 
 // Messages are in English, as the porcelain classification reads them.
 export function networkGit(site: string, args: readonly string[], timeoutMs: number): SpawnSyncReturns<string> {
-  const tracingOff = Object.keys(gitEnv(site))
+  const env = gitEnv(site);
+  const tracingOff = Object.keys(env)
     .filter((name) => tracing.test(name))
     .map((name) => [name, undefined] as const);
+  // ssh asks for a passphrase or a new host key by itself; batch mode stops it, unless the user chose their own ssh.
+  const ownSsh =
+    env['GIT_SSH_COMMAND'] !== undefined ||
+    env['GIT_SSH'] !== undefined ||
+    configValue(site, 'core.sshCommand') !== undefined;
+  const sshInBatchMode = ownSsh ? [] : ['-c', 'core.sshCommand=ssh -o BatchMode=yes'];
 
-  return runGit(site, ['-c', 'credential.interactive=false', ...args], {
+  return runGit(site, ['-c', 'credential.interactive=false', ...sshInBatchMode, ...args], {
     env: { ...Object.fromEntries(tracingOff), LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
     timeout: timeoutMs,
   });

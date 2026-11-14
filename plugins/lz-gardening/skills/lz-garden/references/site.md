@@ -132,8 +132,11 @@ The share states:
   message; a lock a killed run left in the site's `.git/refs/garden-shared/` reads that way on every run until it is
   deleted.
 
-Fetch and push never ask for a password or wait for input: a URL that needs credentials git cannot find is `offline`. A
-try that another push or sync beat waits 1, 2, 4 and 8 seconds (give or take half) before the next try.
+Fetch and push never ask for a password or wait for input: a URL that needs credentials git cannot find is `offline`.
+For an SSH `origin`, ssh runs with `BatchMode=yes`, so a key that needs a passphrase no agent holds, or a host key not
+yet known, is `offline` too; a user who set their own ssh command (`core.sshCommand`, `GIT_SSH_COMMAND` or `GIT_SSH`)
+keeps it as it is. A try that another push or sync beat waits 1, 2, 4 and 8 seconds (give or take half) before the next
+try.
 
 Every git command `site.ts` runs, from the clone to each commit in the site, runs none of the user's git hooks and signs
 nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick that runs
