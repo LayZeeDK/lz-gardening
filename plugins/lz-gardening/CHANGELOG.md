@@ -15,71 +15,37 @@ unreadable is a major change.
 
 First release.
 
-- `lz-garden` skill: one watch tick over the repository, recorded in a garden site beside it. Counts the hits
-  of each census pattern on the base branch, reads what landed since the last tick, and queues each weed with its
-  evidence. The first tick seeds the queue from the census's seed list, the repository's records and its history.
-  A weed of a class a tend pass closed is queued as `regrown` wherever it comes back, naming the bed and the check
-  that should have held it, and saying when that check was not on the base branch as of the last census: the bed had
-  not landed by then, or the check's file is gone from it. A weed of a class only ever closed as a one-off is queued as new. Carries its own
-  permission rules: they allow reading its own files and running its own scripts and read-only git commands; anything
-  else falls back to your own settings. The queue script writes only events to the site's `refs/garden/log`, and the
-  census script only a census it took, to the site's `refs/garden/pending/<sha>`, and takes no output path. Two runs
-  on one machine both land their events; an event file the queue cannot read, or whose text holds a line break or
-  control character, is skipped and named, not fatal. A close exits 1 when it finds nothing open. The site's own git
-  commands run none of your git hooks and sign nothing. The queue and the census are shared through the repository's
-  `origin`: `site.ts open` and the tick's last command, `site.ts sync --census <sha>`, fetch `origin`'s
-  `refs/garden/log` and `refs/garden/census`, merge the log with the site's events, keep the census of the later
-  base commit (read by ancestry in your checkout), record the tick's census unless another clone already read past
-  it, and push both refs back in one atomic push, pushing no ref outside `refs/garden/`. A tick whose base is behind
-  the garden's census says so and stops; a seed pass marks the queue seeded, so no other clone seeds again. Both
-  report the share state in a `shared` field: `local` (no `origin`, or
-  `git config lzGardening.share false`), `synced`, `offline` (with git's reason; a fetch or push never asks for
-  credentials and gives up after a minute), `read-only` (the push was declined, with git's reason) or `behind` (every
-  try lost to another push or another sync of the site; the next run pushes the events). `site.ts sync` also prints how many events it shared and
-  the files whose shared content it kept over the site's, and exits 0 in every state. A `sync --census` deletes the
-  pending censuses of older base commits that an interrupted tick left. The garden log's and the census's commits
-  are authored and committed as `lz-gardening <>`, or as `lzGardening.name` and `lzGardening.email` when the
-  checkout's git config sets both. The queue is shared with the repository, so `weeds.ts` takes repository-relative paths only (`--where`, a
-  `lesson:<path>` source, `--check`) and refuses an event whose text holds this machine's home folder, the
-  checkout's path or the site's path, in any letter case, with either slash, doubled backslashes or a drive in Git
-  Bash's `/d/` form. A census whose base commit no branch fetched from `origin` holds stays in the site and is named
-  on stderr, as is a bed that would bring `origin` any commit but its own (one made in the site) and a bed whose
-  commits add a line or a message holding one of those paths, merges and binary files included. Each census
-  carries the site's `.garden/patterns.json` as it is, unchecked, so it is shared too; a site without one takes its
-  census with the extra patterns of the shared census. A census pattern without `paths` searches the JavaScript and
-  TypeScript source files only (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`), and the bundled
-  `angular-structural-directive` pattern searches `.html` and `.ts` files. The census stores each hit's text cut to
-  200 characters, marked `...`. Its summary counts the commits from the previous census to this one (`commits`,
-  merges left out), its `+ duplicate <name>:` line names the files that define the name since the previous census
-  (`new`) apart from those that defined it before (`already`), and with `--seed` it prints the seed report's census
-  line (`census: <pattern> <count>, ...` or `census: none`). The tick and the seed pass reply with a fixed form,
-  every line always there. `weeds.ts add` refuses a `repeated-lesson` weed whose source is not a
-  `lesson:<path>:<line>` record. A class is ready to tend when its open weeds sit in two or more files (places), not
-  when it has two open weeds: `weeds.ts groups --min <n>` keeps the classes with `n` or more places, and
-  `weeds.ts claim` without a class takes only such a class. `weeds.ts groups` shows who holds a claim of each class in
-  a last `tending` column (`-` for none).
-- `lz-tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
-  baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Closes the class in
-  the queue as tended, one-off or kept; a tended close records the bed and where its check lives, and the weeds of
-  the class its check does not hold are closed first, one by one, as kept or one-off. A class tended
-  again before its bed lands is tended in the same bed, with what the base gained since merged in, so the check sees
-  the weeds that came back. Makes the bed with the garden's site script, which links the checkout's Node.js
-  dependencies into the bed, or names the command that installs them, for npm, pnpm, Yarn 1, and Yarn 4 or later.
-  Carries its own permission rules for reading the `lz-tend` skill and the `lz-garden` references, and for running
-  the garden scripts, and asks you to add the site as a working directory. Claims its class first with
-  `weeds.ts claim [--class <class>]`, so no other clone or run tends it at the same time: the claim lasts six hours,
-  a second claim by its holder renews it, the earliest live claim on `origin` wins, and a claim that lost is given
-  back with a release. A claim names its holder by the checkout's `lzGardening.name`, or
-  `writer <first 8 of the writer id>` when it is not set; never by `user.name`. `claim` prints
-  `claimed <class> until <time>` (exit 0), or exits 1 with `taken <class> by <holder> until <time>`,
-  `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state> (<reason>)`.
-  `weeds.ts release --class <class>` ends a claim
-  (`released <class>; <state>`, or `no claim of <class> held here` and exit 1). `close` and `close-class` sync before
-  they plan and share the close after it, printing `<closed|kept> <n>; <state>`; `close-class` ends this writer's
-  claim of the class, and `close --id` leaves it. `close-class`, like `site.ts bed`, exits 1 and closes nothing
-  unless its first sync is `synced` or `local` and this writer then holds a live claim of the class. A tended close
-  shares its bed as `refs/garden/beds/<class>`, in a push of its own after the log; a bed that does not descend from
-  `origin`'s, or that `origin` refuses, is named on stderr. `site.ts bed` syncs first and exits 1 unless this site
-  holds the claim of the class, and starts from, or merges in, the bed another clone shared.
+- `lz-garden` skill (`/lz-gardening:lz-garden [--base <branch>]`): one watch tick over the repository, recorded in
+  a garden site beside it at `../<repo>.garden`.
+  - Watch: counts the hits of each census pattern on the base branch, reads what landed since the last tick, and
+    queues each weed with its evidence. A weed of a class a tend pass closed is queued as `regrown`, naming the bed
+    and the check that should have held it.
+  - Seed: the first tick seeds the queue from the census, the repository's records and its history. A seed pass
+    marks the queue seeded, so no other clone seeds again.
+  - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`. A
+    pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,
+    `.js`, `.jsx`, `.mjs`, `.cjs`).
+  - Share: the queue (`refs/garden/log`) and the census (`refs/garden/census`) are shared through the repository's
+    `origin`. No ref outside `refs/garden/` is pushed. `git config lzGardening.share false` keeps the garden local.
+  - Privacy: events take repository-relative paths only, and an event that holds this machine's paths is refused. A
+    bed that holds them, or that would bring `origin` a commit other than its own, stays in the site, as does a
+    census of a commit no branch on `origin` holds. Each census carries the site's `.garden/patterns.json` as it
+    is. The garden log's and the census's commits are authored as `lz-gardening <>`, or as `lzGardening.name` and
+    `lzGardening.email` when both are set.
+  - Permissions: carries its own rules, for reading its own files and running its own scripts and read-only git
+    commands. Anything else falls back to your own settings.
+- `lz-tend` skill (`/lz-gardening:lz-tend [<class>] [--base <branch>]`): takes one class of queued weeds, adds the
+  check that keeps it from growing back, then fixes or baselines every instance.
+  - Claim: claims its class first, so no other clone tends it at the same time. A claim lasts six hours, and the
+    earliest live claim on `origin` wins. A claim names its holder by `lzGardening.name`, else by the first 8
+    characters of the site's random writer id, never by `user.name`.
+  - Bed: works in a bed, a worktree of the site on branch `bed/<class>`, with the checkout's Node.js dependencies
+    linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). A class tended again before its bed
+    lands is tended in the same bed.
+  - Close: closes the class as tended, one-off or kept. A tended close names the bed and where its check lives, and
+    shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land. Bed commits carry the
+    identity of whoever commits them.
+  - Permissions: carries its own rules for reading the `lz-tend` skill and the `lz-garden` references and for running
+    the garden scripts, and asks you to add the site as a working directory.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the
-  garden scripts, which keep the queue and the census in the site.
+  garden scripts.
