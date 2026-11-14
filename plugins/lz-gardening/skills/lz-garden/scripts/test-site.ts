@@ -117,9 +117,22 @@ export function writeCensusText(garden: string, text: string): void {
   git(garden, ['update-ref', '-d', pendingCensusRef('fixture')]);
 }
 
+export function censusText(sha: string, extra: Readonly<Record<string, unknown>> = {}): string {
+  const census = {
+    rev: 'main',
+    sha,
+    takenAt: '2026-11-13T00:00:00.000Z',
+    counts: {},
+    hits: {},
+    duplicates: {},
+    ...extra,
+  };
+
+  return `${JSON.stringify(census, null, 2)}\n`;
+}
+
 export function writeCensus(garden: string, sha = 'a'.repeat(40), rev = 'main'): void {
-  const census = { rev, sha, takenAt: '2026-11-07T00:00:00.000Z', counts: {}, hits: {}, duplicates: {} };
-  writeCensusText(garden, JSON.stringify(census));
+  writeCensusText(garden, censusText(sha, { rev }));
 }
 
 // The process environment plus git settings, as a user passes them to git through GIT_CONFIG_COUNT.

@@ -11,10 +11,9 @@ import { logRef, openSite } from './store-log.ts';
 import { censusRef, writePendingCensus } from './store-census.ts';
 import { mergeShared, rejected, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
-import { censusText } from './test-census.ts';
 import { commit, git, repo, scriptProcess } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
-import { bareRemote, planted, remoteHook, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
+import { bareRemote, censusText, planted, remoteHook, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
 import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
 
 test('a site whose checkout has no origin stays local and keeps its log as it was', (t) => {

@@ -9,9 +9,8 @@ import { openSite } from './store-log.ts';
 import { censusRef, parseCensus, pendingCensusRef, readCensusAt, writePendingCensus } from './store-census.ts';
 import type { StoredCensus } from './store-census.ts';
 import { sync } from './store-sync.ts';
-import { censusText } from './test-census.ts';
 import { commit, git } from './test-repo.ts';
-import { bareRemote, planted, sharedPair, site } from './test-site.ts';
+import { bareRemote, censusText, planted, sharedPair, site } from './test-site.ts';
 
 function storedAt(garden: string, ref: string): StoredCensus {
   const read = readCensusAt(garden, ref);

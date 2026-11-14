@@ -57,20 +57,6 @@ export function censusOf(
   };
 }
 
-export function censusText(sha: string, extra: Readonly<Record<string, unknown>> = {}): string {
-  const census = {
-    rev: 'main',
-    sha,
-    takenAt: '2026-11-13T00:00:00.000Z',
-    counts: {},
-    hits: {},
-    duplicates: {},
-    ...extra,
-  };
-
-  return `${JSON.stringify(census, null, 2)}\n`;
-}
-
 export async function takeAndRecord(dir: string, args: readonly string[] = []): Promise<ScriptRun> {
   const result = await census(dir, ['--rev', 'HEAD', ...args]);
   assert.equal(result.status, 0, result.stderr);

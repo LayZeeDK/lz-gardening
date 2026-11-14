@@ -6,9 +6,8 @@ import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { mayPointAtARepository } from './store-git.ts';
 import { writePendingCensus } from './store-census.ts';
-import { censusText } from './test-census.ts';
 import { commit, git, repo } from './test-repo.ts';
-import { bareRemote, planted, sharedPair, siteProcess } from './test-site.ts';
+import { bareRemote, censusText, planted, sharedPair, siteProcess } from './test-site.ts';
 import { addWeed, cliProcess } from './test-weeds.ts';
 
 const startsModule = new URL('test-git-starts.ts', import.meta.url).href;

@@ -6,9 +6,9 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { censusRef, parseCensus, pendingCensusRef, writePendingCensus } from './store-census.ts';
-import { census, censusCli, censusText, takeAndRecord, todoPatterns, writeSitePatterns } from './test-census.ts';
+import { census, censusCli, takeAndRecord, todoPatterns, writeSitePatterns } from './test-census.ts';
 import { commit, git, repo, summaryOf } from './test-repo.ts';
-import { planted, writeCensusText } from './test-site.ts';
+import { censusText, planted, writeCensusText } from './test-site.ts';
 
 test('the CLI writes its census to the pending ref of the commit the rev names, not of the rev', async (t) => {
   const { dir, garden } = planted(t);
