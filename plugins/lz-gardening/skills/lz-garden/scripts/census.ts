@@ -202,7 +202,7 @@ function splitHit(hit: string): { readonly path: string; readonly text: string }
   return match === null ? null : { path: match[1] ?? '', text: match[2] ?? '' };
 }
 
-export function hitKey(hit: string): string {
+function hitKey(hit: string): string {
   const parts = splitHit(hit);
 
   return parts === null ? hit : `${parts.path}\u0000${parts.text}`;

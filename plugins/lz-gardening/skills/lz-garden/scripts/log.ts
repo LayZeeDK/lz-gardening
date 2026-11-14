@@ -260,7 +260,7 @@ function releasesOfLiveClaims(
     .map(releaseOf);
 }
 
-export function releaseOf(claim: ClaimEvent): EventDraft<ReleaseEvent> {
+function releaseOf(claim: ClaimEvent): EventDraft<ReleaseEvent> {
   return { op: 'release', class: claim.class, claim: claim.uuid };
 }
 
@@ -287,7 +287,7 @@ export function releasesOfClaim(
 export const claimLifetimeMs = 6 * 60 * 60 * 1000;
 
 /** Classes a claim never picks on its own: they are tended through another class or job. */
-export const notTendedDirectly: readonly string[] = ['stale-verification', 'repeated-lesson'];
+const notTendedDirectly: readonly string[] = ['stale-verification', 'repeated-lesson'];
 
 export type ClaimPlan =
   | { readonly said: 'claimed'; readonly class: string; readonly drafts: readonly [EventDraft<ClaimEvent>] }

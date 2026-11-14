@@ -30,7 +30,7 @@ import {
 } from './store-log.ts';
 import type { LostToAnotherWriter, Site } from './store-log.ts';
 
-export const shareKey = 'lzGardening.share';
+const shareKey = 'lzGardening.share';
 
 const sharedLogRef = 'refs/garden-shared/log';
 
