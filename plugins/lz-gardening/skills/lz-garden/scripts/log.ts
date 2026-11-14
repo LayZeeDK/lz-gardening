@@ -264,6 +264,25 @@ export function releaseOf(claim: ClaimEvent): EventDraft<ReleaseEvent> {
   return { op: 'release', class: claim.class, claim: claim.uuid };
 }
 
+/** A release of each claim the events hold as the draft planned it (writer, class and until) that none releases yet. */
+export function releasesOfClaim(
+  events: readonly GardenEvent[],
+  draft: EventDraft<ClaimEvent>,
+): readonly EventDraft<ReleaseEvent>[] {
+  const released = releasedClaims(events);
+
+  return events
+    .filter(
+      (event): event is ClaimEvent =>
+        event.op === 'claim' &&
+        event.writer === draft.writer &&
+        event.class === draft.class &&
+        event.until === draft.until &&
+        !released.has(event.uuid),
+    )
+    .map(releaseOf);
+}
+
 /** 6 hours: the GitHub-hosted job limit and GITHUB_TOKEN lifetime, so a crashed CI run's claim ends with it. */
 export const claimLifetimeMs = 6 * 60 * 60 * 1000;
 

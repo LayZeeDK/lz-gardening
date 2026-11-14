@@ -55,13 +55,12 @@ import {
   planClaim,
   planClose,
   planRelease,
-  releaseOf,
-  releasedClaims,
+  releasesOfClaim,
   replay,
   sourcePattern,
   unprintablePattern,
 } from './log.ts';
-import type { AddInput, AddOutcome, ClaimEvent, CloseRequest, EventDraft, GardenEvent, TendedClose } from './log.ts';
+import type { AddInput, AddOutcome, ClaimEvent, CloseRequest, GardenEvent, TendedClose } from './log.ts';
 import { claimRefusalLine, escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';
@@ -293,21 +292,6 @@ function holderOf(site: Site): string {
 }
 
 export type SyncSeams = Pick<SyncOptions, 'wait' | 'timeoutMs'>;
-
-function releasesOfClaim(events: readonly GardenEvent[], draft: EventDraft<ClaimEvent>): readonly EventDraft[] {
-  const released = releasedClaims(events);
-
-  return events
-    .filter(
-      (event): event is ClaimEvent =>
-        event.op === 'claim' &&
-        event.writer === draft.writer &&
-        event.class === draft.class &&
-        event.until === draft.until &&
-        !released.has(event.uuid),
-    )
-    .map(releaseOf);
-}
 
 function takenLine(owner: ClaimEvent): string {
   return `taken ${owner.class} by ${owner.holder} until ${owner.until}\n`;

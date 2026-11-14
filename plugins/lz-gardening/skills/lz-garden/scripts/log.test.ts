@@ -12,6 +12,7 @@ import {
   planClaim,
   planClose,
   planRelease,
+  releasesOfClaim,
   replay,
   stamp,
   weedId,
@@ -521,6 +522,20 @@ test('a release by the holder writes one release per live claim it holds of the 
       { op: 'release', class: 'any-type', claim: 'c2' },
     ],
   });
+});
+
+test('the releases of a planned claim name each claim of its writer, class and until that no release names yet', () => {
+  const events = [
+    claim('c1', 1, 'writer-a'),
+    claim('c2', 2, 'writer-a'),
+    release('r2', 3, 'c2'),
+    claim('c3', 4, 'writer-a', at),
+    claim('c4', 5, 'writer-b'),
+    claim('c5', 6, 'writer-a', later, 'other'),
+  ];
+  const planned = { op: 'claim', class: 'any-type', writer: 'writer-a', holder: 'Ada', until: later } as const;
+
+  assert.deepEqual(releasesOfClaim(events, planned), [{ op: 'release', class: 'any-type', claim: 'c1' }]);
 });
 
 test('a release by a writer that holds no claim of the class writes nothing and says so', () => {
