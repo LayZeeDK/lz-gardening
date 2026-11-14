@@ -148,10 +148,11 @@ exit 2, naming the file.
 ## The base branch
 
 The base is the branch work lands on. `site.ts open` takes, in order: the `--base` argument; the `rev` recorded
-in the site's census (stored without `origin/`, so each clone finds the branch its own way); the repository's default branch (`origin/HEAD`); `main` when that branch
-exists; else `master`. A repository cloned from a local path is the exception: its `origin/HEAD` names whatever
-the source had checked out when it was cloned, often a feature or milestone branch in flight, so `open` passes over
-it for `main` or `master`.
+in the site's census (stored without `origin/`, so each clone finds the branch its own way), when it names a branch
+the repository or `origin` has, so a census taken with `--base HEAD` or a commit id moves no other clone's base; the
+repository's default branch (`origin/HEAD`); `main` when that branch exists; else `master`. A repository cloned from
+a local path is the exception: its `origin/HEAD` names whatever the source had checked out when it was cloned, often
+a feature or milestone branch in flight, so `open` passes over it for `main` or `master`.
 
 A branch that only `origin` has (a clone whose checkout is a milestone branch often has `main` only as
 `origin/main`) is reported as `origin/<name>`, and every later command reads that ref. A base that resolves to no

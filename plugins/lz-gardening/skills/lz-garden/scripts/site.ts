@@ -67,8 +67,11 @@ export function resolveBase(facts: BaseFacts): string {
     return ref(facts.base);
   }
 
-  if (facts.censusRev !== undefined) {
-    return ref(facts.censusRev);
+  // A census taken with --base HEAD or a commit id records it too, and that is no base for another clone.
+  const recordedBranch = [...facts.branches, ...facts.originBranchNames].find((name) => name === facts.censusRev);
+
+  if (recordedBranch !== undefined) {
+    return ref(recordedBranch);
   }
 
   // A clone of a local path takes its origin/HEAD from whatever the source had checked out.
