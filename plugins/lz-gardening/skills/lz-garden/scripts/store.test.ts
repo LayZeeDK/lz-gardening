@@ -19,7 +19,7 @@ import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
 import { eventPath } from './log.ts';
 import type { EventDraft } from './log.ts';
-import { configValue, gitAsync, gitEnv, inRun, namedHooksOff, runGitAsync, treeEntries } from './store-git.ts';
+import { configValue, gitAsync, gitEnv, inRun, namedHooksOff, runGit, runGitAsync, treeEntries } from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
 import { git, repo } from './test-repo.ts';
 import { configEnv, planted } from './test-site.ts';
@@ -488,13 +488,10 @@ test('a site opened outside a repository is refused with the git command and wha
   });
 });
 
-test('a site opened from a folder that does not exist is refused with the git command git could not start', (t) => {
+test('a site opened from a folder that does not exist is refused, saying git could not start', (t) => {
   const { dir } = planted(t);
 
-  assert.throws(() => openSite(join(dir, 'missing')), {
-    message:
-      /^git rev-parse --path-format=absolute --absolute-git-dir --git-common-dir --show-toplevel: spawnSync git ENOENT$/,
-  });
+  assert.throws(() => openSite(join(dir, 'missing')), { message: /^git could not start: spawnSync git ENOENT$/ });
 });
 
 test('planting a writer id on a site that has one keeps its writer id', (t) => {
@@ -734,6 +731,20 @@ test('a log in a newer format than this version reads is refused, saying to upda
   assert.throws(() => readLog(openSite(dir)), {
     message: 'refs/garden/log is in format 2, which this version cannot read; update lz-gardening',
   });
+});
+
+test('a git that cannot start is named without its arguments, so a token in an origin URL stays out of the message', (t) => {
+  const { garden } = planted(t);
+  const empty = mkdtempSync(join(tmpdir(), 'no-git-'));
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
+
+  assert.throws(
+    () =>
+      runGit(garden, ['fetch', '--end-of-options', 'https://gardener:s3cret@example.invalid/r.git'], {
+        env: { PATH: empty, Path: empty },
+      }),
+    { message: /^git could not start: spawnSync git ENOENT$/ },
+  );
 });
 
 test('an event file whose object is not a file is refused with the header git read for it', (t) => {

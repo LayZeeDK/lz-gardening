@@ -150,7 +150,8 @@ function spawnGit(
   const result = spawnSync('git', args, { cwd, encoding: 'utf8', env, input, maxBuffer: Infinity, timeout });
 
   if (result.error !== undefined && !timedOut(result)) {
-    throw new Error(`git ${args.join(' ')}: ${result.error.message}`);
+    // The arguments stay out: a fetch or push carries the origin URL, and a token in it.
+    throw new Error(`git could not start: ${result.error.message}`);
   }
 
   return result;
