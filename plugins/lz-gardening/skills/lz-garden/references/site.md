@@ -138,7 +138,8 @@ that runs unattended.
 
 `census.ts --rev <base>`, run from the repository's checkout, reads the site's census and writes the census it takes
 to `refs/garden/pending/<sha>` when it differs from the site's census in more than the time it was taken;
-`sync --census <sha>` records it. A `refs/garden/census` that is not a census stops it with exit 2, naming the
+`sync --census <sha>` records it. A change to `.garden/patterns.json` that changes no count or hit is shared with the
+next census at a new commit, which carries the new patterns. A `refs/garden/census` that is not a census stops it with exit 2, naming the
 command that deletes it. `weeds.ts`, run from the repository's checkout, finds the site beside it and appends events
 to `refs/garden/log` with git plumbing only: a commit per command, moved onto the ref only if no other run moved it
 first, so two runs on one machine both land. An entry in the log it cannot read (an event file that does not parse
