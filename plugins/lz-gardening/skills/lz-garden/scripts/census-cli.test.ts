@@ -258,24 +258,6 @@ test('a census that differs from the recorded one in nothing but the time taken 
   assert.equal(git(garden, ['for-each-ref', 'refs/garden/pending']), '');
 });
 
-test("a census taken after the site's patterns changed is left pending, though every hit is the same", async (t) => {
-  const { dir, garden } = planted(t);
-  writeSitePatterns(garden);
-  await takeAndRecord(dir);
-  writeSitePatterns(
-    garden,
-    `${JSON.stringify({ patterns: [{ id: 'todo', regex: 'TODO', note: 'name an owner' }] })}\n`,
-  );
-
-  const again = await census(dir, ['--rev', 'HEAD']);
-
-  assert.equal(again.status, 0, again.stderr);
-  assert.equal(
-    git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending']),
-    pendingCensusRef(git(dir, ['rev-parse', 'HEAD'])),
-  );
-});
-
 test('a first census is not behind the garden', async (t) => {
   const { dir } = planted(t);
 

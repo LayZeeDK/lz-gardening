@@ -1,8 +1,11 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { unprintablePattern } from './log.ts';
+import { claimRefusal, replay, unprintablePattern } from './log.ts';
 import { inRun } from './store-git.ts';
+import { readLog } from './store-log.ts';
+import type { Site } from './store-log.ts';
+import { isShared } from './store-sync.ts';
 import type { SyncResult } from './store-sync.ts';
 
 const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
@@ -13,6 +16,28 @@ export function escapeUnprintable(text: string): string {
 
 export function reasonOf(result: SyncResult): string {
   return result.reason === undefined ? '' : ` (${escapeUnprintable(result.reason)})`;
+}
+
+// bed and close-class act on a class only under this writer's live claim, read after a sync that left the log local
+// or shared, so another clone's newer claim is seen and this claim is on origin. Why they may not, or undefined.
+export function claimRefusalLine(site: Site, weedClass: string, pre: SyncResult, now: Date): string | undefined {
+  if (!isShared(pre)) {
+    return `cannot check the claim of ${weedClass}: ${pre.state}${reasonOf(pre)}`;
+  }
+
+  const refusal = claimRefusal(replay(readLog(site).events, now), weedClass, site.writer);
+
+  switch (refusal?.kind) {
+    case undefined: {
+      return undefined;
+    }
+    case 'unclaimed': {
+      return `this site holds no claim of ${weedClass}; run weeds claim --class ${weedClass}`;
+    }
+    case 'held': {
+      return `${weedClass} is claimed by ${refusal.owner.holder} until ${refusal.owner.until}`;
+    }
+  }
 }
 
 export interface Io {

@@ -214,7 +214,7 @@ export function planClose(
     closed,
     drafts: [
       { op: 'close', ids: closed, class: first.class, ...close },
-      ...('class' in target ? releasesOf(events, first.class, writer, now) : []),
+      ...('class' in target ? releasesOfLiveClaims(events, first.class, writer, now) : []),
     ],
   };
 }
@@ -224,15 +224,24 @@ export type ReleasePlan =
   | { readonly said: 'no claim'; readonly drafts: readonly [] };
 
 export function planRelease(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): ReleasePlan {
-  const drafts = releasesOf(events, weedClass, writer, now);
+  const drafts = releasesOfLiveClaims(events, weedClass, writer, now);
 
   return drafts.length === 0 ? { said: 'no claim', drafts: [] } : { said: 'released', drafts };
 }
 
-function releasesOf(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): EventDraft[] {
+function releasesOfLiveClaims(
+  events: readonly GardenEvent[],
+  weedClass: string,
+  writer: string,
+  now: Date,
+): readonly EventDraft[] {
   return liveClaims(events, now)
     .filter((claim) => claim.writer === writer && claim.class === weedClass)
-    .map((claim): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+    .map(releaseOf);
+}
+
+export function releaseOf(claim: ClaimEvent): EventDraft {
+  return { op: 'release', class: claim.class, claim: claim.uuid };
 }
 
 /** 6 hours: the GitHub-hosted job limit and GITHUB_TOKEN lifetime, so a crashed CI run's claim ends with it. */
@@ -247,16 +256,22 @@ export type ClaimPlan =
   | { readonly said: 'nothing ready'; readonly drafts: readonly [] }
   | { readonly said: 'nothing open'; readonly class: string; readonly drafts: readonly [] };
 
-/** The ready classes a claim without a class may take: not tended directly and claimed by no other writer. */
-export function claimableClasses(garden: Garden, writer: string): readonly string[] {
-  return readyClasses(garden.open).filter(
-    (weedClass) => !notTendedDirectly.includes(weedClass) && heldByAnother(garden, weedClass, writer) === undefined,
+/**
+ * The groups a claim without a class may take, in groups order: ready (open weeds in two or more places), not tended
+ * directly, and claimed by no other writer.
+ */
+export function claimableGroups(garden: Garden, writer: string): readonly Group[] {
+  return groupWeeds(garden.open).filter(
+    (group) =>
+      group.places >= 2 &&
+      !notTendedDirectly.includes(group.class) &&
+      heldByAnother(garden, group.class, writer) === undefined,
   );
 }
 
 /**
  * Which class to claim. With a class: taken if another writer holds it, else claimed (a holder's claim renews it).
- * Without: the first claimable class, in groups order.
+ * Without: the first claimable group's class.
  */
 export function planClaim(
   events: readonly GardenEvent[],
@@ -266,7 +281,7 @@ export function planClaim(
   now: Date,
 ): ClaimPlan {
   const garden = replay(events, now);
-  const chosen = wanted ?? claimableClasses(garden, writer)[0];
+  const chosen = wanted ?? claimableGroups(garden, writer)[0]?.class;
 
   if (chosen === undefined) {
     return { said: 'nothing ready', drafts: [] };
@@ -323,17 +338,31 @@ export function planGiveBack(
 }
 
 /** A release of each lost claim the events do not release already. */
-export function releasesFor(events: readonly GardenEvent[], lost: readonly LostClaim[]): readonly EventDraft[] {
+export function releasesOfLostClaims(
+  events: readonly GardenEvent[],
+  lost: readonly LostClaim[],
+): readonly EventDraft[] {
   const released = releasedClaims(events);
 
-  return lost
-    .filter(({ claim }) => !released.has(claim.uuid))
-    .map(({ claim }): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+  return lost.filter(({ claim }) => !released.has(claim.uuid)).map(({ claim }) => releaseOf(claim));
 }
 
 /** The uuids of the claims a release names. */
 export function releasedClaims(events: readonly GardenEvent[]): ReadonlySet<string> {
   return new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
+}
+
+export type ClaimRefusal = { readonly kind: 'unclaimed' } | { readonly kind: 'held'; readonly owner: ClaimEvent };
+
+/** Why a writer may not act on a class under its claim: no live claim, or another writer's; undefined when it holds it. */
+export function claimRefusal(garden: Garden, weedClass: string, writer: string): ClaimRefusal | undefined {
+  const owner = garden.claims.get(weedClass);
+
+  if (owner === undefined) {
+    return { kind: 'unclaimed' };
+  }
+
+  return owner.writer === writer ? undefined : { kind: 'held', owner };
 }
 
 /** The active claim of a class when a writer other than this one owns it. */
@@ -344,20 +373,38 @@ function heldByAnother(garden: Garden, weedClass: string, writer: string): Claim
 }
 
 /** The file a weed sits in: its `--where` without the line. */
-export function placeOf(where: string): string {
+function placeOf(where: string): string {
   return where.replace(/:\d+$/, '');
 }
 
-/** Classes whose open weeds sit in two or more places, in groups order: most open, then most regrown, then by name. */
-function readyClasses(open: readonly OpenWeed[]): string[] {
-  const regrownIn = (weeds: readonly OpenWeed[]): number => weeds.filter((weed) => weed.regrownAfter !== null).length;
+export interface Group {
+  readonly class: string;
+  readonly open: number;
+  /** The files its open weeds sit in. */
+  readonly places: number;
+  readonly regrown: number;
+  readonly firstAt: string;
+  readonly layer: number | null;
+}
 
-  return [...Map.groupBy(open, (weed) => weed.class)]
-    .filter(([, weeds]) => new Set(weeds.map((weed) => placeOf(weed.where))).size >= 2)
-    .toSorted(
-      ([aClass, a], [bClass, b]) => b.length - a.length || regrownIn(b) - regrownIn(a) || aClass.localeCompare(bClass),
-    )
-    .map(([weedClass]) => weedClass);
+/** Open weeds per class, in groups order: most open, then most regrown, then by name. */
+export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
+  return [...Map.groupBy(weeds, (weed) => weed.class)]
+    .map(([weedClass, members]): Group => {
+      const times = members.map((weed) => weed.firstAt).sort();
+      const layers = members.flatMap((weed) => (weed.layer === null ? [] : [weed.layer]));
+
+      return {
+        class: weedClass,
+        open: members.length,
+        places: new Set(members.map((weed) => placeOf(weed.where))).size,
+        regrown: members.filter((weed) => weed.regrownAfter !== null).length,
+        // Stryker disable next-line StringLiteral: a group always has a member, so times[0] is never missing
+        firstAt: times[0] ?? '',
+        layer: layers.length === 0 ? null : Math.min(...layers),
+      };
+    })
+    .sort((a, b) => b.open - a.open || b.regrown - a.regrown || a.class.localeCompare(b.class));
 }
 
 /** Stamps drafts with uuid, clock (maxClock + 1, + 2, ...) and at. */

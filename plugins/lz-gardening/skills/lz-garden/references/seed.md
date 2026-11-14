@@ -59,8 +59,8 @@ weeds are queued.
 
 ## 4. Record and report
 
-Run the two commands of the tick's step 5, `groups` and `sync --census <sha>`, with `--seeded` added at the end of
-`sync`. `--seeded` records in the queue that the seed pass ran, so no clone of the repository seeds again.
+Run the two commands of the tick's step 5, `groups --ready` and `sync --census <sha>`, with `--seeded` added at the
+end of `sync`. `--seeded` records in the queue that the seed pass ran, so no clone of the repository seeds again.
 
 Done when `sync` exits 0. Then reply with this form, every `<slot>` filled as the list below says. The reply is these
 six lines and ends after the last one; the reason for each weed is in its `--note`.

@@ -1,6 +1,6 @@
 // Sharing with origin: fetch origin's garden refs, merge its log into the site's, give back claims a sync lost, settle
 // the census, and push the log, the census and the beds.
-import { eventPathPattern, parseEvent, planGiveBack, releasesFor, replay } from './log.ts';
+import { eventPathPattern, parseEvent, planGiveBack, releasesOfLostClaims } from './log.ts';
 import type { LostClaim } from './log.ts';
 import { pushBeds } from './store-beds.ts';
 import {
@@ -15,25 +15,16 @@ import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
   git,
+  gitReason,
   isAncestor,
   networkGit,
   networkTimeoutMs,
   objectIds,
   optionalGit,
   pushReport,
-  reasonOf,
   timedOut,
 } from './store-git.ts';
-import {
-  append,
-  formatOf,
-  logFormat,
-  logRef,
-  moveLogIfStill,
-  readLog,
-  readReplica,
-  writeLogIfStill,
-} from './store-log.ts';
+import { append, formatOf, logFormat, logRef, moveLogIfStill, readReplica, writeLogIfStill } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
 export const shareKey = 'lzGardening.share';
@@ -240,27 +231,6 @@ export function isShared(result: SyncResult): boolean {
   return result.state === 'synced' || result.state === 'local';
 }
 
-// bed and close-class act on a class only under this writer's live claim, read after a sync that left the log local
-// or shared, so another clone's newer claim is seen and this claim is on origin. The refusal may hold git's message,
-// so a caller escapes it to print it.
-export function claimRefusal(site: Site, weedClass: string, pre: SyncResult, now: Date): string | undefined {
-  if (!isShared(pre)) {
-    return `cannot check the claim of ${weedClass}: ${pre.state}${pre.reason === undefined ? '' : ` (${pre.reason})`}`;
-  }
-
-  const owner = replay(readLog(site).events, now).claims.get(weedClass);
-
-  if (owner === undefined) {
-    return `this site holds no claim of ${weedClass}; run weeds claim --class ${weedClass}`;
-  }
-
-  if (owner.writer !== site.writer) {
-    return `${weedClass} is claimed by ${owner.holder} until ${owner.until}`;
-  }
-
-  return undefined;
-}
-
 export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {
   const { result, recorded } = syncWithOrigin(site, options, now);
 
@@ -352,7 +322,7 @@ function giveBackLosingClaims(
     return { lost, released: 0 };
   }
 
-  const { drafts } = append(site, (replica) => ({ drafts: releasesFor(replica.events, lost) }), now);
+  const { drafts } = append(site, (replica) => ({ drafts: releasesOfLostClaims(replica.events, lost) }), now);
 
   return { lost, released: drafts.length };
 }
@@ -374,7 +344,7 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   if (fetched.status !== 0) {
     return {
       state: lostSharedRefLock.test(fetched.stderr) ? 'behind' : 'offline',
-      reason: reasonOf(fetched.stderr),
+      reason: gitReason(fetched.stderr),
       ...nothingShared,
     };
   }
@@ -429,5 +399,5 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
 
   return rejected(pushed.stdout)
     ? { state: 'behind', ...nothingShared, yielded: given.lost, recorded }
-    : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded };
+    : { state: 'read-only', reason: gitReason(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded };
 }

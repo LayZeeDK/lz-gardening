@@ -51,8 +51,8 @@ keep.
 ## Update, 2026-11-13: claims, shared beds and what the garden may publish
 
 - A claim that loses the race is answered by a release, not deleted from the replica, since sync depends on no event
-  being removed. A claim whose push failed (offline, read-only, or timed out after the remote took it) is released too,
-  and the release is pushed once more, so a claim left on the remote does not block its class for 6 hours.
+  being removed. A claim whose push failed (offline, read-only, behind, or timed out after the remote took it) is
+  released too, and the release is pushed once more, so a claim left on the remote does not block its class for 6 hours.
 - The look for another writer's claim reads the remote's log as fetched, not this site's tip from before the merge:
   when both sides hold new events, the merged tip is a new commit, and a look at the old local tip misses the very
   claim it exists for.

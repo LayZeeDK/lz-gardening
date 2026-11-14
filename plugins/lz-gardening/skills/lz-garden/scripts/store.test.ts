@@ -19,7 +19,7 @@ import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
 import { eventPath } from './log.ts';
 import type { EventDraft } from './log.ts';
-import { configValue, inRun, namedHooksOff, treeEntries } from './store-git.ts';
+import { configValue, gitAsync, gitEnv, inRun, namedHooksOff, runGitAsync, treeEntries } from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
 import { git, repo } from './test-repo.ts';
 import { configEnv, planted } from './test-site.ts';
@@ -76,6 +76,23 @@ test('a log holding more than 1 MiB of events still reads', (t) => {
   append(site, () => ({ drafts: Array.from({ length: 6 }, (_, index) => addDraft(index, note)) }), now);
 
   assert.equal(readLog(site).events.length, 6);
+});
+
+test("an async git read gives git's trimmed output and exit code, fails with the command and git's reason, and fails in a missing folder", async (t) => {
+  const dir = repo(t);
+  const env = inRun(process.env, () => gitEnv(dir));
+
+  const results = await Promise.all([
+    gitAsync(dir, ['rev-parse', '--is-inside-work-tree'], env),
+    runGitAsync(dir, ['cat-file', '-e', 'no-such-object'], env).then(({ code, stdout }) => [code, stdout]),
+    gitAsync(dir, ['cat-file', '-e', 'no-such-object'], env).catch((error: unknown) =>
+      error instanceof Error ? error.message : String(error),
+    ),
+  ]);
+
+  assert.deepEqual(results.slice(0, 2), ['true', [128, '']]);
+  assert.match(results[2], /^git cat-file -e no-such-object: fatal: \S[^\n]*$/);
+  await assert.rejects(runGitAsync(join(dir, 'missing'), ['status'], env), { code: 'ENOENT' });
 });
 
 test('a submodule entry in the log is skipped and named, and the events beside it still read', (t) => {

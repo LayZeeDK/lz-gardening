@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   bedCommit,
+  claimRefusal,
   eventPath,
+  groupWeeds,
   losingClaims,
   parseEvent,
   planAdd,
@@ -21,6 +23,7 @@ import type {
   CloseEvent,
   Garden,
   GardenEvent,
+  OpenWeed,
   ReleaseEvent,
   TendedClose,
 } from './log.ts';
@@ -540,6 +543,104 @@ test('a claim by the writer that holds the class renews it with a fresh until', 
   assert.deepEqual(
     [outcome.said, outcome.said === 'claimed' ? outcome.drafts[0].until : null],
     ['claimed', '2026-11-11T18:00:00.000Z'],
+  );
+});
+
+function openWeed(fields: Partial<OpenWeed>): OpenWeed {
+  return {
+    id: `${fields.where ?? 'src/a.ts:1'}@${fields.firstAt ?? at}`,
+    firstAt: at,
+    class: 'any-type',
+    where: 'src/a.ts:1',
+    source: 'census:any-type',
+    note: '',
+    layer: null,
+    regrownAfter: null,
+    ...fields,
+  };
+}
+
+const tendedClose: TendedClose = {
+  op: 'close',
+  uuid: '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6',
+  clock: 1,
+  at,
+  ids: ['x'],
+  class: 'any-type',
+  by: 'bed/any-type@1a2b3c4',
+  kind: 'tended',
+  check: 'eslint.config.mjs',
+};
+
+test('groups count open weeds and distinct files per class, most first', () => {
+  const events = [
+    add('a1', 1, 'w', { class: 'hollow-assertion', where: 'src/a.spec.ts:3', layer: 2 }),
+    add('a2', 2, 'x', { class: 'hollow-assertion', where: 'src/a.spec.ts:9', layer: 2 }),
+    add('a3', 3, 'y', { class: 'hollow-assertion', where: 'src/b.spec.ts:1', layer: 2 }),
+    add('a4', 4, 'z', { class: 'double-cast', where: 'src/c.ts:4', layer: 1 }),
+  ];
+
+  const groups = groupWeeds(replay(events, now).open);
+
+  assert.deepEqual(
+    groups.map((group) => [group.class, group.open, group.places, group.layer]),
+    [
+      ['hollow-assertion', 3, 2, 2],
+      ['double-cast', 1, 1, 1],
+    ],
+  );
+});
+
+test('a group counts a file once with or without a line, counts regrown weeds, and takes the lowest layer and first sighting', () => {
+  const [group] = groupWeeds([
+    openWeed({ where: 'src/a.ts:12', firstAt: '2026-11-07T10:00:00.000Z', layer: 3, regrownAfter: tendedClose }),
+    openWeed({ where: 'src/a.ts:34', firstAt: '2026-11-06T09:00:00.000Z', layer: 1, regrownAfter: tendedClose }),
+    openWeed({ where: 'src/a.ts', firstAt: '2026-11-08T00:00:00.000Z' }),
+    openWeed({ where: 'src/x:1.ts:4' }),
+    openWeed({ where: 'src/x:1.ts:9' }),
+  ]);
+
+  assert.deepEqual(group, {
+    class: 'any-type',
+    open: 5,
+    places: 2,
+    regrown: 2,
+    firstAt: '2026-11-06T09:00:00.000Z',
+    layer: 1,
+  });
+});
+
+test('a class whose weeds name no layer has no layer', () => {
+  assert.equal(groupWeeds([openWeed({})])[0]?.layer, null);
+});
+
+test('groups sort by open weeds, then by regrowth, then by name', () => {
+  const groups = groupWeeds([
+    openWeed({ class: 'b-one', where: 'b' }),
+    openWeed({ class: 'a-one', where: 'a' }),
+    openWeed({ class: 'c-regrown', where: 'c', regrownAfter: tendedClose }),
+    openWeed({ class: 'd-three', where: 'd1' }),
+    openWeed({ class: 'd-three', where: 'd2' }),
+    openWeed({ class: 'd-three', where: 'd3' }),
+  ]);
+
+  assert.deepEqual(
+    groups.map((group) => group.class),
+    ['d-three', 'c-regrown', 'a-one', 'b-one'],
+  );
+});
+
+test('a writer may act on a class under its own live claim, and is refused one it holds no claim of or another holds', () => {
+  const owner = claim('c1', 1, 'writer-b');
+  const garden = replay([owner, claim('c2', 2, 'writer-a', later, 'other')], now);
+
+  assert.deepEqual(
+    [
+      claimRefusal(garden, 'other', 'writer-a'),
+      claimRefusal(garden, 'unclaimed-class', 'writer-a'),
+      claimRefusal(garden, 'any-type', 'writer-a'),
+    ],
+    [undefined, { kind: 'unclaimed' }, { kind: 'held', owner }],
   );
 });
 

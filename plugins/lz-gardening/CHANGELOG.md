@@ -2,8 +2,8 @@
 
 This plugin uses [Semantic Versioning](https://semver.org/). Its public interface is: the plugin name; the skill
 names and their slash commands; the agent name; who may invoke each skill; the arguments each skill takes; the
-garden site layout (the `refs/garden/log`, `refs/garden/census` and `refs/garden/pending/<sha>` refs, the `garden`
-branch, `.garden/patterns.json`, `bed/<class>` bed branches); the `refs/garden/log`, `refs/garden/census` and
+garden site layout (the `refs/garden/log`, `refs/garden/census`, `refs/garden/pending/<sha>` and
+`refs/garden-unpushed/beds/<class>` refs, the `garden` branch, `.garden/patterns.json`, `bed/<class>` bed branches); the `refs/garden/log`, `refs/garden/census` and
 `refs/garden/beds/<class>` refs the site shares on the repository's `origin`, and the `lzGardening.share`,
 `lzGardening.name` and `lzGardening.email` settings;
 the formats of the event files and
@@ -37,8 +37,8 @@ First release.
 - `lz-tend` skill (`/lz-gardening:lz-tend [<class>] [--base <branch>]`): takes one class of queued weeds, adds the
   check that keeps it from growing back, then fixes or baselines every instance.
   - Claim: claims its class first, so no other clone tends it at the same time. A claim lasts six hours, and the
-    earliest live claim on `origin` wins. A claim names its holder by `lzGardening.name`, else by the first 8
-    characters of the site's random writer id, never by `user.name`.
+    earliest live claim on `origin` wins. A claim names its holder by `lzGardening.name`, else by `writer` and the
+    first 8 characters of the site's random writer id, never by `user.name`.
   - Bed: works in a bed, a worktree of the site on branch `bed/<class>`, with the checkout's Node.js dependencies
     linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). A class tended again before its bed
     lands is tended in the same bed.

@@ -49,9 +49,7 @@ the session's working directories (the session's environment lists any added one
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
 - Stop at a refused command: report it and end the tend pass, as when a step's done condition is not met. The
-  refusal is the user's answer, so the pass ends there. A refused `git rm` is not run as `rm`, a refused `sed` is
-  not done with the Edit tool, a refused redirect is not turned into a pipe, and a refused command is not sent again
-  in another form, the forms above included.
+  refusal is the user's answer to the command in every form, the forms above included, so the pass ends there.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.
@@ -78,8 +76,9 @@ Such a copy is kept, not removed, and the check pins the copies instead. A class
 whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
 each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule too narrow, a
 suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
-`(check: <where> not on the base)` when its bed has not landed, or the check's file is gone from the base. When the bed
-has not landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to
+`(check: <where> not on the base)` when its bed had not landed as of the garden's last census, or the check's file is
+gone from the base; a tend pass takes no census, so a bed that landed since still reads so. When the bed has not
+landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to
 the base, and change the check only if it misses the new weeds.
 
 Then decide, and say which:

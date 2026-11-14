@@ -1,5 +1,7 @@
 // Run: node --test weeds-landed.test.ts
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { commit, repo } from './test-repo.ts';
@@ -81,6 +83,27 @@ test("add --census judges the check at this tick's census, so a bed that landed 
     back.stdout,
     `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
   );
+});
+
+test('a regrown weed whose check git cannot judge exits 2 and is not added', (t) => {
+  const { dir } = tendedBed(t, {
+    'eslint.config.mjs': "export default [{ rules: { 'no-explicit-any': 'error' } }];\n",
+  });
+  const realSpawnSync = childProcess.spawnSync;
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const [, gitArgs, options] = args;
+
+    return Array.isArray(gitArgs) && gitArgs.includes('patch-id')
+      ? Reflect.apply(realSpawnSync, childProcess, ['git', ['patch-id', '--no-such-option'], options])
+      : Reflect.apply(realSpawnSync, childProcess, args);
+  });
+  syncBuiltinESMExports();
+
+  const failed = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  spawned.mock.restore();
+  syncBuiltinESMExports();
+
+  assert.deepEqual([failed.code, failed.stdout, cli(dir, ['list', '--class', 'any-type']).stdout], [2, '', '']);
 });
 
 test('a check added to a file the base already has is on the base once its bed lands by squash', (t) => {

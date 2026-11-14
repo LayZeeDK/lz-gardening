@@ -1,6 +1,6 @@
 // The git process layer of the garden store: every git process the scripts start runs here, in the run's environment
 // without the variables that point git at another repository, and every write with no hook and no signing.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -156,6 +156,48 @@ function spawnGit(
   return result;
 }
 
+interface GitRun {
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+// The async form of a read, for reads that run side by side. A run's state does not reach work that outlives inRun,
+// so the caller takes gitEnv inside the run and passes it in.
+export function runGitAsync(cwd: string, args: readonly string[], env: Readonly<NodeJS.ProcessEnv>): Promise<GitRun> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn('git', args, { cwd, env });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
+    child.on('error', reject);
+    // Stryker disable next-line LzNodeEventName: exit differs from close only when it fires before stdout is fully read, which no test can force
+    child.on('close', (code) => {
+      resolvePromise({
+        // Stryker disable next-line LzJsNumericLiteral: a code is null only when a signal ends git, which no input to the census causes
+        code: code ?? 2,
+        stdout: Buffer.concat(out).toString('utf8'),
+        stderr: Buffer.concat(err).toString('utf8'),
+      });
+    });
+  });
+}
+
+export async function gitAsync(
+  cwd: string,
+  args: readonly string[],
+  env: Readonly<NodeJS.ProcessEnv>,
+): Promise<string> {
+  const result = await runGitAsync(cwd, args, env);
+
+  if (result.code !== 0) {
+    throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
+  }
+
+  return result.stdout.trim();
+}
+
 export function git(cwd: string, args: readonly string[], options: GitInput = {}): string {
   const result = runGit(cwd, args, options);
 
@@ -177,7 +219,7 @@ export function gitSucceeds(cwd: string, args: readonly string[], options: GitIn
 }
 
 /** The first line of git's message, as a reason to print. */
-export function reasonOf(stderr: string): string {
+export function gitReason(stderr: string): string {
   return stderr.trim().split('\n')[0]?.trim() ?? '';
 }
 
