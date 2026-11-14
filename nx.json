@@ -6,6 +6,7 @@
   },
   "pluginsConfig": { "@nx/js": { "analyzeSourceFiles": false } },
   "plugins": [
+    "./tools/nx/claude-plugin.ts",
     { "plugin": "@nx/eslint/plugin", "options": { "targetName": "lint" } },
     { "plugin": "@nx/js/typescript", "options": { "typecheck": { "targetName": "typecheck" }, "build": false } }
   ],

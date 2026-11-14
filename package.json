@@ -7,8 +7,8 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-    "check": "nx run-many -t lint typecheck test && node --test \"plugins/lz-gardening/skills/*/scripts/*.test.ts\" && prettier --check --cache .",
-    "test:mutation": "stryker run"
+    "postinstall": "npm ci --prefix plugins/lz-gardening --ignore-scripts --no-audit --no-fund",
+    "check": "nx run-many -t lint typecheck test lockfile && prettier --check --cache ."
   },
   "devDependencies": {
     "@nx/devkit": "24.0.6",

@@ -1,7 +1,7 @@
 // @ts-check
 // The site and census tests build git repositories (about a minute a run each), so mutate one script at a time
 // against its own tests:
-//   MUTATE=weeds npm run test:mutation      (weeds, site, census or store; every script when unset)
+//   npm exec -- nx mutate-weeds lz-gardening      (one mutate-<script> target per script; mutate runs them all)
 // A script split into modules mutates each of them: MUTATE=store mutates store-git.ts, store-log.ts and the rest.
 // The command runner reruns every test of the script for every mutant. With LZ_NODE_TEST_RUNNER set to the source
 // entry of an @layzee/stryker-node-test-runner checkout, Stryker runs per mutant only the tests that cover it, and
