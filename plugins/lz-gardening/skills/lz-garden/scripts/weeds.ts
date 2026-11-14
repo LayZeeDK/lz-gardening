@@ -14,8 +14,8 @@
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
 //     pass added a check; close-class only), --one-off <reason> (no check written), --keep <reason> (the weed is
 //     deliberate). Values are one line of text without control characters. Both sync with origin before they plan
-//     and after they append, then print `<closed|kept> <n>; <share state>`; a bed origin did not take is named on
-//     stderr. close-class acts only when that first sync leaves the share state synced or local and this writer
+//     and after they append, then print `<closed|kept> <n>; <share state>`; the last sync's reason and a bed origin
+//     did not take are named on stderr. close-class acts only when that first sync leaves the share state synced or local and this writer
 //     holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check the claim of <class>:
 //     <state> (<reason>)`, `this site holds no claim of <class>; run weeds claim --class <class>` or `<class> is
 //     claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of the class. close --id
@@ -25,10 +25,11 @@
 //     Claims the class, or the first one groups --ready lists, for six hours, and shares the claim:
 //     `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
 //     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state> (<reason>)`, the last
-//     after releasing the claim (`; release pending` when that release is not shared yet).
+//     after releasing the claim (`; release pending` when that release is not shared yet). A bed origin did not take
+//     in its first sync is named on stderr.
 //   node weeds.ts release --class <kebab>
-//     Ends this writer's claim and shares the release: `released <class>; <share state>`; exit 1 with
-//     `no claim of <class> held here`.
+//     Ends this writer's claim and shares the release: `released <class>; <share state>`, with the sync's reason and
+//     a bed origin did not take on stderr, as close does; exit 1 with `no claim of <class> held here`.
 //   node weeds.ts groups [--min <n>|--ready]  open weeds per class, most first, and who holds a claim of it
 //                                        (tending); --min <n> keeps the classes whose open weeds sit in n or more
 //                                        files (places), and defaults to 1; --ready keeps the classes claim without
@@ -69,7 +70,7 @@ import { append, openSite, readLog } from './store-log.ts';
 import type { Replica, Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
-import type { SyncOptions } from './store-sync.ts';
+import type { SyncOptions, SyncResult } from './store-sync.ts';
 
 function firstUnprintable(values: Readonly<Record<string, string | undefined>>): string | null {
   // Stryker disable next-line StringLiteral: an absent flag has no text, and the mutant's text has no control character either
@@ -323,7 +324,9 @@ const claimRounds = 3;
 
 function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: SyncSeams): number {
   const holder = holderOf(site);
-  sync(site, { ...seams, attempts: syncTries.quick }, now);
+  sync(site, { ...seams, attempts: syncTries.quick }, now).divergedBeds.forEach((bed) => {
+    io.err(`weeds claim: ${escapeUnprintable(bed)}\n`);
+  });
   let owner: ClaimEvent | undefined;
 
   for (let round = 1; round <= (wanted === null ? claimRounds : 1); round += 1) {
@@ -448,6 +451,17 @@ function add(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
+// The sharing sync's reason and the beds origin did not take, on stderr after the line that names the share state.
+function reportShared(io: Io, command: string, shared: SyncResult): void {
+  if (shared.reason !== undefined) {
+    io.err(`weeds ${command}: ${escapeUnprintable(shared.reason)}\n`);
+  }
+
+  shared.divergedBeds.forEach((bed) => {
+    io.err(`weeds ${command}: ${escapeUnprintable(bed)}\n`);
+  });
+}
+
 function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date, seams: SyncSeams): number {
   const request = parseCloseFlags(command, flags);
 
@@ -494,14 +508,7 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
     case 'kept': {
       const shared = sync(site, { ...seams, attempts: syncTries.sharing }, now);
       writeLine(io, `${outcome.said} ${String(outcome.closed.length)}; ${shared.state}`);
-
-      if (shared.reason !== undefined) {
-        io.err(`weeds ${command}: ${escapeUnprintable(shared.reason)}\n`);
-      }
-
-      shared.divergedBeds.forEach((bed) => {
-        io.err(`weeds ${command}: ${escapeUnprintable(bed)}\n`);
-      });
+      reportShared(io, command, shared);
 
       return 0;
     }
@@ -540,7 +547,9 @@ function release(io: Io, flags: Flags, now: Date, seams: SyncSeams): number {
     return 1;
   }
 
-  writeLine(io, `released ${weedClass}; ${sync(site, { ...seams, attempts: syncTries.sharing }, now).state}`);
+  const shared = sync(site, { ...seams, attempts: syncTries.sharing }, now);
+  writeLine(io, `released ${weedClass}; ${shared.state}`);
+  reportShared(io, 'release', shared);
 
   return 0;
 }

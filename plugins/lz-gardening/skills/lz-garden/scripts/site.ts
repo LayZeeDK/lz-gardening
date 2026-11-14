@@ -5,8 +5,9 @@
 //   node site.ts open [--base <branch>]     create the site if missing, plant the garden log and the writer id if
 //                                           missing, resolve the base (--base, else the census's base, else
 //                                           origin's default), sync once; prints {site, created, base, seeded,
-//                                           shared}, seeded once the log holds a seed event, shared being the share
-//                                           state: local, synced, offline, read-only or behind
+//                                           shared} and reason when there is one, seeded once the log holds a seed
+//                                           event, shared being the share state: local, synced, offline, read-only
+//                                           or behind
 //   node site.ts sync [--census <sha> [--seeded]]
 //                                           sync with origin, up to 5 tries; with --census, record the census
 //                                           census.ts took of <sha> unless the garden's census is of that commit or
@@ -213,6 +214,7 @@ interface Opened {
 interface OpenSummary extends Opened {
   readonly seeded: boolean;
   readonly shared: ShareState;
+  readonly reason: string | undefined;
 }
 
 interface SyncSummary {
@@ -474,6 +476,10 @@ function parseCommand(
   return undefined;
 }
 
+function printableReason(result: SyncResult): string | undefined {
+  return result.reason === undefined ? undefined : escapeUnprintable(result.reason);
+}
+
 function reportSync(io: Io, result: SyncResult): void {
   if (result.sharedCensusIgnored === true) {
     io.err(
@@ -526,7 +532,7 @@ function main(argv: readonly string[], io: Io): number {
       const shared = sync(withWriter({ checkout: top, path: site }), { attempts: syncTries.quick });
       reportSync(io, shared);
       const seeded = replay(readLog({ path: site }).events, new Date()).seeded;
-      summary = { ...opened, seeded, shared: shared.state };
+      summary = { ...opened, seeded, shared: shared.state, reason: printableReason(shared) };
       break;
     }
     case 'sync': {
@@ -545,7 +551,7 @@ function main(argv: readonly string[], io: Io): number {
       summary = {
         shared: shared.state,
         events: shared.pushedEvents,
-        reason: shared.reason === undefined ? undefined : escapeUnprintable(shared.reason),
+        reason: printableReason(shared),
         conflicts: shared.conflicts.length === 0 ? undefined : shared.conflicts,
       };
       break;

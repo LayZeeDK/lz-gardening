@@ -248,6 +248,19 @@ test('open in a repository with no origin reports the garden as local', (t) => {
   assert.deepEqual([result.status, result.summary.get('shared')], [0, 'local'], result.stderr);
 });
 
+test('open to an origin it cannot reach prints offline with what git said', (t) => {
+  const { dir } = planted(t);
+  git(dir, ['remote', 'add', 'origin', join(dirname(dir), 'missing.git')]);
+
+  const result = site(dir, ['open', '--base', 'main']);
+
+  assert.deepEqual([result.status, result.summary.get('shared')], [0, 'offline'], result.stderr);
+  assert.match(
+    String(result.summary.get('reason')),
+    /^fatal: '.*missing\.git' does not appear to be a git repository$/,
+  );
+});
+
 test('open pushes the events a run appended but never shared, as after a crash before its sync', (t) => {
   const { dir, garden } = planted(t);
   const remote = bareRemote(dir);

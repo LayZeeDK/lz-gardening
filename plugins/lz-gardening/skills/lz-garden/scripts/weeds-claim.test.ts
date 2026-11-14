@@ -241,6 +241,19 @@ test('release --class by a site holding no claim of the class says so, exits 1 a
   );
 });
 
+test('release whose origin can no longer be reached releases, exits 0, and says why it shared nothing', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  addWeed(dir, 'src/a.ts:1');
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  git(dir, ['remote', 'set-url', 'origin', join(dirname(dir), 'missing.git')]);
+
+  const released = cli(dir, ['release', '--class', 'any-type'], process.env, now);
+
+  assert.deepEqual([released.code, released.stdout], [0, 'released any-type; offline\n']);
+  assert.match(released.stderr, /^weeds release: fatal: '.*missing\.git' does not appear to be a git repository\n$/);
+});
+
 test('claim and release with a class that is not a kebab-case class id are usage errors', (t) => {
   const { dir } = planted(t);
 

@@ -156,6 +156,27 @@ test('close-class --tended whose bed does not descend from the shared bed names 
   );
 });
 
+test('claim names on stderr a bed its first sync could not share', (t) => {
+  const { dir, garden } = planted(t);
+  bareRemote(dir);
+  const bed = anyTypeBedFromMain(garden);
+  addWeed(dir, 'src/a.ts:1');
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(tendedClose(dir, commit(bed, { 'checks/a.mjs': 'export {};\n' })).code, 0);
+  git(bed, ['reset', '-q', '--hard', 'HEAD~1']);
+  addWeed(dir, 'src/b.ts:1');
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(tendedClose(dir, commit(bed, { 'checks/a.mjs': 'export const b = 1;\n' })).code, 0);
+  addWeed(dir, 'src/c.ts:1');
+
+  const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
+
+  assert.deepEqual(
+    [claimed.code, claimed.stderr],
+    [0, "weeds claim: any-type: bed/any-type does not descend from origin's bed\n"],
+  );
+});
+
 test('close on a garden with no origin prints what it closed and the share state local', (t) => {
   const { dir } = planted(t);
   const id = addWeed(dir, 'src/a.ts:1');
