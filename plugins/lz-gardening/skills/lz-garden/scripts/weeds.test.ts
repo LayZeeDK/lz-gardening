@@ -139,6 +139,13 @@ test('validation refuses an absolute --where, so no machine path reaches the sha
   );
 });
 
+test('validation takes a one-letter root file with a line, which no drive path looks like', () => {
+  assert.deepEqual(
+    ['a:1', 'b:12', 'C:foo', 'c:1x'].map((where) => validateAdd(input({ where }))),
+    [null, null, '--where must be a repository-relative path', '--where must be a repository-relative path'],
+  );
+});
+
 test('add refuses a layer written other than as plain digits, as hex or with spaces', () => {
   const results = ['0x3', ' 2 '].map((layer) =>
     cli(tmpdir(), ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x', '--layer', layer]),

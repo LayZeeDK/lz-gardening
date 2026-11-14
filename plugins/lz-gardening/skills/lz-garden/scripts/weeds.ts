@@ -79,7 +79,8 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
 }
 
-const fromRootDriveOrHome = /^(?:[/\\~]|[a-z]:)/i;
+// A letter, a colon and only digits is a root file with a line, as a:1, not a drive.
+const fromRootDriveOrHome = /^(?:[/\\~]|[a-z]:(?!\d+$))/i;
 const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;
 function notRepositoryRelative(path: string): boolean {
   return fromRootDriveOrHome.test(path) || throughParent.test(path);
