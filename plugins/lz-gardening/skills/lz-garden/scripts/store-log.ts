@@ -89,7 +89,11 @@ export function writeLogIfStill(
     return true;
   }
 
-  if (tip === null || git(site.path, ['rev-parse', '--verify', logRef]) === tip) {
+  // A write that failed while the log is still as planned is an error; a log that moved, or that another writer
+  // started, lost this write the race.
+  const logNow = optionalGit(site.path, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true }) ?? null;
+
+  if (logNow === tip) {
     throw new Error(`git fast-import ${logRef}: ${imported.stderr.trim()}`);
   }
 

@@ -525,16 +525,6 @@ test('a writer id planted during a command is the one that command reads back', 
   assert.equal(read, git(garden, ['config', 'lzGardening.writer']));
 });
 
-test('starting a log where one exists is refused and leaves the log as it was', (t) => {
-  const { dir, garden } = planted(t);
-  const before = git(garden, ['rev-parse', '--verify', logRef]);
-
-  assert.throws(() => {
-    startLog({ path: garden, checkout: dir });
-  }, /^Error: git fast-import refs\/garden\/log: warning: not updating refs\/garden\/log .*$/s);
-  assert.equal(git(garden, ['rev-parse', '--verify', logRef]), before);
-});
-
 test('a planted log holds format 1 in garden.json, in a commit named garden: log', (t) => {
   const { garden } = planted(t);
 
@@ -774,6 +764,28 @@ test("an append starts git only to read the log, the checkout's settings for who
         : undefined,
     ),
     ['rev-parse', 'ls-tree', 'cat-file', 'config', 'fast-import'],
+  );
+});
+
+test('a start of the log that another writer beat keeps the log that writer started', (t) => {
+  const { dir, garden } = planted(t);
+  const tip = git(garden, ['rev-parse', logRef]);
+
+  startLog({ path: garden, checkout: dir });
+
+  assert.equal(git(garden, ['rev-parse', logRef]), tip);
+});
+
+test("a start of the log that fails while there is still no log throws git's message", (t) => {
+  const { dir, garden } = planted(t);
+  git(garden, ['update-ref', '-d', logRef]);
+  writeFileSync(join(garden, '.git', 'refs', 'garden', 'log.lock'), '');
+
+  assert.throws(
+    () => {
+      startLog({ path: garden, checkout: dir });
+    },
+    { message: /^git fast-import refs\/garden\/log: .*cannot lock ref 'refs\/garden\/log'/s },
   );
 });
 
