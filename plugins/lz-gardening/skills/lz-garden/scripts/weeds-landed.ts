@@ -99,14 +99,15 @@ function checkOffBase(cwd: string, ground: Ground | undefined, tended: TendedClo
 }
 
 export function offBaseIn(cwd: string, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {
-  const known = new Map<TendedClose, BaseLabel>();
+  // Keyed by what the label depends on: a retried append replays the log into new objects.
+  const known = new Map<string, BaseLabel>();
   let ground: { readonly value: Ground | undefined } | undefined;
 
   return (tended) => {
     ground ??= { value: groundOf(site, census) };
-    const offBase = known.get(tended) ?? checkOffBase(cwd, ground.value, tended);
-    // Stryker disable next-line CallExpression: without the cache, each weed works out the same label again
-    known.set(tended, offBase);
+    const key = `${tended.by}\0${tended.check}`;
+    const offBase = known.get(key) ?? checkOffBase(cwd, ground.value, tended);
+    known.set(key, offBase);
 
     return offBase;
   };

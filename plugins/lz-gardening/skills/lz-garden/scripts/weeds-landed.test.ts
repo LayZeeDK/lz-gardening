@@ -7,7 +7,10 @@ import { test } from 'node:test';
 import { commit, repo } from './test-repo.ts';
 import { site, writeCensus } from './test-site.ts';
 import { cli, eslintConfig, tendedBed } from './test-weeds.ts';
-import { weedId } from './log.ts';
+import { parseEvent, weedId } from './log.ts';
+import type { TendedClose } from './log.ts';
+import { logFiles } from './test-log.ts';
+import { offBaseIn } from './weeds-landed.ts';
 
 test('a weed that comes back before its bed lands names the check as not on the base', (t) => {
   const { dir, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
@@ -215,4 +218,25 @@ test('a bed that changed its check in two commits is not on the base while only 
     back.stdout,
     `regrown ${weedId('any-type', 'src/c.ts:1', 'commit:ddd4444')} after bed/any-type@${tip} (check: eslint.config.mjs not on the base)\n`,
   );
+});
+
+test('the same tended close read again, as a retried append reads it, is judged once', (t) => {
+  const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const [path = '', event] = [...logFiles(garden)].find(([, file]) => file['kind'] === 'tended') ?? [];
+  const readAgain = (): TendedClose => {
+    const read = parseEvent(path, JSON.stringify(event));
+    assert.ok(typeof read !== 'string' && read.op === 'close' && read.kind === 'tended');
+
+    return read;
+  };
+  const offBase = offBaseIn(dir, garden, undefined);
+  const first = offBase(readAgain());
+  const spawned = t.mock.method(childProcess, 'spawnSync');
+  syncBuiltinESMExports();
+
+  const again = offBase(readAgain());
+  spawned.mock.restore();
+  syncBuiltinESMExports();
+
+  assert.deepEqual([first, again, spawned.mock.callCount()], ['not on the base', 'not on the base', 0]);
 });
