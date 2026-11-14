@@ -305,6 +305,20 @@ test('a lockfile npm wrote for an empty dependency list passes the lockfile chec
   assert.equal(checkLockfile(root).status, 0);
 });
 
+test('the lockfile check runs npm without a deprecation warning', (t) => {
+  const root = workspace(t, {
+    'package.json': JSON.stringify({ name: 'x', private: true }),
+    'package-lock.json': JSON.stringify({
+      name: 'x',
+      lockfileVersion: 3,
+      requires: true,
+      packages: { '': { name: 'x' } },
+    }),
+  });
+
+  assert.doesNotMatch(checkLockfile(root).stderr, /DeprecationWarning/);
+});
+
 test('the lockfile check names its usage when it gets no plugin root', () => {
   const { status, stderr } = spawnSync(process.execPath, [cli, 'lockfile'], { encoding: 'utf8' });
 

@@ -207,10 +207,11 @@ function checkLockfile(root: string): number {
     return 1;
   }
 
-  const npm = spawnSync('npm', ['ci', '--dry-run', '--ignore-scripts', '--no-audit', '--no-fund'], {
+  // One constant command string: Node.js deprecates an argument array with shell, which Windows needs for npm.cmd.
+  const npm = spawnSync('npm ci --dry-run --ignore-scripts --no-audit --no-fund', {
     cwd: root,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: true,
   });
 
   return npm.status ?? 1;
