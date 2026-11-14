@@ -428,6 +428,18 @@ test('definitions in .tsx, .cts, .js and .cjs files count', async (t) => {
   assert.deepEqual(census.duplicates, { isRecord: ['src/a.tsx', 'src/b.cts'], toKey: ['src/c.js', 'src/d.cjs'] });
 });
 
+test('.jsx files are source files: their hits and definitions count', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.jsx': 'function Button() {} // eslint-disable-line\n',
+    'src/b.jsx': 'function Button() {}\n',
+  });
+
+  const census = await takeCensus(dir, 'HEAD', set, now);
+
+  assert.deepEqual([census.counts['eslint-disable'], census.duplicates], [1, { Button: ['src/a.jsx', 'src/b.jsx'] }]);
+});
+
 test('duplicate names are listed in alphabetical order', async (t) => {
   const dir = repo(t);
   commit(dir, {

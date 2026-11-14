@@ -47,7 +47,7 @@ First release.
   commits add a line or a message holding one of those paths, merges and binary files included. Each census
   carries the site's `.garden/patterns.json` as it is, unchecked, so it is shared too; a site without one takes its
   census with the extra patterns of the shared census. A census pattern without `paths` searches the JavaScript and
-  TypeScript source files only (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`), and the bundled
+  TypeScript source files only (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`), and the bundled
   `angular-structural-directive` pattern searches `.html` and `.ts` files. The census stores each hit's text cut to
   200 characters, marked `...`. Its summary counts the commits from the previous census to this one (`commits`,
   merges left out), its `+ duplicate <name>:` line names the files that define the name since the previous census

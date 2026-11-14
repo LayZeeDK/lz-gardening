@@ -47,7 +47,7 @@ export interface PatternDelta {
 const hitCap = 1000;
 
 // The files duplicate helpers are looked for in, and those a pattern without paths searches.
-const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
+const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 
 function stringArray(value: unknown, what: string): string[] {
   if (value === undefined) {
