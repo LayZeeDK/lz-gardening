@@ -248,22 +248,25 @@ async function grepRevision(
 
 export async function takeCensus(cwd: string, rev: string, set: PatternSet, now: Date, env: Env): Promise<Census> {
   const sha = await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env);
-  const results = await Promise.all(
-    set.patterns.map(
-      async (pattern) =>
-        [
-          pattern.id,
-          await grepRevision(
-            cwd,
-            env,
-            sha,
-            pattern.regex,
-            pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
+  const [results, duplicates] = await Promise.all([
+    Promise.all(
+      set.patterns.map(
+        async (pattern) =>
+          [
             pattern.id,
-          ),
-        ] as const,
+            await grepRevision(
+              cwd,
+              env,
+              sha,
+              pattern.regex,
+              pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
+              pattern.id,
+            ),
+          ] as const,
+      ),
     ),
-  );
+    findDuplicates(cwd, env, sha, set.exclude),
+  ]);
 
   return {
     rev: branchName(rev),
@@ -271,7 +274,7 @@ export async function takeCensus(cwd: string, rev: string, set: PatternSet, now:
     takenAt: now.toISOString(),
     counts: Object.fromEntries(results.map(([id, hits]) => [id, hits.length])),
     hits: Object.fromEntries(results.map(([id, hits]) => [id, hits.slice(0, hitCap)])),
-    duplicates: await findDuplicates(cwd, env, sha, set.exclude),
+    duplicates,
   };
 }
 
