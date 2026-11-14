@@ -931,6 +931,58 @@ test("add refuses a note holding a drive's folder in Git Bash's form, /<drive>/ 
   );
 });
 
+test("add refuses a note holding a drive's folder in WSL's form, /mnt/<drive>/ in place of <drive>:\\", (t) => {
+  const { dir, garden } = planted(t);
+  homeAt(t, 'Q:\\Users\\gardener');
+
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:any-type',
+    '--note',
+    'copied from /mnt/q/Users/gardener/notes.txt',
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
+      0,
+    ],
+  );
+});
+
+test("add refuses a note holding a drive's folder in Cygwin's form, /cygdrive/<drive>/ in place of <drive>:\\", (t) => {
+  const { dir, garden } = planted(t);
+  homeAt(t, 'Q:\\Users\\gardener');
+
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:any-type',
+    '--note',
+    'copied from /cygdrive/q/Users/gardener/notes.txt',
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
+      0,
+    ],
+  );
+});
+
 test("add takes a note whose repository path holds the home folder's name inside it, as a home of /root holds src/root", (t) => {
   const { dir, garden } = planted(t);
   homeAt(t, '/root');

@@ -259,8 +259,11 @@ export function machinePathTest(site: Pick<Site, 'checkout' | 'path'>): (text: s
   const paths = [homedir(), site.checkout, site.path]
     .map((path) => fold(path).replace(/\/+$/, ''))
     .filter((path) => !/^(?:[a-z]:)?$/.test(path))
-    // Git Bash writes d:/x as /d/x, and WSL's /mnt/d/x and Cygwin's /cygdrive/d/x hold that too.
-    .flatMap((path) => [path, path.replace(/^([a-z]):\//, '/$1/')]);
+    // Git Bash writes d:/x as /d/x, WSL as /mnt/d/x and Cygwin as /cygdrive/d/x.
+    .flatMap((path) => [
+      path,
+      ...['/', '/mnt/', '/cygdrive/'].map((prefix) => path.replace(/^([a-z]):\//, `${prefix}$1/`)),
+    ]);
   const holds = (text: string, path: string): boolean => {
     for (let at = text.indexOf(path); at !== -1; at = text.indexOf(path, at + 1)) {
       if (!/[\w.-]/.test(text.charAt(at - 1)) && !/[\w.-]/.test(text.charAt(at + path.length))) {
