@@ -30,24 +30,26 @@ interface Landing {
 function bedChangeOnBase({ cwd, withSite, where, fork, base, tip }: Landing): boolean | undefined {
   const diffOptions = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
   const checkPath = ['--', `:(top,literal)${where}`];
-  const patchIdOf = (diffArgs: readonly string[]): string | undefined => {
-    const diff = git(cwd, [...diffArgs, ...checkPath], withSite);
-
-    return diff === '' ? undefined : git(cwd, ['patch-id'], { ...withSite, input: diff }).split(' ')[0];
-  };
-  const bedChange = patchIdOf(['diff-tree', '-p', ...diffOptions, fork, tip]);
+  // patch-id prints `<patch id> <commit>` for each commit's diff it reads, and nothing for no diff.
+  const patchIdsOf = (diffs: string): readonly string[] =>
+    git(cwd, ['patch-id'], { ...withSite, input: diffs }).match(/^\S+(?= )/gm) ?? [];
+  const [bedChange] = patchIdsOf(git(cwd, ['diff-tree', '-p', ...diffOptions, fork, tip, ...checkPath], withSite));
 
   if (bedChange === undefined) {
     return undefined;
   }
 
-  // An empty range prints nothing, which splits into one blank line, and a blank is no commit.
-  const isCommit = (line: string): boolean => line !== '';
-  const patchIdsIn = (range: string): (string | undefined)[] =>
-    git(cwd, ['rev-list', '--no-merges', range, ...checkPath], withSite)
-      .split('\n')
-      .filter(isCommit)
-      .map((commit) => patchIdOf(['diff-tree', '-p', '--root', '--no-commit-id', ...diffOptions, commit]));
+  // One diff-tree reads every commit of the range, so a range costs three git processes however long it is.
+  const patchIdsIn = (range: string): readonly string[] => {
+    const commits = git(cwd, ['rev-list', '--no-merges', range, ...checkPath], withSite);
+
+    return patchIdsOf(
+      git(cwd, ['diff-tree', '--stdin', '-p', '--root', ...diffOptions, ...checkPath], {
+        ...withSite,
+        input: `${commits}\n`,
+      }),
+    );
+  };
   const onBase = new Set(patchIdsIn(`${fork}..${base}`));
 
   return onBase.has(bedChange) || patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
