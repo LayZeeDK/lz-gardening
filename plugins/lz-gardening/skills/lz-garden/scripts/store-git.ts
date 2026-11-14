@@ -120,7 +120,7 @@ export function namedHooksOff(cwd: string): readonly string[] {
   return [...names].map((name) => `--config-env=hook.${name}.enabled=${hookOffVariable}`);
 }
 
-interface GitInput {
+export interface GitInput {
   readonly input?: string;
   readonly env?: Readonly<NodeJS.ProcessEnv>;
   readonly readsOnly?: boolean;

@@ -130,7 +130,7 @@ export function plantWriter(site: string): void {
   }
 }
 
-export function siteOf(cwd: string): { readonly checkout: string; readonly path: string } {
+export function siteOf(cwd: string): Pick<Site, 'checkout' | 'path'> {
   const checkout = resolve(mainCheckout(cwd));
 
   if (basename(checkout).endsWith('.garden')) {

@@ -558,7 +558,7 @@ function main(argv: readonly string[], io: Io): number {
   }
 }
 
-type Located = ReturnType<typeof siteOf>;
+type Located = Pick<Site, 'checkout' | 'path'>;
 
 function printSummary(io: Io, summary: OpenSummary | SyncSummary | BedSummary): number {
   io.out(`${JSON.stringify(summary)}\n`);
