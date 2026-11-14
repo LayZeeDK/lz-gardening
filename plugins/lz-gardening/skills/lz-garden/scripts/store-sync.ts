@@ -58,7 +58,7 @@ interface Change {
 
 // diff-tree -z prints each change as ":<mode> <mode> <oid> <oid> <status>" and its path, NUL after each.
 function diffTree(site: string, shared: string, local: string): readonly Change[] {
-  const fields = git(site, ['diff-tree', '-r', '--no-renames', '-z', shared, local]).split('\0');
+  const fields = git(site, ['diff-tree', '-r', '--no-renames', '-z', shared, local], { readsOnly: true }).split('\0');
 
   return Array.from({ length: Math.floor(fields.length / 2) }, (_, index) => {
     // Stryker disable next-line StringLiteral: diff-tree prints five fields and a path for every change, so no default applies
