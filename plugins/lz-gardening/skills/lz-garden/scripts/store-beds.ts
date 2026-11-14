@@ -126,6 +126,7 @@ interface Bed {
 interface BedPlan {
   readonly pushing: readonly Bed[];
   readonly diverged: readonly string[];
+  readonly landed: readonly Bed[];
 }
 
 const marked: unique symbol = Symbol('marked');
@@ -143,9 +144,14 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
 
     return name.startsWith(bedBranches) && tipOf(fetchedBeds, weedClass) !== oid ? [{ weedClass, tip: oid }] : [];
   });
+  const landed = [...tips].flatMap(([name, oid]) => {
+    const weedClass = name.slice(unpushedBeds.length);
+
+    return name.startsWith(unpushedBeds) && tipOf(fetchedBeds, weedClass) === oid ? [{ weedClass, tip: oid }] : [];
+  });
 
   if (candidates.length === 0) {
-    return { pushing: [], diverged: [] };
+    return { pushing: [], diverged: [], landed };
   }
 
   const { events } = readReplica(site.path, logRef);
@@ -175,11 +181,15 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
     why === undefined ? [] : [`${weedClass}: bed/${weedClass} ${why}`],
   );
 
-  return { pushing, diverged };
+  return { pushing, diverged, landed };
 }
 
-// Each bed to push stays marked until a sync sees it land.
+// Each bed to push stays marked until a sync sees it land: in its push's report, or fetched from origin.
 export function markUnpushed(site: Site, plan: BedPlan): MarkedBeds {
+  plan.landed.forEach(({ weedClass, tip }) => {
+    unmark(site, weedClass, tip);
+  });
+
   if (plan.pushing.length > 0) {
     git(site.path, ['update-ref', '--stdin'], {
       input: plan.pushing.map(({ weedClass, tip }) => `update ${unpushedBedRef(weedClass)} ${tip}\n`).join(''),
