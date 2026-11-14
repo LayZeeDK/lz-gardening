@@ -443,6 +443,22 @@ test('a sync --census whose last record another sync of the site beat keeps the 
   );
 });
 
+test('a sync --census whose last record another sync of the site beat says the census stays pending', (t) => {
+  const place = planted(t);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
+  const other = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
+  writePendingCensus({ path: place.garden, checkout: place.dir }, other, censusText(other));
+  anotherSyncMovesTheCensusFirst(t, place.garden, git(place.garden, ['rev-parse', pendingCensusRef(other)]));
+
+  const synced = site(place.dir, ['sync', '--census', sha]);
+
+  assert.deepEqual(
+    [synced.status, synced.stderr],
+    [0, `site: another sync moved the census first; the census of ${sha} stays pending for the next sync\n`],
+  );
+});
+
 test('a census move that fails while the census is as it was stops the sync with what git said', (t) => {
   const place = planted(t);
   const sha = git(place.dir, ['rev-parse', 'HEAD']);

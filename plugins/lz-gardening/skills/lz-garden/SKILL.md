@@ -76,7 +76,8 @@ shortened with `git rev-parse --short <sha>`. Done when it exits 0; then take th
 - `previousSha` is `null` on a seeded site: there is nothing this checkout can compare against (the census was
   removed, or another clone recorded it at a commit this checkout has not fetched). Run
   `node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>`, reply with the one line
-  `garden: census recorded on <base> at <short sha>`, and stop.
+  `garden: census recorded on <base> at <short sha>`, or `garden: census pending on <base> at <short sha>` when it
+  said on stderr that the census stays pending, and stop.
 - `sha` equals `previousSha`: nothing landed. Reply with the one line
   `garden: nothing new on <base> since <short sha>`, and stop.
 
@@ -142,7 +143,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>
 
 `sync --census` records the census of step 2 as the garden's census, unless another clone already recorded one of a
 later commit, and shares it and the queue's new events with the repository's `origin`. Its last line is JSON:
-`shared` (the share state), `events` (how many events it shared), and `reason` when the state has one.
+`shared` (the share state), `events` (how many events it shared), and `reason` when the state has one. It exits 1,
+recording and sharing nothing, when no census of `<sha>` waits to be recorded: run step 2's `census.ts` again, then
+this command. When another sync of this site moved the census first, it says so on stderr, and the census stays
+pending for the next sync to record.
 
 A class whose open weeds sit in two or more places (files) is ready to tend: several agents took the same shortcut.
 `groups --ready` prints the ready classes `lz-tend` takes on its own: not `stale-verification` or `repeated-lesson`,

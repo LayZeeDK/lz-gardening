@@ -96,18 +96,18 @@ test('sync of a site whose events the origin lacks while the origin holds events
   );
 });
 
-test('sync --census --seeded that records the census of a garden with no origin starts 13 git processes', (t) => {
+test('sync --census --seeded that records the census of a garden with no origin starts 14 git processes', (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
   writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha, '--seeded'], env).status),
-    13,
+    14,
   );
 });
 
-test('sync --census that records the census and pushes it, with no other pending census, starts 15 git processes', (t) => {
+test('sync --census that records the census and pushes it, with no other pending census, starts 16 git processes', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
@@ -116,7 +116,7 @@ test('sync --census that records the census and pushes it, with no other pending
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha], env).status),
-    15,
+    16,
   );
 });
 
@@ -179,7 +179,7 @@ test('close-class --tended with an origin and no shared bed starts 35 git proces
   );
 });
 
-test('sync --census with one pending census of an older base left by a crashed tick starts 16 git processes', (t) => {
+test('sync --census with one pending census of an older base left by a crashed tick starts 17 git processes', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
@@ -191,7 +191,7 @@ test('sync --census with one pending census of an older base left by a crashed t
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha], env).status),
-    16,
+    17,
   );
 });
 

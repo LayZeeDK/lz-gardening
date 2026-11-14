@@ -76,6 +76,8 @@ interface Outcome {
   readonly skipped: readonly string[];
   readonly yielded: readonly LostClaim[];
   readonly divergedBeds: readonly string[];
+  // The commit of a pending census another sync of the site beat to the move, so a later sync records it.
+  readonly censusStillPending?: string;
 }
 
 // Only a read-only or synced result reports the census.
@@ -268,9 +270,11 @@ export function sync(site: Site, options: SyncOptions, now = new Date()): SyncRe
     // A try that settled the census recorded the pending one already. A record another sync beat keeps the pending one.
     const settled = recorded ?? recordPendingCensus(site, options.census);
 
-    if (settled !== 'lost to another writer') {
-      finishPendingCensus(site, options.census, settled);
+    if (settled === 'lost to another writer') {
+      return { ...result, censusStillPending: options.census };
     }
+
+    finishPendingCensus(site, options.census, settled);
   }
 
   return result;

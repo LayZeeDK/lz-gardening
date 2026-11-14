@@ -92,8 +92,10 @@ The census is decided by the ancestry of its base commit, read in the checkout. 
 site's unless the site's census is of a commit that descends from the shared one's; a shared census that is not a census
 is left out, named on stderr, and replaced by the next census pushed. `sync --census <sha>` then records the census
 `census.ts` took at `<sha>`, unless the site's census is of `<sha>` or a commit that descends from it: then another run
-already read past it, and the taken census is dropped. A push that loses the shared census to another clone fetches
-again and decides again.
+already read past it, and the taken census is dropped. With no census of `<sha>` taken and the site's census of an
+earlier commit, it exits 1 and records, seeds and shares nothing. A record that another sync of the site beat keeps
+the taken census pending, said on stderr, for the next sync to record. A push that loses the shared census to another
+clone fetches again and decides again.
 
 ## Open, sync
 

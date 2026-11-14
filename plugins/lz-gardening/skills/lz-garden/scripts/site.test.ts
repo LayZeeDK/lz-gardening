@@ -760,6 +760,30 @@ test('sync --census --seeded adds a seed event naming the commit the seed pass r
   );
 });
 
+test('sync --census --seeded with no census taken of that commit logs no seed and says why', (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+
+  const result = site(dir, ['sync', '--census', sha, '--seeded']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, logFiles(garden).size],
+    [1, `site: no census of ${sha} to record: run census.ts --rev ${sha} first\n`, 0],
+  );
+});
+
+test('sync --census of a commit the garden census already covers records nothing and exits 0', (t) => {
+  const { dir, garden } = planted(t);
+  const older = git(dir, ['rev-parse', 'HEAD']);
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  assert.equal(site(dir, ['sync', '--census', pendCensus(dir, garden).sha]).status, 0);
+  const recorded = git(garden, ['rev-parse', censusRef]);
+
+  const result = site(dir, ['sync', '--census', older]);
+
+  assert.deepEqual([result.status, result.stderr, git(garden, ['rev-parse', censusRef])], [0, '', recorded]);
+});
+
 test('open reports the site seeded once sync --census --seeded has run, and not before', (t) => {
   const { dir, garden } = planted(t);
   const before = site(dir, ['open', '--base', 'main']);

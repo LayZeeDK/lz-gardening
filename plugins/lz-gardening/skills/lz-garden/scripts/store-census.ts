@@ -134,6 +134,14 @@ export interface Recorded {
   readonly sha: string | undefined;
 }
 
+// Whether a census of pendingSha waits to be recorded, or the garden's census is of that commit or a later one.
+export function hasCensusOf(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): boolean {
+  const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
+  const held = pending !== undefined || local === undefined ? undefined : censusIn(site.path, local);
+
+  return pending !== undefined || (held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha));
+}
+
 export function recordPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,

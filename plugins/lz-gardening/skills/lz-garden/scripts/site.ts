@@ -13,7 +13,9 @@
 //                                           sync with origin, up to 5 tries; with --census, record the census
 //                                           census.ts took of <sha> unless the garden's census is of that commit or
 //                                           a later one, and with --seeded add the seed event; prints {shared,
-//                                           events} and reason and conflicts when there are any; exit 0 in every state
+//                                           events} and reason and conflicts when there are any; exit 0 in every
+//                                           share state; a census another sync beat to the move stays pending, said
+//                                           on stderr
 //   node site.ts bed --class <kebab> --base <base>
 //                                           sync once, then, while this site holds the claim of the class, fetch
 //                                           the base into the site and make the bed beds/<class> on bed/<class>
@@ -23,8 +25,9 @@
 //                                           being none, linked (to the checkout's node_modules), installed or
 //                                           install, and with install the command that installs the bed's
 //                                           dependencies
-// Exit 0 on success, 1 when bed cannot check the claim or this site does not hold it, 2 on a usage error, a git error
-// or a site or census it cannot use.
+// Exit 0 on success, 1 when bed cannot check the claim or this site does not hold it, or when sync --census has no
+// census of <sha> to record and the garden's census is of an earlier commit (nothing is synced or seeded then), 2 on
+// a usage error, a git error or a site or census it cannot use.
 import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
@@ -55,7 +58,7 @@ import {
   writerKey,
 } from './store-log.ts';
 import type { Site } from './store-log.ts';
-import { censusRef, readCensusAt } from './store-census.ts';
+import { censusRef, hasCensusOf, readCensusAt } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
 import { sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
@@ -509,6 +512,12 @@ function reportSync(io: Io, result: SyncResult): void {
     );
   }
 
+  if (result.censusStillPending !== undefined) {
+    io.err(
+      `site: another sync moved the census first; the census of ${result.censusStillPending} stays pending for the next sync\n`,
+    );
+  }
+
   result.yielded.forEach(({ claim, owner }) => {
     io.err(`site: gave back the claim of ${claim.class}; ${owner.holder} holds it\n`);
   });
@@ -546,6 +555,12 @@ function main(argv: readonly string[], io: Io): number {
       return printSummary(io, openCommand(io, located, parsed.base));
     }
     case 'sync': {
+      if (parsed.census !== undefined && !hasCensusOf(located, parsed.census)) {
+        io.err(`site: no census of ${parsed.census} to record: run census.ts --rev ${parsed.census} first\n`);
+
+        return 1;
+      }
+
       return printSummary(io, syncCommand(io, located, parsed.census, parsed.seeded));
     }
     case 'bed': {
