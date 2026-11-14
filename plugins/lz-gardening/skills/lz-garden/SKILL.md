@@ -108,9 +108,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`.
   Queue one weed per file after `new` on its `+ duplicate` line, and one per file after `already` that
   `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-helper` does not show. First read the
-  definition you would keep and each one you would queue, with `git show <sha>:<path>`. A comment or a doc that says
-  why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike) makes that
-  copy no weed.
+  definition you would keep and each file's own, with `git show <sha>:<path>`, every one of those files. A comment or
+  a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
+  makes that copy no weed. Each of those files ends either queued or on the reply's `left out:` line with its reason.
 - `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
   `~` or one through `..` is refused with exit 2.
 - `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record (the path
@@ -147,11 +147,14 @@ A class whose open weeds sit in two or more places (files) is ready to tend: sev
 `groups --min 2` prints those classes.
 
 Done when `site.ts sync --census <sha>` exits 0. Then reply with this form, every `<slot>` filled as the list below
-says. The reply is these four lines and ends after the last one; the reason for each weed is in its `--note`.
+says. The reply is exactly these five lines: the last character of the reply ends the `shared:` line. The reason for
+each weed is in its `--note`, what was not read is in the counts, and what was not queued is on `left out:`; the
+reply holds nothing the form has no line for.
 
 ```text
 garden: <base> <short previousSha>..<short sha>, <commits> commits, <read> read, <skipped> skipped
 queued <total> (<class> x<n>, ...); regrown: <class> (check: <where>[ not on the base]), ...
+left out: <path> (<reason>), ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)
 ```
@@ -162,6 +165,8 @@ shared: <state> (<reason>)
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
+- `left out`: each file of a new duplicate (step 4) you did not queue, with its reason in a few words, such as
+  `extension/a.js (documented copy: no imports)`; `left out: none` when there is none.
 - `ready to tend`: one entry per row of `groups --min 2`, its `open` and `places` columns, and the first row's class
   after `lz-tend`; `ready to tend: none` when it printed no row.
 - `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.
