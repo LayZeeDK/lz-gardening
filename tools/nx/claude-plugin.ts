@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, globSync, readFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
 import { basename, dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -92,11 +92,9 @@ export function lockfileDrift(packageJson: unknown, lockfile: Lockfile): readonl
 }
 
 function scripts(pluginRoot: string): readonly string[] {
-  const skills = join(pluginRoot, 'skills');
-  const files = readdirSync(skills, { withFileTypes: true })
-    .filter((skill) => skill.isDirectory() && existsSync(join(skills, skill.name, 'scripts')))
-    .flatMap((skill) => readdirSync(join(skills, skill.name, 'scripts')))
-    .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts') && !file.startsWith('test-'));
+  const files = globSync('skills/*/scripts/*.ts', { cwd: pluginRoot })
+    .map((path) => basename(path))
+    .filter((file) => !file.endsWith('.test.ts') && !file.startsWith('test-'));
 
   return [...new Set(files.map((file) => basename(file, '.ts').split('-')[0] ?? file))].sort();
 }

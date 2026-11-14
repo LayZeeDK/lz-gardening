@@ -161,6 +161,8 @@ test('a plugin folder is a project named in its manifest, with one mutate target
     [`${scripts}/store-log.ts`]: '',
     [`${scripts}/test-repo.ts`]: '',
     [`${scripts}/patterns.json`]: '',
+    'plugins/p/skills/notes/SKILL.md': '',
+    'plugins/p/skills/README.md': '',
   });
 
   const project = (await inferred(root, 'plugins/p/.claude-plugin/plugin.json'))?.projects?.['plugins/p'];
@@ -172,10 +174,18 @@ test('a plugin folder is a project named in its manifest, with one mutate target
   );
 });
 
+test('a plugin with no skills folder gets the plugin-wide targets and no per-script mutate target', async (t) => {
+  const root = workspace(t, { 'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }' });
+
+  assert.deepEqual(
+    Object.keys((await inferred(root, 'plugins/p/.claude-plugin/plugin.json'))?.projects?.['plugins/p']?.targets ?? {}),
+    ['test', 'lockfile', 'mutate'],
+  );
+});
+
 test("a plugin's lockfile packages are external nodes of the graph", async (t) => {
   const root = workspace(t, {
     'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
-    'plugins/p/skills/.keep': '',
     'plugins/p/package-lock.json': JSON.stringify({
       lockfileVersion: 3,
       packages: { '': { dependencies: { zod: '4.6.7' } }, 'node_modules/zod': { version: '4.6.7' } },
@@ -190,7 +200,6 @@ test("a plugin's lockfile packages are external nodes of the graph", async (t) =
 test("a plugin's test target runs its specs from its root, cached per Node.js and git version", async (t) => {
   const root = workspace(t, {
     'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
-    'plugins/p/skills/.keep': '',
   });
 
   assert.deepEqual(
@@ -208,7 +217,6 @@ test("a plugin's test target runs its specs from its root, cached per Node.js an
 test("a plugin's lockfile target checks its package.json against its lockfile, cached on both and the check", async (t) => {
   const root = workspace(t, {
     'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
-    'plugins/p/skills/.keep': '',
   });
 
   assert.deepEqual(
@@ -230,7 +238,7 @@ test("a plugin's lockfile target checks its package.json against its lockfile, c
 });
 
 test('a manifest that names no plugin is refused, naming the manifest', async (t) => {
-  const root = workspace(t, { 'plugins/p/.claude-plugin/plugin.json': '{}', 'plugins/p/skills/.keep': '' });
+  const root = workspace(t, { 'plugins/p/.claude-plugin/plugin.json': '{}' });
 
   await assert.rejects(inferred(root, 'plugins/p/.claude-plugin/plugin.json'), {
     message: 'plugins/p/.claude-plugin/plugin.json names no plugin',
