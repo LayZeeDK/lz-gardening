@@ -686,37 +686,40 @@ function byClock(a: GardenEvent, b: GardenEvent): number {
  * A close ends every add of its ids that did not see it; a weed is open while one of its adds is not ended. The
  * earliest unended add opens it, and is regrown when it saw a tend close of its class.
  */
-function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[]): Map<string, OpenWeed> {
+function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[]): ReadonlyMap<string, OpenWeed> {
+  const closesById = Map.groupBy(
+    closes.flatMap((close) => close.ids.map((id) => ({ id, close }))),
+    (named) => named.id,
+  );
   const ended = (event: AddEvent): boolean =>
-    closes.some((close) => closesWeed(close, event.class, event.id) && !event.sawCloses.includes(close.uuid));
-  const openById = new Map<string, OpenWeed>();
+    closesById
+      .get(event.id)
+      ?.some(({ close }) => closesWeed(close, event.class, event.id) && !event.sawCloses.includes(close.uuid)) ?? false;
 
-  for (const event of ordered) {
-    if (event.op !== 'add' || ended(event)) {
-      continue;
-    }
+  return ordered
+    .filter((event): event is AddEvent => event.op === 'add' && !ended(event))
+    .reduce((openById, event) => {
+      const opened = openById.get(event.id);
 
-    const opened = openById.get(event.id);
-
-    if (opened !== undefined) {
-      // Stryker disable next-line EqualityOperator: when the two times are equal, either one is the same string
-      openById.set(event.id, { ...opened, firstAt: event.at < opened.firstAt ? event.at : opened.firstAt });
-    } else {
-      openById.set(event.id, {
-        id: event.id,
-        class: event.class,
-        where: event.where,
-        source: event.source,
-        note: event.note,
-        layer: event.layer,
-        firstAt: event.at,
-        regrownAfter:
-          closes.find((close): close is TendedClose => close.kind === 'tended' && close.uuid === event.sawTend) ?? null,
-      });
-    }
-  }
-
-  return openById;
+      return openById.set(
+        event.id,
+        opened === undefined
+          ? {
+              id: event.id,
+              class: event.class,
+              where: event.where,
+              source: event.source,
+              note: event.note,
+              layer: event.layer,
+              firstAt: event.at,
+              regrownAfter:
+                closes.find((close): close is TendedClose => close.kind === 'tended' && close.uuid === event.sawTend) ??
+                null,
+            }
+          : // Stryker disable next-line EqualityOperator: when the two times are equal, either one is the same string
+            { ...opened, firstAt: event.at < opened.firstAt ? event.at : opened.firstAt },
+      );
+    }, new Map<string, OpenWeed>());
 }
 
 /**
@@ -746,18 +749,12 @@ function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
  * A claim is active until a release names it or its until passes the reader's clock. The earliest active claim of a
  * class owns it; a later claim by the same writer renews it.
  */
-function activeClaims(ordered: readonly GardenEvent[], now: Date): Map<string, ClaimEvent> {
-  const claims = new Map<string, ClaimEvent>();
-
-  for (const event of liveClaims(ordered, now)) {
+function activeClaims(ordered: readonly GardenEvent[], now: Date): ReadonlyMap<string, ClaimEvent> {
+  return liveClaims(ordered, now).reduce((claims, event) => {
     const owner = claims.get(event.class);
 
-    if (owner === undefined || owner.writer === event.writer) {
-      claims.set(event.class, event);
-    }
-  }
-
-  return claims;
+    return owner === undefined || owner.writer === event.writer ? claims.set(event.class, event) : claims;
+  }, new Map<string, ClaimEvent>());
 }
 
 export function replay(events: readonly GardenEvent[], now: Date): Garden {
