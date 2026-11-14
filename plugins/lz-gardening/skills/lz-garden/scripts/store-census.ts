@@ -2,7 +2,7 @@
 // (refs/garden/pending/<sha>), and which of them, or of origin's, the site keeps.
 import { isRecord } from './log.ts';
 import {
-  blobTexts,
+  catFileBatch,
   git,
   gitSucceeds,
   isAncestorInCheckout,
@@ -96,7 +96,9 @@ export function writePendingCensus(site: string, sha: string, text: string, patt
 }
 
 export function readCensusAt(site: string, ref: string): StoredCensus | null | 'not a census' {
-  const [text, patterns] = blobTexts(site, [`${ref}:census.json`, `${ref}:patterns.json`]);
+  const [text, patterns] = catFileBatch(site, [`${ref}:census.json`, `${ref}:patterns.json`], (name) => name).map(
+    ([, object]) => object.text,
+  );
 
   if (text === undefined) {
     return null;

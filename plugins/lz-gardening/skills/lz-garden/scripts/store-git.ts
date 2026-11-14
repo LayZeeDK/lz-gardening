@@ -235,31 +235,53 @@ export function treeEntries(listed: string): readonly TreeEntry[] {
     });
 }
 
-export function blobTexts(site: string, names: readonly string[]): readonly (string | undefined)[] {
+export interface BatchObject {
+  readonly header: string;
+  readonly type: string | undefined;
+  readonly text: string | undefined;
+}
+
+// Reads each item's object, named by nameOf, with its header, and its text when it is a blob. An object git does not
+// have prints its header alone ("<name> missing"); any other prints its size and content. cat-file sizes are in
+// bytes, so the output is read as bytes and each blob decoded on its own.
+export function catFileBatch<T>(
+  cwd: string,
+  items: readonly T[],
+  nameOf: (item: T) => string,
+): readonly (readonly [T, BatchObject])[] {
   const batch = spawnSync('git', ['cat-file', '--batch'], {
-    cwd: site,
-    env: gitEnv(site),
-    input: names.map((name) => `${name}\n`).join(''),
+    cwd,
+    env: gitEnv(cwd),
+    input: items.map((item) => `${nameOf(item)}\n`).join(''),
     maxBuffer: Infinity,
   });
+
+  if (batch.status !== 0) {
+    throw new Error(`git cat-file --batch: ${batch.error?.message ?? batch.stderr.toString().trim()}`);
+  }
+
   const output = batch.stdout;
   let at = 0;
 
-  return names.map(() => {
+  return items.map((item) => {
     const headerEnd = output.indexOf('\n', at);
-    const [, type, size] = output.subarray(at, headerEnd).toString().split(' ');
+    const header = output.subarray(at, headerEnd).toString();
+    const [, type, size] = header.split(' ');
+    const start = headerEnd + 1;
 
-    if (type !== 'blob') {
-      at = headerEnd + 1;
+    if (size === undefined) {
+      at = start;
 
-      return undefined;
+      return [item, { header, type, text: undefined }] as const;
     }
 
-    const start = headerEnd + 1;
     const end = start + Number(size);
     at = end + 1;
 
-    return output.subarray(start, end).toString();
+    return [
+      item,
+      { header, type, text: type === 'blob' ? output.subarray(start, end).toString() : undefined },
+    ] as const;
   });
 }
 

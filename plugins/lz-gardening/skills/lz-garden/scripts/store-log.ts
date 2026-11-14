@@ -1,5 +1,4 @@
 // The garden site and its log: where the site is, and how events are read from and appended to refs/garden/log.
-import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -7,6 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { eventPath, isRecord, parseEvent, stamp } from './log.ts';
 import type { EventDraft, GardenEvent } from './log.ts';
 import {
+  catFileBatch,
   configValue,
   forgetConfig,
   git,
@@ -156,46 +156,27 @@ function blobsAt(
   readonly skipped: readonly Skipped[];
 } {
   const listed = treeEntries(git(site, ['ls-tree', '-r', '-z', commit], { readsOnly: true }));
-  const entries = listed.filter(({ type }) => type === 'blob').map(({ oid, path }) => [oid, path] as const);
-  const skipped: Skipped[] = listed
-    .filter(({ type }) => type !== 'blob')
-    .map(({ type, path }) => ({ path, why: `a ${type}, not a file` }));
-  // cat-file sizes are in bytes, so the output is read as bytes and each blob decoded on its own.
-  const batch = spawnSync('git', ['cat-file', '--batch'], {
-    cwd: site,
-    env: gitEnv(site),
-    input: entries.map(([oid]) => `${oid}\n`).join(''),
-    maxBuffer: Infinity,
-  });
-
-  if (batch.status !== 0) {
-    throw new Error(`git cat-file --batch: ${batch.error?.message ?? batch.stderr.toString().trim()}`);
-  }
-
-  const output = batch.stdout;
-  const texts = new Map<string, string>();
-  let at = 0;
-
-  for (const [oid, path] of entries) {
-    const headerEnd = output.indexOf('\n', at);
-    const header = output.subarray(at, headerEnd).toString();
-    const [, type, size] = header.split(' ');
-
-    if (type === 'missing') {
-      skipped.push({ path, why: 'missing from the site' });
-      at = headerEnd + 1;
-      continue;
+  const read = catFileBatch(
+    site,
+    listed.filter(({ type }) => type === 'blob'),
+    ({ oid }) => oid,
+  );
+  const texts = new Map(read.flatMap(([{ path }, { text }]) => (text === undefined ? [] : [[path, text] as const])));
+  const missing = read.flatMap(([{ oid, path }, { header, type, text }]) => {
+    if (text !== undefined) {
+      return [];
     }
 
-    if (type !== 'blob') {
+    if (type !== 'missing') {
       throw new Error(`git cat-file --batch: read ${JSON.stringify(header)} for ${path}, not ${oid} blob <size>`);
     }
 
-    const start = headerEnd + 1;
-    const end = start + Number(size);
-    texts.set(path, output.subarray(start, end).toString());
-    at = end + 1;
-  }
+    return [{ path, why: 'missing from the site' }];
+  });
+  const skipped = [
+    ...listed.filter(({ type }) => type !== 'blob').map(({ type, path }) => ({ path, why: `a ${type}, not a file` })),
+    ...missing,
+  ];
 
   return { texts, skipped };
 }

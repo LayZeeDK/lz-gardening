@@ -6,7 +6,7 @@ import { pushBeds } from './store-beds.ts';
 import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
 import type { CensusTips } from './store-census.ts';
 import {
-  blobTexts,
+  catFileBatch,
   git,
   isAncestor,
   networkGit,
@@ -262,11 +262,8 @@ function giveBackLosingClaims(
     return { lost: [], released: 0 };
   }
 
-  const events = blobTexts(
-    site.path,
-    leaving.map(({ localOid }) => localOid),
-  ).flatMap((text, index) => {
-    const event = parseEvent(leaving[index]?.path ?? '', text ?? '');
+  const events = catFileBatch(site.path, leaving, ({ localOid }) => localOid).flatMap(([{ path }, { text }]) => {
+    const event = parseEvent(path, text ?? '');
 
     return typeof event === 'string' ? [] : [event];
   });
