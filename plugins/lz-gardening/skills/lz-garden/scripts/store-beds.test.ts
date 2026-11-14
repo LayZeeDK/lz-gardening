@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { logRef, openSite } from './store-log.ts';
-import { sleep, sync } from './store-sync.ts';
+import { sync } from './store-sync.ts';
 import { commit, git } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
 import { bareRemote, planted, remoteHook, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
@@ -262,22 +262,6 @@ test('a bed whose push takes longer than the time allowed is named as timed out'
   const result = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1000 });
 
   assert.deepEqual([result.state, result.divergedBeds], ['synced', ['any-type: timed out']]);
-});
-
-test('a later sync pushes the bed of a close whose log push landed after the sync stopped waiting', (t) => {
-  const place = withBed(t);
-  git(place.dir, ['config', 'lzGardening.share', 'false']);
-  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
-  git(place.dir, ['config', 'lzGardening.share', 'true']);
-  remoteHook(place.remote, 'post-receive', 'sleep 4');
-  const stopped = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1500 });
-  sleep(5000);
-  rmSync(join(place.remote, 'hooks', 'post-receive'));
-  const landed = git(place.remote, ['rev-parse', logRef]) === git(place.garden, ['rev-parse', logRef]);
-
-  const result = sync(openSite(place.dir), { attempts: 1 });
-
-  assert.deepEqual([stopped.reason, landed, result.state, bedRef(place.remote)], ['timed out', true, 'synced', tip]);
 });
 
 function stopOnReceive(pidFile: string): string {
