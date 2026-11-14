@@ -118,6 +118,14 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+function parseNamed(file: { readonly text: string; readonly source: string }): unknown {
+  try {
+    return JSON.parse(file.text);
+  } catch (error: unknown) {
+    throw new Error(`${file.source}: ${String(error)}`);
+  }
+}
+
 function extraPatterns(
   site: string,
   recorded: StoredCensus | null,
@@ -432,7 +440,7 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const { site, recorded, extraFile } = inRun(io.env, () => readSite(io.cwd));
   const bundled = join(dirname(fileURLToPath(import.meta.url)), 'patterns.json');
   const before = recorded?.census ?? null;
-  const extra = extraFile === undefined ? null : parsePatternSet(JSON.parse(extraFile.text), extraFile.source);
+  const extra = extraFile === undefined ? null : parsePatternSet(parseNamed(extraFile), extraFile.source);
   // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message
   const set = mergePatternSets(parsePatternSet(readJson(bundled), 'patterns.json'), extra);
   const after = await takeCensus(io.cwd, rev, set, new Date());

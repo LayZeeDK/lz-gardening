@@ -751,6 +751,19 @@ test("the census counts the extra patterns in the site's .garden/patterns.json",
   assert.match(result.stdout, /^todo +1 {2}new$/m);
 });
 
+test("a site's .garden/patterns.json that is not JSON is refused, naming the file", async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden, '{ "patterns": [\n');
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual(
+    [result.status, /^census: .*[\\/]\.garden[\\/]patterns\.json: /.test(result.stderr)],
+    [2, true],
+    result.stderr,
+  );
+});
+
 test("a census taken with the site's extra patterns carries them, so a clone without the file counts the same", async (t) => {
   const { dir, garden } = planted(t);
   writeSitePatterns(garden);
