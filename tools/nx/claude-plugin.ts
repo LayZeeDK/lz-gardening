@@ -104,6 +104,7 @@ function mutate(script: string): TargetConfiguration {
     command: 'node --conditions=@layzee/source node_modules/@stryker-mutator/core/bin/stryker.js run',
     options: { env: { MUTATE: script } },
     cache: false,
+    parallelism: false,
   };
 }
 

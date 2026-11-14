@@ -183,6 +183,23 @@ test('a plugin with no skills folder gets the plugin-wide targets and no per-scr
   );
 });
 
+test('a mutate target runs Stryker uncached and alone, on the scripts its MUTATE names', async (t) => {
+  const root = workspace(t, {
+    'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
+    'plugins/p/skills/s/scripts/weeds.ts': '',
+  });
+
+  assert.deepEqual(
+    (await inferred(root, 'plugins/p/.claude-plugin/plugin.json'))?.projects?.['plugins/p']?.targets?.['mutate-weeds'],
+    {
+      command: 'node --conditions=@layzee/source node_modules/@stryker-mutator/core/bin/stryker.js run',
+      options: { env: { MUTATE: 'weeds' } },
+      cache: false,
+      parallelism: false,
+    },
+  );
+});
+
 test("a plugin's lockfile packages are external nodes of the graph", async (t) => {
   const root = workspace(t, {
     'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
