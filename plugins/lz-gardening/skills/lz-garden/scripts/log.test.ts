@@ -221,6 +221,12 @@ test('a close of another class leaves a weed open, though it names the weed', ()
   assert.deepEqual(statuses(garden, ['x']), { x: 'added' });
 });
 
+test('a closed weed takes the kind of its latest close of its own class, not of a later close of another class', () => {
+  const garden = replay([add('a1', 1, 'x'), tend('a2', 2, ['x']), close('c1', 3, ['x'], 'kept', 'other')], now);
+
+  assert.deepEqual(statuses(garden, ['x']), { x: 'closed:tended' });
+});
+
 test('a closed weed takes the kind of its latest close by clock, then uuid, in whatever order the events arrive', () => {
   const events = [add('a1', 1, 'x'), close('b2', 2, ['x'], 'kept'), close('a2', 2, ['x'], 'one-off')];
 

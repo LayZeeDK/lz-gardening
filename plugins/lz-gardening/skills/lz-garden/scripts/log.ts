@@ -180,7 +180,7 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
     : { said: 'regrown', id, drafts: [draft(tend.uuid)], after: tend };
 }
 
-function closesWeed(close: CloseEvent, weedClass: string, id: string): boolean {
+function closesWeed(close: CloseEvent, weedClass: string | undefined, id: string): boolean {
   return close.class === weedClass && close.ids.includes(id);
 }
 
@@ -724,7 +724,8 @@ export function replay(events: readonly GardenEvent[], now: Date): Garden {
       return { state: 'open', weed };
     }
 
-    const close = closes.findLast((event) => event.ids.includes(id));
+    const weedClass = ordered.find((event): event is AddEvent => event.op === 'add' && event.id === id)?.class;
+    const close = closes.findLast((event) => closesWeed(event, weedClass, id));
 
     return close === undefined ? undefined : { state: 'closed', kind: close.kind };
   };
