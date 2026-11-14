@@ -46,7 +46,9 @@ keep.
   base, a clone that has not fetched the rewrite and one that has can replace each other's census on every tick until
   the stale clone fetches. Nothing is lost: adds dedupe and the ranges are read again. Keeping the remote's census
   instead would leave a clone without the old history, such as CI, stuck on a census from before the rewrite.
-- A claim expires after 6 hours, so a crashed pass blocks its class that long.
+- A claim expires after 6 hours, so a crashed pass blocks its class that long. Since no event is removed, readers keep
+  that bound too: a claim whose end is more than 6 hours after its own time is skipped, and one whose end is more than
+  6 hours after the reader's clock is not live, so no writer, nor one whose clock ran ahead, holds a class for good.
 
 ## Update, 2026-11-13: claims, shared beds and what the garden may publish
 

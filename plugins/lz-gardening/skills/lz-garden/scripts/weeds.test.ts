@@ -742,12 +742,13 @@ test('a close of a class another writer holds a claim on exits 1, names the hold
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
   const uuid = '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6';
-  const until = '2999-01-01T00:00:00.000Z';
+  const at = new Date();
+  const until = new Date(at.getTime() + 60 * 60 * 1000).toISOString();
   const claim = {
     op: 'claim',
     uuid,
     clock: 9,
-    at: now.toISOString(),
+    at: at.toISOString(),
     class: 'any-type',
     writer: 'w',
     holder: 'ci on runner',

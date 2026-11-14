@@ -274,6 +274,18 @@ test('a claim whose until is not after the reader clock has expired and gives th
   assert.equal(garden.claims.has('any-type'), false);
 });
 
+test('a claim whose until is more than six hours past the reader clock is not live, whatever its at says', () => {
+  const skewed = { ...claim('c1', 1, 'writer-b'), at: '2026-11-11T12:00:00.001Z', until: '2026-11-11T18:00:00.001Z' };
+
+  assert.equal(replay([skewed], now).claims.get('any-type'), undefined);
+});
+
+test('a claim whose until is six hours past the reader clock is live, as a claim taken now is', () => {
+  const fresh = { ...claim('c1', 1, 'writer-b'), at: now.toISOString(), until: '2026-11-11T18:00:00.000Z' };
+
+  assert.equal(replay([fresh], now).claims.get('any-type'), fresh);
+});
+
 test('of two active claims of a class, the earliest by clock, then uuid, owns it on every replica', () => {
   const events = [claim('c3', 2, 'writer-c'), claim('cb', 1, 'writer-b'), claim('ca', 1, 'writer-a')];
 
@@ -284,9 +296,9 @@ test('of two active claims of a class, the earliest by clock, then uuid, owns it
 });
 
 test('a renewal by the holder keeps the owner and moves its until to the renewed claim', () => {
-  const renewedUntil = '2026-11-11T20:00:00.000Z';
+  const renewedUntil = '2026-11-11T17:00:00.000Z';
   const events = [claim('c1', 1, 'writer-a'), claim('c2', 2, 'writer-a', renewedUntil)];
-  const afterFirstUntil = new Date('2026-11-11T18:00:00.000Z');
+  const afterFirstUntil = new Date('2026-11-11T16:30:00.000Z');
 
   assert.deepEqual(
     [now, afterFirstUntil].map((reader) => replay(events, reader).claims.get('any-type')?.until),
@@ -847,6 +859,12 @@ test('a claim event file whose until is a local time is skipped, so every reader
   const event = { ...claim(uuid, 5, 'writer-a'), until: '2026-11-11 16:00' };
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'until is not a date');
+});
+
+test('a claim event file whose until is more than six hours after its at is skipped, so no claim holds a class for good', () => {
+  const event = { ...claim(uuid, 5, 'writer-a'), until: '2026-11-11T16:00:00.001Z' };
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), "until is more than a claim's lifetime after at");
 });
 
 test('a close event file parses back to the event that was written', () => {

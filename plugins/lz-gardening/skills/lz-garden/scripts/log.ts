@@ -532,6 +532,10 @@ function parseClaim(json: Record<string, unknown>, base: EventBase): ClaimEvent 
     return 'until is not a date';
   }
 
+  if (Date.parse(until) - Date.parse(base.at) > claimLifetimeMs) {
+    return "until is more than a claim's lifetime after at";
+  }
+
   return { op: 'claim', ...base, class: weedClass, writer, holder, until };
 }
 
@@ -623,13 +627,17 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
   return openById;
 }
 
-/** The claims no release names whose until is later than the reader's clock, in (clock, uuid) order. */
+/**
+ * The claims no release names whose until is later than the reader's clock and at most a claim's lifetime past it,
+ * in (clock, uuid) order.
+ */
 function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
   const released = releasedClaims(events);
+  const ending = (claim: ClaimEvent): number => Date.parse(claim.until) - now.getTime();
 
   return events
     .filter((event) => event.op === 'claim')
-    .filter((claim) => !released.has(claim.uuid) && Date.parse(claim.until) > now.getTime())
+    .filter((claim) => !released.has(claim.uuid) && ending(claim) > 0 && ending(claim) <= claimLifetimeMs)
     .toSorted(byClock);
 }
 
