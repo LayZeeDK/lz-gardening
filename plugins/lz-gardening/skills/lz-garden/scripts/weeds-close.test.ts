@@ -6,7 +6,7 @@ import { claimLifetimeMs, replay } from './log.ts';
 import { openSite, readLog } from './store-log.ts';
 import { commit, git } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
-import { addWeed, cli, now } from './test-weeds.ts';
+import { addWeed, anyTypeBedFromMain, cli, now } from './test-weeds.ts';
 
 test("close-class after the site's claim expired is refused once its first sync fetches another writer's newer claim", (t) => {
   const { first, second } = sharedPair(t);
@@ -85,14 +85,6 @@ test('close --id --keep by the holder leaves the class claimed on the origin', (
   assert.deepEqual([kept.stdout, ownerOn(remote)], ['kept 1; synced\n', openSite(dir).writer]);
 });
 
-function bedOf(garden: string): string {
-  const bed = join(garden, 'beds', 'any-type');
-  git(garden, ['fetch', '-q', 'origin', 'main']);
-  git(garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
-
-  return bed;
-}
-
 function tendedClose(dir: string, tip: string, at = now): ReturnType<typeof cli> {
   const by = `bed/any-type@${tip.slice(0, 7)}`;
 
@@ -104,7 +96,7 @@ test('close-class --tended by the holder shares the close and the release, then 
   const remote = bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
-  const tip = commit(bedOf(garden), { 'checks/a.mjs': 'export {};\n' });
+  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
 
   const closed = tendedClose(dir, tip);
 
@@ -120,7 +112,7 @@ test('a tended close made with sharing off exits 0, and the next open pushes the
   addWeed(dir, 'src/a.ts:1');
   git(dir, ['config', 'lzGardening.share', 'false']);
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
-  const tip = commit(bedOf(garden), { 'checks/a.mjs': 'export {};\n' });
+  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
   const closed = tendedClose(dir, tip);
   git(dir, ['config', 'lzGardening.share', 'true']);
 
@@ -148,7 +140,7 @@ test('close-class whose origin cannot be reached exits 1 and closes nothing, as 
 test('close-class --tended whose bed does not descend from the shared bed names it on stderr and exits 0', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
-  const bed = bedOf(garden);
+  const bed = anyTypeBedFromMain(garden);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
   assert.equal(tendedClose(dir, commit(bed, { 'checks/a.mjs': 'export {};\n' })).code, 0);

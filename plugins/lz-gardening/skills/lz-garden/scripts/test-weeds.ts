@@ -5,7 +5,7 @@ import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { weedId } from './log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { commit, git } from './test-repo.ts';
+import { capturingIo, commit, git } from './test-repo.ts';
 import { planted, writeCensus } from './test-site.ts';
 import { run } from './weeds.ts';
 import type { SyncSeams } from './weeds.ts';
@@ -26,25 +26,10 @@ export function cli(cwd: string, args: readonly string[], env = process.env, at?
 
 // The claim tests that pass sync seams plan against the fixed now.
 export function cliWith(cwd: string, args: readonly string[], seams: SyncSeams, env = process.env, at = now): WeedsRun {
-  let stdout = '';
-  let stderr = '';
-  const code = run(
-    args,
-    {
-      cwd,
-      env,
-      out: (text) => {
-        stdout += text;
-      },
-      err: (text) => {
-        stderr += text;
-      },
-    },
-    at,
-    seams,
-  );
+  const captured = capturingIo(cwd, env);
+  const code = run(args, captured.io, at, seams);
 
-  return { code, stdout, stderr };
+  return { code, stdout: captured.stdout(), stderr: captured.stderr() };
 }
 
 export function addWeed(dir: string, where: string, weedClass = 'any-type'): string {
@@ -64,6 +49,15 @@ export function eslintConfig(files: string, rules: string): string {
   return `export default [\n  {\n    files: ${files},\n    rules: ${rules},\n  },\n];\n`;
 }
 
+// The any-type bed made by hand: a worktree of the site on bed/any-type at the checkout's main.
+export function anyTypeBedFromMain(garden: string): string {
+  const bed = join(garden, 'beds', 'any-type');
+  git(garden, ['fetch', '-q', 'origin', 'main']);
+  git(garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
+
+  return bed;
+}
+
 export function tendedBed(
   t: TestContext,
   check: Readonly<Record<string, string>>,
@@ -72,9 +66,7 @@ export function tendedBed(
 ): { readonly dir: string; readonly garden: string; readonly bed: string; readonly tip: string } {
   const { dir, garden } = planted(t);
   commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}'), ...before });
-  const bed = join(garden, 'beds', 'any-type');
-  git(garden, ['fetch', '-q', 'origin', 'main']);
-  git(garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
+  const bed = anyTypeBedFromMain(garden);
   const tip = commit(bed, check);
   const base = commit(dir, { 'src/b.ts': 'export const b = 1;\n' });
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);

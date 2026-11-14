@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import type { Io } from './cli.ts';
 
 process.env['GIT_CONFIG_GLOBAL'] = fileURLToPath(new URL('test.gitconfig', import.meta.url));
 process.env['GIT_CONFIG_NOSYSTEM'] = '1';
@@ -14,6 +15,33 @@ export function git(cwd: string, args: readonly string[]): string {
   assert.equal(result.status, 0, result.stderr);
 
   return result.stdout.trim();
+}
+
+export interface CapturingIo {
+  readonly io: Io;
+  readonly stdout: () => string;
+  readonly stderr: () => string;
+}
+
+// The Io a test runs a script's run function with in this process, keeping what it prints.
+export function capturingIo(cwd: string, env: Readonly<NodeJS.ProcessEnv>): CapturingIo {
+  let stdout = '';
+  let stderr = '';
+
+  return {
+    io: {
+      cwd,
+      env,
+      out: (text) => {
+        stdout += text;
+      },
+      err: (text) => {
+        stderr += text;
+      },
+    },
+    stdout: () => stdout,
+    stderr: () => stderr,
+  };
 }
 
 export function repo(t: TestContext): string {

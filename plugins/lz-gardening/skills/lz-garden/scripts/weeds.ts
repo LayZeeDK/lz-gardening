@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Usage, from the repository's checkout (the site is the <repo>.garden folder beside it):
 //   node weeds.ts add --class <kebab> --where <path[:line]> --source <kind:ref> --note <text> [--layer <1-6>]
+//                     [--census <sha>]
 //     Prints `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep: a weed left on purpose is
 //     never queued again) or `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass closed its
 //     class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
-//     `(check: <where> not on the base)` when it is not on the commit of the site's census: the bed has not landed,
-//     or the check's file is gone from the base.
+//     `(check: <where> not on the base)` when it is not on the census commit: <sha>, the full commit id of the
+//     census this tick took, else the commit of the site's census. Then the bed has not landed, or the check's file
+//     is gone from the base.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
@@ -233,9 +235,9 @@ function shaOfReadableCensus(site: string): string | undefined {
   return sha !== undefined && objectIdPattern.test(sha) ? sha : undefined;
 }
 
-function checkOffBase(io: Io, site: string, tended: TendedClose): boolean {
+function checkOffBase(io: Io, site: string, census: string | undefined, tended: TendedClose): boolean {
   const tip = bedCommit(tended);
-  const base = shaOfReadableCensus(site);
+  const base = census ?? shaOfReadableCensus(site);
   const where = tended.check;
 
   if (base === undefined) {
@@ -310,11 +312,11 @@ export function addStatus(outcome: AddOutcome, offBase: (tended: TendedClose) =>
   }
 }
 
-function offBaseIn(io: Io, site: string): (tended: TendedClose) => boolean {
+function offBaseIn(io: Io, site: string, census: string | undefined): (tended: TendedClose) => boolean {
   const known = new Map<TendedClose, boolean>();
 
   return (tended) => {
-    const offBase = known.get(tended) ?? checkOffBase(io, site, tended);
+    const offBase = known.get(tended) ?? checkOffBase(io, site, census, tended);
     // Stryker disable next-line CallExpression: without the cache, each weed works out the same label again
     known.set(tended, offBase);
 
@@ -430,6 +432,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       source: { type: 'string', default: '' },
       note: { type: 'string', default: '' },
       layer: { type: 'string' },
+      census: { type: 'string' },
       id: { type: 'string' },
       tended: { type: 'string' },
       'one-off': { type: 'string' },
@@ -454,7 +457,10 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
         note: values.note,
         layer: values.layer === undefined ? null : Number(values.layer),
       };
-      const problem = validateAdd(input);
+      const problem =
+        values.census === undefined || objectIdPattern.test(values.census)
+          ? validateAdd(input)
+          : '--census must be the full commit id census.ts printed';
 
       if (problem !== null) {
         io.err(`weeds add: ${problem}\n`);
@@ -464,7 +470,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const site = openSite(io.cwd);
       const outcome = append(site, (replica) => planAdd(eventsReportingSkipped(io, replica), input, now), now);
-      write(addStatus(outcome, offBaseIn(io, site.path)));
+      write(addStatus(outcome, offBaseIn(io, site.path, values.census)));
 
       return 0;
     }
@@ -592,7 +598,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
     case 'list': {
       const only = values.class;
       const site = openSite(io.cwd);
-      const offBase = offBaseIn(io, site.path);
+      const offBase = offBaseIn(io, site.path, undefined);
 
       for (const weed of replay(eventsReportingSkipped(io, readLog(site)), now).open.filter(
         (item) => only === undefined || item.class === only,

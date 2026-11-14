@@ -74,6 +74,10 @@ test("the base a census recorded is read as origin/<name> in a clone with only o
   );
 });
 
+test('a base the last census recorded that names no branch here, such as HEAD, is passed over', () => {
+  assert.equal(resolveBase(facts({ censusRev: 'HEAD', originHead: 'trunk', branches: ['main', 'trunk'] })), 'trunk');
+});
+
 test('with no census yet, the remote default branch is the base', () => {
   assert.equal(resolveBase(facts({ originHead: 'trunk', branches: ['feature/x', 'main', 'trunk'] })), 'trunk');
 });

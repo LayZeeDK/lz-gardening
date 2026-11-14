@@ -33,10 +33,10 @@ site by path. Two consequences above change:
 
 - The site's freshness no longer matters to a tick, which reads the repository directly; `site.ts open` does not
   fetch. A tend pass fetches the base into the site when it makes a bed.
-- The base comes from the repository's own refs: an explicit `--base`, the base the last census recorded, the
-  repository's `origin/HEAD`, then `main` or `master`, as `origin/<name>` when only the remote has it. In a clone
-  of a local path, `origin/HEAD` only records what the source had checked out at clone time, so there it is passed
-  over.
+- The base comes from the repository's own refs: an explicit `--base`, the base the last census recorded when it
+  names a branch, the repository's `origin/HEAD`, then `main` or `master`, as `origin/<name>` when only the remote
+  has it. In a clone of a local path, `origin/HEAD` only records what the source had checked out at clone time, so
+  there it is passed over.
 
 ## Update, 2026-11-11: the garden is shared
 

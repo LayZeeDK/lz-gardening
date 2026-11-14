@@ -699,6 +699,27 @@ test('add says which flag is wrong', (t) => {
   assert.equal(result.stderr, 'weeds add: --where must not be empty\n');
 });
 
+test('add refuses a --census that is not a full commit id, as git would read an option or a ref there', (t) => {
+  const dir = checkout(t);
+
+  const result = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'census:x',
+    '--census',
+    'HEAD',
+  ]);
+
+  assert.deepEqual(
+    [result.code, result.stderr],
+    [2, 'weeds add: --census must be the full commit id census.ts printed\n'],
+  );
+});
+
 test('list prints each open weed as id, class, place, source and note, and --class keeps one class', (t) => {
   const dir = checkout(t);
   const id = idOf(

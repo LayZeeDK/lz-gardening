@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 interface Run {
   readonly env: Readonly<NodeJS.ProcessEnv>;
-  gitEnv: Readonly<NodeJS.ProcessEnv> | undefined;
-  readonly configs: Map<string, ReadonlyMap<string, string>>;
+  readonly gitEnv: Readonly<NodeJS.ProcessEnv> | undefined;
+  readonly configs: ReadonlyMap<string, ReadonlyMap<string, string>>;
 }
 
 let current: Run = { env: process.env, gitEnv: undefined, configs: new Map() };
@@ -30,24 +30,27 @@ export function mayPointAtARepository(variable: string): boolean {
   return variable.startsWith('GIT_') && !variable.startsWith('GIT_CONFIG_');
 }
 
-export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
-  // Stryker disable next-line ConditionalExpression: the cache only saves a git run within one command
-  if (current.gitEnv === undefined) {
-    // Every variable git lists with --local-env-vars starts with GIT_; the only ones that start with GIT_CONFIG_ are the
-    // settings kept below, so an environment with no other GIT_ variable has nothing to drop.
-    const localVariables = Object.keys(current.env).some(mayPointAtARepository)
-      ? spawnGit(cwd, ['rev-parse', '--local-env-vars'], current.env)
-          .stdout.split('\n')
-          .filter((name) => !settingsInEnvironment.includes(name))
-      : [];
-    current.gitEnv = {
-      ...Object.fromEntries(Object.entries(current.env).filter(([name]) => !localVariables.includes(name))),
-      // Stryker disable next-line StringLiteral: git reads an empty boolean as false, so '' turns the hooks off too
-      [hookOffVariable]: 'false',
-    };
-  }
+function cleanedGitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
+  // Every variable git lists with --local-env-vars starts with GIT_; the only ones that start with GIT_CONFIG_ are the
+  // settings kept below, so an environment with no other GIT_ variable has nothing to drop.
+  const localVariables = Object.keys(current.env).some(mayPointAtARepository)
+    ? spawnGit(cwd, ['rev-parse', '--local-env-vars'], current.env)
+        .stdout.split('\n')
+        .filter((name) => !settingsInEnvironment.includes(name))
+    : [];
 
-  return current.gitEnv;
+  return {
+    ...Object.fromEntries(Object.entries(current.env).filter(([name]) => !localVariables.includes(name))),
+    // Stryker disable next-line StringLiteral: git reads an empty boolean as false, so '' turns the hooks off too
+    [hookOffVariable]: 'false',
+  };
+}
+
+export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
+  const env = current.gitEnv ?? cleanedGitEnv(cwd);
+  current = { ...current, gitEnv: env };
+
+  return env;
 }
 
 const withoutHooksOrSigning = [
@@ -81,7 +84,9 @@ function configOf(cwd: string): ReadonlyMap<string, string> {
         return end === -1 ? ([entry, ''] as const) : ([entry.slice(0, end), entry.slice(end + 1)] as const);
       }),
   );
-  current.configs.set(cwd, config);
+  const configs = new Map(current.configs);
+  configs.set(cwd, config);
+  current = { ...current, configs };
 
   return config;
 }
@@ -97,7 +102,9 @@ export function configValue(cwd: string, key: string): string | undefined {
 
 /** Reads cwd's git config again on its next use in this run, after a write to it. */
 export function forgetConfig(cwd: string): void {
-  current.configs.delete(cwd);
+  const configs = new Map(current.configs);
+  configs.delete(cwd);
+  current = { ...current, configs };
 }
 
 // A hook set up by name in the git config (hook.<name>.command) ignores core.hooksPath, so each is turned off by name.

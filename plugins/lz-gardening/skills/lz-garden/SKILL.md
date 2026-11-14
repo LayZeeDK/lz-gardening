@@ -48,11 +48,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/site.ts" open $ARGUMENTS
 
 It creates the site on the first tick, picks the base on every tick, and syncs the queue with the repository's
 `origin`. The last line is JSON: `site` (the site's path, written `<site>` below), `created`, `base` (the branch to
-watch, such as `main` or `origin/main`, written `<base>`), `seeded` (false until a seed pass has synced, in this
-clone or another), and
-`shared` (the share state: `local`, `synced`, `offline`, `read-only` or `behind`; see
-`${CLAUDE_SKILL_DIR}/references/site.md`). Any share state is fine: the tick goes on with the site's own queue. Done
-when it exits 0.
+watch, such as `main` or `origin/main`, written `<base>`), `seeded` (false until a seed pass is recorded, in this
+clone or another), and `shared` (the share state: `local`, `synced`, `offline`, `read-only` or `behind`; see "The
+share states" under "Open, sync" in `${CLAUDE_SKILL_DIR}/references/site.md`). Any share state is fine: the tick
+goes on with the site's own queue. Done when it exits 0.
 
 ## 2. Take the census
 
@@ -68,7 +67,7 @@ commits from `previousSha` to `sha`, merges left out), `grew`, `newHits`, `newDu
 `+ [<pattern>]` are new hits, each hit's text cut to 200 characters. A line
 `+ duplicate <name>: new <path>, ...[; already <path>, ...]` is a name newly defined in another file: the files
 after `new` define it since the last census, those after `already` defined it before. Below, `<short sha>` is `sha`
-shortened with `git rev-parse --short <sha>`.
+shortened with `git rev-parse --short <sha>`. Done when it exits 0; then take the first case below that holds.
 
 - `seeded` was false: run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md` in place of steps 3 to 5,
   whatever the census says; it ends with its own sync and report. A seed pass cut short runs again on the next tick.
@@ -102,7 +101,7 @@ Done when every commit in the range is read or counted as skipped.
 Queue each weed with `weeds.ts`. The script dedupes, so queueing the same weed twice is safe:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>]
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>] --census <sha>
 ```
 
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`.
@@ -124,13 +123,13 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   symptom. Plain words only: no backticks, `$` or double quotes inside the note, which the shell would run or end.
 - `--layer`: the strongest layer that could stop it growing back, from the catalogue's layer list, when the evidence
   shows it.
+- `--census`: the census's `sha` from step 2, in full.
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
-`(check: <where> not on the base)`, the bed's change to that check was not on the base as of the garden's last
-census, the one recorded before this tick: the bed had not landed by then, or the check's file is gone from the base.
-The bed may have landed in this tick's range. Report it that way, not as a check that failed. Done when every weed
-from steps 2 and 3 printed one of those words.
+`(check: <where> not on the base)`, the bed's change to that check is not on the base at this tick's census: the bed
+has not landed, or the check's file is gone from the base. Report it that way, not as a check that failed. Done when
+every weed from steps 2 and 3 printed one of those words.
 
 ## 5. Group, record, report
 
@@ -162,12 +161,13 @@ shared: <state> (<reason>)
 
 - `<commits>`: the census's `commits`, as printed.
 - `<read>`: the commits whose whole diff you read with `git show <commit>`, a diff saved to a file only once you
-  read that file to its end. A `--stat` or a path-limited `git show` is not a read. `<skipped>` is `<commits>` minus `<read>`.
+  read that file to its end. A `--stat` or a path-limited `git show` is not a read. `<skipped>` is `<commits>` minus
+  `<read>`.
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
 - `left out`: each file of a new duplicate (step 4) you did not queue, with its reason in a few words, such as
   `extension/a.js (documented copy: no imports)`; `left out: none` when there is none.
 - `ready to tend`: one entry per row of `groups --ready`, its `open` and `places` columns, and the first row's class
-  after `lz-tend`; `ready to tend: none` when it printed no row.
+  after `lz-tend`; `ready to tend: none` when it printed no row below its header.
 - `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.

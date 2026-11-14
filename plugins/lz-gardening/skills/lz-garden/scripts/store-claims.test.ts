@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import type { TestContext } from 'node:test';
 import { claimLifetimeMs } from './log.ts';
 import { append, openSite } from './store-log.ts';
 import { sync } from './store-sync.ts';
@@ -29,7 +30,7 @@ function holderOf(dir: string): string {
   return `writer ${writerOf(dir).slice(0, 8)}`;
 }
 
-function racedPair(t: Parameters<typeof sharedPair>[0]) {
+function racedPair(t: TestContext) {
   const pair = sharedPair(t);
   const { first, second, remote } = pair;
   addWeed(first.dir, 'src/a.ts:1');
@@ -47,7 +48,7 @@ function racedPair(t: Parameters<typeof sharedPair>[0]) {
   return { ...pair, catchUp };
 }
 
-function racedTrio(t: Parameters<typeof sharedPair>[0]) {
+function racedTrio(t: TestContext) {
   const raced = racedPair(t);
   const third = planted(t);
   git(third.dir, ['remote', 'add', 'origin', raced.remote]);

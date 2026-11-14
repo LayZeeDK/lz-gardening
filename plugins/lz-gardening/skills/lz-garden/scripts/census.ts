@@ -110,11 +110,8 @@ export function mergePatternSets(base: PatternSet, extra: PatternSet | null): Pa
     return base;
   }
 
-  const byId = new Map(base.patterns.map((pattern) => [pattern.id, pattern]));
-
-  for (const pattern of extra.patterns) {
-    byId.set(pattern.id, pattern);
-  }
+  // A Map keeps the first place of an id and the last pattern given for it.
+  const byId = new Map([...base.patterns, ...extra.patterns].map((pattern) => [pattern.id, pattern]));
 
   return { exclude: [...new Set([...base.exclude, ...extra.exclude])], patterns: [...byId.values()] };
 }
@@ -200,7 +197,7 @@ function cut(text: string): string {
  * One hit as `path:line: text`, its text cut to hitTextCap; the delta compares hits by path and text, so moved lines
  * are not new, and both censuses it compares cut their text here.
  */
-export function parseGrep(stdout: string, sha: string): string[] {
+export function parseGrep(stdout: string, sha: string): readonly string[] {
   const prefix = `${sha}:`;
 
   return stdout
@@ -241,7 +238,7 @@ async function grepRevision(
   regex: string,
   specs: readonly string[],
   what: string,
-): Promise<string[]> {
+): Promise<readonly string[]> {
   const grep = await gitAsync(['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], cwd, env);
 
   // git grep exits 1 when nothing matches; anything else above 0 is an error.
@@ -335,7 +332,7 @@ async function findDuplicates(
   env: Env,
   sha: string,
   exclude: readonly string[],
-): Promise<Record<string, string[]>> {
+): Promise<Readonly<Record<string, readonly string[]>>> {
   const byName = Map.groupBy(await definitionsAt(cwd, env, sha, exclude), (item) => item.name);
 
   return Object.fromEntries(
@@ -346,7 +343,7 @@ async function findDuplicates(
   );
 }
 
-export function diffDuplicates(before: Census | null, after: Census): string[] {
+export function diffDuplicates(before: Census | null, after: Census): readonly string[] {
   if (before === null) {
     return [];
   }
@@ -380,7 +377,7 @@ function duplicateLines(
     });
 }
 
-export function diffCensus(before: Census | null, after: Census): PatternDelta[] {
+export function diffCensus(before: Census | null, after: Census): readonly PatternDelta[] {
   return Object.entries(after.counts).map(([id, count]) => {
     const previous = before?.hits[id];
     const seen = new Map<string, number>();
