@@ -629,6 +629,27 @@ test('close refuses an id holding a control character, which its output would pr
   );
 });
 
+test('close refuses an empty or blank id before it syncs, as a usage error', () => {
+  assert.deepEqual(
+    ['', ' '].map((id) => parseCloseFlags('close', { id, keep: 'on purpose' })),
+    Array(2).fill('needs --id and exactly one of --tended, --one-off or --keep'),
+  );
+});
+
+test('close refuses --class beside --id rather than drop it', () => {
+  assert.equal(
+    parseCloseFlags('close', { id: 'abc', class: 'any-type', keep: 'on purpose' }),
+    '--class goes with close-class; close takes --id alone',
+  );
+});
+
+test('close-class refuses --id beside --class rather than drop it', () => {
+  assert.equal(
+    parseCloseFlags('close-class', { id: 'abc', class: 'any-type', keep: 'on purpose' }),
+    '--id goes with close; close-class takes --class alone',
+  );
+});
+
 test('a close-class under a claim whose class has nothing open any more exits 1 and names its target', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);

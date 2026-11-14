@@ -156,8 +156,14 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
   const byId = command === 'close';
   const target = byId ? flags.id : flags.class;
 
-  if (chosen === undefined || !hasText(chosen.by) || target === undefined) {
+  if (chosen === undefined || !hasText(chosen.by) || target === undefined || !hasText(target)) {
     return `needs ${byId ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep`;
+  }
+
+  if ((byId ? flags.class : flags.id) !== undefined) {
+    return byId
+      ? '--class goes with close-class; close takes --id alone'
+      : '--id goes with close; close-class takes --class alone';
   }
 
   if (!byId && !classPattern.test(target)) {
