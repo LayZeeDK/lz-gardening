@@ -11,11 +11,12 @@ import {
   eventPathPattern,
   isRecord,
   latestTendedClose,
-  losingClaims,
   parseEvent,
+  planGiveBack,
+  releasesFor,
   stamp,
 } from './log.ts';
-import type { ClaimEvent, EventDraft, GardenEvent, LostClaim } from './log.ts';
+import type { EventDraft, GardenEvent, LostClaim } from './log.ts';
 
 interface Run {
   readonly env: Readonly<NodeJS.ProcessEnv>;
@@ -506,7 +507,6 @@ export interface SyncOptions {
   readonly wait?: ((ms: number) => void) | undefined;
   readonly timeoutMs?: number;
   readonly census?: string | undefined;
-  readonly look?: typeof losingClaims;
 }
 
 function reasonOf(stderr: string): string {
@@ -710,7 +710,7 @@ function finishPendingCensus(site: Site, pendingSha: string): void {
 
 function syncWithOrigin(
   site: Site,
-  { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha, look = losingClaims }: SyncOptions,
+  { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha }: SyncOptions,
   now: Date,
 ): SyncResult {
   const fetchUrl = optionalGit(site.checkout, ['remote', 'get-url', 'origin'], { readsOnly: true });
@@ -723,10 +723,11 @@ function syncWithOrigin(
   }
 
   const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
-  const yielded: LostClaim[] = [];
+  let yielded: readonly LostClaim[] = [];
 
   for (let attempt = 1; ; attempt += 1) {
-    const result = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, look, now, yielded });
+    const result = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
+    yielded = [...yielded, ...result.yielded];
 
     if (result.state !== 'behind' || attempt >= attempts) {
       return { ...result, yielded };
@@ -741,19 +742,22 @@ interface Attempt {
   readonly pushUrl: string;
   readonly timeoutMs: number;
   readonly pendingSha: string | undefined;
-  readonly look: typeof losingClaims;
   readonly now: Date;
-  readonly yielded: LostClaim[];
+}
+
+interface GivenBack {
+  readonly lost: readonly LostClaim[];
+  readonly released: number;
 }
 
 function giveBackLosingClaims(
   site: Site,
   sharedTip: string | undefined,
   leaving: readonly Leaving[],
-  { look, now, yielded }: Attempt,
-): number {
+  now: Date,
+): GivenBack {
   if (leaving.length === 0) {
-    return 0;
+    return { lost: [], released: 0 };
   }
 
   const events = blobTexts(
@@ -764,39 +768,28 @@ function giveBackLosingClaims(
 
     return typeof event === 'string' ? [] : [event];
   });
-  const released = new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
-  const mine = events.filter(
-    (event): event is ClaimEvent =>
-      event.op === 'claim' &&
-      event.writer === site.writer &&
-      !released.has(event.uuid) &&
-      Date.parse(event.until) > now.getTime(),
+  const lost = planGiveBack(
+    events,
+    () => (sharedTip === undefined ? [] : readReplica(site.path, sharedTip).events),
+    site.writer,
+    now,
   );
 
-  if (mine.length === 0) {
-    return 0;
-  }
-
-  const lost = look(sharedTip === undefined ? [] : readReplica(site.path, sharedTip).events, mine, site.writer, now);
-
   if (lost.length === 0) {
-    return 0;
+    return { lost, released: 0 };
   }
 
-  yielded.push(...lost);
-
-  return append(
+  const released = append(
     site,
     (replica) => {
-      const releasedHere = new Set(replica.events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
-      const drafts = lost
-        .filter(({ claim }) => !releasedHere.has(claim.uuid))
-        .map(({ claim }): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+      const drafts = releasesFor(replica.events, lost);
 
       return { drafts, result: drafts.length };
     },
     now,
   );
+
+  return { lost, released };
 }
 
 function censusOffOrigin(site: Site, ref: string): string | undefined {
@@ -816,7 +809,7 @@ function censusOffOrigin(site: Site, ref: string): string | undefined {
 }
 
 // A try lost to another writer ends behind, which the next try, if any, takes up.
-function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> {
+function syncOnce(site: Site, attempt: Attempt): SyncResult {
   const { path } = site;
   const { fetchUrl, pushUrl, timeoutMs, pendingSha } = attempt;
   const fetched = networkGit(
@@ -838,15 +831,16 @@ function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> {
   }
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
-  const releases = giveBackLosingClaims(site, sharedTip, leaving, attempt);
+  const given = giveBackLosingClaims(site, sharedTip, leaving, attempt.now);
   const settled = settleCensus(site, censusTips, pendingSha);
-  const pushedEvents = mergedLog.pushedEvents + releases;
+  const pushedEvents = mergedLog.pushedEvents + given.released;
   const newerCensus = settled.local === censusTips.shared ? undefined : settled.local;
   const keptLocal = newerCensus === undefined ? undefined : censusOffOrigin(site, newerCensus);
   const censusAhead = newerCensus !== undefined && keptLocal === undefined;
   const merged = {
     ...mergedLog,
     pushedEvents,
+    yielded: given.lost,
     ...(settled.ignored ? { sharedCensusIgnored: true } : {}),
     ...(keptLocal === undefined ? {} : { censusKeptLocal: keptLocal }),
   };
@@ -871,7 +865,7 @@ function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> {
   );
 
   if (timedOut(pushed)) {
-    return { state: 'offline', reason: 'timed out', ...nothingShared };
+    return { state: 'offline', reason: 'timed out', ...nothingShared, yielded: given.lost };
   }
 
   if (pushed.status === 0) {
@@ -879,7 +873,7 @@ function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> {
   }
 
   return rejected(pushed.stdout)
-    ? { state: 'behind', ...nothingShared }
+    ? { state: 'behind', ...nothingShared, yielded: given.lost }
     : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [] };
 }
 

@@ -231,13 +231,3 @@ test('release --class by the holder pushes the release, says so, and another sit
     [0, 'released any-type; synced\n', 'claimed any-type until 2026-11-07T18:00:00.000Z\n'],
   );
 });
-
-test("spike 2's control: with the look turned off, the losing claim stays live on the origin beside the winner", (t) => {
-  const { first, second, remote, catchUp } = racedPair(t);
-  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
-  addWeed(second.dir, 'src/b.ts:1');
-
-  claimWith(second.dir, ['claim', '--class', 'any-type'], { wait: catchUp, look: () => [] });
-
-  assert.deepEqual(new Set(liveClaimWriters(remote)), new Set([writerOf(first.dir), writerOf(second.dir)]));
-});

@@ -301,6 +301,35 @@ export function losingClaims(
   });
 }
 
+/**
+ * The claims to give back before a push: this writer's live claims among the events leaving for origin that lose to
+ * a claim origin already holds. Origin's events are read only when there is a claim to judge.
+ */
+export function planGiveBack(
+  leaving: readonly GardenEvent[],
+  shared: () => readonly GardenEvent[],
+  writer: string,
+  now: Date,
+): readonly LostClaim[] {
+  const mine = liveClaims(leaving, now).filter((claim) => claim.writer === writer);
+
+  return mine.length === 0 ? [] : losingClaims(shared(), mine, writer, now);
+}
+
+/** A release of each lost claim the events do not release already. */
+export function releasesFor(events: readonly GardenEvent[], lost: readonly LostClaim[]): readonly EventDraft[] {
+  const released = releasedClaims(events);
+
+  return lost
+    .filter(({ claim }) => !released.has(claim.uuid))
+    .map(({ claim }): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+}
+
+/** The uuids of the claims a release names. */
+export function releasedClaims(events: readonly GardenEvent[]): ReadonlySet<string> {
+  return new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
+}
+
 /** The active claim of a class when a writer other than this one owns it. */
 function heldByAnother(garden: Garden, weedClass: string, writer: string): ClaimEvent | undefined {
   const held = garden.claims.get(weedClass);
@@ -543,7 +572,7 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
 
 /** The claims no release names whose until is later than the reader's clock, in (clock, uuid) order. */
 function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
-  const released = new Set(events.filter((event) => event.op === 'release').map((release) => release.claim));
+  const released = releasedClaims(events);
 
   return events
     .filter((event) => event.op === 'claim')

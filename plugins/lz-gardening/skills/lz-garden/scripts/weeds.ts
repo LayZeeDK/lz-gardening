@@ -50,6 +50,7 @@ import {
   planClose,
   placeOf,
   planRelease,
+  releasedClaims,
   replay,
   unprintablePattern,
 } from './log.ts';
@@ -342,10 +343,10 @@ function holderOf(site: Site): string {
   return escapeUnprintable(configValue(site.checkout, 'lzGardening.name') ?? `writer ${site.writer.slice(0, 8)}`);
 }
 
-export type SyncSeams = Pick<SyncOptions, 'wait' | 'look' | 'timeoutMs'>;
+export type SyncSeams = Pick<SyncOptions, 'wait' | 'timeoutMs'>;
 
 function releasesOfClaim(events: readonly GardenEvent[], draft: EventDraft<ClaimEvent>): readonly EventDraft[] {
-  const released = new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
+  const released = releasedClaims(events);
 
   return events
     .filter(
