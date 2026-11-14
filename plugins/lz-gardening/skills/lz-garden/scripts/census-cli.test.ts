@@ -300,6 +300,37 @@ test('malformed patterns carried by the recorded census are refused, naming the 
   );
 });
 
+test('a pattern carried by the recorded census that git grep refuses is named with the census and the way out', async (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  const patterns = '{"patterns": [{"id": "bad", "regex": "a{2,1}"}]}\n';
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha), patterns);
+  git(garden, ['update-ref', censusRef, pendingCensusRef(sha)]);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual(
+    [result.status, result.stderr.split(': fatal: ')[0]],
+    [
+      2,
+      'census: git grep for bad from refs/garden/census:patterns.json' +
+        ' (a .garden/patterns.json written in the site is read instead)',
+    ],
+    result.stderr,
+  );
+});
+
+test("a bundled pattern whose git grep fails is named by its id alone, beside the site's own patterns", async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden);
+  const blob = git(dir, ['rev-parse', 'HEAD:src/a.ts']);
+  rmSync(join(dir, '.git', 'objects', blob.slice(0, 2), blob.slice(2)));
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual([result.status, result.stderr.split(': error: ')[0]], [2, 'census: git grep for eslint-disable']);
+});
+
 test('a census in a repository with no garden site is refused, saying to open the site first', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });

@@ -39,6 +39,7 @@ export function takeCensusInRun(cwd: string, rev: string, patterns: PatternSet, 
     patterns,
     at,
     inRun(process.env, () => gitEnv(cwd)),
+    (id) => id,
   );
 }
 

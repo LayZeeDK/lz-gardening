@@ -242,27 +242,36 @@ async function grepRevision(
   return parseGrep(grep.stdout, sha);
 }
 
-export async function takeCensus(cwd: string, rev: string, set: PatternSet, now: Date, env: Env): Promise<Census> {
+/** `named` gives the name a git error calls a pattern by, from its id. */
+export async function takeCensus(
+  cwd: string,
+  rev: string,
+  set: PatternSet,
+  now: Date,
+  env: Env,
+  named: (id: string) => string,
+): Promise<Census> {
   const sha = await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env);
-  const [results, duplicates] = await Promise.all([
-    Promise.all(
-      set.patterns.map(
-        async (pattern) =>
-          [
-            pattern.id,
-            await grepRevision(
-              cwd,
-              env,
-              sha,
-              pattern.regex,
-              pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
-              pattern.id,
-            ),
-          ] as const,
-      ),
-    ),
-    findDuplicates(cwd, env, sha, set.exclude),
-  ]);
+  const greps = set.patterns.map(
+    async (pattern) =>
+      [
+        pattern.id,
+        await grepRevision(
+          cwd,
+          env,
+          sha,
+          pattern.regex,
+          pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
+          named(pattern.id),
+        ),
+      ] as const,
+  );
+  const found = findDuplicates(cwd, env, sha, set.exclude);
+  // Every git grep ends before a failure is reported, so none is left running in a folder its caller removes, and the
+  // failure reported is the first in the set's order.
+  await Promise.allSettled([...greps, found]);
+  const results = await Promise.all(greps);
+  const duplicates = await found;
 
   return {
     rev: branchName(rev),
@@ -478,7 +487,10 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const extra = extraFile === undefined ? null : parsePatternSet(parseNamed(extraFile), extraFile.source);
   // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message
   const set = mergePatternSets(parsePatternSet(bundledPatterns, 'patterns.json'), extra);
-  const after = await takeCensus(io.cwd, rev, set, new Date(), env);
+  const fromExtra = new Set(extra?.patterns.map(({ id }) => id));
+  const named = (id: string): string =>
+    extraFile !== undefined && fromExtra.has(id) ? `${id} from ${extraFile.source}` : id;
+  const after = await takeCensus(io.cwd, rev, set, new Date(), env, named);
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;

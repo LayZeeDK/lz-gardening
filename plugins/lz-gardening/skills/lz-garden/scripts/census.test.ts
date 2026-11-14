@@ -343,7 +343,10 @@ test('a census in a folder that does not exist fails with the reason git could n
 
   const env = inRun(process.env, () => gitEnv(dir));
 
-  await assert.rejects(takeCensus(join(dir, 'missing'), 'HEAD', set, now, env), { code: 'ENOENT' });
+  await assert.rejects(
+    takeCensus(join(dir, 'missing'), 'HEAD', set, now, env, (id) => id),
+    { code: 'ENOENT' },
+  );
 });
 
 test('git grep output keeps colons inside the matched text', () => {
