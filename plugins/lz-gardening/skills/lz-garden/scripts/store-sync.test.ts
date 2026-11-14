@@ -527,7 +527,7 @@ test('an origin that asks for credentials leaves the site offline with what git 
   const { dir } = planted(t);
   const port = await serve(
     t,
-    'require("node:http").createServer((q, s) => { s.writeHead(401, { "WWW-Authenticate": "Basic realm=garden" }); s.end(); }).listen(0, "127.0.0.1", function () { console.log(this.address().port); });',
+    'require("node:http").createServer((q, s) => { s.writeHead(401, { "WWW-Authenticate": "Basic realm=garden" }); s.end(); }).listen(0, "127.0.0.1", function () { process.stdout.write(String(this.address().port)); });',
   );
   git(dir, ['remote', 'add', 'origin', `http://127.0.0.1:${port}/repo.git`]);
 
