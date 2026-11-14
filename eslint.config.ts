@@ -59,7 +59,7 @@ export default tseslint.config(
         'error',
         {
           selector:
-            'JSONProperty[key.value=/^(dependencies|optionalDependencies|peerDependencies)$/] > JSONObjectExpression > JSONProperty > JSONLiteral.value[value!=/^\\d+\\.\\d+\\.\\d+$/]',
+            'JSONProperty[key.value=/^(dependencies|optionalDependencies|peerDependencies)$/] > JSONObjectExpression > JSONProperty > JSONLiteral.value[value!=/^\\d+\\.\\d+\\.\\d+(-[\\w.-]+)?$/]',
           message: 'Pin the exact version (npm install --save-exact): the plugin ships the version its lockfile holds.',
         },
       ],
