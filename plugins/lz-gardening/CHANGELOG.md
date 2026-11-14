@@ -38,8 +38,8 @@ First release.
   try lost to another push or another sync of the site; the next run pushes the events). `site.ts sync` also prints how many events it shared and
   the files whose shared content it kept over the site's, and exits 0 in every state. A `sync --census` deletes the
   pending censuses of older base commits that an interrupted tick left. The garden log's and the census's commits
-  are signed `lz-gardening <>`, or by `lzGardening.name` and `lzGardening.email` when the checkout's git config sets
-  both. The queue is shared with the repository, so `weeds.ts` takes repository-relative paths only (`--where`, a
+  are authored and committed as `lz-gardening <>`, or as `lzGardening.name` and `lzGardening.email` when the
+  checkout's git config sets both. The queue is shared with the repository, so `weeds.ts` takes repository-relative paths only (`--where`, a
   `lesson:<path>` source, `--check`) and refuses an event whose text holds this machine's home folder, the
   checkout's path or the site's path, in any letter case, with either slash, doubled backslashes or a drive in Git
   Bash's `/d/` form. A census whose base commit no branch fetched from `origin` holds stays in the site and is named

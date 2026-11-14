@@ -64,11 +64,11 @@ outside `refs/garden/` is pushed, and the checkout itself fetches nothing. A clo
 not push to it, keeps working on its own copy and shares it on a later tick. Whoever can read the repository can read
 the shared queue: each claim names its holder by `lzGardening.name` when you set it, and otherwise by the first 8
 characters of the site's random writer id, never by your `user.name`; the bed commits carry your `user.name` and
-`user.email`. Each census also carries the site's
-`.garden/patterns.json` byte for byte, and nothing checks that file for machine paths, so keep local paths and private
-text out of it. A clone without the file takes its census with the extra patterns of the last census it holds, which
-a sync takes from `origin`. The queue's and the census's own commits are signed `lz-gardening <>`; to sign them
-yourself, set both `lzGardening.name` and `lzGardening.email` in the repository's git config. To keep the garden local only:
+`user.email`. Each census also carries the site's `.garden/patterns.json` byte for byte, and nothing checks that
+file for machine paths, so keep local paths and private text out of it. A clone without the file takes its census
+with the extra patterns of the last census it holds, which a sync takes from `origin`. The queue's and the census's
+own commits are authored and committed as `lz-gardening <>`; to put your own name on them, set both
+`lzGardening.name` and `lzGardening.email` in the repository's git config. To keep the garden local only:
 
 ```bash
 git config lzGardening.share false
@@ -176,7 +176,7 @@ Leave these three claude-code-action inputs unset:
 
 A run shares what a tick on your machine shares: the queue and the census, pushed to `refs/garden/` on the
 repository, where anyone who can read the repository can read them. The site copies the `claude[bot]` identity that
-the action sets, and the queue's and the census's commits are signed `lz-gardening <>` as on any clone.
+the action sets, and the queue's and the census's commits are authored as `lz-gardening <>`, as on any clone.
 
 The site lasts one job. A run whose last `shared` state is `offline`, `read-only` or `behind` loses what it found,
 and the next run reads the same commits again, because the shared census did not move. The `concurrency` group
