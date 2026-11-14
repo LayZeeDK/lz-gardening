@@ -46,13 +46,18 @@ export function processIo(): Io {
   };
 }
 
+/** Prints what stopped a command and returns its exit code. */
+export function commandFailed(name: string, io: Io, error: unknown): number {
+  io.err(`${name}: ${error instanceof Error ? error.message : String(error)}\n`);
+
+  return 2;
+}
+
 export function runCommand(name: string, io: Io, main: () => number): number {
   try {
     return inRun(io.env, main);
   } catch (error: unknown) {
-    io.err(`${name}: ${error instanceof Error ? error.message : String(error)}\n`);
-
-    return 2;
+    return commandFailed(name, io, error);
   }
 }
 

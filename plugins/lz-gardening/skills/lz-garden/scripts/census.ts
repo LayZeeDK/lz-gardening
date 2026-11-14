@@ -19,7 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
-import { escapeUnprintable, isMainModule, processIo } from './cli.ts';
+import { commandFailed, escapeUnprintable, isMainModule, processIo } from './cli.ts';
 import bundledPatterns from './patterns.json' with { type: 'json' };
 import type { Io } from './cli.ts';
 import { classPattern, firstReason } from './log.ts';
@@ -548,9 +548,7 @@ export async function run(argv: readonly string[], io: Io): Promise<number> {
   try {
     return await main(argv, io);
   } catch (error: unknown) {
-    io.err(`census: ${error instanceof Error ? error.message : String(error)}\n`);
-
-    return 2;
+    return commandFailed('census', io, error);
   }
 }
 
