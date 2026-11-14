@@ -19,7 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { isMainModule, processIo } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo } from './cli.ts';
 import type { Io } from './cli.ts';
 import { isRecord } from './log.ts';
 import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
@@ -406,7 +406,7 @@ function seedList(census: Census): string[] {
   ];
 }
 
-function formatDelta(deltas: readonly PatternDelta[]): string {
+function formatDelta(deltas: readonly PatternDelta[]): readonly string[] {
   const rows = deltas.map((delta) => {
     const change = delta.before === null ? 'new' : String(delta.after - delta.before).replace(/^(?=\d)/, '+');
 
@@ -414,7 +414,7 @@ function formatDelta(deltas: readonly PatternDelta[]): string {
   });
   const added = deltas.flatMap((delta) => delta.added.map((hit) => `+ [${delta.id}] ${hit}`));
 
-  return [`${'pattern'.padEnd(30)} ${'count'.padStart(6)}  change`, ...rows, '', ...added].join('\n');
+  return [`${'pattern'.padEnd(30)} ${'count'.padStart(6)}  change`, ...rows, '', ...added];
 }
 
 function readSite(cwd: string): {
@@ -493,9 +493,8 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     newDuplicates,
   };
   const seed = values.seed ? seedList(after) : [];
-  io.out(
-    `${[formatDelta(deltas), ...duplicateLines(before, after, newDuplicates, earlier), ...seed].join('\n')}\n${JSON.stringify(summary)}\n`,
-  );
+  const lines = [...formatDelta(deltas), ...duplicateLines(before, after, newDuplicates, earlier), ...seed];
+  io.out(`${lines.map(escapeUnprintable).join('\n')}\n${JSON.stringify(summary)}\n`);
 
   return 0;
 }

@@ -397,6 +397,18 @@ test('the CLI writes the census, and a second run reports what grew', async (t) 
   assert.match(second.stdout, /\+ \[eslint-disable\] src\/a\.ts:1:/);
 });
 
+test('a new hit holding a terminal control character prints it escaped', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/t.ts': 'const t = 1;\n' });
+  await takeAndRecord(dir);
+  commit(dir, { 'src/t.ts': '// TODO \u001b[31mred\n' });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.ok(second.stdout.split('\n').includes('+ [todo-marker] src/t.ts:1: // TODO \\u{1b}[31mred'), second.stdout);
+});
+
 test('the table shows each count and its change in fixed columns, then the new hits, and the summary counts them', async (t) => {
   const { dir } = planted(t);
   commit(dir, { 'src/a.ts': '// eslint-disable\n// eslint-disable\n', 'src/t.ts': '// TODO one\n' });
