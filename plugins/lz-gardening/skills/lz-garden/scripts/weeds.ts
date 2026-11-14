@@ -144,13 +144,14 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     ] as const
   ).flatMap(([kind, by]) => (by === undefined ? [] : [{ kind, by }]));
   const chosen = kinds.length === 1 ? kinds[0] : undefined;
-  const target = command === 'close' ? flags.id : flags.class;
+  const byId = command === 'close';
+  const target = byId ? flags.id : flags.class;
 
   if (chosen === undefined || !hasText(chosen.by) || target === undefined) {
-    return `needs ${command === 'close' ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep`;
+    return `needs ${byId ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep`;
   }
 
-  if (command === 'close-class' && !classPattern.test(target)) {
+  if (!byId && !classPattern.test(target)) {
     return '--class must be kebab-case';
   }
 
@@ -171,11 +172,11 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
 
   if (kind !== 'tended') {
     return check === undefined
-      ? { target: command === 'close' ? { id: target } : { class: target }, kind, by, check: null }
+      ? { target: byId ? { id: target } : { class: target }, kind, by, check: null }
       : '--check goes with --tended only';
   }
 
-  if (command === 'close') {
+  if (byId) {
     return '--tended closes a whole class; use close-class --class <class>';
   }
 
