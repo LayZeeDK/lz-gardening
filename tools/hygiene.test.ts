@@ -99,6 +99,15 @@ test('the plugin ships the same license as the repository', () => {
   );
 });
 
+test('no file under a node_modules folder is committed, the plugin folder included', () => {
+  const committed = git(['ls-files', '-z', '--', ':(glob)**/node_modules/**']).split('\0');
+
+  assert.deepEqual(
+    committed.filter((path) => path !== ''),
+    [],
+  );
+});
+
 test('CI tests the Node.js version package.json names as its floor', () => {
   const engine = /"node":\s*">=([\d.]+)"/.exec(readFileSync(join(root, 'package.json'), 'utf8'))?.[1];
   const matrix = /^\s*node: \[(.*)\]$/m.exec(readFileSync(join(root, '.github/workflows/check.yml'), 'utf8'))?.[1];
