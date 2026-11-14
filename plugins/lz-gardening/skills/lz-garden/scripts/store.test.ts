@@ -19,9 +19,19 @@ import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
 import { eventPath, weedId } from './log.ts';
 import type { EventDraft } from './log.ts';
-import { configValue, gitAsync, gitEnv, inRun, namedHooksOff, runGit, runGitAsync, treeEntries } from './store-git.ts';
+import {
+  configValue,
+  gitAsync,
+  gitEnv,
+  inRun,
+  isAncestor,
+  namedHooksOff,
+  runGit,
+  runGitAsync,
+  treeEntries,
+} from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
-import { git, repo } from './test-repo.ts';
+import { commit, git, repo } from './test-repo.ts';
 import { configEnv, planted, scriptProcess } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { cli, cliProcess, now, script } from './test-weeds.ts';
@@ -380,8 +390,9 @@ test('a log whose garden.json names no format from 1 up is refused as damaged, n
   };
 
   assert.deepEqual(
-    [refusal('{}'), refusal('{"format":0}'), refusal('{"format":"1"}')],
+    [refusal('{}'), refusal('{"format":0}'), refusal('{"format":"1"}'), refusal('{"format":1.5}')],
     [
+      'refs/garden/log:garden.json names no log format',
       'refs/garden/log:garden.json names no log format',
       'refs/garden/log:garden.json names no log format',
       'refs/garden/log:garden.json names no log format',
@@ -821,6 +832,15 @@ test('a git that cannot start is named without its arguments, so a token in an o
       }),
     { message: /^git could not start: spawnSync git ENOENT$/ },
   );
+});
+
+test("an ancestry question about a commit git does not know is an error with git's reason, not a no", (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  assert.throws(() => isAncestor(dir, 'f'.repeat(40), 'HEAD'), {
+    message: new RegExp(`^git merge-base --is-ancestor ${'f'.repeat(40)} HEAD: fatal: .*${'f'.repeat(40)}`),
+  });
 });
 
 test('an event file whose object is not a file is refused with the header git read for it', (t) => {
