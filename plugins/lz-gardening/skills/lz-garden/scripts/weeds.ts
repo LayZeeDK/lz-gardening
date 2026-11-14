@@ -15,16 +15,16 @@
 //     pass added a check; close-class only), --one-off <reason> (no check written), --keep <reason> (the weed is
 //     deliberate). Values are one line of text without control characters. Both sync with origin before they plan
 //     and after they append, then print `<closed|kept> <n>; <share state>`; the last sync's reason and a bed origin
-//     did not take are named on stderr. close-class acts only when that first sync leaves the share state synced or local and this writer
-//     holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check the claim of <class>:
-//     <state> (<reason>)`, `this site holds no claim of <class>; run weeds claim --class <class>` or `<class> is
-//     claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of the class. close --id
-//     needs no claim, names a first sync other than synced or local on stderr, and leaves the claim as it is; it
-//     exits 1 with `<class> is claimed by <holder> until <time>`, closing nothing, while another writer holds one.
+//     did not take are named on stderr. close-class acts only when that first sync leaves the share state synced or
+//     local and this writer holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check
+//     the claim of <class>: <state>[ (<reason>)]`, `this site holds no claim of <class>; run weeds claim --class
+//     <class>` or `<class> is claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of
+//     the class. close --id needs no claim, names a first sync other than synced or local on stderr, and leaves the
+//     claim as it is; it exits 1 with `<class> is claimed by <holder> until <time>`, closing nothing, while another writer holds one.
 //   node weeds.ts claim [--class <kebab>]
 //     Claims the class, or the first one groups --ready lists, for six hours, and shares the claim:
 //     `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
-//     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state> (<reason>)`, the last
+//     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state>[ (<reason>)]`, the last
 //     after releasing the claim (`; release pending` when that release is not shared yet). A bed origin did not take
 //     in its first sync is named on stderr.
 //   node weeds.ts release --class <kebab>

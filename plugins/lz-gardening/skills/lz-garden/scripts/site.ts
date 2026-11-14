@@ -3,11 +3,12 @@
 // the beds of tended closes under refs/garden/beds/<class>; its `garden` branch holds only the .gitignore for the beds.
 // Usage, from the repository:
 //   node site.ts open [--base <branch>]     create the site if missing, plant the garden log and the writer id if
-//                                           missing, resolve the base (--base, else the census's base, else
-//                                           origin's default), sync once; prints {site, created, base, seeded,
-//                                           shared} and reason when there is one, seeded once the log holds a seed
-//                                           event, shared being the share state: local, synced, offline, read-only
-//                                           or behind
+//                                           missing, sync once, and resolve the base: --base, else the base of the
+//                                           census after the sync, else origin's default branch (not asked of an
+//                                           origin on a local path), else main, else master; prints {site, created,
+//                                           base, seeded, shared} and reason when there is one, seeded once the log
+//                                           holds a seed event, shared being the share state: local, synced,
+//                                           offline, read-only or behind
 //   node site.ts sync [--census <sha> [--seeded]]
 //                                           sync with origin, up to 5 tries; with --census, record the census
 //                                           census.ts took of <sha> unless the garden's census is of that commit or
