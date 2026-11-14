@@ -41,14 +41,30 @@ user configured it (`lzGardening.name` and `lzGardening.email` name the garden's
 The scripts under `plugins/lz-gardening/skills/*/scripts/` are TypeScript in erasable syntax that Node.js 22.18+
 runs directly, with no build step. They may import npm packages that `plugins/lz-gardening/package.json` lists at an
 exact version, with the npm-written `package-lock.json` beside it to match: Claude Code installs a marketplace
-plugin's packages from those two files when it installs or updates the plugin, and installs nothing when they
-disagree. `--plugin-dir` installs nothing, so run `npm ci --prefix plugins/lz-gardening` before such a run. Develop
-them test-first, one `node:test` test per red-green-refactor cycle. Give each test its own state from a setup function it calls (a throwaway git repository for census tests),
-not shared `before` hooks. Mutation-test changes with StrykerJS: the command runner over `node --test`, or, on a
-machine with an `@layzee/stryker-node-test-runner` checkout, that runner and the checkout's mutators
-(`stryker.config.mjs` says how).
+plugin's packages from those two files when it installs or updates the plugin. When the two disagree it installs
+nothing, and the scripts fail when they import a package.
 
-Keep `npm run check` passing: type-check, lint, Prettier and every test, the hygiene checks included.
+- Add, bump or remove a package of the plugin in its folder only, and commit both files:
+  `npm install <pkg>@<version> --save-exact --prefix plugins/lz-gardening` or
+  `npm uninstall <pkg> --prefix plugins/lz-gardening`. A test-only or tooling package goes to the root:
+  `npm install -D -E <pkg>`.
+- The tests, Stryker and `claude --plugin-dir` all run on the plugin's own `node_modules`, and `--plugin-dir`
+  installs nothing. `npm ci` at the root fills it through `postinstall`
+  (`npm ci --prefix plugins/lz-gardening --ignore-scripts`); `npm install <pkg>` at the root skips that step, so run
+  `npm ci` after it.
+- Run Nx as `npm exec -- nx`. A local Nx plugin, `tools/nx/claude-plugin.ts`, infers the plugin's `test`,
+  `lockfile` and `mutate` targets and adds its lockfile's packages to the project graph, which
+  `@nx/dependency-checks` reads (ADR 0005).
+
+Develop the scripts test-first, one `node:test` test per red-green-refactor cycle. Give each test its own state from a
+setup function it calls (a throwaway git repository for census tests), not shared `before` hooks. Mutation-test
+changes with StrykerJS, one script at a time: `npm exec -- nx mutate-<name> lz-gardening`, where `<name>` is a
+script's name before its first hyphen, so `mutate-store` takes every `store-*.ts` (the `mutate` target takes every
+script). Stryker runs the command runner over `node --test`, or, on a machine with an
+`@layzee/stryker-node-test-runner` checkout, that runner and the checkout's mutators (`stryker.config.mjs` says how).
+
+Keep `npm run check` passing: type-check, lint, every test with the hygiene checks, the plugin's lockfile check and
+Prettier.
 
 ## Versioning and commits
 
