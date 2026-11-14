@@ -342,14 +342,15 @@ function mergeInto(bed: string, commitId: string, name: string): void {
   throw new Error(`${name} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
 }
 
-interface BedSummary {
+type Deps = 'none' | 'linked' | 'installed' | 'install';
+
+// install names the command exactly when deps is install.
+type BedSummary = {
   readonly bed: string;
   readonly branch: string;
   readonly start: string;
   readonly created: boolean;
-  readonly deps: 'none' | 'linked' | 'installed' | 'install';
-  readonly install: string | undefined;
-}
+} & ({ readonly deps: Exclude<Deps, 'install'> } | { readonly deps: 'install'; readonly install: string });
 
 function makeBed(top: string, site: string, bedClass: string, base: string): BedSummary {
   git(site, ['fetch', '-q', 'origin', base]);
@@ -392,22 +393,16 @@ function makeBed(top: string, site: string, bedClass: string, base: string): Bed
   }
 
   const deps = plantDeps(top, bed);
+  const made = { bed, branch, start, created: !hasBranch };
 
-  return {
-    bed,
-    branch,
-    start,
-    created: !hasBranch,
-    deps,
-    install: deps === 'install' ? installCommand(bed) : undefined,
-  };
+  return deps === 'install' ? { ...made, deps, install: installCommand(bed) } : { ...made, deps };
 }
 
 function sharesLockfile(top: string, bed: string): boolean {
   return lockfiles.some((name) => sameBytes(join(top, name), join(bed, name)));
 }
 
-function plantDeps(top: string, bed: string): BedSummary['deps'] {
+function plantDeps(top: string, bed: string): Deps {
   const entry = lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false });
 
   if (entry !== undefined) {
