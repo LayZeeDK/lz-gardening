@@ -426,8 +426,18 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       }
 
       const site = openSite(io.cwd);
-      const outcome = append(site, (replica) => planAdd(eventsReportingSkipped(io, replica), input, now), now);
-      write(addStatus(outcome, offBaseIn(io, site.path, values.census)));
+      const offBase = offBaseIn(io, site.path, values.census);
+      // The status is worked out before the event is written, so a git failure in the bed check writes nothing.
+      const { status } = append(
+        site,
+        (replica) => {
+          const outcome = planAdd(eventsReportingSkipped(io, replica), input, now);
+
+          return { drafts: outcome.drafts, status: addStatus(outcome, offBase) };
+        },
+        now,
+      );
+      write(status);
 
       return 0;
     }
