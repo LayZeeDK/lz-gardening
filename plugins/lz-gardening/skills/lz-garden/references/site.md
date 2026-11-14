@@ -50,15 +50,16 @@ neither the log nor another bed. For each class, the latest tended close in the 
 pushes the site's `bed/<class>` as `refs/garden/beds/<class>` when that branch's commit is the close's, and either
 `origin`'s bed is an ancestor of it or `origin` has no bed of the class and either the close is shared by this very sync
 or an earlier sync set out to push that commit and did not see it land. The sync picks the beds before it pushes the
-log and marks each one it will push until it sees that bed land, so a sync that ends after its log lands (a push that
-timed out, a process stopped) leaves the bed to the next sync. A bed that does not descend from `origin`'s is named on
-stderr and left in the site. So is a bed `origin` refuses or whose push fails, with git's reason (`timed out` for a push
-that took longer than a minute), and the next sync pushes it again. The only commits a bed may bring `origin` are its
-own, made in the site: a bed that would bring any commit the checkout holds (a base on an unpushed branch, a tag, a
-detached commit or another remote's branch) stays in the site and is named too. So is a bed whose commits add a line,
-or hold a message, with this machine's home folder, the checkout's path or the site's path in it, spelled as the event
-check below reads them; merges and files git reads as binary count. A bed ref deleted on `origin` after its close was
-shared stays deleted.
+log and marks each one it will push until it sees that bed land, in its own push's result or in a later sync's fetch
+of `origin`'s beds, so a sync that ends after its log lands (a push that timed out, a process stopped) leaves the bed
+to the next sync. A bed that does not descend from `origin`'s is named on stderr and left in the site; so is a bed
+whose ref on `origin` is not a commit, and the log still syncs. So is a bed `origin` refuses or whose push fails, with
+git's reason (`timed out` for a push that took longer than a minute), and the next sync pushes it again. The only
+commits a bed may bring `origin` are its own, made in the site: a bed that would bring any commit the checkout holds (a
+base on an unpushed branch, a tag, a detached commit or another remote's branch) stays in the site and is named too. So
+is a bed whose commits add a line, or hold a message, with this machine's home folder, the checkout's path or the
+site's path in it, spelled as the event check below reads them; merges and files git reads as binary count. A bed ref
+deleted on `origin` after its close was shared stays deleted, whether or not the sync that pushed it saw it land.
 
 A census is shared only while a branch the checkout fetched from `origin` (`refs/remotes/origin/*`) holds its base
 commit. Otherwise it stays in the site, and `site.ts` says so on stderr; a later sync, once that commit is pushed and
