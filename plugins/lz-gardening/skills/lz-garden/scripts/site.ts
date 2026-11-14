@@ -60,7 +60,7 @@ import {
 import type { Site } from './store-log.ts';
 import { censusRef, hasCensusOf, readableCensus } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
-import { sync, syncTries } from './store-sync.ts';
+import { sleep, sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
 import { classPattern, isRecord, replay } from './log.ts';
 
@@ -114,20 +114,16 @@ const lockTries = 20;
 // Stryker disable next-line LzJsNumericLiteral: how long a try waits is policy; no result depends on a millisecond more or less
 const lockPauseMs = 250;
 
-function pause(): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, lockPauseMs);
-}
-
 export function renameRetrying(
   from: string,
   to: string,
   {
     rename = renameSync,
-    wait = pause,
+    wait = sleep,
     platform = process.platform,
   }: {
     readonly rename?: (from: string, to: string) => void;
-    readonly wait?: () => void;
+    readonly wait?: (ms: number) => void;
     readonly platform?: NodeJS.Platform;
   } = {},
 ): void {
@@ -144,7 +140,7 @@ export function renameRetrying(
         throw error;
       }
 
-      wait();
+      wait(lockPauseMs);
     }
   }
 }
