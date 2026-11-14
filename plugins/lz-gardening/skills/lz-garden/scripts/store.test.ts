@@ -31,10 +31,10 @@ import {
   treeEntries,
 } from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
-import { commit, git, repo } from './test-repo.ts';
+import { commit, git, now, repo } from './test-repo.ts';
 import { configEnv, planted, scriptProcess } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
-import { cli, cliProcess, now, script } from './test-weeds.ts';
+import { cli, cliProcess, script } from './test-weeds.ts';
 
 async function exitOf(cwd: string, args: readonly string[]): Promise<number | null> {
   return (await scriptProcess(script, cwd, args)).code;

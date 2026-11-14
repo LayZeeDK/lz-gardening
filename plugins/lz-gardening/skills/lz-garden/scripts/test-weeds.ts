@@ -5,14 +5,12 @@ import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { weedId } from './log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { capturingIo, commit, git } from './test-repo.ts';
+import { capturingIo, commit, git, now } from './test-repo.ts';
 import { planted, writeCensus } from './test-site.ts';
 import { run } from './weeds.ts';
 import type { SyncSeams } from './weeds.ts';
 
 export const script = join(dirname(fileURLToPath(import.meta.url)), 'weeds.ts');
-
-export const now = new Date('2026-11-07T12:00:00.000Z');
 
 export interface WeedsRun {
   readonly code: number | null;

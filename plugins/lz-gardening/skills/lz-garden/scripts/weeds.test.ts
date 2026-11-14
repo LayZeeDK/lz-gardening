@@ -8,10 +8,10 @@ import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { planAdd, replay, stamp, weedId } from './log.ts';
 import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './log.ts';
-import { commit, repo } from './test-repo.ts';
+import { commit, now, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { cli, homeAt, now, script } from './test-weeds.ts';
+import { cli, homeAt, script } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 

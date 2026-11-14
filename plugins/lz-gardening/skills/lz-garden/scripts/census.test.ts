@@ -8,8 +8,8 @@ import { test } from 'node:test';
 import { diffCensus, diffDuplicates, mergePatternSets, parseGrep, parsePatternSet, takeCensus } from './census.ts';
 import { parseCensus } from './store-census.ts';
 import { gitEnv, inRun } from './store-git.ts';
-import { censusOf, now, script, set, takeCensusInRun } from './test-census.ts';
-import { commit, git, repo } from './test-repo.ts';
+import { censusOf, script, set, takeCensusInRun } from './test-census.ts';
+import { commit, git, now, repo } from './test-repo.ts';
 
 test('counts hits per pattern at a revision, honouring paths and excludes', async (t) => {
   const dir = repo(t);

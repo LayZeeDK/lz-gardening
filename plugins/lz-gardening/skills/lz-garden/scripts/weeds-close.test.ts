@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { claimLifetimeMs, replay } from './log.ts';
 import { openSite, readLog } from './store-log.ts';
-import { commit, git } from './test-repo.ts';
+import { commit, git, now } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
-import { addWeed, anyTypeBedFromMain, cli, now } from './test-weeds.ts';
+import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
 
 test("close-class after the site's claim expired is refused once its first sync fetches another writer's newer claim", (t) => {
   const { first, second } = sharedPair(t);

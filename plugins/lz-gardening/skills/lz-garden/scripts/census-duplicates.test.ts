@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { diffDuplicates } from './census.ts';
-import { census, censusOf, now, set, takeAndRecord, takeCensusInRun } from './test-census.ts';
-import { commit, repo } from './test-repo.ts';
+import { census, censusOf, set, takeAndRecord, takeCensusInRun } from './test-census.ts';
+import { commit, now, repo, summaryOf } from './test-repo.ts';
 import { planted } from './test-site.ts';
 
 test('a function defined in two files is reported as a duplicate with both paths', async (t) => {
@@ -194,9 +194,7 @@ test('the CLI names a helper that became duplicated since the last census, not o
   const second = await census(dir, ['--rev', 'HEAD']);
 
   assert.equal(second.status, 0, second.stderr);
-  const summary: unknown = JSON.parse(second.stdout.trim().split('\n').at(-1) ?? '');
-  assert.ok(typeof summary === 'object' && summary !== null && 'newDuplicates' in summary);
-  assert.deepEqual(summary.newDuplicates, ['isRecord']);
+  assert.deepEqual(summaryOf(second.stdout).get('newDuplicates'), ['isRecord']);
   assert.deepEqual(
     second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
     ['+ duplicate isRecord: new src/b.ts; already src/a.ts'],

@@ -6,9 +6,20 @@ import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Io } from './cli.ts';
+import { isRecord } from './log.ts';
 
 process.env['GIT_CONFIG_GLOBAL'] = fileURLToPath(new URL('test.gitconfig', import.meta.url));
 process.env['GIT_CONFIG_NOSYSTEM'] = '1';
+
+export const now = new Date('2026-11-07T12:00:00.000Z');
+
+// The JSON summary a script prints as its last line, or an empty map when the last line is not a JSON object.
+export function summaryOf(stdout: string): ReadonlyMap<string, unknown> {
+  const last = stdout.trim().split('\n').at(-1) ?? '';
+  const parsed: unknown = last.startsWith('{') ? JSON.parse(last) : {};
+
+  return new Map(isRecord(parsed) ? Object.entries(parsed) : []);
+}
 
 export function git(cwd: string, args: readonly string[]): string {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });

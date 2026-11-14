@@ -6,18 +6,9 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { censusRef, parseCensus, pendingCensusRef, writePendingCensus } from './store-census.ts';
-import {
-  census,
-  censusCli,
-  censusText,
-  recordByHand,
-  summaryOf,
-  takeAndRecord,
-  todoPatterns,
-  writeSitePatterns,
-} from './test-census.ts';
-import { commit, git, repo } from './test-repo.ts';
-import { planted } from './test-site.ts';
+import { census, censusCli, censusText, takeAndRecord, todoPatterns, writeSitePatterns } from './test-census.ts';
+import { commit, git, repo, summaryOf } from './test-repo.ts';
+import { planted, writeCensusText } from './test-site.ts';
 
 test('the CLI writes its census to the pending ref of the commit the rev names, not of the rev', async (t) => {
   const { dir, garden } = planted(t);
@@ -283,7 +274,7 @@ test('a census of a commit the recorded census descends from is behind the garde
 test('a previous census of a commit this checkout lacks reports no previous sha, so the tick reads no range', async (t) => {
   const { dir, garden } = planted(t);
   const unknown = 'f'.repeat(40);
-  recordByHand(garden, unknown, censusText(unknown));
+  writeCensusText(garden, censusText(unknown));
 
   const result = await census(dir, ['--rev', 'HEAD']);
 
@@ -320,7 +311,7 @@ test('a census in a repository with no garden site is refused, saying to open th
 
 test('a recorded census that is not a census is refused by name and left as it was', async (t) => {
   const { dir, garden } = planted(t);
-  recordByHand(garden, git(dir, ['rev-parse', 'HEAD']), '{"rev": 1}\n');
+  writeCensusText(garden, '{"rev": 1}\n');
   const recorded = git(garden, ['rev-parse', censusRef]);
 
   const result = await census(dir, ['--rev', 'HEAD']);
@@ -395,9 +386,7 @@ test('the CLI writes the census, and a second run reports what grew', async (t) 
   const second = await census(dir, ['--rev', 'HEAD']);
   assert.equal(second.status, 0, second.stderr);
 
-  const summary: unknown = JSON.parse(second.stdout.trim().split('\n').at(-1) ?? '');
-  assert.ok(typeof summary === 'object' && summary !== null && 'grew' in summary);
-  assert.ok(Array.isArray(summary.grew) && summary.grew.includes('eslint-disable'));
+  assert.deepEqual(summaryOf(second.stdout).get('grew'), ['eslint-disable']);
   assert.match(second.stdout, /\+ \[eslint-disable\] src\/a\.ts:1:/);
 });
 

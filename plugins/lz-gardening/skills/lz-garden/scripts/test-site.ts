@@ -6,10 +6,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { isRecord } from './log.ts';
 import { run } from './site.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
-import { capturingIo, commit, git, init } from './test-repo.ts';
+import { capturingIo, commit, git, init, summaryOf } from './test-repo.ts';
 
 export const siteScript = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
 
@@ -20,11 +19,7 @@ export interface SiteRun {
 }
 
 function siteRun(status: number | null, stdout: string, stderr: string): SiteRun {
-  const last = stdout.trim().split('\n').at(-1) ?? '';
-  const parsed: unknown = last.startsWith('{') ? JSON.parse(last) : {};
-  const summary = new Map(isRecord(parsed) ? Object.entries(parsed) : []);
-
-  return { status, stderr, summary };
+  return { status, stderr, summary: summaryOf(stdout) };
 }
 
 export function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {

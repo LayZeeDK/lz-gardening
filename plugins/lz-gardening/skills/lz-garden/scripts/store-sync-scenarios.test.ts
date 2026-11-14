@@ -4,8 +4,9 @@ import { replay, weedId } from './log.ts';
 import type { GardenEvent } from './log.ts';
 import { openSite, readLog } from './store-log.ts';
 import { sync } from './store-sync.ts';
+import { now } from './test-repo.ts';
 import { configEnv, sharedPair } from './test-site.ts';
-import { cli, now } from './test-weeds.ts';
+import { cli } from './test-weeds.ts';
 
 const weed = { class: 'any-type', where: 'src/a.ts:1', source: 'census:x' } as const;
 const id = weedId(weed.class, weed.where, weed.source);

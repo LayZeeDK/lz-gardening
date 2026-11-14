@@ -7,9 +7,9 @@ import { replay } from './log.ts';
 import { logRef, openSite, readLog } from './store-log.ts';
 import { sync } from './store-sync.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { git } from './test-repo.ts';
+import { git, now } from './test-repo.ts';
 import { bareRemote, planted } from './test-site.ts';
-import { addWeed, cli, cliWith, now } from './test-weeds.ts';
+import { addWeed, cli, cliWith } from './test-weeds.ts';
 
 function claimsIn(gitDir: string): readonly (readonly unknown[])[] {
   if (git(gitDir, ['for-each-ref', logRef]) === '') {

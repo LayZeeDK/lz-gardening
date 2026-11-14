@@ -7,9 +7,9 @@ import { claimLifetimeMs } from './log.ts';
 import { append, openSite } from './store-log.ts';
 import { sync } from './store-sync.ts';
 import { logFiles } from './test-log.ts';
-import { git } from './test-repo.ts';
+import { git, now } from './test-repo.ts';
 import { planted, scriptProcess, sharedPair, site } from './test-site.ts';
-import { addWeed, cli, cliWith as claimWith, now, script } from './test-weeds.ts';
+import { addWeed, cli, cliWith as claimWith, script } from './test-weeds.ts';
 
 function liveClaimWriters(gitDir: string, reader = now): readonly unknown[] {
   const events = [...logFiles(gitDir).values()];

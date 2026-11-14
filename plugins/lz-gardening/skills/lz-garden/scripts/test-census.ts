@@ -1,5 +1,5 @@
 // The census tests' shared utilities: the command line run in this process or as a child, the patterns and censuses
-// the tests build, and a census recorded by a sync or by hand.
+// the tests build, and a census recorded by a sync.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -7,17 +7,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run, takeCensus } from './census.ts';
 import type { PatternSet } from './census.ts';
-import { isRecord } from './log.ts';
 import { gitEnv, inRun } from './store-git.ts';
 import { openSite } from './store-log.ts';
-import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import type { Census } from './store-census.ts';
 import { sync } from './store-sync.ts';
-import { capturingIo, git } from './test-repo.ts';
+import { capturingIo, now, summaryOf } from './test-repo.ts';
 
 export const script = join(dirname(fileURLToPath(import.meta.url)), 'census.ts');
-
-export const now = new Date('2026-11-07T12:00:00.000Z');
 
 export interface Ran {
   readonly status: number | null;
@@ -84,12 +80,6 @@ export function censusText(sha: string, extra: Readonly<Record<string, unknown>>
   return `${JSON.stringify(census, null, 2)}\n`;
 }
 
-export function summaryOf(stdout: string): ReadonlyMap<string, unknown> {
-  const parsed: unknown = JSON.parse(stdout.trim().split('\n').at(-1) ?? '');
-
-  return new Map(isRecord(parsed) ? Object.entries(parsed) : []);
-}
-
 export async function takeAndRecord(dir: string, args: readonly string[] = []): Promise<Ran> {
   const result = await census(dir, ['--rev', 'HEAD', ...args]);
   assert.equal(result.status, 0, result.stderr);
@@ -105,11 +95,4 @@ export const todoPatterns = `${JSON.stringify({ patterns: [{ id: 'todo', regex: 
 export function writeSitePatterns(garden: string, text = todoPatterns): void {
   mkdirSync(join(garden, '.garden'), { recursive: true });
   writeFileSync(join(garden, '.garden', 'patterns.json'), text);
-}
-
-export function recordByHand(garden: string, sha: string, text: string): void {
-  // The commit's identity is not under test, so it reads the site's config.
-  writePendingCensus({ path: garden, checkout: garden }, sha, text);
-  git(garden, ['update-ref', censusRef, pendingCensusRef(sha)]);
-  git(garden, ['update-ref', '-d', pendingCensusRef(sha)]);
 }
