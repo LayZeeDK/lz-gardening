@@ -1,4 +1,5 @@
 import nx from '@nx/eslint-plugin';
+import * as jsoncParser from 'jsonc-eslint-parser';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -37,5 +38,31 @@ export default tseslint.config(
     files: ['plugins/lz-gardening/skills/*/scripts/**/*.ts', 'tools/**/*.ts'],
     plugins: { '@nx': nx },
     rules: { '@nx/workspace-shared-console-spawn': 'error' },
+  },
+  {
+    files: ['plugins/*/package.json'],
+    languageOptions: { parser: jsoncParser },
+    plugins: { '@nx': nx },
+    rules: {
+      '@nx/dependency-checks': [
+        'error',
+        {
+          buildTargets: ['lint'],
+          ignoredFiles: ['{projectRoot}/**/*.test.ts', '{projectRoot}/**/test-*.ts'],
+          checkMissingDependencies: true,
+          checkObsoleteDependencies: true,
+          checkVersionMismatches: true,
+          includeTransitiveDependencies: false,
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'JSONProperty[key.value=/^(dependencies|optionalDependencies|peerDependencies)$/] > JSONObjectExpression > JSONProperty > JSONLiteral.value[value!=/^\\d+\\.\\d+\\.\\d+$/]',
+          message: 'Pin the exact version (npm install --save-exact): the plugin ships the version its lockfile holds.',
+        },
+      ],
+    },
   },
 );
