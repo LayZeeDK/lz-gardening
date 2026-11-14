@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { replay, unprintablePattern } from './log.ts';
@@ -71,5 +71,9 @@ export function runCommand(name: string, io: Io, main: () => number): number {
 export function isMainModule(url: string): boolean {
   const entry = process.argv[1];
 
-  return entry !== undefined && realpathSync.native(resolve(entry)) === realpathSync.native(fileURLToPath(url));
+  return (
+    entry !== undefined &&
+    existsSync(entry) &&
+    realpathSync.native(resolve(entry)) === realpathSync.native(fileURLToPath(url))
+  );
 }
