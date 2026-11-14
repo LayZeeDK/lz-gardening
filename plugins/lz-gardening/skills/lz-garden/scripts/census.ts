@@ -56,8 +56,6 @@ const hitCap = 1000;
 // The files duplicate helpers are looked for in, and those a pattern without paths searches.
 const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 
-// A pattern set's schema names its source in every reason. "patterns" is checked as an array before "exclude", and
-// its entries after "exclude".
 function patternSetSchema(source: string): z.ZodType<PatternSet> {
   const entryFault = (
     fault: string,
@@ -140,7 +138,6 @@ function extraPatterns(
   return recorded?.patterns === undefined ? undefined : { text: recorded.patterns, source: censusPatterns };
 }
 
-// Named with the way out, as every clone reads the shared census's patterns until the site has its own.
 const censusPatterns = `${censusRef}:patterns.json (a .garden/patterns.json written in the site is read instead)`;
 
 function branchName(rev: string): string {
@@ -292,7 +289,6 @@ interface Definition {
   readonly path: string;
 }
 
-/** Every function definition in the source files of a commit. */
 async function definitionsAt(
   cwd: string,
   env: Env,
@@ -312,7 +308,6 @@ async function definitionsAt(
   });
 }
 
-/** Function names defined in two or more files, each with its sorted file list. */
 async function findDuplicates(
   cwd: string,
   env: Env,
@@ -363,7 +358,6 @@ function duplicateLines(
     });
 }
 
-// A census's keys are pattern ids and function names, which may name a method every object inherits (toString).
 function ownEntry<T>(record: Readonly<Record<string, T>> | undefined, key: string): T | undefined {
   return record !== undefined && Object.hasOwn(record, key) ? record[key] : undefined;
 }

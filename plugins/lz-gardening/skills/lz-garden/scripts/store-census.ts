@@ -106,7 +106,6 @@ export function readCensusAt(site: string, ref: string): ReadCensus {
   return census === null ? { kind: 'not a census' } : { kind: 'census', census, text, patterns };
 }
 
-/** The census at ref, or undefined when there is none or it is not a census. */
 export function readableCensus(site: string, ref: string): Census | undefined {
   const read = readCensusAt(site, ref);
 
@@ -118,7 +117,6 @@ export interface Recorded {
   readonly sha: string | undefined;
 }
 
-// Whether a census of pendingSha waits to be recorded, or the garden's census is of that commit or a later one.
 export function hasCensusOf(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): boolean {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
 
@@ -129,7 +127,6 @@ function censusAt(site: Pick<Site, 'path'>, local: string | undefined): Census |
   return local === undefined ? undefined : readableCensus(site.path, local);
 }
 
-// Whether the held census is of pendingSha or a commit that descends from it.
 function covers(site: Pick<Site, 'checkout'>, held: Census | undefined, pendingSha: string): boolean {
   return held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha);
 }
@@ -224,8 +221,6 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
   return now === to;
 }
 
-// Records the pending census unless a try that settled the census recorded it already, then deletes the pending
-// censuses it covers. A record another sync beat keeps the pending census.
 export function finishPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,

@@ -61,7 +61,6 @@ function add(uuid: string, clock: number, id: string, fields: Partial<AddEvent> 
   };
 }
 
-/** An add as its writer stores it, with the weed id of its class, where and source. */
 function storedAdd(uuid: string, clock: number, fields: Partial<Omit<AddEvent, 'id'>> = {}): AddEvent {
   const event = add(uuid, clock, '', { where: 'src/x.ts:1', ...fields });
 
@@ -92,7 +91,6 @@ function tend(uuid: string, clock: number, ids: readonly string[], weedClass = '
   };
 }
 
-/** Each id's status: added, regrown, or closed:<kind>. */
 function statuses(garden: Garden, ids: readonly string[]): Record<string, string | undefined> {
   return Object.fromEntries(
     ids.map((id) => {

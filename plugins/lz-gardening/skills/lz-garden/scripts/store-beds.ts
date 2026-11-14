@@ -27,7 +27,6 @@ function sharedBedRef(weedClass: string): string {
   return `refs/garden/beds/${weedClass}`;
 }
 
-// A bed a sync is to push, marked in the site until a sync sees it land on origin.
 const unpushedBeds = 'refs/garden-unpushed/beds/';
 
 function unpushedBedRef(weedClass: string): string {

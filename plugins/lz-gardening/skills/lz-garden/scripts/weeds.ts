@@ -90,7 +90,6 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
 }
 
-// A letter, a colon and only digits is a root file with a line, as a:1, not a drive.
 const fromRootDriveOrHome = /^(?:[/\\~]|[a-z]:(?!\d+$))/i;
 const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;
 function notRepositoryRelative(path: string): boolean {
@@ -334,7 +333,7 @@ function parseFlags(argv: readonly string[]) {
 
 type Flags = ReturnType<typeof parseFlags>['values'];
 
-// Number() also reads hex, exponents and padding; a flag that is not plain digits reads as NaN, which no check takes.
+// Number() also reads hex, exponents and padding.
 function wholeNumber(text: string): number {
   return /^\d+$/.test(text) ? Number(text) : Number.NaN;
 }
@@ -380,7 +379,6 @@ function add(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
-// The sharing sync's reason and the beds origin did not take, on stderr after the line that names the share state.
 function reportShared(io: Io, command: string, shared: SyncResult): void {
   if (shared.reason !== undefined) {
     io.err(`weeds ${command}: ${escapeUnprintable(shared.reason)}\n`);

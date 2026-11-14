@@ -27,7 +27,6 @@ function data(text: string): string {
   return `data ${String(Buffer.byteLength(text))}\n${text}\n`;
 }
 
-// A commit's identity line ends at a line break and puts the address between < and >.
 function identityPart(checkout: string, key: string): string | undefined {
   const value = configValue(checkout, key);
 
@@ -95,8 +94,6 @@ export function writeLogIfStill(
     return true;
   }
 
-  // A write that failed while the log is still as planned is an error; a log that moved, or that another writer
-  // started, lost this write the race.
   const logNow = optionalGit(site.path, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true }) ?? null;
 
   if (logNow === tip) {

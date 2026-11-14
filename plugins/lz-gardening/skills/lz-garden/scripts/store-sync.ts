@@ -70,11 +70,9 @@ interface Outcome {
   readonly skipped: readonly string[];
   readonly yielded: readonly LostClaim[];
   readonly divergedBeds: readonly string[];
-  // The commit of a pending census another sync of the site beat to the move, so a later sync records it.
   readonly censusStillPending?: string;
 }
 
-// Only a read-only or synced result reports the census.
 interface WithoutCensusNotes extends Outcome {
   readonly sharedCensusIgnored?: undefined;
   readonly censusKeptLocal?: undefined;
@@ -85,8 +83,6 @@ interface WithCensusNotes extends Outcome {
   readonly censusKeptLocal?: string;
 }
 
-// A reason comes with every offline result (git's, or that the time ran out) and read-only one, and with a behind
-// one lost to a ref lock.
 export type SyncResult =
   | (WithoutCensusNotes & { readonly state: 'local'; readonly reason?: undefined })
   | (WithoutCensusNotes & { readonly state: 'behind'; readonly reason?: string })
@@ -236,7 +232,6 @@ export function rejected(porcelain: string): boolean {
   return [...pushReport(porcelain).values()].some(({ summary }) => lostRace.test(summary));
 }
 
-// origin answered and left a ref as it was; a push that never reached it reports no ref.
 function declined(porcelain: string): boolean {
   return [...pushReport(porcelain).values()].some(({ flag }) => flag === '!');
 }
@@ -292,7 +287,6 @@ function syncWithOrigin(
     const { recorded, ...result } = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
     yielded = [...yielded, ...result.yielded];
     conflicts = [...conflicts, ...result.conflicts];
-    // A file origin holds that is not an event file stays there, so each try that merges skips it again.
     skipped = [...new Set([...skipped, ...result.skipped])];
 
     if (result.state !== 'behind' || attempt >= attempts) {
@@ -376,7 +370,6 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
   const given = giveBackLosingClaims(site, sharedTip, leaving, attempt.now);
-  // What the merge found, which a try reports whether or not it shares.
   const found = { conflicts: mergedLog.conflicts, skipped: mergedLog.skipped, yielded: given.lost };
   const settledCensus = settleCensus(site, censusTips, pendingSha);
 

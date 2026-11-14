@@ -13,7 +13,6 @@ process.env['GIT_CONFIG_NOSYSTEM'] = '1';
 
 export const now = new Date('2026-11-07T12:00:00.000Z');
 
-// The JSON summary a script prints as its last line, or an empty map when the last line is not a JSON object.
 export function summaryOf(stdout: string): ReadonlyMap<string, unknown> {
   const last = stdout.trim().split('\n').at(-1) ?? '';
   const parsed: unknown = last.startsWith('{') ? JSON.parse(last) : {};
@@ -34,7 +33,6 @@ export interface ScriptRun {
   readonly stderr: string;
 }
 
-// Runs a script in a child process, as a user runs it from the command line.
 export function scriptRun(
   script: string,
   cwd: string,

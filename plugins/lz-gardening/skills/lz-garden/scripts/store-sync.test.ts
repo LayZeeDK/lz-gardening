@@ -258,8 +258,6 @@ test('a push the origin refuses because another push moved the log first is trie
   assert.deepEqual([result.state, git(remote, ['rev-parse', logRef])], ['synced', git(garden, ['rev-parse', logRef])]);
 });
 
-// A path both sites hold with different content, a file the shared log holds that is not an event file, a shared
-// census, and a second site with an event to push, on an origin whose log the next push moves first.
 function conflictBeforeARace(t: TestContext): {
   readonly second: { readonly dir: string; readonly garden: string };
   readonly remote: string;
@@ -314,7 +312,6 @@ test('a try whose push takes longer than the time allowed still reports what its
   const port = await serve(t, silentServer);
   git(second.dir, ['remote', 'set-url', '--push', 'origin', `git://127.0.0.1:${port}/repo.git`]);
 
-  // Time enough for the fetch from the local origin on a loaded machine, so only the push runs out of it.
   const result = sync(openSite(second.dir), { attempts: 1, timeoutMs: 5000 });
 
   assert.deepEqual(
@@ -643,7 +640,6 @@ test('a sync whose origin already holds the local log fetches, lists the beds an
   );
 });
 
-// The arguments of the fetch a sync starts, run in env.
 function fetchArgs(t: TestContext, dir: string, env: NodeJS.ProcessEnv): readonly string[] {
   const spawned = t.mock.method(childProcess, 'spawnSync');
   syncBuiltinESMExports();

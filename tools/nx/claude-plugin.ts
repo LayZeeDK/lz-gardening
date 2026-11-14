@@ -8,12 +8,10 @@ import { DependencyType } from '@nx/devkit';
 import ts from 'typescript';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log.ts';
 
-/** An npm lockfile of version 3; entries stay unparsed until a reader narrows the fields it uses. */
 export interface Lockfile {
   readonly packages: Readonly<Record<string, unknown>>;
 }
 
-/** The lockfile in `value`, read from `path`; throws unless it is an npm lockfile of version 3. */
 export function parseLockfile(value: unknown, path: string): Lockfile {
   if (!isRecord(value) || value['lockfileVersion'] !== 3 || !isRecord(value['packages'])) {
     throw new Error(`${path} is not an npm lockfile of version 3`);
@@ -22,7 +20,6 @@ export function parseLockfile(value: unknown, path: string): Lockfile {
   return { packages: value['packages'] };
 }
 
-/** The package-lock.json in `folder`, or undefined when it has none. */
 function readLockfile(folder: string): Lockfile | undefined {
   const path = join(folder, 'package-lock.json');
 
@@ -31,7 +28,6 @@ function readLockfile(folder: string): Lockfile | undefined {
 
 const installed = 'node_modules/';
 
-/** Every installed package in a plugin lockfile as `npm:<name>@<version>`, its integrity as the hash. */
 export function externalNodes(lockfile: Lockfile): Record<string, ProjectGraphExternalNode> {
   return Object.fromEntries(
     Object.entries(lockfile.packages).flatMap(([path, entry]) => {
@@ -54,7 +50,6 @@ export function externalNodes(lockfile: Lockfile): Record<string, ProjectGraphEx
   );
 }
 
-/** The package an import names; undefined for a relative path, an absolute path or a Node.js built-in. */
 export function importedPackage(specifier: string): string | undefined {
   if (specifier.startsWith('.') || specifier.startsWith('/') || isBuiltin(specifier)) {
     return undefined;
@@ -65,10 +60,6 @@ export function importedPackage(specifier: string): string | undefined {
   return first.startsWith('@') ? `${first}/${second}` : first;
 }
 
-/**
- * The external node an import of `packageName` reaches: the version the project's own lockfile holds at its top level,
- * else the workspace's hoisted `npm:<name>` node.
- */
 export function importTarget(
   packageName: string,
   lockfile: Lockfile | undefined,
@@ -86,7 +77,6 @@ export function importTarget(
   return hoisted in workspaceNodes ? hoisted : undefined;
 }
 
-/** Where package.json and the lockfile's root entry disagree, per dependency section. */
 export function lockfileDrift(packageJson: unknown, lockfile: Lockfile): readonly string[] {
   const root = lockfile.packages[''];
   const sections = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const;
@@ -101,7 +91,6 @@ export function lockfileDrift(packageJson: unknown, lockfile: Lockfile): readonl
   });
 }
 
-/** The scripts under mutation: each name before its first hyphen, as stryker.config.mjs reads MUTATE. */
 function scripts(pluginRoot: string): readonly string[] {
   const skills = join(pluginRoot, 'skills');
   const files = readdirSync(skills, { withFileTypes: true })

@@ -34,7 +34,6 @@ export function siteProcess(cwd: string, args: readonly string[], env: NodeJS.Pr
   return siteRun(result.status, result.stdout, result.stderr);
 }
 
-// Runs a script in a child process without waiting for it, so a test can start several at once.
 export function scriptProcess(
   script: string,
   cwd: string,
@@ -72,7 +71,6 @@ function plantTemplate(): string {
   return folder;
 }
 
-// A repository and its site.
 export interface Planted {
   readonly dir: string;
   readonly garden: string;
@@ -112,7 +110,7 @@ export function bareRemote(dir: string): string {
   return remote;
 }
 
-/** Makes a remote run a shell script as one of its hooks, as git does on every platform the tests run on. */
+// git runs a #!/bin/sh hook on every platform the tests run on, Windows included.
 export function remoteHook(remote: string, name: string, body: string): void {
   writeFileSync(join(remote, 'hooks', name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
 }

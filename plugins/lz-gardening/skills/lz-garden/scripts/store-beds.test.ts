@@ -236,7 +236,6 @@ test('a later sync pushes the bed of a close whose log push landed after the syn
   git(place.dir, ['config', 'lzGardening.share', 'true']);
   remoteHook(place.remote, 'post-receive', 'sleep 4');
   const stopped = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1500 });
-  // The hook goes on after the push stopped waiting; it must end before the next push runs it again.
   sleep(5000);
   rmSync(join(place.remote, 'hooks', 'post-receive'));
   const landed = git(place.remote, ['rev-parse', logRef]) === git(place.garden, ['rev-parse', logRef]);
@@ -246,7 +245,6 @@ test('a later sync pushes the bed of a close whose log push landed after the syn
   assert.deepEqual([stopped.reason, landed, result.state, bedRef(place.remote)], ['timed out', true, 'synced', tip]);
 });
 
-// A post-receive hook that stops the process whose id the file holds, once: the sync dies after its log landed.
 function stopOnReceive(pidFile: string): string {
   const stop = `const { existsSync, readFileSync, rmSync } = require("node:fs"); const file = process.argv[1]; if (existsSync(file)) { const pid = Number(readFileSync(file, "utf8")); rmSync(file); process.kill(pid, "SIGKILL"); }`;
 
@@ -307,7 +305,6 @@ test('a bed made from a commit only a tag holds stays local and is named', (t) =
   );
 });
 
-// Rewrites the bed's last commit with a signature header, as a signing setup leaves it; no key could check it.
 function signTipByHand(bed: string): void {
   const text = git(bed, ['cat-file', 'commit', 'HEAD']);
   const signed = spawnSync('git', ['hash-object', '-t', 'commit', '-w', '--stdin'], {

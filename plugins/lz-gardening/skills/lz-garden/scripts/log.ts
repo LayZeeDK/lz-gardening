@@ -23,12 +23,10 @@ export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiCon
 // these print as read; text from anywhere else (paths, git's messages, census data) goes through escapeUnprintable.
 const printedFields: readonly string[] = ['id', 'where', 'source', 'note', 'check', 'by', 'holder'];
 
-/** Text with more than white space in it, as a weed's where, a close's by and a tend close's check need. */
 export function hasText(text: string): boolean {
   return text.trim() !== '';
 }
 
-/** One of the six layers, 1 the strongest. */
 export function isLayer(layer: number): boolean {
   return Number.isInteger(layer) && layer >= 1 && layer <= 6;
 }
@@ -152,7 +150,6 @@ export type AddOutcome =
       readonly after: TendedClose;
     };
 
-/** The writer's rules over the replica: no add of a weed seen open or kept; records what the writer saw. */
 export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Date): AddOutcome {
   const id = weedId(input.class, input.where, input.source);
   const status = replay(events, now).statusOf(id);
@@ -182,7 +179,6 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
     : { said: 'regrown', id, drafts: [draft(tend.uuid)], after: tend };
 }
 
-/** A close ends only weeds of its own class, so one that names a weed of another class leaves it as it was. */
 function closesWeed(close: CloseEvent, weedClass: string, id: string): boolean {
   return close.class === weedClass && close.ids.includes(id);
 }
@@ -264,7 +260,6 @@ function releaseOf(claim: ClaimEvent): EventDraft<ReleaseEvent> {
   return { op: 'release', class: claim.class, claim: claim.uuid };
 }
 
-/** A release of each claim the events hold as the draft planned it (writer, class and until) that none releases yet. */
 export function releasesOfClaim(
   events: readonly GardenEvent[],
   draft: EventDraft<ClaimEvent>,
@@ -308,10 +303,6 @@ export function claimableGroups(garden: Garden, writer: string): readonly Group[
   );
 }
 
-/**
- * Which class to claim. With a class: taken if another writer holds it, nothing open if no weed of it is open, else
- * claimed (a holder's claim renews it). Without: the first claimable group's class, or nothing ready when there is none.
- */
 export function planClaim(
   events: readonly GardenEvent[],
   wanted: string | null,
@@ -446,7 +437,6 @@ export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
     .sort((a, b) => b.open - a.open || b.regrown - a.regrown || a.class.localeCompare(b.class));
 }
 
-/** The highest clock among the events, from which the next event counts on; 0 for none. */
 export function maxClockOf(events: readonly GardenEvent[]): number {
   return events.reduce((max, event) => Math.max(max, event.clock), 0);
 }
@@ -461,7 +451,6 @@ export function stamp(drafts: readonly EventDraft[], maxClock: number, now: Date
   }));
 }
 
-/** Where an event lives in the log tree: events/<uuid[0..2]>/<uuid>.json, in 256 shards by the uuid's first byte. */
 export function eventPath(uuid: string): string {
   return `events/${uuid.slice(0, 2)}/${uuid}.json`;
 }
@@ -484,8 +473,6 @@ function jsonNumber(params: { readonly error: string }): z.ZodType<number> {
 
 const missingEnvelope = { error: 'missing uuid, clock or at' };
 
-// The fields every event carries. Each schema's refines run in the order their reasons are reported, and only once
-// its fields have their types.
 const envelopeSchema = z
   .looseObject(
     {
@@ -589,7 +576,6 @@ const bodySchemas = new Map<unknown, z.ZodType<Body<GardenEvent>>>([
   ['seed', seedSchema],
 ]);
 
-// The checks every op takes, whatever fields it has: a class id, and the printed fields.
 function sharedFieldFault(json: Readonly<Record<string, unknown>>): string | undefined {
   const weedClass = json['class'];
 
@@ -606,13 +592,11 @@ function sharedFieldFault(json: Readonly<Record<string, unknown>>): string | und
   return unprintable === undefined ? undefined : `${unprintable} holds a line break or control character`;
 }
 
-/** The reason a parse failed, from its first issue: schemas list their checks in the order to report them. */
 export function firstReason(error: z.ZodError): string {
   // Stryker disable next-line OptionalChaining,LogicalOperator: a failed parse has at least one issue
   return error.issues[0]?.message ?? error.message;
 }
 
-/** Parses one event file at the trust boundary; anything malformed is a reason string, never a throw. */
 export function parseEvent(path: string, text: string): GardenEvent | string {
   let json: unknown;
 
@@ -698,16 +682,8 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
     }, new Map<string, OpenWeed>());
 }
 
-/**
- * How far a writer's clock may run ahead of the reader's: another process, or another machine, takes a claim after the
- * reader read the time. Dropping such a claim as dated in the future would let two writers hold one class.
- */
 const clockSkewAllowanceMs = 60 * 60 * 1000;
 
-/**
- * The claims no release names whose until is later than the reader's clock and at most a claim's lifetime and the
- * clock skew allowance past it, in (clock, uuid) order.
- */
 function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
   const released = releasedClaims(events);
   const ending = (claim: ClaimEvent): number => Date.parse(claim.until) - now.getTime();

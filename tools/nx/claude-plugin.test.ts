@@ -15,7 +15,6 @@ import {
   parseLockfile,
 } from './claude-plugin.ts';
 
-/** A throwaway workspace holding `files`, removed when the test ends. */
 function workspace(t: TestContext, files: Readonly<Record<string, string>>): string {
   const root = mkdtempSync(join(tmpdir(), 'claude-plugin-'));
   t.after(() => {

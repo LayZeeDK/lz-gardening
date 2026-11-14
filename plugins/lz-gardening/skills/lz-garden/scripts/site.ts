@@ -267,7 +267,6 @@ const installs: readonly (readonly [lockfile: string, command: (bed: string) => 
 ];
 const lockfiles = installs.map(([lockfile]) => lockfile);
 
-// The skills run the command through a POSIX shell, which takes text in single quotes literally.
 function shellQuoted(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`;
 }
@@ -340,7 +339,6 @@ function mergeInto(bed: string, commitId: string, name: string): void {
 
 type Deps = 'none' | 'linked' | 'installed' | 'install';
 
-// install names the command exactly when deps is install.
 type BedSummary = {
   readonly bed: string;
   readonly branch: string;
@@ -425,7 +423,6 @@ function plantDeps(top: string, bed: string): Deps {
     return 'none';
   }
 
-  // Like the lockfile, the package.json comes from the base, so only a plain file is read.
   const linkable =
     manifest.isFile() && existsSync(join(top, 'node_modules')) && sharesLockfile(top, bed) && !declaresWorkspaces(bed);
 

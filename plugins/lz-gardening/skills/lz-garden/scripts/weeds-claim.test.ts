@@ -142,7 +142,6 @@ test('claim --class whose push the origin takes after the time is up releases th
   const remote = bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(sync(openSite(dir), { attempts: 1 }).state, 'synced');
-  // The hook holds the claim's push until the claim has given up, so the timeout can leave the release sync room.
   remoteHook(
     remote,
     'post-receive',

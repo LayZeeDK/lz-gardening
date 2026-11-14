@@ -1,5 +1,3 @@
-// The census tests' shared utilities: the command line run in this process or as a child, the patterns and censuses
-// the tests build, and a census recorded by a sync.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -58,7 +56,6 @@ export function censusOf(
   };
 }
 
-/** A census.json text of a commit with no hits, as census.ts writes it; extra replaces its fields. */
 export function censusText(sha: string, extra: Readonly<Record<string, unknown>> = {}): string {
   const census = {
     rev: 'main',
