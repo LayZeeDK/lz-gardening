@@ -50,12 +50,15 @@ export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
   return current.gitEnv;
 }
 
-const withoutHooksOrSigning = [
+// Every write runs no hook, signs nothing, and waits for a ref lock another run of this site may hold for a moment.
+const writeSettings = [
   '-c',
   // Stryker disable next-line StringLiteral: the scripts folder itself holds no file named after a git hook either
   `core.hooksPath=${join(dirname(fileURLToPath(import.meta.url)), 'no-hooks')}`,
   '-c',
   'commit.gpgsign=false',
+  '-c',
+  'core.filesRefLockTimeout=3000',
 ];
 
 function configOf(cwd: string): ReadonlyMap<string, string> {
@@ -121,7 +124,7 @@ export function runGit(
   args: readonly string[],
   { input, env = {}, readsOnly = false, timeout }: GitInput = {},
 ): SpawnSyncReturns<string> {
-  const settings = readsOnly ? [] : [...withoutHooksOrSigning, ...namedHooksOff(cwd)];
+  const settings = readsOnly ? [] : [...writeSettings, ...namedHooksOff(cwd)];
 
   return spawnGit(cwd, [...settings, ...args], { ...gitEnv(cwd), ...env }, input, timeout);
 }
@@ -171,15 +174,12 @@ export function reasonOf(stderr: string): string {
   return stderr.trim().split('\n')[0]?.trim() ?? '';
 }
 
-// Another run of this site may hold a ref's lock for a moment; a writer waits for it instead of failing.
-export const waitForRefLocks = ['-c', 'core.filesRefLockTimeout=3000'];
-
 // Stryker disable next-line LzJsNumericLiteral: how long a fetch or push may take is policy; the limit is tested through timeoutMs
 export const networkTimeoutMs = 60_000;
 
 // Messages are in English, as the porcelain classification reads them.
 export function networkGit(site: string, args: readonly string[], timeoutMs: number): SpawnSyncReturns<string> {
-  return runGit(site, ['-c', 'credential.interactive=false', ...waitForRefLocks, ...args], {
+  return runGit(site, ['-c', 'credential.interactive=false', ...args], {
     env: { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
     timeout: timeoutMs,
   });

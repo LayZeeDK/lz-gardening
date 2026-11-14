@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import childProcess from 'node:child_process';
+import childProcess, { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -41,6 +41,28 @@ test('a pending census reads back byte for byte', (t) => {
   writePendingCensus({ path: garden, checkout: dir }, sha, text);
 
   assert.equal(storedAt(garden, pendingCensusRef(sha)).text, text);
+});
+
+test('a pending census written while another run holds its ref lock waits for the lock and lands', async (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  const lock = join(garden, '.git', 'refs', 'garden', 'pending', `${sha}.lock`);
+  mkdirSync(dirname(lock), { recursive: true });
+  writeFileSync(lock, '');
+  const holder = spawn(
+    process.execPath,
+    [
+      '-e',
+      'console.log("held"); setTimeout(() => require("node:fs").rmSync(process.argv[1], { force: true }), 500);',
+      lock,
+    ],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  await new Promise((held) => holder.stdout.once('data', held));
+
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
+
+  assert.equal(storedAt(garden, pendingCensusRef(sha)).text, censusText(sha));
 });
 
 test('a pending census taken with extra patterns carries them as written', (t) => {

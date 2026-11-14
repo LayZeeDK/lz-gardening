@@ -10,7 +10,6 @@ import {
   optionalGit,
   refsUnder,
   runGit,
-  waitForRefLocks,
 } from './store-git.ts';
 import { commitStream } from './store-log.ts';
 import type { Site } from './store-log.ts';
@@ -203,7 +202,7 @@ function adoptSharedCensus(
 // Another sync of this site may have moved the census first: to the same commit, which is as good as moving it here,
 // or to another, which loses this move.
 function moveCensusIfStill(site: string, to: string, from: string | undefined): boolean {
-  const args = [...waitForRefLocks, 'update-ref', censusRef, to, from ?? ''];
+  const args = ['update-ref', censusRef, to, from ?? ''];
   const moved = runGit(site, args);
 
   if (moved.status === 0) {

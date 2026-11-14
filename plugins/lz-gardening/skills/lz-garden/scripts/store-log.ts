@@ -15,7 +15,6 @@ import {
   optionalGit,
   runGit,
   treeEntries,
-  waitForRefLocks,
 } from './store-git.ts';
 
 export const logRef = 'refs/garden/log';
@@ -71,11 +70,9 @@ export function writeLogIfStill(
   merge?: string,
 ): boolean {
   const parents = [...(tip === null ? [] : [tip]), ...(merge === undefined ? [] : [merge])];
-  const imported = runGit(
-    site.path,
-    [...waitForRefLocks, 'fast-import', '--quiet', '--done', '--date-format=rfc2822'],
-    { input: commitStream(site, logRef, 'garden: log\n', files, parents) },
-  );
+  const imported = runGit(site.path, ['fast-import', '--quiet', '--done', '--date-format=rfc2822'], {
+    input: commitStream(site, logRef, 'garden: log\n', files, parents),
+  });
 
   if (imported.status === 0) {
     return true;
@@ -89,7 +86,7 @@ export function writeLogIfStill(
 }
 
 export function moveLogIfStill(site: string, to: string, from: string): boolean {
-  const args = [...waitForRefLocks, 'update-ref', logRef, to, from];
+  const args = ['update-ref', logRef, to, from];
   const moved = runGit(site, args);
 
   if (moved.status !== 0 && git(site, ['rev-parse', '--verify', logRef]) === from) {
