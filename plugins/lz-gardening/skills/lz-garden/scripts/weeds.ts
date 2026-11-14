@@ -64,13 +64,13 @@ import type {
   OpenWeed,
   TendedClose,
 } from './log.ts';
-import { claimRefusal, escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import type { Replica, Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
-import { isShared, sync, syncTries } from './store-sync.ts';
+import { claimRefusal, isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions } from './store-sync.ts';
 
 export interface Group {
@@ -483,7 +483,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       const refusal = 'class' in request.target ? claimRefusal(site, request.target.class, before, now) : undefined;
 
       if (refusal !== undefined) {
-        io.err(`weeds ${command}: ${refusal}\n`);
+        io.err(`weeds ${command}: ${escapeUnprintable(refusal)}\n`);
 
         return 1;
       }

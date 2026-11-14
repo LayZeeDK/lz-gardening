@@ -1,6 +1,6 @@
 // Sharing with origin: fetch origin's garden refs, merge its log into the site's, give back claims a sync lost, settle
 // the census, and push the log, the census and the beds.
-import { eventPathPattern, parseEvent, planGiveBack, releasesFor } from './log.ts';
+import { eventPathPattern, parseEvent, planGiveBack, releasesFor, replay } from './log.ts';
 import type { LostClaim } from './log.ts';
 import { pushBeds } from './store-beds.ts';
 import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
@@ -16,7 +16,16 @@ import {
   reasonOf,
   timedOut,
 } from './store-git.ts';
-import { append, formatOf, logFormat, logRef, moveLogIfStill, readReplica, writeLogIfStill } from './store-log.ts';
+import {
+  append,
+  formatOf,
+  logFormat,
+  logRef,
+  moveLogIfStill,
+  readLog,
+  readReplica,
+  writeLogIfStill,
+} from './store-log.ts';
 import type { Site } from './store-log.ts';
 
 export const shareKey = 'lzGardening.share';
@@ -207,6 +216,27 @@ export const syncTries = {
 
 export function isShared(result: SyncResult): boolean {
   return result.state === 'synced' || result.state === 'local';
+}
+
+// bed and close-class act on a class only under this writer's live claim, read after a sync that left the log local
+// or shared, so another clone's newer claim is seen and this claim is on origin. The refusal may hold git's message,
+// so a caller escapes it to print it.
+export function claimRefusal(site: Site, weedClass: string, pre: SyncResult, now: Date): string | undefined {
+  if (!isShared(pre)) {
+    return `cannot check the claim of ${weedClass}: ${pre.state}${pre.reason === undefined ? '' : ` (${pre.reason})`}`;
+  }
+
+  const owner = replay(readLog(site).events, now).claims.get(weedClass);
+
+  if (owner === undefined) {
+    return `this site holds no claim of ${weedClass}; run weeds claim --class ${weedClass}`;
+  }
+
+  if (owner.writer !== site.writer) {
+    return `${weedClass} is claimed by ${owner.holder} until ${owner.until}`;
+  }
+
+  return undefined;
 }
 
 export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {

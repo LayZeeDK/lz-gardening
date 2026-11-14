@@ -27,7 +27,7 @@ import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { claimRefusal, escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { configValue, git, gitSucceeds, objectIdPattern, objectIds, optionalGit } from './store-git.ts';
 import {
@@ -45,7 +45,7 @@ import {
 import type { Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
-import { sync, syncTries } from './store-sync.ts';
+import { claimRefusal, sync, syncTries } from './store-sync.ts';
 import type { SyncResult } from './store-sync.ts';
 import { classPattern, isRecord, replay } from './log.ts';
 
@@ -507,7 +507,7 @@ function main(argv: readonly string[], io: Io): number {
       const refusal = bedRefusal(withWriter({ checkout: top, path: site }), parsed.bedClass);
 
       if (refusal !== undefined) {
-        io.err(`site: bed: ${refusal}\n`);
+        io.err(`site: bed: ${escapeUnprintable(refusal)}\n`);
 
         return 1;
       }
