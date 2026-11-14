@@ -276,15 +276,14 @@ export function machinePathTest(site: Pick<Site, 'checkout' | 'path'>): (text: s
 
 function refuseMachinePaths(site: Site, drafts: readonly EventDraft[]): void {
   const holdsMachinePath = machinePathTest(site);
+  const field = drafts
+    .flatMap((draft) => Object.entries(draft))
+    .find(([, value]) => typeof value === 'string' && holdsMachinePath(value))?.[0];
 
-  for (const draft of drafts) {
-    for (const [field, value] of Object.entries(draft)) {
-      if (typeof value === 'string' && holdsMachinePath(value)) {
-        throw new Error(
-          `the ${field} holds a path on this machine; the queue is shared with the repository, so write paths repository-relative`,
-        );
-      }
-    }
+  if (field !== undefined) {
+    throw new Error(
+      `the ${field} holds a path on this machine; the queue is shared with the repository, so write paths repository-relative`,
+    );
   }
 }
 
