@@ -118,7 +118,7 @@ export function readCensusAt(site: string, ref: string): StoredCensus | null | '
   return census === null ? 'not a census' : { census, text, patterns };
 }
 
-interface Recorded {
+export interface Recorded {
   readonly local: string | undefined;
   readonly sha: string | undefined;
 }
@@ -162,14 +162,16 @@ export function settleCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   tips: CensusTips,
   pendingSha: string | undefined,
-): Settled {
+): Settled & { readonly recorded: Recorded | undefined } {
   const adopted = adoptSharedCensus(site, tips);
 
   if (pendingSha === undefined) {
-    return adopted;
+    return { ...adopted, recorded: undefined };
   }
 
-  return { ...adopted, local: recordPendingCensus(site, pendingSha).local };
+  const recorded = recordPendingCensus(site, pendingSha);
+
+  return { ...adopted, local: recorded.local, recorded };
 }
 
 function adoptSharedCensus(site: Pick<Site, 'checkout' | 'path'>, { local, shared }: CensusTips): Settled {
@@ -205,8 +207,12 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
   }
 }
 
-export function finishPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): void {
-  const recorded = recordPendingCensus(site, pendingSha);
+// A sync that settled the census recorded the pending one already, and passes what it recorded.
+export function finishPendingCensus(
+  site: Pick<Site, 'checkout' | 'path'>,
+  pendingSha: string,
+  recorded = recordPendingCensus(site, pendingSha),
+): void {
   const pendingPrefix = pendingCensusRef('');
   const deletes = [...refsUnder(site.path, [pendingPrefix])].filter(([name]) => {
     const sha = name.slice(pendingPrefix.length);

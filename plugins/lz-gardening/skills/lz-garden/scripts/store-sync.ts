@@ -4,7 +4,7 @@ import { eventPathPattern, parseEvent, planGiveBack, releasesFor, replay } from 
 import type { LostClaim } from './log.ts';
 import { pushBeds } from './store-beds.ts';
 import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
-import type { CensusTips } from './store-census.ts';
+import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
   git,
@@ -255,38 +255,41 @@ export function claimRefusal(site: Site, weedClass: string, pre: SyncResult, now
 }
 
 export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {
-  const result = syncWithOrigin(site, options, now);
+  const { result, recorded } = syncWithOrigin(site, options, now);
 
   if (options.census !== undefined) {
-    finishPendingCensus(site, options.census);
+    finishPendingCensus(site, options.census, recorded);
   }
 
   return result;
 }
 
+// What a try that settled the census recorded of the pending one.
+type Tried = SyncResult & { readonly recorded?: Recorded | undefined };
+
 function syncWithOrigin(
   site: Site,
   { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha }: SyncOptions,
   now: Date,
-): SyncResult {
+): { readonly result: SyncResult; readonly recorded: Recorded | undefined } {
   const fetchUrl = optionalGit(site.checkout, ['remote', 'get-url', 'origin'], { readsOnly: true });
 
   if (
     fetchUrl === undefined ||
     git(site.checkout, ['config', '--type=bool', '--default=true', shareKey], { readsOnly: true }) === 'false'
   ) {
-    return { state: 'local', ...nothingShared };
+    return { result: { state: 'local', ...nothingShared }, recorded: undefined };
   }
 
   const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
   let yielded: readonly LostClaim[] = [];
 
   for (let attempt = 1; ; attempt += 1) {
-    const result = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
+    const { recorded, ...result } = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
     yielded = [...yielded, ...result.yielded];
 
     if (result.state !== 'behind' || attempt >= attempts) {
-      return { ...result, yielded };
+      return { result: { ...result, yielded }, recorded };
     }
 
     wait(2 ** (attempt - 1) * 1000 * (0.5 + Math.random()));
@@ -338,7 +341,7 @@ function giveBackLosingClaims(
 }
 
 // A try lost to another writer ends behind, which the next try, if any, takes up.
-function syncOnce(site: Site, attempt: Attempt): SyncResult {
+function syncOnce(site: Site, attempt: Attempt): Tried {
   const { path } = site;
   const { fetchUrl, pushUrl, timeoutMs, pendingSha } = attempt;
   const fetched = networkGit(
@@ -361,7 +364,7 @@ function syncOnce(site: Site, attempt: Attempt): SyncResult {
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
   const given = giveBackLosingClaims(site, sharedTip, leaving, attempt.now);
-  const settled = settleCensus(site, censusTips, pendingSha);
+  const { recorded, ...settled } = settleCensus(site, censusTips, pendingSha);
   const pushedEvents = mergedLog.pushedEvents + given.released;
   const newerCensus = settled.local === censusTips.shared ? undefined : settled.local;
   const keptLocal = newerCensus === undefined ? undefined : censusOffOrigin(site, newerCensus);
@@ -375,7 +378,7 @@ function syncOnce(site: Site, attempt: Attempt): SyncResult {
   };
 
   if (upToDate && !censusAhead) {
-    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, leaving, attempt) };
+    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, leaving, attempt), recorded };
   }
 
   const pushed = networkGit(
@@ -394,14 +397,14 @@ function syncOnce(site: Site, attempt: Attempt): SyncResult {
   );
 
   if (timedOut(pushed)) {
-    return { state: 'offline', reason: 'timed out', ...nothingShared, yielded: given.lost };
+    return { state: 'offline', reason: 'timed out', ...nothingShared, yielded: given.lost, recorded };
   }
 
   if (pushed.status === 0) {
-    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, leaving, attempt) };
+    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, leaving, attempt), recorded };
   }
 
   return rejected(pushed.stdout)
-    ? { state: 'behind', ...nothingShared, yielded: given.lost }
-    : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [] };
+    ? { state: 'behind', ...nothingShared, yielded: given.lost, recorded }
+    : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded };
 }
