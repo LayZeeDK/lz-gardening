@@ -3,7 +3,7 @@
 import { eventPathPattern, parseEvent, planGiveBack, releasesOfLostClaims } from './log.ts';
 import type { LostClaim } from './log.ts';
 import { markUnpushed, planBeds, pushBeds } from './store-beds.ts';
-import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
+import { censusRef, finishPendingCensus, leaseOnFetchedCensus, localCensusOf, settleCensus } from './store-census.ts';
 import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
@@ -77,11 +77,13 @@ interface Outcome {
 interface WithoutCensusNotes extends Outcome {
   readonly sharedCensusIgnored?: undefined;
   readonly censusKeptLocal?: undefined;
+  readonly localCensusUnreadable?: undefined;
 }
 
 interface WithCensusNotes extends Outcome {
   readonly sharedCensusIgnored?: boolean;
   readonly censusKeptLocal?: string;
+  readonly localCensusUnreadable?: boolean;
 }
 
 // A reason comes with every offline result (git's, or that the time ran out) and read-only one, and with a behind
@@ -384,14 +386,15 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   const { recorded, ...settled } = settledCensus;
   const pushedEvents = mergedLog.pushedEvents + given.released;
   const newerCensus = settled.local === censusTips.shared ? undefined : settled.local;
-  const keptLocal = newerCensus === undefined ? undefined : censusOffOrigin(site, newerCensus);
-  const censusAhead = newerCensus !== undefined && keptLocal === undefined;
+  const localCensus = newerCensus === undefined ? undefined : localCensusOf(site, newerCensus);
+  const censusAhead = localCensus === 'ahead';
   const merged = {
     ...mergedLog,
     ...found,
     pushedEvents,
     ...(settled.ignored ? { sharedCensusIgnored: true } : {}),
-    ...(keptLocal === undefined ? {} : { censusKeptLocal: keptLocal }),
+    ...(typeof localCensus === 'object' ? { censusKeptLocal: localCensus.offOrigin } : {}),
+    ...(localCensus === 'not a census' ? { localCensusUnreadable: true } : {}),
   };
 
   const plan = planBeds(site, leaving);

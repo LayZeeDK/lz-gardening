@@ -246,11 +246,15 @@ export function finishPendingCensus(
   return undefined;
 }
 
-export function censusOffOrigin(site: Pick<Site, 'checkout' | 'path'>, ref: string): string | undefined {
+// A census to push, the commit of one no branch fetched from origin holds, or one that is not a census: the last two
+// stay in the site.
+export type LocalCensus = 'ahead' | 'not a census' | { readonly offOrigin: string };
+
+export function localCensusOf(site: Pick<Site, 'checkout' | 'path'>, ref: string): LocalCensus {
   const sha = readableCensus(site.path, ref)?.sha;
 
   if (sha === undefined) {
-    return undefined;
+    return 'not a census';
   }
 
   const holders = optionalGit(
@@ -259,5 +263,5 @@ export function censusOffOrigin(site: Pick<Site, 'checkout' | 'path'>, ref: stri
     { readsOnly: true },
   );
 
-  return holders === undefined || holders === '' ? sha : undefined;
+  return holders === undefined || holders === '' ? { offOrigin: sha } : 'ahead';
 }

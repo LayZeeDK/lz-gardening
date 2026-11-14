@@ -496,6 +496,12 @@ function reportSync(io: Io, result: SyncResult): void {
     );
   }
 
+  if (result.localCensusUnreadable === true) {
+    io.err(
+      `site: the site's ${censusRef} is not a census, so it stays local; delete it in the site (git update-ref -d ${censusRef}), and the next tick records a new one\n`,
+    );
+  }
+
   if (result.censusStillPending !== undefined) {
     io.err(
       `site: another sync moved the census first; the census of ${result.censusStillPending} stays pending for the next sync\n`,

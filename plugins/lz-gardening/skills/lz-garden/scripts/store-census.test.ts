@@ -10,7 +10,8 @@ import { censusRef, parseCensus, pendingCensusRef, readCensusAt, writePendingCen
 import type { StoredCensus } from './store-census.ts';
 import { sync } from './store-sync.ts';
 import { commit, git } from './test-repo.ts';
-import { bareRemote, censusText, planted, sharedPair, site } from './test-site.ts';
+import { bareRemote, censusText, planted, sharedPair, site, writeCensusText } from './test-site.ts';
+import type { Planted } from './test-site.ts';
 
 function storedAt(garden: string, ref: string): StoredCensus {
   const read = readCensusAt(garden, ref);
@@ -501,6 +502,40 @@ test('a census of a commit no branch fetched from origin holds stays local, and 
   assert.deepEqual(
     [synced.status, synced.stderr, remoteCensus(remote), git(place.garden, ['rev-parse', censusRef])],
     [0, `site: the census of ${sha} stays local: no branch fetched from origin holds that commit\n`, '', pending],
+  );
+});
+
+function writeUnreadableCensus(place: Planted): void {
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  writeCensusText(
+    place.garden,
+    JSON.stringify({ rev: 'main', sha, takenAt: '', counts: { 'any-type': 1 }, hits: {}, duplicates: {} }),
+  );
+}
+
+test('a site census that is not a census stays local and is never pushed to an origin without one', (t) => {
+  const place = planted(t);
+  const remote = bareRemote(place.dir);
+  writeUnreadableCensus(place);
+
+  sync(openSite(place.dir), { attempts: 1 });
+
+  assert.equal(remoteCensus(remote), '');
+});
+
+test('a sync of a site whose census is not a census says on stderr that it stays local, and how to replace it', (t) => {
+  const place = planted(t);
+  bareRemote(place.dir);
+  writeUnreadableCensus(place);
+
+  const synced = site(place.dir, ['sync']);
+
+  assert.deepEqual(
+    [synced.status, synced.stderr],
+    [
+      0,
+      `site: the site's ${censusRef} is not a census, so it stays local; delete it in the site (git update-ref -d ${censusRef}), and the next tick records a new one\n`,
+    ],
   );
 });
 
