@@ -6,7 +6,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, parse, sep } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
-import { planAdd, replay, stamp, weedId } from './log.ts';
+import { maxClockOf, planAdd, replay, stamp, weedId } from './log.ts';
 import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './log.ts';
 import { commit, now, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
@@ -27,7 +27,7 @@ function input(overrides: Partial<AddInput> = {}): AddInput {
 }
 
 function grow(events: readonly GardenEvent[], ...drafts: EventDraft[]): GardenEvent[] {
-  return [...events, ...stamp(drafts, replay(events, now).maxClock, now)];
+  return [...events, ...stamp(drafts, maxClockOf(events), now)];
 }
 
 function draftOf(outcome: AddOutcome): EventDraft<AddEvent> {

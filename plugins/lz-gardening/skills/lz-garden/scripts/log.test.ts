@@ -7,6 +7,7 @@ import {
   eventPath,
   groupWeeds,
   losingClaims,
+  maxClockOf,
   parseEvent,
   planAdd,
   planClaim,
@@ -261,14 +262,12 @@ test('a log is seeded when a seed event is among its other events, and not seede
   );
 });
 
-test('the replay names the highest clock in the log, from which the next event counts on', () => {
-  const garden = replay([add('a1', 3, 'x'), add('b1', 7, 'y'), close('a2', 2, ['z'], 'one-off')], now);
-
-  assert.equal(garden.maxClock, 7);
+test('the highest clock in the log is the one the next event counts on from', () => {
+  assert.equal(maxClockOf([add('a1', 3, 'x'), add('b1', 7, 'y'), close('a2', 2, ['z'], 'one-off')]), 7);
 });
 
 test('an empty log has clock 0, so the first event stamped on it gets clock 1', () => {
-  assert.equal(replay([], now).maxClock, 0);
+  assert.equal(maxClockOf([]), 0);
 });
 
 test('an active claim makes its writer the owner of the class', () => {

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { eventPath, isRecord, parseEvent, stamp } from './log.ts';
+import { eventPath, isRecord, maxClockOf, parseEvent, stamp } from './log.ts';
 import type { EventDraft, GardenEvent } from './log.ts';
 import {
   catFileBatch,
@@ -326,7 +326,7 @@ export function append<T extends { readonly drafts: readonly EventDraft[] }>(
 
     refuseMachinePaths(site, drafts);
 
-    const maxClock = replica.events.reduce((max, event) => Math.max(max, event.clock), 0);
+    const maxClock = maxClockOf(replica.events);
 
     if (!Number.isSafeInteger(maxClock + drafts.length)) {
       throw new Error(`${logRef} holds clock ${String(maxClock)}; the next clock would pass the largest whole number`);

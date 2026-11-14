@@ -125,7 +125,6 @@ export interface Garden {
   readonly statusOf: (id: string) => WeedStatus | undefined;
   readonly seeded: boolean;
   readonly claims: ReadonlyMap<string, ClaimEvent>;
-  readonly maxClock: number;
 }
 
 /** An event as the writer asks for it: stamp assigns uuid, clock and at. */
@@ -444,6 +443,11 @@ export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
       };
     })
     .sort((a, b) => b.open - a.open || b.regrown - a.regrown || a.class.localeCompare(b.class));
+}
+
+/** The highest clock among the events, from which the next event counts on; 0 for none. */
+export function maxClockOf(events: readonly GardenEvent[]): number {
+  return events.reduce((max, event) => Math.max(max, event.clock), 0);
 }
 
 /** Stamps drafts with uuid, clock (maxClock + 1, + 2, ...) and at. */
@@ -769,6 +773,5 @@ export function replay(events: readonly GardenEvent[], now: Date): Garden {
     statusOf,
     seeded: events.some((event) => event.op === 'seed'),
     claims: activeClaims(ordered, now),
-    maxClock: ordered.at(-1)?.clock ?? 0,
   };
 }
