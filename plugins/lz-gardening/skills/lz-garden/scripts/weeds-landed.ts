@@ -16,7 +16,8 @@ interface Landing {
   readonly tip: string;
 }
 
-function bedChangeOnBase({ cwd, withSite, where, fork, base, tip }: Landing): boolean | undefined {
+// A bed that left the check as the fork had it has nothing to miss.
+function bedChangeMissingFromBase({ cwd, withSite, where, fork, base, tip }: Landing): boolean {
   const diffOptions = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
   const checkPath = ['--', `:(top,literal)${where}`];
   // patch-id prints `<patch id> <commit>` for each commit's diff it reads, and nothing for no diff.
@@ -25,7 +26,7 @@ function bedChangeOnBase({ cwd, withSite, where, fork, base, tip }: Landing): bo
   const [bedChange] = patchIdsOf(git(cwd, ['diff-tree', '-p', ...diffOptions, fork, tip, ...checkPath], withSite));
 
   if (bedChange === undefined) {
-    return undefined;
+    return false;
   }
 
   const patchIdsIn = (range: string): readonly string[] => {
@@ -40,15 +41,16 @@ function bedChangeOnBase({ cwd, withSite, where, fork, base, tip }: Landing): bo
   };
   const onBase = new Set(patchIdsIn(`${fork}..${base}`));
 
-  return onBase.has(bedChange) || patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
+  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
 }
 
-interface Ground {
+/** The base commit to judge against, and the git options that read the site's objects beside the checkout's. */
+interface BaseInSite {
   readonly base: string;
   readonly withSite: GitInput;
 }
 
-function groundOf(site: string, census: string | undefined): Ground | undefined {
+function baseInSiteOf(site: string, census: string | undefined): BaseInSite | undefined {
   const base = census ?? readableCensus(site, censusRef)?.sha;
 
   if (base === undefined) {
@@ -68,12 +70,12 @@ function groundOf(site: string, census: string | undefined): Ground | undefined 
   return { base, withSite };
 }
 
-function checkOffBase(cwd: string, ground: Ground | undefined, tended: TendedClose): BaseLabel {
-  if (ground === undefined) {
+function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: TendedClose): BaseLabel {
+  if (judged === undefined) {
     return 'base unknown';
   }
 
-  const { base, withSite } = ground;
+  const { base, withSite } = judged;
   const tip = bedCommit(tended);
   const where = tended.check;
   const hasCheck = (commit: string): boolean => gitSucceeds(cwd, ['cat-file', '-e', `${commit}:${where}`], withSite);
@@ -95,18 +97,18 @@ function checkOffBase(cwd: string, ground: Ground | undefined, tended: TendedClo
     return 'no label';
   }
 
-  return bedChangeOnBase({ cwd, withSite, where, fork, base, tip }) === false ? 'not on the base' : 'no label';
+  return bedChangeMissingFromBase({ cwd, withSite, where, fork, base, tip }) ? 'not on the base' : 'no label';
 }
 
 export function offBaseIn(cwd: string, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {
   // Keyed by what the label depends on: a retried append replays the log into new objects.
   const known = new Map<string, BaseLabel>();
-  let ground: { readonly value: Ground | undefined } | undefined;
+  let baseInSite: { readonly value: BaseInSite | undefined } | undefined;
 
   return (tended) => {
-    ground ??= { value: groundOf(site, census) };
+    baseInSite ??= { value: baseInSiteOf(site, census) };
     const key = `${tended.by}\0${tended.check}`;
-    const offBase = known.get(key) ?? checkOffBase(cwd, ground.value, tended);
+    const offBase = known.get(key) ?? checkOffBase(cwd, baseInSite.value, tended);
     known.set(key, offBase);
 
     return offBase;
