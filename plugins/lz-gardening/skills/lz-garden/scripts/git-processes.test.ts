@@ -96,14 +96,14 @@ test('sync of a site whose events the origin lacks while the origin holds events
   );
 });
 
-test('sync --census --seeded that records the census of a garden with no origin starts 14 git processes', (t) => {
+test('sync --census --seeded that records the census of a garden with no origin starts 13 git processes', (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
   writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha, '--seeded'], env).status),
-    14,
+    13,
   );
 });
 

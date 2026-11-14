@@ -48,7 +48,6 @@ import {
 import {
   append,
   logRef,
-  openSite,
   plantWriter,
   readLog,
   requireSite,
@@ -439,13 +438,9 @@ function plantDeps(top: string, bed: string): Deps {
   return 'linked';
 }
 
-function recordSeed(cwd: string, sha: string): void {
+function recordSeed(site: Site, sha: string): void {
   const now = new Date();
-  append(
-    openSite(cwd),
-    (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }] }),
-    now,
-  );
+  append(site, (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }] }), now);
 }
 
 type Command =
@@ -583,11 +578,13 @@ function openCommand(io: Io, located: Located, requested: string | undefined): O
 }
 
 function syncCommand(io: Io, located: Located, census: string | undefined, seeded: boolean): SyncSummary {
+  const site = withWriter(located);
+
   if (seeded && census !== undefined) {
-    recordSeed(io.cwd, census);
+    recordSeed(site, census);
   }
 
-  const shared = sync(withWriter(located), { attempts: syncTries.sharing, census });
+  const shared = sync(site, { attempts: syncTries.sharing, census });
   reportSync(io, shared);
   shared.skipped.forEach((path) => {
     io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);
