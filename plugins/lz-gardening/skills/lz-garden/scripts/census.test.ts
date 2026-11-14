@@ -263,6 +263,17 @@ test("a git grep that fails is an error that names the search and carries git's 
   });
 });
 
+test('a file git grep cannot read fails the census rather than counting nothing', async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'function f() {}\n' });
+  const blob = git(dir, ['rev-parse', 'HEAD:src/a.ts']);
+  rmSync(join(dir, '.git', 'objects', blob.slice(0, 2), blob.slice(2)));
+
+  await assert.rejects(takeCensusInRun(dir, 'HEAD', { exclude: [], patterns: [] }, now), {
+    message: /^git grep for definitions: error: /,
+  });
+});
+
 test('a repository set to color git output always counts its hits all the same', async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1; // eslint-disable-line\n' });

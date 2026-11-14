@@ -236,9 +236,9 @@ async function grepRevision(
     env,
   );
 
-  // git grep exits 1 when nothing matches; anything else above 0 is an error.
+  // git grep exits 1 when nothing matches, and also when it could not read a file, which it reports only on stderr.
   // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
-  if (grep.code > 1) {
+  if (grep.code > 1 || /^error: /m.test(grep.stderr)) {
     throw new Error(`git grep for ${what}: ${grep.stderr.trim()}`);
   }
 
