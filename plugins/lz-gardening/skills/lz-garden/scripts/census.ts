@@ -8,8 +8,9 @@
 //     --seed, the seed list (`= ` lines) and `census: <id> <count>, ...` (or `census: none`), then one JSON summary
 //     line: sha, previousSha (null when there is no census or this checkout lacks its commit), behind (the census's
 //     commit descends from sha), commits (non-merge commits from previousSha to sha, or null), grew, newHits and
-//     newDuplicates. When the new census differs from the site's in more than the time taken, it is written to
-//     refs/garden/pending/<sha>, named by the commit rev-parse gives; site.ts sync --census <sha> records it.
+//     newDuplicates. When the new census differs from the site's in more than the time taken, or carries other
+//     patterns, it is written to refs/garden/pending/<sha>, named by the commit rev-parse gives; site.ts sync
+//     --census <sha> records it.
 //     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
 // or, when the site has none, by the patterns the site's census carries. A pattern without paths searches sourceGlobs.
@@ -437,7 +438,10 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const after = await takeCensus(io.cwd, rev, set, new Date());
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
-  const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
+  const changed =
+    recorded === null ||
+    extraFile?.text !== recorded.patterns ||
+    serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
 
   if (changed) {
     inRun(io.env, () => {
