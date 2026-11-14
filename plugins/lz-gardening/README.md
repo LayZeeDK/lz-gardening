@@ -96,8 +96,9 @@ files, running its own scripts and `node --version`, and `git ls-tree` and `git 
 read-only `git log` and `git show` a tick also uses without asking anyway. They grant nothing more; any other
 command falls back to your own permission settings, so a tick never needs a broad rule such as `Bash(git *)`,
 which would also allow a push. The site and weeds scripts push `refs/garden/log`, `refs/garden/census` and
-`refs/garden/beds/<class>` themselves, and take no remote, URL or ref argument, so their rules cannot be turned into
-another push; `lzGardening.share false` is the switch for those pushes. Claude Code asks before it runs a skill with its own rules. Allow it
+`refs/garden/beds/<class>` themselves. No argument names a remote, a URL or a ref to push: they push only those
+fixed refs, so their rules cannot be turned into another push; `lzGardening.share false` is the switch for those
+pushes. Claude Code asks before it runs a skill with its own rules. Allow it
 once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` tick never waits on a prompt:
 
 ```json
