@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { escapeUnprintable, isMainModule, processIo } from './cli.ts';
+import bundledPatterns from './patterns.json' with { type: 'json' };
 import type { Io } from './cli.ts';
 import { classPattern, firstReason } from './log.ts';
 import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
@@ -116,10 +117,6 @@ export function mergePatternSets(base: PatternSet, extra: PatternSet | null): Pa
   const byId = new Map([...base.patterns, ...extra.patterns].map((pattern) => [pattern.id, pattern]));
 
   return { exclude: [...new Set([...base.exclude, ...extra.exclude])], patterns: [...byId.values()] };
-}
-
-function readJson(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf8'));
 }
 
 function parseNamed(file: { readonly text: string; readonly source: string }): unknown {
@@ -483,11 +480,10 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   }
 
   const { site, recorded, extraFile, env } = inRun(io.env, () => ({ ...readSite(io.cwd), env: gitEnv(io.cwd) }));
-  const bundled = join(import.meta.dirname, 'patterns.json');
   const before = recorded?.census ?? null;
   const extra = extraFile === undefined ? null : parsePatternSet(parseNamed(extraFile), extraFile.source);
   // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message
-  const set = mergePatternSets(parsePatternSet(readJson(bundled), 'patterns.json'), extra);
+  const set = mergePatternSets(parsePatternSet(bundledPatterns, 'patterns.json'), extra);
   const after = await takeCensus(io.cwd, rev, set, new Date(), env);
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
