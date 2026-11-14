@@ -18,6 +18,7 @@ new RuleTester().run(ruleName, rule, {
   valid: [
     `spawnSync('git', ['--version'], { encoding: 'utf8' });`,
     `spawn('node', ['server.js'], { detached: false });`,
+    `spawnSync('git', ['--version'], { windowsHide: false });`,
     `create({ messages: { windowsHide: 'text', detached: 'text' } });`,
   ],
   invalid: [
@@ -40,5 +41,5 @@ test('the rule is a problem whose reports name the cost and the fix', () => {
   assert.equal(rule.meta.type, 'problem');
   assert.match(rule.meta.docs?.description ?? '', /share the console/);
   assert.match(rule.meta.messages.windowsHide, /extra conhost\.exe per spawn.*Remove it/);
-  assert.match(rule.meta.messages.detached, /opens a window.*windowsHide: true/);
+  assert.match(rule.meta.messages.detached, /opens a window.*disable this rule.*on each windowsHide: true/);
 });
