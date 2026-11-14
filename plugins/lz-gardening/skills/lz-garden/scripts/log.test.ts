@@ -77,7 +77,7 @@ function close(
   return { op: 'close', uuid, clock, at, ids, class: weedClass, kind, by: 'generated code', check: null };
 }
 
-function tend(uuid: string, clock: number, ids: readonly string[], weedClass = 'any-type'): CloseEvent {
+function tend(uuid: string, clock: number, ids: readonly string[], weedClass = 'any-type'): TendedClose {
   return {
     op: 'close',
     uuid,
@@ -895,9 +895,7 @@ test('an event file whose class has text after a kebab-case class id is skipped'
 });
 
 test('the bed commit of a tend close is what its by names after the @', () => {
-  const tended: TendedClose = { ...tend(uuid, 4, [weed]), kind: 'tended', check: 'eslint.config.mjs' };
-
-  assert.equal(bedCommit(tended), '1a2b3c4');
+  assert.equal(bedCommit(tend(uuid, 4, [weed])), '1a2b3c4');
 });
 
 test('an event file whose at is not a date is skipped', () => {
