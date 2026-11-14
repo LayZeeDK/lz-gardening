@@ -349,6 +349,16 @@ test("a bed that adds a line starting with ++ and holding the site's path stays 
   );
 });
 
+test("a bed that edits a file with no final newline, adding the site's path as the hunk's last line, stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      commit(place.bed, { 'checks/notes.txt': 'old' });
+      tend(place, { 'checks/notes.txt': `new\nbuilt in ${realpathSync.native(place.garden)}\n` });
+    }),
+    keptForAPath,
+  );
+});
+
 test("a bed that adds a file git reads as binary, holding the site's path, stays local", (t) => {
   assert.deepEqual(
     keptLocalForAPath(t, (place) => {
