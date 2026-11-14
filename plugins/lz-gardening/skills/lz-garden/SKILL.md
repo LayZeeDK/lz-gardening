@@ -20,16 +20,22 @@ A tick watches what landed on the base branch since the last tick and queues eac
 fixes nothing: grouping and fixing happen in a tend pass (`/lz-gardening:lz-tend`). Every step below ends on a done
 condition; when one is not met, report the command and its output and stop.
 
+Two rules hold for the whole tick:
+
+- **Search with the Grep tool, list files with the Glob tool.** These two tools are the tick's only search and
+  listing; `git grep`, `rg`, `find` and `ls` are outside the tick, since a shell search can start other programs.
+- **A refused command ends the tick.** Report the command and its refusal, and stop. The refusal is the user's
+  answer, so the tick reaches the same result no other way, with a tool or with another command.
+
 Stay in the repository's working directory for the whole tick and run every command as written below, quotes
 included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read
 the repository with the git commands below and the Read, Grep and Glob tools. Claude Code runs `git log` and
-`git show` without asking only in read-only forms like the ones below; add no other options to them. To search, use
-the Grep tool (`git grep` is not allowed: it can start other programs), and read a file as it is on the base with
-`git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often another branch than
-`<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through the three
-scripts, which keep the queue and the census in the garden site beside the repository. Anything else (another
-command, `cd`, a file write, a redirect) falls back to the user's permission settings; a tick cannot stop to ask, so
-what those settings do not allow is refused, and a refusal stops the tick.
+`git show` without asking only in read-only forms like the ones below; add no other options to them. Read a file as
+it is on the base with `git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often
+another branch than `<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through
+the three scripts, which keep the queue and the census in the garden site beside the repository. Anything else
+(another command, `cd`, a file write, a redirect) falls back to the user's permission settings; a tick cannot stop
+to ask, so what those settings do not allow is refused.
 
 ## 1. Open the site
 
