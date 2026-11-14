@@ -46,7 +46,7 @@ import type { Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
 import { claimRefusal, sync, syncTries } from './store-sync.ts';
-import type { SyncResult } from './store-sync.ts';
+import type { ShareState, SyncResult } from './store-sync.ts';
 import { classPattern, isRecord, replay } from './log.ts';
 
 export interface BaseFacts {
@@ -192,7 +192,25 @@ function baseFacts(top: string, site: string, base: string | undefined): BaseFac
 
 const shellSafeRef = /^[\w.+@][\w./+@-]*$/;
 
-function openOrPlant(top: string, site: string, requested: string | undefined) {
+interface Opened {
+  readonly site: string;
+  readonly created: boolean;
+  readonly base: string;
+}
+
+interface OpenSummary extends Opened {
+  readonly seeded: boolean;
+  readonly shared: ShareState;
+}
+
+interface SyncSummary {
+  readonly shared: ShareState;
+  readonly events: number;
+  readonly reason: string | undefined;
+  readonly conflicts: readonly string[] | undefined;
+}
+
+function openOrPlant(top: string, site: string, requested: string | undefined): Opened {
   const base = resolveBase(baseFacts(top, site, requested));
 
   if (!shellSafeRef.test(base)) {
@@ -284,7 +302,16 @@ function mergeInto(bed: string, commitId: string, name: string): void {
   }
 }
 
-function makeBed(top: string, site: string, bedClass: string, base: string) {
+interface BedSummary {
+  readonly bed: string;
+  readonly branch: string;
+  readonly start: string;
+  readonly created: boolean;
+  readonly deps: 'none' | 'linked' | 'installed' | 'install';
+  readonly install: string | undefined;
+}
+
+function makeBed(top: string, site: string, bedClass: string, base: string): BedSummary {
   git(site, ['fetch', '-q', 'origin', base]);
   const branch = `bed/${bedClass}`;
   const branchRef = `refs/heads/${branch}`;
@@ -340,7 +367,7 @@ function sharesLockfile(top: string, bed: string): boolean {
   return lockfiles.some((name) => sameBytes(join(top, name), join(bed, name)));
 }
 
-function plantDeps(top: string, bed: string): 'none' | 'linked' | 'installed' | 'install' {
+function plantDeps(top: string, bed: string): BedSummary['deps'] {
   const entry = lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false });
 
   if (entry !== undefined) {
@@ -386,17 +413,17 @@ function recordSeed(cwd: string, sha: string): void {
 }
 
 type Command =
-  | { command: 'open'; base: string | undefined }
-  | { command: 'sync'; census: string | undefined; seeded: boolean }
-  | { command: 'bed'; bedClass: string; base: string };
+  | { readonly command: 'open'; readonly base: string | undefined }
+  | { readonly command: 'sync'; readonly census: string | undefined; readonly seeded: boolean }
+  | { readonly command: 'bed'; readonly bedClass: string; readonly base: string };
 
 function parseCommand(
   positionals: readonly string[],
   values: {
-    base?: string | undefined;
-    class?: string | undefined;
-    census?: string | undefined;
-    seeded: boolean;
+    readonly base?: string | undefined;
+    readonly class?: string | undefined;
+    readonly census?: string | undefined;
+    readonly seeded: boolean;
   },
 ): Command | undefined {
   const [command] = positionals;
@@ -470,7 +497,7 @@ function main(argv: readonly string[], io: Io): number {
   }
 
   const { checkout: top, path: site } = siteOf(io.cwd);
-  let summary: object;
+  let summary: OpenSummary | SyncSummary | BedSummary;
 
   switch (parsed.command) {
     case 'open': {
