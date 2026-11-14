@@ -101,9 +101,11 @@ of the repository, it uses the one site beside the main checkout:
   `refs/garden/log` and the writer id, and leaves the rest as it is. Then it syncs the garden log once, with no
   wait, which also pushes events a run appended but never shared. It prints JSON with `site`, `created`, `base`,
   `seeded` (whether the queue holds the event a seed pass records, after the sync) and `shared` (the share state,
-  below). It
-  exits 2 when the repository has no `user.name` or `user.email`, so the gardener never commits under a default
-  identity, and when a repository at `../<repo>.garden` has no `garden` branch, writing nothing into it.
+  below). When it creates the site, it exits 2 if the repository has no `user.name` or `user.email`, so the gardener
+  never commits under a default identity. The site keeps the identity it copied: a later change to the repository's
+  `user.name` or `user.email` does not reach bed commits; set it in the site too (`git -C "<site>" config user.email
+  <address>`). It also exits 2 when a repository at `../<repo>.garden` has no `garden` branch, writing nothing into
+  it.
 - `site.ts sync [--census <sha> [--seeded]]` syncs the garden log and census, trying up to five times. With
   `--census`, it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares
   nothing (a `local` or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once. It
