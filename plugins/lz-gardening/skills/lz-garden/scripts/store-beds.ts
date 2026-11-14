@@ -1,7 +1,16 @@
 // The shared beds: which bed branches a sync pushes to origin as refs/garden/beds/<class>, which stay local and why.
 import { join } from 'node:path';
 import { bedCommit, eventPath, latestTendedClose } from './log.ts';
-import { git, isAncestor, networkGit, objectIdPattern, reasonOf, refsUnder, timedOut } from './store-git.ts';
+import {
+  git,
+  isAncestor,
+  networkGit,
+  objectIdPattern,
+  pushReport,
+  reasonOf,
+  refsUnder,
+  timedOut,
+} from './store-git.ts';
 import { logRef, machinePathTest, readReplica } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
@@ -104,11 +113,6 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
   return added.some(machinePathTest(site)) ? 'stays local: it holds a path on this machine' : undefined;
 }
 
-// The tab-separated fields of a porcelain line, split from git's output, reach the summary only on a ref's line.
-function holdsSummary(fields: string[]): fields is [string, string, string, ...string[]] {
-  return fields[2] !== undefined;
-}
-
 export function pushBeds(
   site: Site,
   leaving: readonly { readonly path: string }[],
@@ -168,15 +172,8 @@ export function pushBeds(
     ],
     timeoutMs,
   );
-  // A porcelain line per ref: "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as it was. A push
-  // that failed before it reached the refs prints no line for them.
-  const reported = new Map(
-    pushed.stdout
-      .split('\n')
-      .map((line) => line.split('\t'))
-      .filter(holdsSummary)
-      .map(([flag, refs, summary]) => [refs.slice(refs.indexOf(':') + 1), { flag, summary }] as const),
-  );
+  // A push that failed before it reached the refs reports none of them.
+  const reported = pushReport(pushed.stdout);
   const outcomes = pushing.map(({ weedClass, tip }) => {
     const line = reported.get(sharedBedRef(weedClass));
 

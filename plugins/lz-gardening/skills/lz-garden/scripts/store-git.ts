@@ -185,6 +185,28 @@ export function networkGit(site: string, args: readonly string[], timeoutMs: num
   });
 }
 
+interface PushedRef {
+  readonly flag: string;
+  readonly summary: string;
+}
+
+// The tab-separated fields of a porcelain line, split from git's output, reach the summary only on a ref's line.
+function holdsSummary(fields: string[]): fields is [string, string, string, ...string[]] {
+  return fields[2] !== undefined;
+}
+
+// git push --porcelain prints a line per ref, "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as
+// it was; its other lines hold no tab. Each ref's flag and summary, by the ref it pushed to.
+export function pushReport(porcelain: string): ReadonlyMap<string, PushedRef> {
+  return new Map(
+    porcelain
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .filter(holdsSummary)
+      .map(([flag, refs, summary]) => [refs.slice(refs.indexOf(':') + 1), { flag, summary }] as const),
+  );
+}
+
 export function mainCheckout(cwd: string): string {
   // Stryker disable next-line StringLiteral: a rev-parse that succeeds prints all three paths, so the default never applies
   const [gitDir, sharedGitDir, top = ''] = git(
