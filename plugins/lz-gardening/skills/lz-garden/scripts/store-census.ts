@@ -108,13 +108,16 @@ export function writePendingCensus(
   });
 }
 
-export function readCensusAt(site: string, ref: string): StoredCensus | null | 'not a census' {
+export type ReadCensus =
+  { readonly kind: 'none' } | { readonly kind: 'not a census' } | ({ readonly kind: 'census' } & StoredCensus);
+
+export function readCensusAt(site: string, ref: string): ReadCensus {
   const [text, patterns] = catFileBatch(site, [`${ref}:census.json`, `${ref}:patterns.json`], (name) => name).map(
     ([, object]) => (object.kind === 'blob' ? object.text : undefined),
   );
 
   if (text === undefined) {
-    return null;
+    return { kind: 'none' };
   }
 
   let json: unknown;
@@ -122,12 +125,19 @@ export function readCensusAt(site: string, ref: string): StoredCensus | null | '
   try {
     json = JSON.parse(text);
   } catch {
-    return 'not a census';
+    return { kind: 'not a census' };
   }
 
   const census = parseCensus(json);
 
-  return census === null ? 'not a census' : { census, text, patterns };
+  return census === null ? { kind: 'not a census' } : { kind: 'census', census, text, patterns };
+}
+
+/** The census at ref, or undefined when there is none or it is not a census. */
+export function readableCensus(site: string, ref: string): Census | undefined {
+  const read = readCensusAt(site, ref);
+
+  return read.kind === 'census' ? read.census : undefined;
 }
 
 export interface Recorded {
@@ -143,7 +153,7 @@ export function hasCensusOf(site: Pick<Site, 'checkout' | 'path'>, pendingSha: s
 }
 
 function censusAt(site: Pick<Site, 'path'>, local: string | undefined): Census | undefined {
-  return local === undefined ? undefined : censusIn(site.path, local);
+  return local === undefined ? undefined : readableCensus(site.path, local);
 }
 
 // Whether the held census is of pendingSha or a commit that descends from it.
@@ -169,12 +179,6 @@ function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string
   const mine = censusAt(site, local);
 
   return mine !== undefined && mine.sha !== theirs.sha && isKnownAncestor(site.checkout, theirs.sha, mine.sha);
-}
-
-function censusIn(site: string, ref: string): Census | undefined {
-  const read = readCensusAt(site, ref);
-
-  return typeof read === 'object' && read !== null ? read.census : undefined;
 }
 
 export interface CensusTips {
@@ -215,7 +219,7 @@ function adoptSharedCensus(
     return { local, ignored: false };
   }
 
-  const theirs = censusIn(site.path, shared);
+  const theirs = readableCensus(site.path, shared);
 
   if (theirs === undefined) {
     return { local, ignored: true };
@@ -275,7 +279,7 @@ export function finishPendingCensus(
 }
 
 export function censusOffOrigin(site: Pick<Site, 'checkout' | 'path'>, ref: string): string | undefined {
-  const sha = censusIn(site.path, ref)?.sha;
+  const sha = readableCensus(site.path, ref)?.sha;
 
   if (sha === undefined) {
     return undefined;

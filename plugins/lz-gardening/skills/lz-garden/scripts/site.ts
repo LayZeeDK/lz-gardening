@@ -58,7 +58,7 @@ import {
   writerKey,
 } from './store-log.ts';
 import type { Site } from './store-log.ts';
-import { censusRef, hasCensusOf, readCensusAt } from './store-census.ts';
+import { censusRef, hasCensusOf, readableCensus } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
 import { sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
@@ -179,9 +179,7 @@ function readableCensusRev(site: string): string | undefined {
     return undefined;
   }
 
-  const recorded = readCensusAt(site, censusRef);
-
-  return typeof recorded === 'object' ? recorded?.census.rev : undefined;
+  return readableCensus(site, censusRef)?.rev;
 }
 
 function baseFacts(top: string, site: string, base: string | undefined): BaseFacts {

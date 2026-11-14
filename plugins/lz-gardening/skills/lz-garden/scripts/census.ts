@@ -447,13 +447,15 @@ function readSite(cwd: string): {
   readonly extraFile: { readonly text: string; readonly source: string } | undefined;
 } {
   const site = openSite(cwd);
-  const recorded = readCensusAt(site.path, censusRef);
+  const read = readCensusAt(site.path, censusRef);
 
-  if (recorded === 'not a census') {
+  if (read.kind === 'not a census') {
     throw new Error(
       `${censusRef} in ${site.path} is not a census; delete it (git -C "${site.path}" update-ref -d ${censusRef}), and the next tick records a new one`,
     );
   }
+
+  const recorded = read.kind === 'census' ? read : null;
 
   return { site, recorded, extraFile: extraPatterns(site.path, recorded) };
 }

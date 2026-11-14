@@ -2,18 +2,12 @@
 import { bedCommit } from './log.ts';
 import type { TendedClose } from './log.ts';
 import { git, gitSucceeds, optionalGit } from './store-git.ts';
-import { censusRef, readCensusAt } from './store-census.ts';
+import { censusRef, readableCensus } from './store-census.ts';
 
 type GitOptions = NonNullable<Parameters<typeof git>[2]>;
 
 /** What add and list can say of a regrown weed's check and the base; 'no label' when it landed or cannot be judged. */
 export type BaseLabel = 'no label' | 'not on the base' | 'base unknown';
-
-function shaOfReadableCensus(site: string): string | undefined {
-  const recorded = readCensusAt(site, censusRef);
-
-  return typeof recorded === 'object' ? recorded?.census.sha : undefined;
-}
 
 interface Landing {
   readonly cwd: string;
@@ -56,7 +50,7 @@ function bedChangeOnBase({ cwd, withSite, where, fork, base, tip }: Landing): bo
 
 function checkOffBase(cwd: string, site: string, census: string | undefined, tended: TendedClose): BaseLabel {
   const tip = bedCommit(tended);
-  const base = census ?? shaOfReadableCensus(site);
+  const base = census ?? readableCensus(site, censusRef)?.sha;
   const where = tended.check;
 
   if (base === undefined) {

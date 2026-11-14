@@ -15,7 +15,7 @@ import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 
 function storedAt(garden: string, ref: string): StoredCensus {
   const read = readCensusAt(garden, ref);
-  assert.ok(typeof read === 'object' && read !== null, `${ref} holds a census`);
+  assert.ok(read.kind === 'census', `${ref} holds a census`);
 
   return read;
 }
@@ -68,7 +68,7 @@ test('a census ref whose census.json is not a census reads as not a census', (t)
 
   writePendingCensus({ path: garden, checkout: dir }, sha, '{"rev":"main"}\n');
 
-  assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
+  assert.equal(readCensusAt(garden, pendingCensusRef(sha)).kind, 'not a census');
 });
 
 test('a census ref whose census.json is not JSON reads as not a census', (t) => {
@@ -77,7 +77,7 @@ test('a census ref whose census.json is not JSON reads as not a census', (t) => 
 
   writePendingCensus({ path: garden, checkout: dir }, sha, 'not json\n');
 
-  assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
+  assert.equal(readCensusAt(garden, pendingCensusRef(sha)).kind, 'not a census');
 });
 
 test('each malformed part of a census reads as not a census', () => {
@@ -112,7 +112,7 @@ test('a census whose sha is a revision expression rather than a commit id reads 
 
   writePendingCensus({ path: garden, checkout: dir }, sha, censusText('origin/x$(touch${IFS}pwned)'));
 
-  assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
+  assert.equal(readCensusAt(garden, pendingCensusRef(sha)).kind, 'not a census');
 });
 
 function censusRefs(garden: string): string {
