@@ -56,15 +56,7 @@ import {
   replay,
   unprintablePattern,
 } from './log.ts';
-import type {
-  AddInput,
-  AddOutcome,
-  ClaimEvent,
-  CloseRequest,
-  EventDraft,
-  GardenEvent,
-  TendedClose,
-} from './log.ts';
+import type { AddInput, AddOutcome, ClaimEvent, CloseRequest, EventDraft, GardenEvent, TendedClose } from './log.ts';
 import { claimRefusalLine, escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';

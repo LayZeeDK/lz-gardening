@@ -24,15 +24,7 @@ import {
   reasonOf,
   timedOut,
 } from './store-git.ts';
-import {
-  append,
-  formatOf,
-  logFormat,
-  logRef,
-  moveLogIfStill,
-  readReplica,
-  writeLogIfStill,
-} from './store-log.ts';
+import { append, formatOf, logFormat, logRef, moveLogIfStill, readReplica, writeLogIfStill } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
 export const shareKey = 'lzGardening.share';

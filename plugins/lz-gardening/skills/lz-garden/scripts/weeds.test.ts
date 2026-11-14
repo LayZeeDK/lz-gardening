@@ -335,7 +335,6 @@ test('validation takes layers 1 and 6, refuses 0 and 1.5, and matches the whole 
   assert.match(validateAdd(input({ source: 'see commit:abc' })) ?? '', /kind/);
 });
 
-
 test('the CLI takes no --file, so it writes nowhere but the site', (t) => {
   const dir = checkout(t);
   const target = join(dir, 'profile');
