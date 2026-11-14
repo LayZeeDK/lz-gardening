@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { eventPath, isRecord, maxClockOf, parseEvent, stamp } from './log.ts';
+import { z } from 'zod';
+import { eventPath, maxClockOf, parseEvent, stamp } from './log.ts';
 import type { EventDraft, GardenEvent } from './log.ts';
 import {
   catFileBatch,
@@ -225,14 +226,16 @@ export function formatOf(gardenJson: string | undefined): number {
     throw new Error(`${logRef}:garden.json is not JSON`);
   }
 
-  const format = isRecord(garden) ? garden['format'] : undefined;
+  const parsed = gardenSchema.safeParse(garden);
 
-  if (typeof format !== 'number' || !Number.isSafeInteger(format) || format < 1) {
+  if (!parsed.success) {
     throw new Error(`${logRef}:garden.json names no log format`);
   }
 
-  return format;
+  return parsed.data.format;
 }
+
+const gardenSchema = z.object({ format: z.int().positive() });
 
 export function readReplica(site: string, tip: string): Replica {
   const { texts: blobs, skipped } = blobsAt(site, tip);
