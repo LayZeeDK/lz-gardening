@@ -48,13 +48,17 @@ function bedChangeOnBase({ cwd, withSite, where, fork, base, tip }: Landing): bo
   return onBase.has(bedChange) || patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
 }
 
-function checkOffBase(cwd: string, site: string, census: string | undefined, tended: TendedClose): BaseLabel {
-  const tip = bedCommit(tended);
+// What every tended close is judged against: the base, and the site's objects the checkout reads the beds through.
+interface Ground {
+  readonly base: string;
+  readonly withSite: GitOptions;
+}
+
+function groundOf(site: string, census: string | undefined): Ground | undefined {
   const base = census ?? readableCensus(site, censusRef)?.sha;
-  const where = tended.check;
 
   if (base === undefined) {
-    return 'base unknown';
+    return undefined;
   }
 
   // The bed's commits are in the site, so the checkout reads them through the site's objects, fetching nothing.
@@ -67,6 +71,18 @@ function checkOffBase(cwd: string, site: string, census: string | undefined, ten
       GIT_NO_LAZY_FETCH: '1',
     },
   };
+
+  return { base, withSite };
+}
+
+function checkOffBase(cwd: string, ground: Ground | undefined, tended: TendedClose): BaseLabel {
+  if (ground === undefined) {
+    return 'base unknown';
+  }
+
+  const { base, withSite } = ground;
+  const tip = bedCommit(tended);
+  const where = tended.check;
   const hasCheck = (commit: string): boolean => gitSucceeds(cwd, ['cat-file', '-e', `${commit}:${where}`], withSite);
   const fork = optionalGit(cwd, ['merge-base', tip, base], withSite);
 
@@ -90,12 +106,15 @@ function checkOffBase(cwd: string, site: string, census: string | undefined, ten
   return bedChangeOnBase({ cwd, withSite, where, fork, base, tip }) === false ? 'not on the base' : 'no label';
 }
 
-/** The label of each tended close, worked out once per close. */
+/** The label of each tended close, worked out once per close, against a base worked out on the first. */
 export function offBaseIn(cwd: string, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {
   const known = new Map<TendedClose, BaseLabel>();
+  let ground: { readonly value: Ground | undefined } | undefined;
 
   return (tended) => {
-    const offBase = known.get(tended) ?? checkOffBase(cwd, site, census, tended);
+    // Stryker disable next-line AssignmentOperator: without the cache, each close works out the same base again
+    ground ??= { value: groundOf(site, census) };
+    const offBase = known.get(tended) ?? checkOffBase(cwd, ground.value, tended);
     // Stryker disable next-line CallExpression: without the cache, each weed works out the same label again
     known.set(tended, offBase);
 
