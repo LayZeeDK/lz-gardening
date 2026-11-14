@@ -289,8 +289,20 @@ test('a claim whose until is not after the reader clock has expired and gives th
   assert.equal(garden.claims.has('any-type'), false);
 });
 
-test('a claim whose until is more than six hours past the reader clock is not live, whatever its at says', () => {
-  const skewed = { ...claim('c1', 1, 'writer-b'), at: '2026-11-11T12:00:00.001Z', until: '2026-11-11T18:00:00.001Z' };
+test('a claim taken a moment after the reader clock read the time is live, as another process takes one', () => {
+  const later = { ...claim('c1', 1, 'writer-b'), at: '2026-11-11T12:00:00.001Z', until: '2026-11-11T18:00:00.001Z' };
+
+  assert.equal(replay([later], now).claims.get('any-type'), later);
+});
+
+test('a claim taken by a writer whose clock runs an hour ahead of the reader is live', () => {
+  const ahead = { ...claim('c1', 1, 'writer-b'), at: '2026-11-11T13:00:00.000Z', until: '2026-11-11T19:00:00.000Z' };
+
+  assert.equal(replay([ahead], now).claims.get('any-type'), ahead);
+});
+
+test('a claim whose until is more than seven hours past the reader clock is not live, whatever its at says', () => {
+  const skewed = { ...claim('c1', 1, 'writer-b'), at: '2026-11-11T13:00:00.001Z', until: '2026-11-11T19:00:00.001Z' };
 
   assert.equal(replay([skewed], now).claims.get('any-type'), undefined);
 });

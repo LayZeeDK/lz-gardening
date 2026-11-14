@@ -52,7 +52,10 @@ keep.
   instead would leave a clone without the old history, such as CI, stuck on a census from before the rewrite.
 - A claim expires after 6 hours, so a crashed pass blocks its class that long. Since no event is removed, readers keep
   that bound too: a claim whose end is more than 6 hours after its own time is skipped, and one whose end is more than
-  6 hours after the reader's clock is not live, so no writer, nor one whose clock ran ahead, holds a class for good.
+  7 hours after the reader's clock is not live, so no writer, nor one whose clock ran ahead, holds a class for good.
+  The extra hour is for clocks: a claim another process or machine took after the reader read the time ends more
+  than 6 hours after the reader's clock. Measured on 2026-11-14: with a 6-hour bound, two claim processes started
+  together both claimed the class in one of five rounds, as each dropped the other's claim as dated in the future.
 
 ## Update, 2026-11-13: claims, shared beds and what the garden may publish
 

@@ -707,8 +707,14 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
 }
 
 /**
- * The claims no release names whose until is later than the reader's clock and at most a claim's lifetime past it,
- * in (clock, uuid) order.
+ * How far a writer's clock may run ahead of the reader's: another process, or another machine, takes a claim after the
+ * reader read the time. Dropping such a claim as dated in the future would let two writers hold one class.
+ */
+const clockSkewAllowanceMs = 60 * 60 * 1000;
+
+/**
+ * The claims no release names whose until is later than the reader's clock and at most a claim's lifetime and the
+ * clock skew allowance past it, in (clock, uuid) order.
  */
 function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
   const released = releasedClaims(events);
@@ -716,7 +722,10 @@ function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
 
   return events
     .filter((event) => event.op === 'claim')
-    .filter((claim) => !released.has(claim.uuid) && ending(claim) > 0 && ending(claim) <= claimLifetimeMs)
+    .filter(
+      (claim) =>
+        !released.has(claim.uuid) && ending(claim) > 0 && ending(claim) <= claimLifetimeMs + clockSkewAllowanceMs,
+    )
     .toSorted(byClock);
 }
 
