@@ -93,6 +93,15 @@ test('a census ref whose census.json is not JSON reads as not a census', (t) => 
   assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
 });
 
+test('a census whose sha is a revision expression rather than a commit id reads as not a census', (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText('origin/x$(touch${IFS}pwned)'));
+
+  assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
+});
+
 function censusRefs(garden: string): string {
   return git(garden, ['for-each-ref', '--format=%(refname) %(objectname)', censusRef, 'refs/garden/pending']);
 }

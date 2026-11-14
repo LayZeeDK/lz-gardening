@@ -1,7 +1,7 @@
 // Whether a tended close's bed has landed its check on the base, judged by patch ids in the checkout (ADR 0003).
 import { bedCommit } from './log.ts';
 import type { TendedClose } from './log.ts';
-import { git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';
+import { git, gitSucceeds, optionalGit } from './store-git.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
 
 type GitOptions = NonNullable<Parameters<typeof git>[2]>;
@@ -11,9 +11,8 @@ export type BaseLabel = 'no label' | 'not on the base' | 'base unknown';
 
 function shaOfReadableCensus(site: string): string | undefined {
   const recorded = readCensusAt(site, censusRef);
-  const sha = typeof recorded === 'object' ? recorded?.census.sha : undefined;
 
-  return sha !== undefined && objectIdPattern.test(sha) ? sha : undefined;
+  return typeof recorded === 'object' ? recorded?.census.sha : undefined;
 }
 
 interface Landing {

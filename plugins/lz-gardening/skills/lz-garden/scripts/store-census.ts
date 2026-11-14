@@ -6,6 +6,7 @@ import {
   git,
   gitSucceeds,
   isKnownAncestor,
+  objectIdPattern,
   objectIds,
   optionalGit,
   refsUnder,
@@ -40,7 +41,7 @@ export function parseCensus(json: unknown): Census | null {
 
   const { rev, sha, takenAt } = json;
 
-  if (typeof rev !== 'string' || typeof sha !== 'string' || typeof takenAt !== 'string') {
+  if (typeof rev !== 'string' || typeof sha !== 'string' || !objectIdPattern.test(sha) || typeof takenAt !== 'string') {
     return null;
   }
 

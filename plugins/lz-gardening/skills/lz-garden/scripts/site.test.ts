@@ -144,7 +144,7 @@ test('open without a base reports the base the last census recorded', (t) => {
   const { dir, garden } = planted(t);
   git(dir, ['branch', 'release']);
   git(dir, ['switch', '-q', '-c', 'feature/x']);
-  writeCensus(garden, 'abc', 'release');
+  writeCensus(garden, 'a'.repeat(40), 'release');
 
   const result = site(dir, ['open']);
 
