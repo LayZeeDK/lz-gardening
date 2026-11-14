@@ -267,13 +267,13 @@ const installs: readonly (readonly [lockfile: string, command: (bed: string) => 
 ];
 const lockfiles = installs.map(([lockfile]) => lockfile);
 
-function shellQuoted(text: string): string {
+function posixShellQuoted(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`;
 }
 
 function installCommand(bed: string): string {
   const found = installs.find(([lockfile]) => existsSync(join(bed, lockfile)));
-  const quoted = shellQuoted(bed);
+  const quoted = posixShellQuoted(bed);
 
   return found === undefined ? `npm --prefix ${quoted} install` : found[1](quoted);
 }
@@ -313,8 +313,7 @@ function checkBed(site: string, bedClass: string, base: string): void {
   requireSite(site);
 }
 
-function bedRefusal(io: Io, site: Site, bedClass: string): string | undefined {
-  const now = new Date();
+function bedRefusal(io: Io, site: Site, bedClass: string, now: Date): string | undefined {
   const shared = sync(site, { attempts: syncTries.quick }, now);
   reportSync(io, shared);
 
@@ -439,8 +438,7 @@ function plantDeps(top: string, bed: string): Deps {
   return 'linked';
 }
 
-function recordSeed(site: Site, sha: string): void {
-  const now = new Date();
+function recordSeed(site: Site, sha: string, now: Date): void {
   append(site, (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }] }), now);
 }
 
@@ -535,10 +533,12 @@ function main(argv: readonly string[], io: Io): number {
   }
 
   const located = siteOf(io.cwd);
+  // One time for the run, so its syncs, the seed check and the claim check agree.
+  const now = new Date();
 
   switch (parsed.command) {
     case 'open': {
-      return printSummary(io, openCommand(io, located, parsed.base));
+      return printSummary(io, openCommand(io, located, parsed.base, now));
     }
     case 'sync': {
       requireSite(located.path);
@@ -549,10 +549,10 @@ function main(argv: readonly string[], io: Io): number {
         return 1;
       }
 
-      return printSummary(io, syncCommand(io, located, parsed.census, parsed.seeded));
+      return printSummary(io, syncCommand(io, located, parsed.census, parsed.seeded, now));
     }
     case 'bed': {
-      return bedCommand(io, located, parsed.bedClass, parsed.base);
+      return bedCommand(io, located, parsed.bedClass, parsed.base, now);
     }
   }
 }
@@ -565,25 +565,25 @@ function printSummary(io: Io, summary: OpenSummary | SyncSummary | BedSummary): 
   return 0;
 }
 
-function openCommand(io: Io, located: Located, requested: string | undefined): OpenSummary {
+function openCommand(io: Io, located: Located, requested: string | undefined, now: Date): OpenSummary {
   const opened = openOrPlant(located.checkout, located.path, requested);
-  const shared = sync(withWriter(located), { attempts: syncTries.quick });
+  const shared = sync(withWriter(located), { attempts: syncTries.quick }, now);
   reportSync(io, shared);
-  const seeded = replay(readLog(located).events, new Date()).seeded;
+  const seeded = replay(readLog(located).events, now).seeded;
   // Without --base, the base can come from the census this sync just fetched.
   const base = requested === undefined ? checkedBase(located.checkout, located.path, undefined) : opened.base;
 
   return { ...opened, base, seeded, shared: shared.state, reason: printableReason(shared) };
 }
 
-function syncCommand(io: Io, located: Located, census: string | undefined, seeded: boolean): SyncSummary {
+function syncCommand(io: Io, located: Located, census: string | undefined, seeded: boolean, now: Date): SyncSummary {
   const site = withWriter(located);
 
   if (seeded && census !== undefined) {
-    recordSeed(site, census);
+    recordSeed(site, census, now);
   }
 
-  const shared = sync(site, { attempts: syncTries.sharing, census });
+  const shared = sync(site, { attempts: syncTries.sharing, census }, now);
   reportSync(io, shared);
   shared.skipped.forEach((path) => {
     io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);
@@ -597,9 +597,9 @@ function syncCommand(io: Io, located: Located, census: string | undefined, seede
   };
 }
 
-function bedCommand(io: Io, located: Located, bedClass: string, base: string): number {
+function bedCommand(io: Io, located: Located, bedClass: string, base: string, now: Date): number {
   checkBed(located.path, bedClass, base);
-  const refusal = bedRefusal(io, withWriter(located), bedClass);
+  const refusal = bedRefusal(io, withWriter(located), bedClass, now);
 
   if (refusal !== undefined) {
     io.err(`site: bed: ${refusal}\n`);
