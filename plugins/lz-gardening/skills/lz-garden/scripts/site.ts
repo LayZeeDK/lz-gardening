@@ -280,10 +280,11 @@ function sameBytes(checkout: string, bed: string): boolean {
 
 function declaresWorkspaces(dir: string): boolean {
   const file = join(dir, 'package.json');
+  const text = readFileSync(file, 'utf8');
   let manifest: unknown;
 
   try {
-    manifest = JSON.parse(readFileSync(file, 'utf8'));
+    manifest = JSON.parse(text);
   } catch {
     throw new Error(`${file} is not valid JSON`);
   }
@@ -411,11 +412,15 @@ function plantDeps(top: string, bed: string): BedSummary['deps'] {
     return 'installed';
   }
 
-  if (!existsSync(join(bed, 'package.json'))) {
+  const manifest = lstatSync(join(bed, 'package.json'), { throwIfNoEntry: false });
+
+  if (manifest === undefined) {
     return 'none';
   }
 
-  const linkable = existsSync(join(top, 'node_modules')) && sharesLockfile(top, bed) && !declaresWorkspaces(bed);
+  // Like the lockfile, the package.json comes from the base, so only a plain file is read.
+  const linkable =
+    manifest.isFile() && existsSync(join(top, 'node_modules')) && sharesLockfile(top, bed) && !declaresWorkspaces(bed);
 
   if (!linkable) {
     return 'install';

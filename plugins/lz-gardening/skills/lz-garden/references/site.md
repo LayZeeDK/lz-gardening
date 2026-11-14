@@ -211,9 +211,9 @@ is not valid JSON (the message names the file).
 
 - `linked`: the bed's `node_modules` is a link to the checkout's. `bed` makes the link when three things hold: the
   checkout has a `node_modules`; the bed's `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` is a plain file, not a
-  link, with the same bytes as the checkout's; and the bed is not a workspace, so its `package.json` declares no
-  `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a linked `node_modules` to the
-  repository's checkout, so the bed would test the other checkout's code. On a bed that exists, the link stays only
+  link, with the same bytes as the checkout's; and the bed is not a workspace, so its `package.json`, a plain file and
+  not a link, declares no `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a
+  linked `node_modules` to the repository's checkout, so the bed would test the other checkout's code. On a bed that exists, the link stays only
   while a lockfile still has the same bytes as the checkout's; when the merged base changed it, `bed` removes the link
   (never the checkout's folder) and reports `install`.
 - `install`: run the command `bed` prints as `install`. It installs with the package manager of the bed's lockfile,

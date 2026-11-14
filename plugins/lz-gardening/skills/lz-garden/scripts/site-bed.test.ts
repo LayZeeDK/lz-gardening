@@ -550,6 +550,22 @@ test('bed asks for an install, and links nothing, when the bed lockfile is a lin
   assert.equal(again.summary.get('deps'), 'install');
 });
 
+test('bed asks for an install, and reads nothing through it, when the bed package.json is a link', (t) => {
+  const dir = installed(t);
+  writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'install');
+  const bed = bedOf(first.summary);
+  writeFileSync(join(bed, 'package-lock.json'), readFileSync(join(dir, 'package-lock.json')));
+  rmSync(join(bed, 'package.json'));
+  symlinkSync(join(dir, 'package.json'), join(bed, 'package.json'), 'file');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('deps'), 'install');
+});
+
 test('bed on an existing bed with its own install reports it installed, not linked', (t) => {
   const dir = installed(t);
   writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');
