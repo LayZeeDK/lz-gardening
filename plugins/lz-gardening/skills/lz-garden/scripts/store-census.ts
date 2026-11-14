@@ -142,7 +142,7 @@ export function hasCensusOf(site: Pick<Site, 'checkout' | 'path'>, pendingSha: s
   return pending !== undefined || (held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha));
 }
 
-export function recordPendingCensus(
+function recordPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,
 ): Recorded | 'lost to another writer' {
@@ -238,11 +238,19 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
   return now === to;
 }
 
+// Records the pending census unless a try that settled the census recorded it already, then deletes the pending
+// censuses it covers. A record another sync beat keeps the pending census.
 export function finishPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,
-  recorded: Recorded,
-): void {
+  triedRecord: Recorded | undefined,
+): 'lost to another writer' | undefined {
+  const recorded = triedRecord ?? recordPendingCensus(site, pendingSha);
+
+  if (recorded === 'lost to another writer') {
+    return recorded;
+  }
+
   const pendingPrefix = pendingCensusRef('');
   const deletes = [...refsUnder(site.path, [pendingPrefix])].filter(([name]) => {
     const sha = name.slice(pendingPrefix.length);
@@ -253,6 +261,8 @@ export function finishPendingCensus(
   gitSucceeds(site.path, ['update-ref', '--stdin'], {
     input: deletes.map(([name, oid]) => `delete ${name} ${oid}\n`).join(''),
   });
+
+  return undefined;
 }
 
 export function censusOffOrigin(site: Pick<Site, 'checkout' | 'path'>, ref: string): string | undefined {

@@ -3,14 +3,7 @@
 import { eventPathPattern, parseEvent, planGiveBack, releasesOfLostClaims } from './log.ts';
 import type { LostClaim } from './log.ts';
 import { planBeds, pushBeds } from './store-beds.ts';
-import {
-  censusOffOrigin,
-  censusRef,
-  finishPendingCensus,
-  leaseOnFetchedCensus,
-  recordPendingCensus,
-  settleCensus,
-} from './store-census.ts';
+import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
 import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
@@ -266,18 +259,10 @@ export function isShared(result: SyncResult): boolean {
 export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {
   const { result, recorded } = syncWithOrigin(site, options, now);
 
-  if (options.census !== undefined) {
-    // A try that settled the census recorded the pending one already. A record another sync beat keeps the pending one.
-    const settled = recorded ?? recordPendingCensus(site, options.census);
+  const lost =
+    options.census !== undefined && finishPendingCensus(site, options.census, recorded) === 'lost to another writer';
 
-    if (settled === 'lost to another writer') {
-      return { ...result, censusStillPending: options.census };
-    }
-
-    finishPendingCensus(site, options.census, settled);
-  }
-
-  return result;
+  return lost ? { ...result, censusStillPending: options.census } : result;
 }
 
 // What a try that settled the census recorded of the pending one.
