@@ -526,6 +526,23 @@ test('bed unlinks a linked bed whose lockfile the base changed, asks for an inst
   assert.equal(existsSync(join(dir, 'node_modules')), true);
 });
 
+test('bed unlinks a linked bed whose base came to declare workspaces, and asks for an install', (t) => {
+  const dir = installed(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'linked');
+  commit(dir, { 'package.json': '{ "name": "x", "workspaces": ["packages/*"] }\n' });
+  const bed = join(dirname(dir), 'repo.garden', 'beds', 'any-type');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.deepEqual(
+    [again.status, again.summary.get('deps'), lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false })],
+    [0, 'install', undefined],
+    again.stderr,
+  );
+  assert.equal(existsSync(join(dir, 'node_modules')), true);
+});
+
 test('bed on an existing bed that was never installed asks for the install again', (t) => {
   const dir = installed(t);
   writeFileSync(join(dir, 'package-lock.json'), '{ "lockfileVersion": 3, "packages": {} }\n');

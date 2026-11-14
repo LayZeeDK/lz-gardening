@@ -396,6 +396,15 @@ function sharesLockfile(top: string, bed: string): boolean {
   return lockfiles.some((name) => sameBytes(join(top, name), join(bed, name)));
 }
 
+function linkable(top: string, bed: string): boolean {
+  return (
+    lstatSync(join(bed, 'package.json'), { throwIfNoEntry: false })?.isFile() === true &&
+    existsSync(join(top, 'node_modules')) &&
+    sharesLockfile(top, bed) &&
+    !declaresWorkspaces(bed)
+  );
+}
+
 function plantDeps(top: string, bed: string): Deps {
   const entry = lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false });
 
@@ -404,7 +413,7 @@ function plantDeps(top: string, bed: string): Deps {
       return 'installed';
     }
 
-    if (sharesLockfile(top, bed)) {
+    if (linkable(top, bed)) {
       return 'linked';
     }
 
@@ -417,16 +426,11 @@ function plantDeps(top: string, bed: string): Deps {
     return 'installed';
   }
 
-  const manifest = lstatSync(join(bed, 'package.json'), { throwIfNoEntry: false });
-
-  if (manifest === undefined) {
+  if (lstatSync(join(bed, 'package.json'), { throwIfNoEntry: false }) === undefined) {
     return 'none';
   }
 
-  const linkable =
-    manifest.isFile() && existsSync(join(top, 'node_modules')) && sharesLockfile(top, bed) && !declaresWorkspaces(bed);
-
-  if (!linkable) {
+  if (!linkable(top, bed)) {
     return 'install';
   }
 
