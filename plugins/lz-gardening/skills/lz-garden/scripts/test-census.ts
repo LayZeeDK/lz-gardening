@@ -5,9 +5,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { run } from './census.ts';
+import { run, takeCensus } from './census.ts';
 import type { PatternSet } from './census.ts';
 import { isRecord } from './log.ts';
+import { gitEnv, inRun } from './store-git.ts';
 import { openSite } from './store-log.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import type { Census } from './store-census.ts';
@@ -42,6 +43,17 @@ export const set: PatternSet = {
     { id: 'any-type', regex: '(: any\\b|\\bas any\\b)', paths: ['**/*.ts'], note: '' },
   ],
 };
+
+/** A census taken as census.ts takes it: in the run's git environment for the checkout. */
+export function takeCensusInRun(cwd: string, rev: string, patterns: PatternSet, at: Date): Promise<Census> {
+  return takeCensus(
+    cwd,
+    rev,
+    patterns,
+    at,
+    inRun(process.env, () => gitEnv(cwd)),
+  );
+}
 
 export function censusOf(
   hits: Readonly<Record<string, readonly string[]>>,

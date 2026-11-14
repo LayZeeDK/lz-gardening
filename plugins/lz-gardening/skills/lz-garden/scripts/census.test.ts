@@ -7,7 +7,8 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { diffCensus, mergePatternSets, parseGrep, parsePatternSet, takeCensus } from './census.ts';
 import { parseCensus } from './store-census.ts';
-import { censusOf, now, script, set } from './test-census.ts';
+import { gitEnv, inRun } from './store-git.ts';
+import { censusOf, now, script, set, takeCensusInRun } from './test-census.ts';
 import { commit, git, repo } from './test-repo.ts';
 
 test('counts hits per pattern at a revision, honouring paths and excludes', async (t) => {
@@ -18,7 +19,7 @@ test('counts hits per pattern at a revision, honouring paths and excludes', asyn
     'README.md': 'eslint-disable is discussed here\n',
   });
 
-  const census = await takeCensus(dir, 'main', set, now);
+  const census = await takeCensusInRun(dir, 'main', set, now);
   assert.equal(census.counts['eslint-disable'], 1);
   assert.equal(census.counts['any-type'], 2, 'the .js file is outside the pattern paths');
   assert.deepEqual(census.hits['any-type'], [
@@ -35,7 +36,7 @@ test('a pattern with no paths counts hits in source files only, not in data file
     'notes.txt': 'eslint-disable is discussed here\n',
   });
 
-  const census = await takeCensus(dir, 'main', set, now);
+  const census = await takeCensusInRun(dir, 'main', set, now);
 
   assert.deepEqual(census.hits['eslint-disable'], ['src/a.mjs:1: // eslint-disable-next-line']);
 });
@@ -50,7 +51,7 @@ test('the bundled structural-directive pattern counts templates and components, 
   });
   const bundled = parsePatternSet(JSON.parse(readFileSync(join(dirname(script), 'patterns.json'), 'utf8')), 'bundled');
 
-  const census = await takeCensus(dir, 'main', bundled, now);
+  const census = await takeCensusInRun(dir, 'main', bundled, now);
 
   assert.deepEqual(census.hits['angular-structural-directive'], [
     'src/card.ts:1: @Component({ template: \'<p *ngIf="shown">x</p>\' })',
@@ -63,7 +64,7 @@ test("a hit's stored text is cut to 200 characters, marked with an ellipsis", as
   const line = `// eslint-disable-next-line ${'x'.repeat(5000)}`;
   commit(dir, { 'src/a.ts': `${line}\n` });
 
-  const census = await takeCensus(dir, 'main', set, now);
+  const census = await takeCensusInRun(dir, 'main', set, now);
 
   assert.deepEqual(census.hits['eslint-disable'], [`src/a.ts:1: ${line.slice(0, 200)}...`]);
 });
@@ -73,7 +74,7 @@ test("a hit's text of exactly 200 characters is kept whole", async (t) => {
   const line = `// eslint-disable ${'x'.repeat(182)}`;
   commit(dir, { 'src/a.ts': `${line}\n` });
 
-  const census = await takeCensus(dir, 'main', set, now);
+  const census = await takeCensusInRun(dir, 'main', set, now);
 
   assert.deepEqual(census.hits['eslint-disable'], [`src/a.ts:1: ${line}`]);
 });
@@ -83,7 +84,7 @@ test("a hit's text is cut by characters, not UTF-16 units: 118 characters in 218
   const line = `// eslint-disable ${String.fromCodePoint(0x1f331).repeat(100)}`;
   commit(dir, { 'src/a.ts': `${line}\n` });
 
-  const census = await takeCensus(dir, 'main', set, now);
+  const census = await takeCensusInRun(dir, 'main', set, now);
 
   assert.deepEqual(census.hits['eslint-disable'], [`src/a.ts:1: ${line}`]);
 });
@@ -95,12 +96,12 @@ test('hits in a file with CRLF line ends are counted', async (t) => {
     'src/crlf.ts': '// eslint-disable one\r\n// eslint-disable two\r\n',
     'src/sep.ts': "const s = 'a b'; // eslint-disable\n",
   });
-  const before = await takeCensus(dir, 'HEAD', set, now);
+  const before = await takeCensusInRun(dir, 'HEAD', set, now);
   commit(dir, {
     'src/crlf.ts': '\r\n// eslint-disable one\r\n// eslint-disable two\r\n',
     'src/sep.ts': "\nconst s = 'a b'; // eslint-disable\n",
   });
-  const after = await takeCensus(dir, 'HEAD', set, now);
+  const after = await takeCensusInRun(dir, 'HEAD', set, now);
 
   assert.deepEqual(
     [before.hits['eslint-disable'], diffCensus(before, after).find((item) => item.id === 'eslint-disable')?.added],
@@ -120,16 +121,16 @@ test('reads the revision, not the working tree', async (t) => {
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
   writeFileSync(join(dir, 'src/a.ts'), '// eslint-disable\n');
 
-  const census = await takeCensus(dir, 'HEAD', set, now);
+  const census = await takeCensusInRun(dir, 'HEAD', set, now);
   assert.equal(census.counts['eslint-disable'], 0);
 });
 
 test('the delta ignores moved lines and reports only new hits', async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1 as any;\n' });
-  const before = await takeCensus(dir, 'HEAD', set, now);
+  const before = await takeCensusInRun(dir, 'HEAD', set, now);
   commit(dir, { 'src/a.ts': '\n\nconst a = 1 as any;\nconst b = 2 as any;\n' });
-  const after = await takeCensus(dir, 'HEAD', set, now);
+  const after = await takeCensusInRun(dir, 'HEAD', set, now);
 
   const delta = diffCensus(before, after).find((item) => item.id === 'any-type');
   assert.deepEqual(delta, { id: 'any-type', before: 1, after: 2, added: ['src/a.ts:4: const b = 2 as any;'] });
@@ -138,7 +139,7 @@ test('the delta ignores moved lines and reports only new hits', async (t) => {
 test('a first census has no previous counts and reports no hits as new', async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'const a = 1 as any;\n' });
-  const after = await takeCensus(dir, 'HEAD', set, now);
+  const after = await takeCensusInRun(dir, 'HEAD', set, now);
 
   assert.deepEqual(
     diffCensus(null, after).find((item) => item.id === 'any-type'),
@@ -155,7 +156,7 @@ test('an unknown revision is an error, not an empty census', async (t) => {
   const dir = repo(t);
   commit(dir, { 'a.ts': '' });
 
-  await assert.rejects(takeCensus(dir, 'no-such-branch', set, now), /rev-parse/);
+  await assert.rejects(takeCensusInRun(dir, 'no-such-branch', set, now), /rev-parse/);
 });
 
 test('extra patterns override by id and add excludes', () => {
@@ -224,7 +225,7 @@ test('a pattern with more than 1000 hits counts them all and keeps the first 100
   const dir = repo(t);
   commit(dir, { 'src/many.ts': '// eslint-disable\n'.repeat(1001) });
 
-  const census = await takeCensus(dir, 'HEAD', set, now);
+  const census = await takeCensusInRun(dir, 'HEAD', set, now);
 
   assert.deepEqual(
     [census.counts['eslint-disable'], census.hits['eslint-disable']?.length, census.hits['eslint-disable']?.at(-1)],
@@ -237,7 +238,7 @@ test('only a leading origin/ is dropped from the recorded rev', async (t) => {
   commit(dir, { 'src/a.ts': 'const a = 1;\n' });
   git(dir, ['branch', 'team/origin/main']);
 
-  const census = await takeCensus(dir, 'team/origin/main', set, now);
+  const census = await takeCensusInRun(dir, 'team/origin/main', set, now);
 
   assert.equal(census.rev, 'team/origin/main');
 });
@@ -246,8 +247,8 @@ test("an unknown revision's error carries git's own reason", async (t) => {
   const dir = repo(t);
   commit(dir, { 'a.ts': '' });
 
-  await assert.rejects(takeCensus(dir, 'no-such-branch', set, now), {
-    message: /^git rev-parse no-such-branch: \S[^\n]*$/,
+  await assert.rejects(takeCensusInRun(dir, 'no-such-branch', set, now), {
+    message: /^git rev-parse --verify no-such-branch\^\{commit\}: \S[^\n]*$/,
   });
 });
 
@@ -255,7 +256,7 @@ test("a git grep that fails is an error that names the search and carries git's 
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'function f() {}\n' });
 
-  await assert.rejects(takeCensus(dir, 'HEAD', { exclude: ['../outside'], patterns: [] }, now), {
+  await assert.rejects(takeCensusInRun(dir, 'HEAD', { exclude: ['../outside'], patterns: [] }, now), {
     message: /^git grep for definitions: \S[^\n]*$/,
   });
 });
@@ -288,7 +289,9 @@ test('a pattern counted without a hit list has no new hits', () => {
 test('a census in a folder that does not exist fails with the reason git could not start', async (t) => {
   const dir = repo(t);
 
-  await assert.rejects(takeCensus(join(dir, 'missing'), 'HEAD', set, now), { code: 'ENOENT' });
+  const env = inRun(process.env, () => gitEnv(dir));
+
+  await assert.rejects(takeCensus(join(dir, 'missing'), 'HEAD', set, now, env), { code: 'ENOENT' });
 });
 
 test('git grep output keeps colons inside the matched text', () => {

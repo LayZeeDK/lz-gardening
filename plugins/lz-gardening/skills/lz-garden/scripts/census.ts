@@ -15,7 +15,6 @@
 //     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
 // or, when the site has none, by the patterns the site's census carries. A pattern without paths searches sourceGlobs.
-import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +22,7 @@ import { parseArgs } from 'node:util';
 import { isMainModule, processIo } from './cli.ts';
 import type { Io } from './cli.ts';
 import { isRecord } from './log.ts';
-import { gitEnv, inRun } from './store-git.ts';
+import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
 import { openSite } from './store-log.ts';
 import type { Site } from './store-log.ts';
 import { censusRef, readCensusAt, writePendingCensus } from './store-census.ts';
@@ -148,33 +147,10 @@ function branchName(rev: string): string {
   return rev.replace(/^origin\//, '');
 }
 
+// env, in every git call below, is the store's git environment for the run (gitEnv), which drops what would point git
+// at another repository.
 async function hasCommit(cwd: string, env: Env, sha: string): Promise<boolean> {
-  return (await gitAsync(['cat-file', '-e', `${sha}^{commit}`], cwd, env)).code === 0;
-}
-
-// env is the store's git environment for the run (gitEnv), which drops what would point git at another repository.
-function gitAsync(
-  args: readonly string[],
-  cwd: string,
-  env: Env,
-): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn('git', args, { cwd, env });
-    const out: Buffer[] = [];
-    const err: Buffer[] = [];
-    child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
-    child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
-    child.on('error', reject);
-    // Stryker disable next-line LzNodeEventName: exit differs from close only when it fires before stdout is fully read, which no test can force
-    child.on('close', (code) => {
-      resolvePromise({
-        // Stryker disable next-line LzJsNumericLiteral: a code is null only when a signal ends git, which no input to the census causes
-        code: code ?? 2,
-        stdout: Buffer.concat(out).toString('utf8'),
-        stderr: Buffer.concat(err).toString('utf8'),
-      });
-    });
-  });
+  return (await runGitAsync(cwd, ['cat-file', '-e', `${sha}^{commit}`], env)).code === 0;
 }
 
 function pathspecs(paths: readonly string[], exclude: readonly string[]): string[] {
@@ -240,7 +216,7 @@ async function grepRevision(
   specs: readonly string[],
   what: string,
 ): Promise<readonly string[]> {
-  const grep = await gitAsync(['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], cwd, env);
+  const grep = await runGitAsync(cwd, ['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], env);
 
   // git grep exits 1 when nothing matches; anything else above 0 is an error.
   // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
@@ -251,20 +227,8 @@ async function grepRevision(
   return parseGrep(grep.stdout, sha);
 }
 
-export async function takeCensus(
-  cwd: string,
-  rev: string,
-  set: PatternSet,
-  now: Date,
-  env: Env = process.env,
-): Promise<Census> {
-  const parsed = await gitAsync(['rev-parse', '--verify', `${rev}^{commit}`], cwd, env);
-
-  if (parsed.code !== 0) {
-    throw new Error(`git rev-parse ${rev}: ${parsed.stderr.trim()}`);
-  }
-
-  const sha = parsed.stdout.trim();
+export async function takeCensus(cwd: string, rev: string, set: PatternSet, now: Date, env: Env): Promise<Census> {
+  const sha = await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env);
   const results = await Promise.all(
     set.patterns.map(
       async (pattern) =>
@@ -519,14 +483,11 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     behind:
       previousSha !== null &&
       previousSha !== after.sha &&
-      (await gitAsync(['merge-base', '--is-ancestor', after.sha, previousSha], io.cwd, env)).code === 0,
+      (await runGitAsync(io.cwd, ['merge-base', '--is-ancestor', after.sha, previousSha], env)).code === 0,
     commits:
       previousSha === null
         ? null
-        : Number(
-            (await gitAsync(['rev-list', '--no-merges', '--count', `${previousSha}..${after.sha}`], io.cwd, env))
-              .stdout,
-          ),
+        : Number(await gitAsync(io.cwd, ['rev-list', '--no-merges', '--count', `${previousSha}..${after.sha}`], env)),
     grew,
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
