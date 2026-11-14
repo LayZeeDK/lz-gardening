@@ -138,10 +138,11 @@ function extraPatterns(
     return { text: readFileSync(siteFile, 'utf8'), source: siteFile };
   }
 
-  return recorded?.patterns === undefined
-    ? undefined
-    : { text: recorded.patterns, source: `${censusRef}:patterns.json` };
+  return recorded?.patterns === undefined ? undefined : { text: recorded.patterns, source: censusPatterns };
 }
+
+// Named with the way out, as every clone reads the shared census's patterns until the site has its own.
+const censusPatterns = `${censusRef}:patterns.json (a .garden/patterns.json written in the site is read instead)`;
 
 function branchName(rev: string): string {
   return rev.replace(/^origin\//, '');

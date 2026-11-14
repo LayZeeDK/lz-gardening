@@ -291,7 +291,7 @@ test('a previous census of a commit this checkout lacks reports no previous sha,
   assert.equal(summaryOf(result.stdout).get('previousSha'), null);
 });
 
-test('malformed patterns carried by the recorded census are refused, naming the census as their source', async (t) => {
+test('malformed patterns carried by the recorded census are refused, naming the census and the way out', async (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
   writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha), '{"patterns": "x"}\n');
@@ -301,7 +301,11 @@ test('malformed patterns carried by the recorded census are refused, naming the 
 
   assert.deepEqual(
     [result.status, result.stderr],
-    [2, 'census: refs/garden/census:patterns.json: "patterns" must be an array\n'],
+    [
+      2,
+      'census: refs/garden/census:patterns.json (a .garden/patterns.json written in the site is read instead):' +
+        ' "patterns" must be an array\n',
+    ],
   );
 });
 
