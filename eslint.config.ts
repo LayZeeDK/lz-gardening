@@ -29,7 +29,7 @@ export default tseslint.config(
         {
           selector: 'FunctionDeclaration[id.name="isRecord"], VariableDeclarator[id.name="isRecord"]',
           message:
-            'isRecord is defined once, in garden/scripts/log.ts: import { isRecord } from it instead of redefining it.',
+            'isRecord is defined once, in lz-garden/scripts/log.ts: import { isRecord } from it instead of redefining it.',
         },
       ],
     },
