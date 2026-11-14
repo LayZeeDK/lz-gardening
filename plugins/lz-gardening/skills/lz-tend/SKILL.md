@@ -70,7 +70,10 @@ claim is yours and shared. Exit 1 stops the pass: report its line as it is (`tak
 ## 2. Find the root cause
 
 Read every open weed at the base (`git show <base>:<path>`) and the commit that planted it (`--source`).
-Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? A class
+Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? For
+copies (a helper defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that
+pins the copies alike can say a copy must stay (a file loaded or copied alone, which cannot import the shared one).
+Such a copy is kept, not removed, and the check pins the copies instead. A class
 whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
 each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule too narrow, a
 suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
