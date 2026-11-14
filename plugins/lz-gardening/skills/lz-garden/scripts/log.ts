@@ -15,6 +15,8 @@ const controlsAndLineBreaks = String.raw`\p{Cc}\p{Zl}\p{Zp}`;
 const bidiControls = String.raw`\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}`;
 export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiControls}]`, 'u');
 
+// The event fields the scripts print. The log reader skips an event with an unprintable character in one of them, so
+// these print as read; text from anywhere else (paths, git's messages, census data) goes through escapeUnprintable.
 const printedFields: readonly string[] = ['id', 'where', 'source', 'note', 'check', 'by', 'holder'];
 
 export function weedId(weedClass: string, where: string, source: string): string {

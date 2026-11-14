@@ -32,7 +32,7 @@ export function claimRefusal(site: Site, weedClass: string, pre: SyncResult, now
   }
 
   if (owner.writer !== site.writer) {
-    return `${weedClass} is claimed by ${escapeUnprintable(owner.holder)} until ${owner.until}`;
+    return `${weedClass} is claimed by ${owner.holder} until ${owner.until}`;
   }
 
   return undefined;

@@ -440,7 +440,7 @@ function reportSync(io: Io, result: SyncResult): void {
   }
 
   result.yielded.forEach(({ claim, owner }) => {
-    io.err(`site: gave back the claim of ${claim.class}; ${escapeUnprintable(owner.holder)} holds it\n`);
+    io.err(`site: gave back the claim of ${claim.class}; ${owner.holder} holds it\n`);
   });
   result.divergedBeds.forEach((bed) => {
     io.err(`site: ${escapeUnprintable(bed)}\n`);

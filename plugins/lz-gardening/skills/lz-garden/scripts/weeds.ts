@@ -352,7 +352,7 @@ function releasesOfClaim(events: readonly GardenEvent[], draft: EventDraft<Claim
 }
 
 function takenLine(owner: ClaimEvent): string {
-  return `taken ${owner.class} by ${escapeUnprintable(owner.holder)} until ${owner.until}\n`;
+  return `taken ${owner.class} by ${owner.holder} until ${owner.until}\n`;
 }
 
 // Stryker disable next-line LzJsNumericLiteral: how many classes a claim without --class tries is policy
@@ -581,7 +581,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       write(`${'class'.padEnd(36)} open places regrown layer first-seen tending`);
 
       for (const group of groups) {
-        const tending = escapeUnprintable(garden.claims.get(group.class)?.holder ?? '-');
+        const tending = garden.claims.get(group.class)?.holder ?? '-';
         write(
           `${group.class.padEnd(36)} ${String(group.open).padStart(4)} ${String(group.places).padStart(6)} ${String(group.regrown).padStart(7)} ${String(group.layer ?? '-').padStart(5)} ${group.firstAt.slice(0, 10)} ${tending}`,
         );
