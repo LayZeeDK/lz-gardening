@@ -9,7 +9,7 @@ import { eventPath } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
 import { logRef, openSite } from './store-log.ts';
 import { censusRef, writePendingCensus } from './store-census.ts';
-import { mergeShared, sync } from './store-sync.ts';
+import { mergeShared, rejected, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
@@ -789,6 +789,16 @@ test("a sync whose fetch finds a fetched ref's lock left behind ends behind with
   assert.deepEqual(
     [result.state, result.reason?.includes("cannot lock ref 'refs/garden-shared/log'")],
     ['behind', true],
+  );
+});
+
+test('a push origin refused for a reason that only mentions a lock lost no race; one git could not lock a ref for did', () => {
+  assert.deepEqual(
+    [
+      rejected('!\trefs/garden/log:refs/garden/log\t[remote rejected] (repository is locked for maintenance)'),
+      rejected("!\trefs/garden/log:refs/garden/log\t[remote rejected] (cannot lock ref 'refs/garden/log': x)"),
+    ],
+    [false, true],
   );
 });
 

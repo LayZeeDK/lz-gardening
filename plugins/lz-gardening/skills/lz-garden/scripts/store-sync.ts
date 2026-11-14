@@ -225,9 +225,10 @@ function sleep(ms: number): void {
 
 // A push lost to another writer: a fast-forward or lease refused by this git, or the remote's ref moved or locked
 // under it, which an atomic push reports as a failed transaction. Only a ref the push left as it was has such a summary.
-const lostRace = /\[rejected\]|\[remote rejected\] \(.*(?:lock|old value|failed to update|atomic transaction failed)/;
+const lostRace =
+  /\[rejected\]|\[remote rejected\] \(.*(?:cannot lock ref|old value|failed to update|atomic transaction failed)/;
 
-function rejected(porcelain: string): boolean {
+export function rejected(porcelain: string): boolean {
   return [...pushReport(porcelain).values()].some(({ summary }) => lostRace.test(summary));
 }
 
