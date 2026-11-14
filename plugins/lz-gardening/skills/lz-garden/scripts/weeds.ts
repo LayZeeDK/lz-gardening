@@ -92,7 +92,9 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
 }
 
-const fromRootDriveOrHome = /^(?:[/\\~]|[a-z]:(?!\d+$))/i;
+// `c:` starts a path on a Windows drive, while `a:12` is the file a at line 12.
+const driveLetter = /[a-z]:(?!\d+$)/;
+const fromRootDriveOrHome = new RegExp(`^(?:[/\\\\~]|${driveLetter.source})`, 'i');
 const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;
 function notRepositoryRelative(path: string): boolean {
   return fromRootDriveOrHome.test(path) || throughParent.test(path);
@@ -272,8 +274,9 @@ function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: Sync
   const holder = holderOf(site);
   reportDivergedBeds(io, 'claim', sync(site, { ...seams, attempts: syncTries.quick }, now).divergedBeds);
   let owner: ClaimEvent | undefined;
+  const rounds = wanted === null ? claimRounds : 1;
 
-  for (let round = 1; round <= (wanted === null ? claimRounds : 1); round += 1) {
+  for (let round = 1; round <= rounds; round += 1) {
     const planned = append(
       site,
       (replica) => planClaim(eventsReportingSkipped(io, replica), wanted, site.writer, holder, now),
