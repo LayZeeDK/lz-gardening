@@ -83,7 +83,7 @@ test('a log holding more than 1 MiB of events still reads', (t) => {
   const { dir } = planted(t);
   const site = openSite(dir);
   const note = 'x'.repeat(200 * 1024);
-  append(site, () => ({ drafts: Array.from({ length: 6 }, (_, index) => addDraft(index, note)), result: null }), now);
+  append(site, () => ({ drafts: Array.from({ length: 6 }, (_, index) => addDraft(index, note)) }), now);
 
   assert.equal(readLog(site).events.length, 6);
 });
@@ -91,7 +91,7 @@ test('a log holding more than 1 MiB of events still reads', (t) => {
 test('a submodule entry in the log is skipped and named, and the events beside it still read', (t) => {
   const { dir, garden } = planted(t);
   const site = openSite(dir);
-  append(site, () => ({ drafts: [addDraft(1)], result: null }), now);
+  append(site, () => ({ drafts: [addDraft(1)] }), now);
   writeEntriesToLogByHand(garden, [`160000 ${'1'.repeat(40)}\tevents/50/sub`]);
   const replica = readLog(site);
 
@@ -104,7 +104,7 @@ test('a submodule entry in the log is skipped and named, and the events beside i
 test('an event file whose object the site does not hold is skipped and named, and the events beside it still read', (t) => {
   const { dir, garden } = planted(t);
   const site = openSite(dir);
-  append(site, () => ({ drafts: [addDraft(1)], result: null }), now);
+  append(site, () => ({ drafts: [addDraft(1)] }), now);
   writeEntriesToLogByHand(garden, [`100644 ${'1'.repeat(40)}\tevents/50/absent.json`]);
   const replica = readLog(site);
 
@@ -119,7 +119,7 @@ test('an append to a log naming an event file the site does not hold lands, and 
   const site = openSite(dir);
   writeEntriesToLogByHand(garden, [`100644 ${'1'.repeat(40)}\tevents/50/absent.json`]);
 
-  append(site, () => ({ drafts: [addDraft(1)], result: null }), now);
+  append(site, () => ({ drafts: [addDraft(1)] }), now);
   const replica = readLog(site);
 
   assert.deepEqual(
@@ -150,7 +150,7 @@ test('an append on a log holding the largest clock a whole number allows is refu
   writeToLogByHand(garden, eventPath(uuid), JSON.stringify(top));
   const tip = git(garden, ['rev-parse', logRef]);
 
-  assert.throws(() => append(site, () => ({ drafts: [addDraft(2)], result: null }), now), {
+  assert.throws(() => append(site, () => ({ drafts: [addDraft(2)] }), now), {
     message: `${logRef} holds clock 9007199254740991; the next clock would pass the largest whole number`,
   });
   assert.equal(git(garden, ['rev-parse', logRef]), tip);
@@ -188,7 +188,7 @@ test('an append whose log another writer moves after the read plans again on the
         moved = moveLog(garden);
       }
 
-      return { drafts: [addDraft(1)], result: null };
+      return { drafts: [addDraft(1)] };
     },
     now,
   );
@@ -215,7 +215,7 @@ test('an append whose log moves after each of its tries gives up after that many
             moveLog(garden);
           }
 
-          return { drafts: [addDraft(1)], result: null };
+          return { drafts: [addDraft(1)] };
         },
         now,
         3,
@@ -241,7 +241,7 @@ test('an append given fewer than one try still gives up after its first plan whe
             moveLog(garden);
           }
 
-          return { drafts: [addDraft(1)], result: null };
+          return { drafts: [addDraft(1)] };
         },
         now,
         0,
@@ -264,7 +264,7 @@ test('an append whose ref stays locked while the log has not moved throws git me
         () => {
           plans += 1;
 
-          return { drafts: [addDraft(1)], result: null };
+          return { drafts: [addDraft(1)] };
         },
         now,
       ),
@@ -273,21 +273,21 @@ test('an append whose ref stays locked while the log has not moved throws git me
   assert.equal(plans, 1);
 });
 
-test('an append whose plan adds no events returns its result and leaves the log where it was', (t) => {
+test('an append whose plan adds no events returns that plan and leaves the log where it was', (t) => {
   const { dir, garden } = planted(t);
   const site = openSite(dir);
   const tip = git(garden, ['rev-parse', logRef]);
 
   assert.deepEqual(
-    [append(site, () => ({ drafts: [], result: 'kept' }), now), git(garden, ['rev-parse', logRef])],
-    ['kept', tip],
+    [append(site, () => ({ drafts: [], said: 'kept' }), now), git(garden, ['rev-parse', logRef])],
+    [{ drafts: [], said: 'kept' }, tip],
   );
 });
 
 test('an event file that does not parse is skipped with its reason, and the events beside it still read', (t) => {
   const { dir, garden } = planted(t);
   const site = openSite(dir);
-  append(site, () => ({ drafts: [addDraft(1)], result: null }), now);
+  append(site, () => ({ drafts: [addDraft(1)] }), now);
   writeToLogByHand(garden, 'events/50/broken.json', '{"uuid":');
   const replica = readLog(site);
 
@@ -314,7 +314,7 @@ test('an append waits for a ref lock another writer releases within a second, an
       );
       released = new Promise((resolve) => releaser.on('close', resolve));
 
-      return { drafts: [addDraft(1)], result: null };
+      return { drafts: [addDraft(1)] };
     },
     now,
   );
@@ -630,7 +630,7 @@ test('an append commits as lz-gardening with no address, whatever user.name and 
 
 function appendIn(dir: string, env: NodeJS.ProcessEnv): void {
   inRun({ ...process.env, ...env }, () => {
-    append(openSite(dir), () => ({ drafts: [addDraft(1)], result: null }), now);
+    append(openSite(dir), () => ({ drafts: [addDraft(1)] }), now);
   });
 }
 
@@ -699,7 +699,7 @@ test("an append starts git only to read the log, the checkout's settings for who
     syncBuiltinESMExports();
   });
 
-  append(site, () => ({ drafts: [addDraft(1)], result: null }), now);
+  append(site, () => ({ drafts: [addDraft(1)] }), now);
 
   assert.deepEqual(
     spawned.mock.calls.map(({ arguments: [, args] }) =>

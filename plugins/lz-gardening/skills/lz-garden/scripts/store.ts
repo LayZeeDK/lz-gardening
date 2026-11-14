@@ -779,17 +779,9 @@ function giveBackLosingClaims(
     return { lost, released: 0 };
   }
 
-  const released = append(
-    site,
-    (replica) => {
-      const drafts = releasesFor(replica.events, lost);
+  const { drafts } = append(site, (replica) => ({ drafts: releasesFor(replica.events, lost) }), now);
 
-      return { drafts, result: drafts.length };
-    },
-    now,
-  );
-
-  return { lost, released };
+  return { lost, released: drafts.length };
 }
 
 function censusOffOrigin(site: Site, ref: string): string | undefined {
@@ -1327,18 +1319,21 @@ function refuseMachinePaths(site: Site, drafts: readonly EventDraft[]): void {
   }
 }
 
-export function append<T>(
+// Appends the drafts a plan of the current log gives, planning again on the new log while another writer moves it,
+// and returns the plan that landed.
+export function append<T extends { readonly drafts: readonly EventDraft[] }>(
   site: Site,
-  plan: (replica: Replica) => { readonly drafts: readonly EventDraft[]; readonly result: T },
+  plan: (replica: Replica) => T,
   now: Date,
   tries = appendTries,
 ): T {
   for (let attempt = 1; ; attempt += 1) {
     const replica = readLog(site);
-    const { drafts, result } = plan(replica);
+    const planned = plan(replica);
+    const { drafts } = planned;
 
     if (drafts.length === 0) {
-      return result;
+      return planned;
     }
 
     refuseMachinePaths(site, drafts);
@@ -1358,7 +1353,7 @@ export function append<T>(
         events.map((event) => ({ path: eventPath(event.uuid), text: JSON.stringify(event) })),
       )
     ) {
-      return result;
+      return planned;
     }
 
     if (attempt >= tries) {

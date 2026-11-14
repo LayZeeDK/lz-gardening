@@ -385,7 +385,7 @@ function recordSeed(cwd: string, sha: string): void {
   const now = new Date();
   append(
     openSite(cwd),
-    (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }], result: undefined }),
+    (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }] }),
     now,
   );
 }

@@ -122,13 +122,16 @@ export interface AddInput {
   readonly layer: number | null;
 }
 
+// Each planner's outcome carries the drafts it writes, none for an outcome that writes nothing, so append writes
+// what the plan decided and no caller decides it again.
+
 export type AddOutcome =
-  | { readonly said: 'seen' | 'kept'; readonly id: string }
-  | { readonly said: 'added'; readonly id: string; readonly draft: EventDraft<AddEvent> }
+  | { readonly said: 'seen' | 'kept'; readonly id: string; readonly drafts: readonly [] }
+  | { readonly said: 'added'; readonly id: string; readonly drafts: readonly [EventDraft<AddEvent>] }
   | {
       readonly said: 'regrown';
       readonly id: string;
-      readonly draft: EventDraft<AddEvent>;
+      readonly drafts: readonly [EventDraft<AddEvent>];
       readonly after: TendedClose;
     };
 
@@ -138,14 +141,14 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
   const status = replay(events, now).statusOf(id);
 
   if (status?.state === 'open') {
-    return { said: 'seen', id };
+    return { said: 'seen', id, drafts: [] };
   }
 
   const closes = events.filter((event) => event.op === 'close').toSorted(byClock);
   const closesOfId = closes.filter((close) => close.ids.includes(id));
 
   if (closesOfId.some((close) => close.kind === 'kept')) {
-    return { said: 'kept', id };
+    return { said: 'kept', id, drafts: [] };
   }
 
   const tend = latestTendedClose(closes, input.class);
@@ -158,8 +161,8 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
   });
 
   return tend === undefined
-    ? { said: 'added', id, draft: draft(null) }
-    : { said: 'regrown', id, draft: draft(tend.uuid), after: tend };
+    ? { said: 'added', id, drafts: [draft(null)] }
+    : { said: 'regrown', id, drafts: [draft(tend.uuid)], after: tend };
 }
 
 export function latestTendedClose(events: readonly GardenEvent[], weedClass: string): TendedClose | undefined {
@@ -177,8 +180,8 @@ export type CloseRequest = { readonly target: { readonly id: string } | { readon
 );
 
 export type CloseOutcome =
-  | { readonly said: 'nothing open' }
-  | { readonly said: 'claimed by another'; readonly claim: ClaimEvent }
+  | { readonly said: 'nothing open'; readonly drafts: readonly [] }
+  | { readonly said: 'claimed by another'; readonly claim: ClaimEvent; readonly drafts: readonly [] }
   | { readonly said: 'closed' | 'kept'; readonly closed: readonly string[]; readonly drafts: readonly EventDraft[] };
 
 export function planClose(
@@ -193,13 +196,13 @@ export function planClose(
   const first = closing[0];
 
   if (first === undefined) {
-    return { said: 'nothing open' };
+    return { said: 'nothing open', drafts: [] };
   }
 
   const held = heldByAnother(garden, first.class, writer);
 
   if (held !== undefined) {
-    return { said: 'claimed by another', claim: held };
+    return { said: 'claimed by another', claim: held, drafts: [] };
   }
 
   const closed = closing.map((weed) => weed.id);
@@ -215,12 +218,13 @@ export function planClose(
 }
 
 export type ReleasePlan =
-  { readonly said: 'released'; readonly drafts: readonly EventDraft[] } | { readonly said: 'no claim' };
+  | { readonly said: 'released'; readonly drafts: readonly EventDraft[] }
+  | { readonly said: 'no claim'; readonly drafts: readonly [] };
 
 export function planRelease(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): ReleasePlan {
   const drafts = releasesOf(events, weedClass, writer, now);
 
-  return drafts.length === 0 ? { said: 'no claim' } : { said: 'released', drafts };
+  return drafts.length === 0 ? { said: 'no claim', drafts: [] } : { said: 'released', drafts };
 }
 
 function releasesOf(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): EventDraft[] {
@@ -236,10 +240,10 @@ export const claimLifetimeMs = 6 * 60 * 60 * 1000;
 export const notTendedDirectly: readonly string[] = ['stale-verification', 'repeated-lesson'];
 
 export type ClaimPlan =
-  | { readonly said: 'claimed'; readonly class: string; readonly draft: EventDraft<ClaimEvent> }
-  | { readonly said: 'taken'; readonly claim: ClaimEvent }
-  | { readonly said: 'nothing ready' }
-  | { readonly said: 'nothing open'; readonly class: string };
+  | { readonly said: 'claimed'; readonly class: string; readonly drafts: readonly [EventDraft<ClaimEvent>] }
+  | { readonly said: 'taken'; readonly claim: ClaimEvent; readonly drafts: readonly [] }
+  | { readonly said: 'nothing ready'; readonly drafts: readonly [] }
+  | { readonly said: 'nothing open'; readonly class: string; readonly drafts: readonly [] };
 
 /** The ready classes a claim without a class may take: not tended directly and claimed by no other writer. */
 export function claimableClasses(garden: Garden, writer: string): readonly string[] {
@@ -263,22 +267,22 @@ export function planClaim(
   const chosen = wanted ?? claimableClasses(garden, writer)[0];
 
   if (chosen === undefined) {
-    return { said: 'nothing ready' };
+    return { said: 'nothing ready', drafts: [] };
   }
 
   const held = heldByAnother(garden, chosen, writer);
 
   if (held !== undefined) {
-    return { said: 'taken', claim: held };
+    return { said: 'taken', claim: held, drafts: [] };
   }
 
   if (!garden.open.some((weed) => weed.class === chosen)) {
-    return { said: 'nothing open', class: chosen };
+    return { said: 'nothing open', class: chosen, drafts: [] };
   }
 
   const until = new Date(now.getTime() + claimLifetimeMs).toISOString();
 
-  return { said: 'claimed', class: chosen, draft: { op: 'claim', class: chosen, writer, holder, until } };
+  return { said: 'claimed', class: chosen, drafts: [{ op: 'claim', class: chosen, writer, holder, until }] };
 }
 
 export interface LostClaim {

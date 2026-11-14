@@ -134,10 +134,7 @@ function crashedClaim(dir: string, at: Date): void {
   const until = new Date(at.getTime() + claimLifetimeMs).toISOString();
   append(
     crashed,
-    () => ({
-      drafts: [{ op: 'claim', class: 'any-type', writer: crashed.writer, holder: 'crashed', until }],
-      result: undefined,
-    }),
+    () => ({ drafts: [{ op: 'claim', class: 'any-type', writer: crashed.writer, holder: 'crashed', until }] }),
     at,
   );
 }

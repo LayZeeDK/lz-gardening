@@ -375,11 +375,7 @@ function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: Sync
   for (let round = 1; round <= (wanted === null ? claimRounds : 1); round += 1) {
     const planned = append(
       site,
-      (replica) => {
-        const plan = planClaim(eventsReportingSkipped(io, replica), wanted, site.writer, holder, now);
-
-        return { drafts: plan.said === 'claimed' ? [plan.draft] : [], result: plan };
-      },
+      (replica) => planClaim(eventsReportingSkipped(io, replica), wanted, site.writer, holder, now),
       now,
     );
 
@@ -407,7 +403,7 @@ function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: Sync
     const shared = sync(site, { ...seams, attempts: 5 }, now);
 
     if (!isShared(shared)) {
-      append(site, (replica) => ({ drafts: releasesOfClaim(replica.events, planned.draft), result: null }), now);
+      append(site, (replica) => ({ drafts: releasesOfClaim(replica.events, planned.drafts[0]) }), now);
       const pending = isShared(sync(site, { ...seams, attempts: 1 }, now)) ? '' : '; release pending';
       io.out(`cannot claim ${planned.class}: ${shared.state}${reasonOf(shared)}${pending}\n`);
 
@@ -476,18 +472,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       }
 
       const site = openSite(io.cwd);
-      const outcome = append(
-        site,
-        (replica) => {
-          const planned = planAdd(eventsReportingSkipped(io, replica), input, now);
-
-          return {
-            drafts: planned.said === 'added' || planned.said === 'regrown' ? [planned.draft] : [],
-            result: planned,
-          };
-        },
-        now,
-      );
+      const outcome = append(site, (replica) => planAdd(eventsReportingSkipped(io, replica), input, now), now);
       write(addStatus(outcome, (tended) => checkOffBase(io, site.path, tended)));
 
       return 0;
@@ -518,14 +503,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const outcome = append(
         site,
-        (replica) => {
-          const planned = planClose(eventsReportingSkipped(io, replica), request, site.writer, now);
-
-          return {
-            drafts: planned.said === 'closed' || planned.said === 'kept' ? planned.drafts : [],
-            result: planned,
-          };
-        },
+        (replica) => planClose(eventsReportingSkipped(io, replica), request, site.writer, now),
         now,
       );
 
@@ -580,11 +558,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       const site = openSite(io.cwd);
       const planned = append(
         site,
-        (replica) => {
-          const plan = planRelease(eventsReportingSkipped(io, replica), weedClass, site.writer, now);
-
-          return { drafts: plan.said === 'released' ? plan.drafts : [], result: plan };
-        },
+        (replica) => planRelease(eventsReportingSkipped(io, replica), weedClass, site.writer, now),
         now,
       );
 

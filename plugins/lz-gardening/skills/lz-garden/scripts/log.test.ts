@@ -301,21 +301,21 @@ test('an add of a weed the log has never seen is added, and records that its wri
   assert.deepEqual(planAdd([], input(), now), {
     said: 'added',
     id,
-    draft: { op: 'add', id, ...input(), sawCloses: [], sawTend: null },
+    drafts: [{ op: 'add', id, ...input(), sawCloses: [], sawTend: null }],
   });
 });
 
 test('an add of a weed the log shows open is seen and writes nothing', () => {
   const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
 
-  assert.deepEqual(planAdd([add('a1', 1, id)], input(), now), { said: 'seen', id });
+  assert.deepEqual(planAdd([add('a1', 1, id)], input(), now), { said: 'seen', id, drafts: [] });
 });
 
 test('an add of a weed any kept close names is kept and writes nothing, even after a later close of another kind', () => {
   const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
   const events = [add('a1', 1, id), close('a2', 2, [id], 'kept'), close('b2', 3, [id], 'one-off')];
 
-  assert.deepEqual(planAdd(events, input(), now), { said: 'kept', id });
+  assert.deepEqual(planAdd(events, input(), now), { said: 'kept', id, drafts: [] });
 });
 
 test('an add of a weed closed before records every close of it its writer saw', () => {
@@ -324,7 +324,7 @@ test('an add of a weed closed before records every close of it its writer saw', 
 
   const outcome = planAdd(events, input(), now);
 
-  assert.deepEqual(outcome.said === 'added' ? outcome.draft.sawCloses : null, ['a2', 'b2']);
+  assert.deepEqual(outcome.said === 'added' ? outcome.drafts[0].sawCloses : null, ['a2', 'b2']);
 });
 
 test('an add records only the closes that name its weed, so a keep of another weed neither keeps it nor is seen', () => {
@@ -334,7 +334,7 @@ test('an add records only the closes that name its weed, so a keep of another we
   assert.deepEqual(planAdd(events, input(), now), {
     said: 'added',
     id,
-    draft: { op: 'add', id, ...input(), sawCloses: [], sawTend: null },
+    drafts: [{ op: 'add', id, ...input(), sawCloses: [], sawTend: null }],
   });
 });
 
@@ -350,7 +350,7 @@ test('an add of a class a tend pass closed is regrown and records the latest ten
   const outcome = planAdd(events, input(), now);
 
   assert.deepEqual(
-    [outcome.said, outcome.said === 'regrown' ? [outcome.draft.sawTend, outcome.after.uuid] : null],
+    [outcome.said, outcome.said === 'regrown' ? [outcome.drafts[0].sawTend, outcome.after.uuid] : null],
     ['regrown', ['t4', 't4']],
   );
 });
@@ -358,7 +358,10 @@ test('an add of a class a tend pass closed is regrown and records the latest ten
 const oneOff = { kind: 'one-off', by: 'generated code', check: null } as const;
 
 test('a close that finds nothing open says so and writes nothing', () => {
-  assert.deepEqual(planClose([], { target: { id: 'x' }, ...oneOff }, 'writer-a', now), { said: 'nothing open' });
+  assert.deepEqual(planClose([], { target: { id: 'x' }, ...oneOff }, 'writer-a', now), {
+    said: 'nothing open',
+    drafts: [],
+  });
 });
 
 test('a close by id writes one close event naming that open weed and its class', () => {
@@ -395,6 +398,7 @@ test('a close is refused while another writer holds an active claim of the class
   assert.deepEqual(planClose([add('a1', 1, 'x'), held], { target: { id: 'x' }, ...oneOff }, 'writer-a', now), {
     said: 'claimed by another',
     claim: held,
+    drafts: [],
   });
 });
 
@@ -482,13 +486,17 @@ test('a release by the holder writes one release per live claim it holds of the 
 });
 
 test('a release by a writer that holds no claim of the class writes nothing and says so', () => {
-  assert.deepEqual(planRelease([claim('cb', 1, 'writer-b')], 'any-type', 'writer-a', now), { said: 'no claim' });
+  assert.deepEqual(planRelease([claim('cb', 1, 'writer-b')], 'any-type', 'writer-a', now), {
+    said: 'no claim',
+    drafts: [],
+  });
 });
 
 test('a claim of a named class with nothing open says nothing open and writes nothing', () => {
   assert.deepEqual(planClaim([add('a1', 1, 'x', { class: 'other' })], 'any-type', 'writer-a', 'Ada', now), {
     said: 'nothing open',
     class: 'any-type',
+    drafts: [],
   });
 });
 
@@ -499,7 +507,11 @@ test('a claim of a named class with one open weed is claimed', () => {
 test('a claim of a class another writer holds is taken', () => {
   const held = claim('c1', 1, 'writer-b');
 
-  assert.deepEqual(planClaim([held], 'any-type', 'writer-a', 'Ada on laptop', now), { said: 'taken', claim: held });
+  assert.deepEqual(planClaim([held], 'any-type', 'writer-a', 'Ada on laptop', now), {
+    said: 'taken',
+    claim: held,
+    drafts: [],
+  });
 });
 
 test('a claim of a free class is claimed for six hours from now', () => {
@@ -508,13 +520,15 @@ test('a claim of a free class is claimed for six hours from now', () => {
   assert.deepEqual(planClaim(events, 'any-type', 'writer-a', 'Ada on laptop', now), {
     said: 'claimed',
     class: 'any-type',
-    draft: {
-      op: 'claim',
-      class: 'any-type',
-      writer: 'writer-a',
-      holder: 'Ada on laptop',
-      until: '2026-11-11T18:00:00.000Z',
-    },
+    drafts: [
+      {
+        op: 'claim',
+        class: 'any-type',
+        writer: 'writer-a',
+        holder: 'Ada on laptop',
+        until: '2026-11-11T18:00:00.000Z',
+      },
+    ],
   });
 });
 
@@ -524,13 +538,16 @@ test('a claim by the writer that holds the class renews it with a fresh until', 
   const outcome = planClaim(events, 'any-type', 'writer-a', 'Ada on laptop', now);
 
   assert.deepEqual(
-    [outcome.said, outcome.said === 'claimed' ? outcome.draft.until : null],
+    [outcome.said, outcome.said === 'claimed' ? outcome.drafts[0].until : null],
     ['claimed', '2026-11-11T18:00:00.000Z'],
   );
 });
 
 test('a claim of the next ready class finds nothing ready when no class has two open weeds', () => {
-  assert.deepEqual(planClaim([add('a1', 1, 'x')], null, 'writer-a', 'Ada on laptop', now), { said: 'nothing ready' });
+  assert.deepEqual(planClaim([add('a1', 1, 'x')], null, 'writer-a', 'Ada on laptop', now), {
+    said: 'nothing ready',
+    drafts: [],
+  });
 });
 
 test('a claim of the next ready class finds nothing ready when a class has two open weeds in one file', () => {
@@ -539,7 +556,7 @@ test('a claim of the next ready class finds nothing ready when a class has two o
     add('a2', 2, 'y', { where: 'src/panel.spec.ts:476' }),
   ];
 
-  assert.deepEqual(planClaim(events, null, 'writer-a', 'Ada on laptop', now), { said: 'nothing ready' });
+  assert.deepEqual(planClaim(events, null, 'writer-a', 'Ada on laptop', now), { said: 'nothing ready', drafts: [] });
 });
 
 test('a claim of the next ready class takes a class with two open weeds', () => {
@@ -568,7 +585,7 @@ test('a claim of the next ready class never picks stale-verification or repeated
     add(`a${String(index)}y`, 2, `${weedClass}-y`, { class: weedClass }),
   ]);
 
-  assert.deepEqual(planClaim(events, null, 'writer-a', 'Ada on laptop', now), { said: 'nothing ready' });
+  assert.deepEqual(planClaim(events, null, 'writer-a', 'Ada on laptop', now), { said: 'nothing ready', drafts: [] });
 });
 
 test('a claim of the next ready class takes the class with the most open weeds first, as groups lists them', () => {

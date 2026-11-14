@@ -57,7 +57,7 @@ function grow(events: readonly GardenEvent[], ...drafts: EventDraft[]): GardenEv
 
 function draftOf(outcome: AddOutcome): EventDraft<AddEvent> {
   if (outcome.said === 'added' || outcome.said === 'regrown') {
-    return outcome.draft;
+    return outcome.drafts[0];
   }
 
   throw new Error(`${outcome.said} plans no add`);
