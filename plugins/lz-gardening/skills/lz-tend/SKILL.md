@@ -169,7 +169,9 @@ weed of `weeds list --class <class>` that the check does not hold (a function th
 say): `weeds close --id <id> --keep "<reason>"` when it is deliberate or not this class's mistake, else
 `weeds close --id <id> --one-off "<reason>"`. Name each in the report. Then close the class:
 `weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
-check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). Like the keep and
+check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). `<short sha>` is
+the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your last commit: the close shares
+the bed only when it names the bed's tip; with any other commit the bed stays in the site. Like the keep and
 one-off closes, it exits 1 and closes nothing when its first sync is not `synced` or `local` or the claim is no
 longer this site's: stop and report its line; the bed stays for the next pass. It prints `closed <n>; <state>`: the
 close and the end of the claim land in the site's queue and, when the state is `synced`, on `origin`, followed by
