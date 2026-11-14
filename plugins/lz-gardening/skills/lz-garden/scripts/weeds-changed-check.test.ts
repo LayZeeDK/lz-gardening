@@ -5,9 +5,10 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { commit, git, repo } from './test-repo.ts';
-import { configEnv, writeCensus } from './test-site.ts';
+import { configEnv, site, writeCensus } from './test-site.ts';
 import { cli, eslintConfig, tendedBed } from './test-weeds.ts';
 import { weedId } from './log.ts';
+import { logRef } from './store-log.ts';
 
 test('a check whose file the base deleted after the bed landed is not on the base', (t) => {
   const check = { 'eslint.config.mjs': "export default [{ rules: { 'no-explicit-any': 'error' } }];\n" };
@@ -196,20 +197,55 @@ test('a check path holding glob characters names that one file, not the files th
 });
 
 test('a checkout cloned without every object never fetches for the label', (t) => {
-  const { dir } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   git(dir, ['config', 'uploadpack.allowFilter', 'true']);
   const partial = join(dirname(dir), 'partial');
-  git(dirname(dir), ['clone', '-q', '--filter=blob:none', `file://${dir.replaceAll('\\', '/')}`, partial]);
+  git(dirname(dir), [
+    'clone',
+    '-q',
+    '--filter=blob:none',
+    ...['-c', 'user.name=test', '-c', 'user.email=test@example.com'],
+    `file://${dir.replaceAll('\\', '/')}`,
+    partial,
+  ]);
+  const census = git(partial, ['rev-parse', 'HEAD']);
   const elsewhere = commit(dir, { 'src/c.ts': 'export const c = 1;\n' });
-  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
-  cli(dir, ['claim', '--class', 'any-type']);
-  cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${elsewhere}`, '--check', 'src/c.ts']);
+  [
+    ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'],
+    ['claim', '--class', 'any-type'],
+    ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${elsewhere}`, '--check', 'src/c.ts'],
+  ].forEach((args) => {
+    const ran = cli(dir, args);
+    assert.equal(ran.status, 0, `${args[0] ?? ''}: ${ran.stderr}`);
+  });
+  // The checkout has no origin, so its site shares the log with the checkout itself, the partial clone's origin.
+  git(garden, ['push', '-q', 'origin', logRef]);
+  const opened = site(partial, ['open', '--base', 'main']);
+  assert.equal(opened.status, 0, opened.stderr);
 
-  cli(partial, ['add', '--class', 'any-type', '--where', 'src/d.ts:1', '--source', 'commit:ddd4444']);
+  const added = cli(partial, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/d.ts:1',
+    '--source',
+    'commit:ddd4444',
+    '--census',
+    census,
+  ]);
 
   const fetched = spawnSync('git', ['cat-file', '-e', elsewhere], {
     cwd: partial,
     env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
   });
-  assert.notEqual(fetched.status, 0);
+  assert.deepEqual(
+    [added.status, added.stdout, fetched.status === 0],
+    [
+      0,
+      `regrown ${weedId('any-type', 'src/d.ts:1', 'commit:ddd4444')} after bed/any-type@${elsewhere} (check: src/c.ts, base unknown)\n`,
+      false,
+    ],
+    added.stderr,
+  );
 });
