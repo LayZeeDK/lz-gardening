@@ -54,7 +54,8 @@ nothing, and the scripts fail when they import a package.
   `npm ci` after it.
 - Run Nx as `npm exec -- nx`. A local Nx plugin, `tools/nx/claude-plugin.ts`, infers the plugin's `test`,
   `lockfile` and `mutate` targets and adds its lockfile's packages to the project graph, which
-  `@nx/dependency-checks` reads (ADR 0005).
+  `@nx/dependency-checks` reads (ADR 0005). Nx keeps the edges it drew until the files they come from change, so after
+  changing that plugin run `npm exec -- nx reset` before `npm run check`.
 
 Develop the scripts test-first, one `node:test` test per red-green-refactor cycle. Give each test its own state from a
 setup function it calls (a throwaway git repository for census tests), not shared `before` hooks. Mutation-test

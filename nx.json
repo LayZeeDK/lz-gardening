@@ -25,7 +25,8 @@
             "jsonc-eslint-parser"
           ]
         },
-        "{workspaceRoot}/tools/eslint-rules/**/*"
+        "{workspaceRoot}/tools/eslint-rules/**/*",
+        "{workspaceRoot}/tools/nx/claude-plugin.ts"
       ]
     },
     "typecheck": { "inputs": ["default", "^default", { "externalDependencies": ["typescript", "@types/node"] }] }
