@@ -39,8 +39,11 @@ user configured it (`lzGardening.name` and `lzGardening.email` name the garden's
 ## Scripts
 
 The scripts under `plugins/lz-gardening/skills/*/scripts/` are TypeScript in erasable syntax that Node.js 22.18+
-runs directly, with Node.js built-ins only. Develop them test-first, one `node:test` test per red-green-refactor
-cycle. Give each test its own state from a setup function it calls (a throwaway git repository for census tests),
+runs directly, with no build step. They may import npm packages that `plugins/lz-gardening/package.json` lists at an
+exact version, with the npm-written `package-lock.json` beside it to match: Claude Code installs a marketplace
+plugin's packages from those two files when it installs or updates the plugin, and installs nothing when they
+disagree. `--plugin-dir` installs nothing, so run `npm ci --prefix plugins/lz-gardening` before such a run. Develop
+them test-first, one `node:test` test per red-green-refactor cycle. Give each test its own state from a setup function it calls (a throwaway git repository for census tests),
 not shared `before` hooks. Mutation-test changes with StrykerJS: the command runner over `node --test`, or, on a
 machine with an `@layzee/stryker-node-test-runner` checkout, that runner and the checkout's mutators
 (`stryker.config.mjs` says how).
