@@ -2,8 +2,8 @@
 
 This plugin uses [Semantic Versioning](https://semver.org/). Its public interface is: the plugin name; the skill
 names and their slash commands; the agent name; who may invoke each skill; the arguments each skill takes; the
-garden site layout (the `refs/garden/log`, `refs/garden/census` and `refs/garden/pending/<sha>` refs, the `garden`
-branch, `.garden/patterns.json`, `bed/<class>` bed branches); the `refs/garden/log`, `refs/garden/census` and
+garden site layout (the `refs/garden/log`, `refs/garden/census`, `refs/garden/pending/<sha>` and
+`refs/garden-unpushed/beds/<class>` refs, the `garden` branch, `.garden/patterns.json`, `bed/<class>` bed branches); the `refs/garden/log`, `refs/garden/census` and
 `refs/garden/beds/<class>` refs the site shares on the repository's `origin`, and the `lzGardening.share`,
 `lzGardening.name` and `lzGardening.email` settings;
 the formats of the event files and
