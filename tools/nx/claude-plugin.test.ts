@@ -4,7 +4,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { type TestContext, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import {
   createDependencies,
   createNodes,
@@ -266,10 +265,10 @@ test('a manifest that names no plugin is refused, naming the manifest', async (t
   });
 });
 
-const cli = fileURLToPath(new URL('claude-plugin.ts', import.meta.url));
-
-function checkLockfile(root: string) {
-  return spawnSync(process.execPath, [cli, 'lockfile', root], { encoding: 'utf8' });
+function checkLockfile(...root: readonly string[]) {
+  return spawnSync(process.execPath, [join(import.meta.dirname, 'claude-plugin.ts'), 'lockfile', ...root], {
+    encoding: 'utf8',
+  });
 }
 
 test('a plugin with no lockfile fails the lockfile check, saying Claude Code installs nothing', (t) => {
@@ -354,7 +353,7 @@ test('the lockfile check runs npm without a deprecation warning', (t) => {
 });
 
 test('the lockfile check names its usage when it gets no plugin root', () => {
-  const { status, stderr } = spawnSync(process.execPath, [cli, 'lockfile'], { encoding: 'utf8' });
+  const { status, stderr } = checkLockfile();
 
   assert.equal(status, 2);
   assert.match(stderr, /^usage: node tools\/nx\/claude-plugin\.ts lockfile <plugin root>/);

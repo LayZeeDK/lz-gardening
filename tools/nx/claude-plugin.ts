@@ -109,7 +109,7 @@ export function lockfileDrift(packageJson: unknown, lockfile: Lockfile): readonl
   });
 }
 
-function scripts(pluginRoot: string): readonly string[] {
+function scriptNames(pluginRoot: string): readonly string[] {
   const files = globSync('skills/*/scripts/*.ts', { cwd: pluginRoot })
     .map((path) => basename(path))
     .filter((file) => !file.endsWith('.test.ts') && !file.startsWith('test-'));
@@ -117,7 +117,7 @@ function scripts(pluginRoot: string): readonly string[] {
   return [...new Set(files.map((file) => basename(file, '.ts').split('-')[0] ?? file))].sort();
 }
 
-function mutate(script: string): TargetConfiguration {
+function mutateTarget(script: string): TargetConfiguration {
   return {
     command: 'node --conditions=@layzee/source node_modules/@stryker-mutator/core/bin/stryker.js run',
     options: { env: { MUTATE: script } },
@@ -126,7 +126,7 @@ function mutate(script: string): TargetConfiguration {
   };
 }
 
-function pluginTargets(root: string, scriptNames: readonly string[]): Record<string, TargetConfiguration> {
+function pluginTargets(root: string, scripts: readonly string[]): Record<string, TargetConfiguration> {
   return {
     test: {
       command: 'node --test "skills/*/scripts/*.test.ts"',
@@ -147,8 +147,8 @@ function pluginTargets(root: string, scriptNames: readonly string[]): Record<str
       ],
       outputs: [],
     },
-    mutate: mutate('*'),
-    ...Object.fromEntries(scriptNames.map((script) => [`mutate-${script}`, mutate(script)])),
+    mutate: mutateTarget('*'),
+    ...Object.fromEntries(scripts.map((script) => [`mutate-${script}`, mutateTarget(script)])),
   };
 }
 
@@ -164,7 +164,7 @@ export const createNodes: CreateNodes = [
         throw new Error(`${manifest} names no plugin`);
       }
 
-      const targets = pluginTargets(root, scripts(join(context.workspaceRoot, root)));
+      const targets = pluginTargets(root, scriptNames(join(context.workspaceRoot, root)));
       const lockfile = readLockfile(join(context.workspaceRoot, root));
 
       return [
