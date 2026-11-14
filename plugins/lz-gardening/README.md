@@ -152,7 +152,8 @@ jobs:
           github_token: ${{ github.token }}
           plugin_marketplaces: https://github.com/LayZeeDK/lz-gardening.git
           plugins: lz-gardening@lz-gardening
-          prompt: /lz-gardening:lz-garden
+          # The checkout may have no origin/HEAD, so the tick is told the base.
+          prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
           claude_args: --permission-mode dontAsk
 ```
 
