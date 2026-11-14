@@ -397,7 +397,7 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   git(second.dir, ['config', 'lzGardening.share', 'true']);
   const base = git(second.dir, ['rev-parse', 'HEAD']);
   writePendingCensus(
-    second.garden,
+    { path: second.garden, checkout: second.dir },
     base,
     `${JSON.stringify({ rev: 'main', sha: base, takenAt: '', counts: {}, hits: {} })}\n`,
   );
@@ -530,7 +530,11 @@ test('syncs of one site at once that each adopt the shared census all exit 0', a
 test('syncs of one site at once that each record the same pending census all exit 0', async (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(garden, sha, JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }));
+  writePendingCensus(
+    { path: garden, checkout: dir },
+    sha,
+    JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }),
+  );
   const pending = git(garden, ['rev-parse', `refs/garden/pending/${sha}`]);
 
   const runs = await Promise.all(Array.from({ length: 4 }, () => syncProcess(dir, ['--census', sha])));

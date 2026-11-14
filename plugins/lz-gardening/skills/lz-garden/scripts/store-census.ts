@@ -11,7 +11,7 @@ import {
   runGit,
   waitForRefLocks,
 } from './store-git.ts';
-import { data, identity } from './store-log.ts';
+import { commitStream } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
 export const censusRef = 'refs/garden/census';
@@ -80,19 +80,19 @@ export interface StoredCensus {
   readonly patterns: string | undefined;
 }
 
-export function writePendingCensus(site: string, sha: string, text: string, patterns?: string): void {
-  const now = `@${String(Math.floor(Date.now() / 1000))} +0000`;
-  const checkout = site.slice(0, -'.garden'.length);
-  const stream = [
-    `commit ${pendingCensusRef(sha)}\n`,
-    identity(checkout, 'author', now),
-    identity(checkout, 'committer', now),
-    data('garden: census\n'),
-    `M 100644 inline census.json\n${data(text)}`,
-    ...(patterns === undefined ? [] : [`M 100644 inline patterns.json\n${data(patterns)}`]),
-    'done\n',
-  ].join('');
-  git(site, ['fast-import', '--quiet', '--done', '--force', '--date-format=rfc2822'], { input: stream });
+export function writePendingCensus(
+  site: Pick<Site, 'path' | 'checkout'>,
+  sha: string,
+  text: string,
+  patterns?: string,
+): void {
+  const files = [
+    { path: 'census.json', text },
+    ...(patterns === undefined ? [] : [{ path: 'patterns.json', text: patterns }]),
+  ];
+  git(site.path, ['fast-import', '--quiet', '--done', '--force', '--date-format=rfc2822'], {
+    input: commitStream(site, pendingCensusRef(sha), 'garden: census\n', files),
+  });
 }
 
 export function readCensusAt(site: string, ref: string): StoredCensus | null | 'not a census' {

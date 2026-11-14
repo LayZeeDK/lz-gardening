@@ -811,7 +811,8 @@ test('a census of a commit the recorded census descends from is behind the garde
 });
 
 function recordByHand(garden: string, sha: string, text: string): void {
-  writePendingCensus(garden, sha, text);
+  // The commit's identity is not under test, so it reads the site's config.
+  writePendingCensus({ path: garden, checkout: garden }, sha, text);
   git(garden, ['update-ref', censusRef, pendingCensusRef(sha)]);
   git(garden, ['update-ref', '-d', pendingCensusRef(sha)]);
 }
@@ -835,7 +836,7 @@ test('malformed patterns carried by the recorded census are refused, naming the 
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
   writePendingCensus(
-    garden,
+    { path: garden, checkout: dir },
     sha,
     JSON.stringify({ rev: 'main', sha, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {} }),
     '{"patterns": "x"}\n',

@@ -34,7 +34,7 @@ test('a pending census reads back byte for byte', (t) => {
   const sha = git(dir, ['rev-parse', 'HEAD']);
   const text = censusText(sha, { hits: { 'any-type': ['src/ä.ts:1: const ü: any = 1;'] } });
 
-  writePendingCensus(garden, sha, text);
+  writePendingCensus({ path: garden, checkout: dir }, sha, text);
 
   assert.equal(storedAt(garden, pendingCensusRef(sha)).text, text);
 });
@@ -44,7 +44,7 @@ test('a pending census taken with extra patterns carries them as written', (t) =
   const sha = git(dir, ['rev-parse', 'HEAD']);
   const patterns = '{ "patterns": [{ "id": "todo", "regex": "TODO" }] }\n';
 
-  writePendingCensus(garden, sha, censusText(sha), patterns);
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha), patterns);
 
   assert.equal(storedAt(garden, pendingCensusRef(sha)).patterns, patterns);
 });
@@ -53,7 +53,7 @@ test('a census ref whose census.json is not a census reads as not a census', (t)
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
 
-  writePendingCensus(garden, sha, '{"rev":"main"}\n');
+  writePendingCensus({ path: garden, checkout: dir }, sha, '{"rev":"main"}\n');
 
   assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
 });
@@ -62,7 +62,7 @@ test('a census ref whose census.json is not JSON reads as not a census', (t) => 
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
 
-  writePendingCensus(garden, sha, 'not json\n');
+  writePendingCensus({ path: garden, checkout: dir }, sha, 'not json\n');
 
   assert.equal(readCensusAt(garden, pendingCensusRef(sha)), 'not a census');
 });
@@ -74,7 +74,7 @@ function censusRefs(garden: string): string {
 test('a sync of a garden with no origin records the pending census as its census', (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(garden, sha, censusText(sha));
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
   const pending = git(garden, ['rev-parse', pendingCensusRef(sha)]);
 
   sync(openSite(dir), { attempts: 1, census: sha });
@@ -83,7 +83,7 @@ test('a sync of a garden with no origin records the pending census as its census
 });
 
 function record(place: { readonly dir: string; readonly garden: string }, sha: string): string {
-  writePendingCensus(place.garden, sha, censusText(sha));
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
   const pending = git(place.garden, ['rev-parse', pendingCensusRef(sha)]);
   sync(openSite(place.dir), { attempts: 1, census: sha });
 
@@ -103,7 +103,7 @@ test('a sync keeps the census when the pending census is of an older base commit
 test('a sync --census of a newer base deletes the pending census of an older base a crashed tick left', (t) => {
   const place = planted(t);
   const older = git(place.dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(place.garden, older, censusText(older));
+  writePendingCensus({ path: place.garden, checkout: place.dir }, older, censusText(older));
 
   const recorded = record(place, commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' }));
 
@@ -114,7 +114,7 @@ test('a sync --census keeps a pending census of a base that descends from the ce
   const place = planted(t);
   const older = git(place.dir, ['rev-parse', 'HEAD']);
   const newer = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
-  writePendingCensus(place.garden, newer, censusText(newer));
+  writePendingCensus({ path: place.garden, checkout: place.dir }, newer, censusText(newer));
   const pending = git(place.garden, ['rev-parse', pendingCensusRef(newer)]);
 
   const recorded = record(place, older);
@@ -125,7 +125,7 @@ test('a sync --census keeps a pending census of a base that descends from the ce
 test('a sync --census keeps a pending census of a commit the checkout lacks', (t) => {
   const place = planted(t);
   const missing = 'f'.repeat(40);
-  writePendingCensus(place.garden, missing, censusText(missing));
+  writePendingCensus({ path: place.garden, checkout: place.dir }, missing, censusText(missing));
   const pending = git(place.garden, ['rev-parse', pendingCensusRef(missing)]);
 
   const recorded = record(place, git(place.dir, ['rev-parse', 'HEAD']));
@@ -209,7 +209,7 @@ test('a census of a newer base commit recorded while the garden was local is kep
 
 function pushNotACensus(place: { readonly dir: string; readonly garden: string }, remote: string): string {
   const sha = git(place.dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(place.garden, sha, '{"rev":"main"}\n');
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, '{"rev":"main"}\n');
   git(place.garden, ['push', '-q', remote, `+${pendingCensusRef(sha)}:${censusRef}`]);
   git(place.garden, ['update-ref', '-d', pendingCensusRef(sha)]);
 
@@ -314,7 +314,7 @@ test('a census push whose lease another clone took first is decided again agains
   git(second.dir, ['remote', 'set-url', '--push', 'origin', remote]);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
   const sha = onOrigin(second, rewrittenBase(second.dir));
-  writePendingCensus(second.garden, sha, censusText(sha));
+  writePendingCensus({ path: second.garden, checkout: second.dir }, sha, censusText(sha));
   const pending = git(second.garden, ['rev-parse', pendingCensusRef(sha)]);
   const waits: number[] = [];
 
@@ -337,7 +337,7 @@ test('a census of a commit no branch fetched from origin holds stays local, and 
   const place = planted(t);
   const remote = bareRemote(place.dir);
   const sha = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
-  writePendingCensus(place.garden, sha, censusText(sha));
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
   const pending = git(place.garden, ['rev-parse', pendingCensusRef(sha)]);
 
   const synced = site(place.dir, ['sync', '--census', sha]);
@@ -358,7 +358,7 @@ test('a census of a commit only a tag and another remote hold stays local', (t) 
   git(place.dir, ['tag', 'private']);
   git(place.dir, ['push', '-q', 'upstream', 'main']);
   git(place.dir, ['reset', '-q', '--hard', 'HEAD~1']);
-  writePendingCensus(place.garden, sha, censusText(sha));
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
 
   const synced = site(place.dir, ['sync', '--census', sha]);
 

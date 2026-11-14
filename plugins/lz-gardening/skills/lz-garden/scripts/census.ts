@@ -23,6 +23,7 @@ import type { Io } from './cli.ts';
 import { isRecord } from './log.ts';
 import { gitEnv, inRun } from './store-git.ts';
 import { openSite } from './store-log.ts';
+import type { Site } from './store-log.ts';
 import { censusRef, readCensusAt, writePendingCensus } from './store-census.ts';
 import type { Census, StoredCensus } from './store-census.ts';
 
@@ -422,20 +423,20 @@ function formatDelta(deltas: readonly PatternDelta[]): string {
 }
 
 function readSite(cwd: string): {
-  readonly site: string;
+  readonly site: Site;
   readonly recorded: StoredCensus | null;
   readonly extraFile: { readonly text: string; readonly source: string } | undefined;
 } {
-  const site = openSite(cwd).path;
-  const recorded = readCensusAt(site, censusRef);
+  const site = openSite(cwd);
+  const recorded = readCensusAt(site.path, censusRef);
 
   if (recorded === 'not a census') {
     throw new Error(
-      `${censusRef} in ${site} is not a census; delete it (git -C "${site}" update-ref -d ${censusRef}), and the next tick records a new one`,
+      `${censusRef} in ${site.path} is not a census; delete it (git -C "${site.path}" update-ref -d ${censusRef}), and the next tick records a new one`,
     );
   }
 
-  return { site, recorded, extraFile: extraPatterns(site, recorded) };
+  return { site, recorded, extraFile: extraPatterns(site.path, recorded) };
 }
 
 async function main(argv: readonly string[], io: Io): Promise<number> {

@@ -376,7 +376,7 @@ test('sync takes no option, so --base, --class and --message are usage errors', 
 function pendCensus(dir: string, garden: string): { readonly sha: string; readonly pending: string } {
   const sha = git(dir, ['rev-parse', 'HEAD']);
   const census = { rev: 'main', sha, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {}, duplicates: {} };
-  writePendingCensus(garden, sha, JSON.stringify(census));
+  writePendingCensus({ path: garden, checkout: dir }, sha, JSON.stringify(census));
 
   return { sha, pending: git(garden, ['rev-parse', pendingCensusRef(sha)]) };
 }
@@ -406,7 +406,7 @@ test('sync --census takes the commit id census.ts printed, and anything else is 
 test('open names a shared census that is not a census, leaves it out, and still exits 0', (t) => {
   const { dir, garden } = planted(t);
   const remote = bareRemote(dir);
-  writePendingCensus(garden, 'bad', '{"rev":"main"}\n');
+  writePendingCensus({ path: garden, checkout: dir }, 'bad', '{"rev":"main"}\n');
   git(garden, ['push', '-q', remote, `${pendingCensusRef('bad')}:${censusRef}`]);
   git(garden, ['update-ref', '-d', pendingCensusRef('bad')]);
 

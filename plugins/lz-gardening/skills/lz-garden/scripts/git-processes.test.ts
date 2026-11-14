@@ -98,7 +98,11 @@ test('sync of a site whose events the origin lacks while the origin holds events
 test('sync --census --seeded that records the census of a garden with no origin starts 13 git processes', (t) => {
   const { dir, garden } = planted(t);
   const sha = git(dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(garden, sha, JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }));
+  writePendingCensus(
+    { path: garden, checkout: dir },
+    sha,
+    JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }),
+  );
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha, '--seeded'], env).status),
@@ -111,7 +115,11 @@ test('sync --census that records the census and pushes it, with no other pending
   bareRemote(dir);
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
   const sha = git(dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(garden, sha, JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }));
+  writePendingCensus(
+    { path: garden, checkout: dir },
+    sha,
+    JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }),
+  );
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha], env).status),
@@ -187,10 +195,18 @@ test('sync --census with one pending census of an older base left by a crashed t
   bareRemote(dir);
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
   const older = git(dir, ['rev-parse', 'HEAD']);
-  writePendingCensus(garden, older, JSON.stringify({ rev: 'main', sha: older, takenAt: '', counts: {}, hits: {} }));
+  writePendingCensus(
+    { path: garden, checkout: dir },
+    older,
+    JSON.stringify({ rev: 'main', sha: older, takenAt: '', counts: {}, hits: {} }),
+  );
   const sha = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
   git(dir, ['push', '-q', 'origin', 'main']);
-  writePendingCensus(garden, sha, JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }));
+  writePendingCensus(
+    { path: garden, checkout: dir },
+    sha,
+    JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }),
+  );
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['sync', '--census', sha], env).status),

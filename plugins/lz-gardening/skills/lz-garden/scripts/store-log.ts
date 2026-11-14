@@ -22,11 +22,11 @@ export const logRef = 'refs/garden/log';
 
 export const logFormat = 1;
 
-export function data(text: string): string {
+function data(text: string): string {
   return `data ${String(Buffer.byteLength(text))}\n${text}\n`;
 }
 
-export function identity(checkout: string, whose: 'author' | 'committer', now: string): string {
+function identity(checkout: string, whose: 'author' | 'committer', now: string): string {
   const variable = `GIT_${whose.toUpperCase()}`;
   const name = configValue(checkout, 'lzGardening.name');
   const email = configValue(checkout, 'lzGardening.email');
@@ -35,39 +35,53 @@ export function identity(checkout: string, whose: 'author' | 'committer', now: s
   return `${whose} ${signer} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
 }
 
-type LogFile = { readonly path: string; readonly text: string } | { readonly path: string; readonly oid: string };
+type CommitFile = { readonly path: string; readonly text: string } | { readonly path: string; readonly oid: string };
 
-// fast-import moves the ref only by fast-forward, so a commit planned on the tip lands only while the ref names it,
-// and a first commit lands only where there is no log. A merge parent adds history, not files: the tree is the tip's
-// plus the files given.
-export function writeLogIfStill(
-  { path: site, checkout }: Pick<Site, 'path' | 'checkout'>,
-  tip: string | null,
-  files: readonly LogFile[],
-  merge?: string,
-): boolean {
+// A fast-import stream of one commit to ref, on the first parent given and merging the others, signed with the
+// checkout's garden identity.
+export function commitStream(
+  { checkout }: Pick<Site, 'checkout'>,
+  ref: string,
+  message: string,
+  files: readonly CommitFile[],
+  parents: readonly string[] = [],
+): string {
   const now = `@${String(Math.floor(Date.now() / 1000))} +0000`;
-  const stream = [
-    `commit ${logRef}\n`,
+
+  return [
+    `commit ${ref}\n`,
     identity(checkout, 'author', now),
     identity(checkout, 'committer', now),
-    data('garden: log\n'),
-    ...(tip === null ? [] : [`from ${tip}\n`]),
-    ...(merge === undefined ? [] : [`merge ${merge}\n`]),
+    data(message),
+    ...parents.map((parent, index) => `${index === 0 ? 'from' : 'merge'} ${parent}\n`),
     ...files.map((file) =>
       'oid' in file ? `M 100644 ${file.oid} ${file.path}\n` : `M 100644 inline ${file.path}\n${data(file.text)}`,
     ),
     'done\n',
   ].join('');
-  const imported = runGit(site, [...waitForRefLocks, 'fast-import', '--quiet', '--done', '--date-format=rfc2822'], {
-    input: stream,
-  });
+}
+
+// fast-import moves the ref only by fast-forward, so a commit planned on the tip lands only while the ref names it,
+// and a first commit lands only where there is no log. A merge parent adds history, not files: the tree is the tip's
+// plus the files given.
+export function writeLogIfStill(
+  site: Pick<Site, 'path' | 'checkout'>,
+  tip: string | null,
+  files: readonly CommitFile[],
+  merge?: string,
+): boolean {
+  const parents = [...(tip === null ? [] : [tip]), ...(merge === undefined ? [] : [merge])];
+  const imported = runGit(
+    site.path,
+    [...waitForRefLocks, 'fast-import', '--quiet', '--done', '--date-format=rfc2822'],
+    { input: commitStream(site, logRef, 'garden: log\n', files, parents) },
+  );
 
   if (imported.status === 0) {
     return true;
   }
 
-  if (tip === null || git(site, ['rev-parse', '--verify', logRef]) === tip) {
+  if (tip === null || git(site.path, ['rev-parse', '--verify', logRef]) === tip) {
     throw new Error(`git fast-import ${logRef}: ${imported.stderr.trim()}`);
   }
 

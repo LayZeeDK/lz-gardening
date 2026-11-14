@@ -118,7 +118,8 @@ export function sharedPair(t: TestContext): {
 }
 
 export function writeCensusText(garden: string, text: string): void {
-  writePendingCensus(garden, 'fixture', text);
+  // A census fixture by hand: its commit's identity is not under test, so it reads the site's config.
+  writePendingCensus({ path: garden, checkout: garden }, 'fixture', text);
   git(garden, ['update-ref', censusRef, pendingCensusRef('fixture')]);
   git(garden, ['update-ref', '-d', pendingCensusRef('fixture')]);
 }
