@@ -146,10 +146,16 @@ test('claim --class whose push the origin takes after the time is up releases th
   const remote = bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(sync(openSite(dir), { attempts: 1 }).state, 'synced');
-  hook(remote, 'post-receive', 'if [ -f slow ]; then\n  rm slow\n  sleep 4\n  touch slept\nfi');
+  // The hook holds the claim's push until the claim has given up, so the timeout can leave the release sync room.
+  hook(
+    remote,
+    'post-receive',
+    'if [ -f slow ]; then\n  rm slow\n  i=0\n  while [ ! -f go ] && [ $i -lt 600 ]; do\n    sleep 0.1\n    i=$((i + 1))\n  done\n  touch slept\nfi',
+  );
   writeFileSync(join(remote, 'slow'), '');
 
-  const claimed = cliWith(dir, ['claim', '--class', 'any-type'], { timeoutMs: 1500 });
+  const claimed = cliWith(dir, ['claim', '--class', 'any-type'], { timeoutMs: 4000 });
+  writeFileSync(join(remote, 'go'), '');
   waitFor(join(remote, 'slept'));
 
   assert.deepEqual(
