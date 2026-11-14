@@ -62,7 +62,7 @@ export function parseCensus(json: unknown): Census | null {
   };
 }
 
-function stringLists(value: unknown): Record<string, string[]> {
+function stringLists(value: unknown): Readonly<Record<string, readonly string[]>> {
   if (!isRecord(value)) {
     return {};
   }
