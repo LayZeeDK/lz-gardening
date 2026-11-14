@@ -324,6 +324,19 @@ test('sync in a repository with no origin prints that the garden stays local and
   );
 });
 
+test('sync in a repository with no garden site exits 2 saying to open the site first', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const result = site(dir, ['sync']);
+
+  assert.deepEqual(
+    [result.status, /^site: no garden site at .*repo\.garden; run site\.ts open first\n$/.test(result.stderr)],
+    [2, true],
+    result.stderr,
+  );
+});
+
 test('sync to an origin it cannot reach exits 0 and prints offline with what git said', (t) => {
   const { dir } = planted(t);
   git(dir, ['remote', 'add', 'origin', join(dirname(dir), 'missing.git')]);

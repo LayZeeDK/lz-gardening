@@ -541,6 +541,8 @@ function main(argv: readonly string[], io: Io): number {
       return printSummary(io, openCommand(io, located, parsed.base));
     }
     case 'sync': {
+      requireSite(located.path);
+
       if (parsed.census !== undefined && !hasCensusOf(located, parsed.census)) {
         io.err(`site: no census of ${parsed.census} to record: run census.ts --rev ${parsed.census} first\n`);
 
