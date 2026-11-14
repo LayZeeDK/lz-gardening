@@ -538,24 +538,10 @@ export function parseEvent(path: string, text: string): GardenEvent | string {
       return parseClaim(json, base);
     }
     case 'release': {
-      const claimed = json['claim'];
-
-      if (typeof weedClass !== 'string' || typeof claimed !== 'string') {
-        return 'malformed release';
-      }
-
-      return uuidPattern.test(claimed)
-        ? { op: 'release', ...base, class: weedClass, claim: claimed }
-        : 'claim is not a UUID';
+      return parseRelease(json, base);
     }
     case 'seed': {
-      const { sha } = json;
-
-      if (typeof sha !== 'string') {
-        return 'malformed seed';
-      }
-
-      return objectIdPattern.test(sha) ? { op: 'seed', ...base, sha } : 'sha is not a full commit id';
+      return parseSeed(json, base);
     }
     case 'add': {
       return parseAdd(json, base);
@@ -564,6 +550,29 @@ export function parseEvent(path: string, text: string): GardenEvent | string {
       return `unknown op ${JSON.stringify(json['op'])}`;
     }
   }
+}
+
+function parseRelease(json: Record<string, unknown>, base: EventBase): ReleaseEvent | string {
+  const weedClass = json['class'];
+  const claimed = json['claim'];
+
+  if (typeof weedClass !== 'string' || typeof claimed !== 'string') {
+    return 'malformed release';
+  }
+
+  return uuidPattern.test(claimed)
+    ? { op: 'release', ...base, class: weedClass, claim: claimed }
+    : 'claim is not a UUID';
+}
+
+function parseSeed(json: Record<string, unknown>, base: EventBase): SeedEvent | string {
+  const { sha } = json;
+
+  if (typeof sha !== 'string') {
+    return 'malformed seed';
+  }
+
+  return objectIdPattern.test(sha) ? { op: 'seed', ...base, sha } : 'sha is not a full commit id';
 }
 
 function parseClaim(json: Record<string, unknown>, base: EventBase): ClaimEvent | string {
