@@ -43,6 +43,31 @@ test('a user who colours every git diff still sees an unlanded check as not on t
   );
 });
 
+test('a user whose diffs carry no a/ and b/ prefixes still sees a bed squash-landed on the base as on it', (t) => {
+  const second = {
+    'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error', 'no-unsafe-cast': 'error' }"),
+  };
+  const { dir, garden, bed } = tendedBed(t, {
+    'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"),
+  });
+  const tip = commit(bed, second);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
+  cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
+  writeCensus(garden, commit(dir, second));
+
+  const back = cli(
+    dir,
+    ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444'],
+    configEnv([['diff.noprefix', 'true']]),
+  );
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/c.ts:1', 'commit:ddd4444')} after bed/any-type@${tip} (check: eslint.config.mjs)\n`,
+  );
+});
+
 test('run from a folder inside the checkout, an unlanded check is still not on the base', (t) => {
   const { dir, tip } = tendedBed(t, {
     'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"),

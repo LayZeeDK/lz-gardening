@@ -240,7 +240,7 @@ function checkOffBase(io: Io, site: string, census: string | undefined, tended: 
 
     return diff === '' ? undefined : git(io.cwd, ['patch-id'], { ...withSite, input: diff }).split(' ')[0];
   };
-  const bedChange = patchIdOf(['diff', ...diffOptions, fork, tip]);
+  const bedChange = patchIdOf(['diff-tree', '-p', ...diffOptions, fork, tip]);
   const bedLeftCheckAsItWas = bedChange === undefined;
 
   if (bedLeftCheckAsItWas) {
