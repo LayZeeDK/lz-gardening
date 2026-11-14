@@ -285,7 +285,7 @@ export function catFileBatch<T>(
   });
 }
 
-// merge-base says no with exit 1; any other failure is an error, not a no.
+// merge-base says no with exit 1; any other failure, an unknown commit included, is an error, not a no.
 export function isAncestor(cwd: string, ancestor: string, descendant: string): boolean {
   const args = ['merge-base', '--is-ancestor', ancestor, descendant];
   const result = runGit(cwd, args, { readsOnly: true });
@@ -297,7 +297,8 @@ export function isAncestor(cwd: string, ancestor: string, descendant: string): b
   return result.status === 0;
 }
 
-// A census's commit may be missing from the checkout, which reads as no, as does any other failure.
-export function isAncestorInCheckout(checkout: string, ancestor: string, descendant: string): boolean {
-  return gitSucceeds(checkout, ['merge-base', '--is-ancestor', ancestor, descendant], { readsOnly: true });
+// Yes only for two commits cwd knows: a census's commit may be missing from the checkout, which reads as no, as does
+// any other failure.
+export function isKnownAncestor(cwd: string, ancestor: string, descendant: string): boolean {
+  return gitSucceeds(cwd, ['merge-base', '--is-ancestor', ancestor, descendant], { readsOnly: true });
 }

@@ -5,7 +5,7 @@ import {
   catFileBatch,
   git,
   gitSucceeds,
-  isAncestorInCheckout,
+  isKnownAncestor,
   objectIds,
   optionalGit,
   runGit,
@@ -124,13 +124,10 @@ interface Recorded {
 
 function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): Recorded {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
-  const current = local === undefined ? undefined : censusIn(site.path, local);
+  const held = local === undefined ? undefined : censusIn(site.path, local);
 
-  if (
-    pending === undefined ||
-    (current !== undefined && isAncestorInCheckout(site.checkout, pendingSha, current.sha))
-  ) {
-    return { local, sha: current?.sha };
+  if (pending === undefined || (held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha))) {
+    return { local, sha: held?.sha };
   }
 
   moveCensusIfStill(site.path, pending, local);
@@ -141,7 +138,7 @@ function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: 
 function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string | undefined, theirs: Census): boolean {
   const mine = local === undefined ? undefined : censusIn(site.path, local);
 
-  return mine !== undefined && mine.sha !== theirs.sha && isAncestorInCheckout(site.checkout, theirs.sha, mine.sha);
+  return mine !== undefined && mine.sha !== theirs.sha && isKnownAncestor(site.checkout, theirs.sha, mine.sha);
 }
 
 function censusIn(site: string, ref: string): Census | undefined {
@@ -219,7 +216,7 @@ export function finishPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendi
   const deletes = leftovers.filter(([name = '']) => {
     const sha = name.slice(pendingPrefix.length);
 
-    return sha === pendingSha || (recorded.sha !== undefined && isAncestorInCheckout(site.checkout, sha, recorded.sha));
+    return sha === pendingSha || (recorded.sha !== undefined && isKnownAncestor(site.checkout, sha, recorded.sha));
   });
   // Another sync of this site may delete them first, failing these deletes; what either leaves, a later sync deletes.
   gitSucceeds(site.path, ['update-ref', '--stdin'], {
