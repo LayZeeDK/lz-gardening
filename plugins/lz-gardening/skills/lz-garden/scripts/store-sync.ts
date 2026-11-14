@@ -22,12 +22,13 @@ import {
   formatOf,
   logFormat,
   logRef,
+  lostToAnotherWriter,
   moveLogIfStill,
   noLogAt,
   readReplica,
   writeLogIfStill,
 } from './store-log.ts';
-import type { Site } from './store-log.ts';
+import type { LostToAnotherWriter, Site } from './store-log.ts';
 
 export const shareKey = 'lzGardening.share';
 
@@ -149,7 +150,7 @@ function refuseUnreadableSharedLog(site: string, { shared, sharedFormatFile, loc
 function mergeOnce(
   { path: site, checkout }: Pick<Site, 'path' | 'checkout'>,
   tips: Tips,
-): Merged | 'lost to another writer' {
+): Merged | LostToAnotherWriter {
   refuseUnreadableSharedLog(site, tips);
   const { shared, local } = tips;
 
@@ -176,7 +177,7 @@ function mergeOnce(
   if (copied.length === fromShared.length && localAddsNothing) {
     return moveLogIfStill(site, shared, local)
       ? { upToDate: true, pushedEvents: 0, conflicts, skipped, leaving: [] }
-      : 'lost to another writer';
+      : lostToAnotherWriter;
   }
 
   return writeLogIfStill(
@@ -186,7 +187,7 @@ function mergeOnce(
     shared,
   )
     ? { upToDate: false, pushedEvents, conflicts, skipped, leaving }
-    : 'lost to another writer';
+    : lostToAnotherWriter;
 }
 
 // Stryker disable next-line LzJsNumericLiteral: how many tries a merge spends is policy; the bound is tested through mergeShared's tries
@@ -212,7 +213,7 @@ export function mergeShared(
 
     const merged = mergeOnce(site, { shared, local, sharedFormatFile, localFormatFile });
 
-    if (merged !== 'lost to another writer') {
+    if (merged !== lostToAnotherWriter) {
       return { ...merged, census: { local: localCensus, shared: sharedCensus }, sharedTip: shared };
     }
 
@@ -260,7 +261,7 @@ export function sync(site: Site, options: SyncOptions, now = new Date()): SyncRe
   const { result, recorded } = syncWithOrigin(site, options, now);
 
   const lost =
-    options.census !== undefined && finishPendingCensus(site, options.census, recorded) === 'lost to another writer';
+    options.census !== undefined && finishPendingCensus(site, options.census, recorded) === lostToAnotherWriter;
 
   return lost ? { ...result, censusStillPending: options.census } : result;
 }
@@ -379,7 +380,7 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   const found = { conflicts: mergedLog.conflicts, skipped: mergedLog.skipped, yielded: given.lost };
   const settledCensus = settleCensus(site, censusTips, pendingSha);
 
-  if (settledCensus === 'lost to another writer') {
+  if (settledCensus === lostToAnotherWriter) {
     return { state: 'behind', ...nothingShared, ...found };
   }
 

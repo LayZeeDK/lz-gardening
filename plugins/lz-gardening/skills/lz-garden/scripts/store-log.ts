@@ -72,6 +72,10 @@ export function commitStream(
   ].join('');
 }
 
+// Stryker disable next-line StringLiteral: callers compare a result with this constant, never with its text
+export const lostToAnotherWriter = 'lost to another writer';
+export type LostToAnotherWriter = typeof lostToAnotherWriter;
+
 // fast-import moves the ref only by fast-forward, so a commit planned on the tip lands only while the ref names it,
 // and a first commit lands only where there is no log. A merge parent adds history, not files: the tree is the tip's
 // plus the files given.

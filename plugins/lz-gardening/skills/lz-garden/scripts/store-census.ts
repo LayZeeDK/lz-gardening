@@ -13,8 +13,8 @@ import {
   refsUnder,
   runGit,
 } from './store-git.ts';
-import { commitStream } from './store-log.ts';
-import type { Site } from './store-log.ts';
+import { commitStream, lostToAnotherWriter } from './store-log.ts';
+import type { LostToAnotherWriter, Site } from './store-log.ts';
 
 export const censusRef = 'refs/garden/census';
 
@@ -164,7 +164,7 @@ function covers(site: Pick<Site, 'checkout'>, held: Census | undefined, pendingS
 function recordPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,
-): Recorded | 'lost to another writer' {
+): Recorded | LostToAnotherWriter {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
   const held = censusAt(site, local);
 
@@ -172,7 +172,7 @@ function recordPendingCensus(
     return { local, sha: held?.sha };
   }
 
-  return moveCensusIfStill(site.path, pending, local) ? { local: pending, sha: pendingSha } : 'lost to another writer';
+  return moveCensusIfStill(site.path, pending, local) ? { local: pending, sha: pendingSha } : lostToAnotherWriter;
 }
 
 function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string | undefined, theirs: Census): boolean {
@@ -195,10 +195,10 @@ export function settleCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   tips: CensusTips,
   pendingSha: string | undefined,
-): (Settled & { readonly recorded: Recorded | undefined }) | 'lost to another writer' {
+): (Settled & { readonly recorded: Recorded | undefined }) | LostToAnotherWriter {
   const adopted = adoptSharedCensus(site, tips);
 
-  if (adopted === 'lost to another writer') {
+  if (adopted === lostToAnotherWriter) {
     return adopted;
   }
 
@@ -208,13 +208,13 @@ export function settleCensus(
 
   const recorded = recordPendingCensus(site, pendingSha);
 
-  return recorded === 'lost to another writer' ? recorded : { ...adopted, local: recorded.local, recorded };
+  return recorded === lostToAnotherWriter ? recorded : { ...adopted, local: recorded.local, recorded };
 }
 
 function adoptSharedCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   { local, shared }: CensusTips,
-): Settled | 'lost to another writer' {
+): Settled | LostToAnotherWriter {
   if (shared === undefined || shared === local) {
     return { local, ignored: false };
   }
@@ -229,7 +229,7 @@ function adoptSharedCensus(
     return { local, ignored: false };
   }
 
-  return moveCensusIfStill(site.path, shared, local) ? { local: shared, ignored: false } : 'lost to another writer';
+  return moveCensusIfStill(site.path, shared, local) ? { local: shared, ignored: false } : lostToAnotherWriter;
 }
 
 // Another sync of this site may have moved the census first: to the same commit, which is as good as moving it here,
@@ -257,10 +257,10 @@ export function finishPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,
   triedRecord: Recorded | undefined,
-): 'lost to another writer' | undefined {
+): LostToAnotherWriter | undefined {
   const recorded = triedRecord ?? recordPendingCensus(site, pendingSha);
 
-  if (recorded === 'lost to another writer') {
+  if (recorded === lostToAnotherWriter) {
     return recorded;
   }
 
