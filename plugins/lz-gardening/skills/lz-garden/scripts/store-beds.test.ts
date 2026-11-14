@@ -1,9 +1,9 @@
 // Run: node --test store-beds.test.ts
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { logRef, openSite } from './store-log.ts';
@@ -305,6 +305,35 @@ test('a bed made from a commit only a tag holds stays local and is named', (t) =
     [result.state, result.divergedBeds, bedRef(place.remote)],
     ['synced', ['any-type: bed/any-type stays local: its base is on no branch fetched from origin'], ''],
   );
+});
+
+// Rewrites the bed's last commit with a signature header, as a signing setup leaves it; no key could check it.
+function signTipByHand(bed: string): void {
+  const text = git(bed, ['cat-file', 'commit', 'HEAD']);
+  const signed = spawnSync('git', ['hash-object', '-t', 'commit', '-w', '--stdin'], {
+    cwd: bed,
+    encoding: 'utf8',
+    input: `${text.replace(/^(committer .*)$/m, '$1\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n fake\n -----END PGP SIGNATURE-----')}\n`,
+  });
+  git(bed, ['update-ref', 'refs/heads/bed/any-type', signed.stdout.trim()]);
+}
+
+test("a sync reads a signed bed's commits without starting the program that checks signatures", (t) => {
+  const place = withBed(t);
+  const checked = join(dirname(place.dir), 'signature-checked');
+  const gpg = join(dirname(place.dir), 'gpg.sh');
+  writeFileSync(gpg, `#!/bin/sh\necho checked > '${checked}'\nexit 1\n`, { mode: 0o755 });
+  git(place.dir, ['config', 'lzGardening.share', 'false']);
+  commit(place.bed, { 'checks/notes.txt': 'notes\n' });
+  signTipByHand(place.bed);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'lzGardening.share', 'true']);
+  git(place.dir, ['config', 'log.showSignature', 'true']);
+  git(place.dir, ['config', 'gpg.program', gpg]);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, bedRef(place.remote), existsSync(checked)], ['synced', tip, false]);
 });
 
 test("a bed that adds a line holding the site's path stays local and is named", (t) => {

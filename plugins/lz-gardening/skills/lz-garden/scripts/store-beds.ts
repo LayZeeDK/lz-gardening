@@ -99,6 +99,7 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
         '--no-color',
         '--no-ext-diff',
         '--no-textconv',
+        '--no-show-signature',
         '--format=%x00%H%n%B%x00',
         tip,
         '--not',
