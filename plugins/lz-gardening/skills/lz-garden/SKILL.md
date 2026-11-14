@@ -120,9 +120,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
-`(check: <where> not on the base)`, the bed's change to that check is not on the base: the bed has not landed, or the
-check's file is gone from the base. Report it that way, not as a check that failed. Done when every weed from steps 2
-and 3 printed one of those words.
+`(check: <where> not on the base)`, the bed's change to that check was not on the base as of the garden's last
+census, the one recorded before this tick: the bed had not landed by then, or the check's file is gone from the base.
+The bed may have landed in this tick's range. Report it that way, not as a check that failed. Done when every weed
+from steps 2 and 3 printed one of those words.
 
 ## 5. Group, record, report
 

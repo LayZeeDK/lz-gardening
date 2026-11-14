@@ -29,8 +29,8 @@ check was written), or kept.
 **Regrown**:
 Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
 A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it. When the
-weed reads `not on the base`, the bed's change to its check is not on the base: the bed has not landed, or the check's
-file is gone from the base.
+weed reads `not on the base`, the bed's change to its check was not on the base as of the garden's last census: the
+bed had not landed by then, or the check's file is gone from the base.
 
 **Kept**:
 Said of a weed a human or a tend pass judged deliberate; it is never queued again.

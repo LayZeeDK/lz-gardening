@@ -19,8 +19,8 @@ First release.
   of each census pattern on the base branch, reads what landed since the last tick, and queues each weed with its
   evidence. The first tick seeds the queue from the census's seed list, the repository's records and its history.
   A weed of a class a tend pass closed is queued as `regrown` wherever it comes back, naming the bed and the check
-  that should have held it, and saying when that check is not on the base branch: the bed has not landed, or the
-  check's file is gone from it. A weed of a class only ever closed as a one-off is queued as new. Carries its own
+  that should have held it, and saying when that check was not on the base branch as of the last census: the bed had
+  not landed by then, or the check's file is gone from it. A weed of a class only ever closed as a one-off is queued as new. Carries its own
   permission rules: they allow reading its own files and running its own scripts and read-only git commands; anything
   else falls back to your own settings. The queue script writes only events to the site's `refs/garden/log`, and the
   census script only a census it took, to the site's `refs/garden/pending/<sha>`, and takes no output path. Two runs
