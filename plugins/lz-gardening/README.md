@@ -23,10 +23,10 @@ macOS.
 
 ## Use
 
-| Command                                             | What it does                                                                                                                                                                                                                |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/lz-gardening:lz-garden [--base <branch>]`         | One watch tick: census the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the census, the repository's records and its history. |
-| `/lz-gardening:lz-tend [<class>] [--base <branch>]` | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                                       |
+| Command                                             | What it does                                                                                                                                                                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/lz-gardening:lz-garden [--base <branch>]`         | One watch tick: take a census of the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the census, the repository's records and its history. |
+| `/lz-gardening:lz-tend [<class>] [--base <branch>]` | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                                                 |
 
 Run the watch on a loop and tend by hand:
 
@@ -36,7 +36,8 @@ Run the watch on a loop and tend by hand:
 
 A tick that finds nothing replies with one line. A tick that finds a class whose open weeds sit in two or more files
 names it in its `ready to tend: <class>` line. Two or more files means several agents took the same shortcut. A
-class whose open weeds all sit in one file waits for a second. Recurring `/loop` tasks expire after seven days; start the loop again after that.
+class whose open weeds all sit in one file waits for a second. Recurring `/loop` tasks expire after seven days; start
+the loop again after that.
 
 ## How it stays out of the way
 
@@ -106,10 +107,10 @@ once, in `.claude/settings.json` or `.claude/settings.local.json`, so a `/loop` 
 ```
 
 A tend pass runs in your session under your own permissions. The `lz-tend` skill's own rules pre-approve only
-reading the `lz-tend` skill and the `lz-garden` references, and running the garden scripts, which make the bed (a
-worktree in the site); it asks for the rest, such as edits in the bed and the repository's checks. Because the site
-lies beside your checkout, a tend pass first asks you to add it as a working directory (`/add-dir <site>`); without
-that, Claude Code asks before every read or edit of a file in the bed.
+reading the `lz-tend` skill and the `lz-garden` references, and running the site and weeds scripts, which make the
+bed (a worktree in the site); it asks for the rest, such as edits in the bed and the repository's checks. Because the
+site lies beside your checkout, a tend pass first asks you to add it as a working directory (`/add-dir <site>`);
+without that, Claude Code asks before every read or edit of a file in the bed.
 
 ## Run the watch in CI
 

@@ -1,11 +1,11 @@
 # Seed pass
 
-Run on every tick until a seed pass has synced, in this clone or another (`site.ts open` reports `seeded: false`). The census records every
-current hit as its starting count, so nothing in it is "new"; the seed pass queues what the repository already
-shows instead, so the first tend pass has evidence to work from. Read `weeds.md`, in the same folder as this file,
-first. Queue with the tick's step 4 command, and stay in the repository's working directory throughout. Run all four
-steps: the records and the history find the weeds the census cannot, so a seed that stops after the seed list misses
-them.
+Run on every tick until a seed pass is recorded, in this clone or another (`site.ts open` reports `seeded: false`).
+The census records every current hit as its starting count, so nothing in it is "new"; the seed pass queues what the
+repository already shows instead, so the first tend pass has evidence to work from. Read `weeds.md`, in the same
+folder as this file, first. Queue with the tick's step 4 command, and stay in the repository's working directory
+throughout. Run all four steps: the records and the history find the weeds the census cannot, so a seed that stops
+after the seed list misses them.
 
 ## 1. The seed list
 
@@ -16,12 +16,12 @@ With `--seed`, the census output prints the seed list above its JSON line:
   The census keeps at most 1000 hits per pattern, in path order, so for a pattern with more the files are ranked
   from those 1000.
 - `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
-  in the most files first. Files under dot-directories (`.claude/`, `.github/` and other tool folders, often
-  deliberate mirrors of each other) are left out of duplicate names, though their pattern hits count. Read the
-  definitions, the copy you would keep among them; when they do the same job, queue one `duplicate-helper` weed per
-  file, `--source census:seed`, the note naming the copy to keep. A comment or a doc that says why a copy must exist
-  (a file that cannot import the shared one, a test that pins the copies alike) makes that copy no weed. Names that
-  only share a word (two different `parse` functions) are not weeds. A last line
+  in the most files first. Test files (`*.spec.*`, `*.test.*`) and files under dot-directories (`.claude/`,
+  `.github/` and other tool folders, often deliberate mirrors of each other) are left out of duplicate names, though
+  their pattern hits count. Read the definitions, the copy you would keep among them; when they do the same job,
+  queue one `duplicate-helper` weed per file, `--source census:seed`, the note naming the copy to keep. A comment or
+  a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
+  makes that copy no weed. Names that only share a word (two different `parse` functions) are not weeds. A last line
   `<n> more duplicate names not listed` counts the rest. Later ticks report only what is new, so the seed list is the
   one time these are listed.
 

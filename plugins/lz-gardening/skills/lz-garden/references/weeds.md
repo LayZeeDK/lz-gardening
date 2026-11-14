@@ -28,7 +28,8 @@ A weed held only at layer 4 to 6 regrows whenever an agent misses the text. Pref
 `scripts/patterns.json` finds these by text; the class id is the pattern id. A repository adds or overrides
 patterns in the site's `.garden/patterns.json` (same shape). A pattern without `paths` searches the JavaScript and
 TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`), the files the census looks for
-duplicate helpers in, so data files and prose do not count.
+duplicate helpers in, so data files and prose do not count. Duplicate helpers leave out test files (`*.spec.*`,
+`*.test.*`) and files under dot-directories.
 
 | Class                                                                                    | Usual layer | Note                                                                                                                                    |
 | ---------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |

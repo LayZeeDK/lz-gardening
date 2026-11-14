@@ -63,9 +63,10 @@ Run `site open`, passing `--base <branch>` when the arguments name one; its JSON
 clone or CI run tends it at the same time: `weeds claim --class <class>` with a class argument, else `weeds claim`,
 which takes the first ready class (open weeds in two or more files, not `stale-verification` or `repeated-lesson`,
 not claimed by another writer) and prints it; say which. It prints `claimed <class> until <time>` and exits 0 when the
-claim is yours and shared. Exit 1 stops the pass: report its line as it is (`taken <class> by <holder> until <time>`,
-`nothing ready to tend`, `nothing open for <class>`, or `cannot claim <class>: <state> ...`). Then
-`weeds list --class <class>`. Done when you hold the claim and the open weeds of one class.
+claim is yours and shared, or the garden is local. Exit 1 stops the pass: report its line as it is
+(`taken <class> by <holder> until <time>`, `nothing ready to tend`, `nothing open for <class>`, or
+`cannot claim <class>: <state> ...`). Then `weeds list --class <class>`. Done when you hold the claim and the open
+weeds of one class.
 
 ## 2. Find the root cause
 
@@ -95,15 +96,15 @@ Then decide, and say which:
 Keep and one-off end the claim through `close-class`. `close-class` closes nothing and exits 1 unless its first sync
 is `synced` or `local` and this site still holds the claim; report its line as it is
 (`cannot check the claim of <class>: ...`, `this site holds no claim of <class>; ...` or
-`<class> is claimed by <holder> until <time>`).
+`<class> is claimed by <holder> until <time>`). Done when you have said the root cause and the decision.
 
 ## 3. Choose the layer
 
 Take the strongest layer that can hold the class, from the layer list in
-`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/weeds.md`. `${CLAUDE_SKILL_DIR}/references/checks.md` lists, per stack,
-the checks that hold common classes; read the rows for the repository's stack. Prefer, in order: change the code so
-the weed cannot be written (one helper, one paved road, delete the bad examples); a type or compiler flag; a lint
-rule whose message names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
+`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/weeds.md`. `${CLAUDE_SKILL_DIR}/references/checks.md` lists, per
+stack, the checks that hold common classes; read the rows for the repository's stack. Prefer, in order: change the
+code so the weed cannot be written (one helper, one paved road, delete the bad examples); a type or compiler flag; a
+lint rule whose message names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
 Layers 4 to 6 (instructions, skills, style guide) only when nothing stronger can hold it; say why.
 
 Done when you can name the check, its layer by the number `weeds.md` gives it (a type, lint rule or test is
@@ -142,7 +143,7 @@ Add the check, with its own test when it is a custom rule. Run it in the bed bef
 at least one queued weed by path. A check that reports none does not hold this class; change it until it does.
 Then run it on code that does the same job the right way (the paved road, the simplest correct form): it must
 report nothing there. A check that also flags correct code teaches agents to suppress it. Quote both outputs in the
-report: they are the proof.
+report: they are the proof. Done when you have both outputs.
 
 ## 6. Clear the bed
 
@@ -185,7 +186,8 @@ one-off closes, it exits 1 and closes nothing when its first sync is not `synced
 longer this site's: stop and report its line; the bed stays for the next pass. It prints `closed <n>; <state>`: the
 close and the end of the claim land in the site's queue and, when the state is `synced`, on `origin`, followed by
 the bed. Any other state shares them on the next `site open`. A line on stderr names a bed `origin` did not take. A
-later weed of the class, anywhere, is then queued as `regrown` and names this bed and check.
+later weed of the class, anywhere, is then queued as `regrown` and names this bed and check. Done when `close-class`
+prints `closed <n>; <state>`.
 
 ## 8. Report
 

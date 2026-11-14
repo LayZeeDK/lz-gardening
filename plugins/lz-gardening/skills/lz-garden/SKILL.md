@@ -48,11 +48,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/site.ts" open $ARGUMENTS
 
 It creates the site on the first tick, picks the base on every tick, and syncs the queue with the repository's
 `origin`. The last line is JSON: `site` (the site's path, written `<site>` below), `created`, `base` (the branch to
-watch, such as `main` or `origin/main`, written `<base>`), `seeded` (false until a seed pass has synced, in this
-clone or another), and
-`shared` (the share state: `local`, `synced`, `offline`, `read-only` or `behind`; see
-`${CLAUDE_SKILL_DIR}/references/site.md`). Any share state is fine: the tick goes on with the site's own queue. Done
-when it exits 0.
+watch, such as `main` or `origin/main`, written `<base>`), `seeded` (false until a seed pass is recorded, in this
+clone or another), and `shared` (the share state: `local`, `synced`, `offline`, `read-only` or `behind`; see "The
+share states" under "Open, sync" in `${CLAUDE_SKILL_DIR}/references/site.md`). Any share state is fine: the tick
+goes on with the site's own queue. Done when it exits 0.
 
 ## 2. Take the census
 
@@ -68,7 +67,7 @@ commits from `previousSha` to `sha`, merges left out), `grew`, `newHits`, `newDu
 `+ [<pattern>]` are new hits, each hit's text cut to 200 characters. A line
 `+ duplicate <name>: new <path>, ...[; already <path>, ...]` is a name newly defined in another file: the files
 after `new` define it since the last census, those after `already` defined it before. Below, `<short sha>` is `sha`
-shortened with `git rev-parse --short <sha>`.
+shortened with `git rev-parse --short <sha>`. Done when it exits 0; then take the first case below that holds.
 
 - `seeded` was false: run the seed pass in `${CLAUDE_SKILL_DIR}/references/seed.md` in place of steps 3 to 5,
   whatever the census says; it ends with its own sync and report. A seed pass cut short runs again on the next tick.
@@ -162,12 +161,13 @@ shared: <state> (<reason>)
 
 - `<commits>`: the census's `commits`, as printed.
 - `<read>`: the commits whose whole diff you read with `git show <commit>`, a diff saved to a file only once you
-  read that file to its end. A `--stat` or a path-limited `git show` is not a read. `<skipped>` is `<commits>` minus `<read>`.
+  read that file to its end. A `--stat` or a path-limited `git show` is not a read. `<skipped>` is `<commits>` minus
+  `<read>`.
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
 - `left out`: each file of a new duplicate (step 4) you did not queue, with its reason in a few words, such as
   `extension/a.js (documented copy: no imports)`; `left out: none` when there is none.
 - `ready to tend`: one entry per row of `groups --ready`, its `open` and `places` columns, and the first row's class
-  after `lz-tend`; `ready to tend: none` when it printed no row.
+  after `lz-tend`; `ready to tend: none` when it printed no row below its header.
 - `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.
