@@ -123,13 +123,18 @@ interface Bed {
   readonly tip: string;
 }
 
-export interface BedPlan {
+interface BedPlan {
   readonly pushing: readonly Bed[];
   readonly diverged: readonly string[];
 }
 
-// Judged before the log's push: each bed to push is marked until a sync sees it land, so a log push that lands
-// unseen (timed out, or the process stopped) or a bed push that fails leaves the bed for a later sync.
+const marked: unique symbol = Symbol('marked');
+
+// Only markUnpushed holds the key, so pushBeds takes no plan whose beds were not marked.
+export interface MarkedBeds {
+  readonly [marked]: BedPlan;
+}
+
 export function planBeds(site: Site, leaving: readonly { readonly path: string }[]): BedPlan {
   const tips = refsUnder(site.path, [bedBranches, fetchedBeds, unpushedBeds]);
   const tipOf = (prefix: string, weedClass: string): string | undefined => tips.get(`${prefix}${weedClass}`);
@@ -170,18 +175,28 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
     why === undefined ? [] : [`${weedClass}: bed/${weedClass} ${why}`],
   );
 
-  if (pushing.length > 0) {
+  return { pushing, diverged };
+}
+
+// Each bed to push stays marked until a sync sees it land.
+export function markUnpushed(site: Site, plan: BedPlan): MarkedBeds {
+  if (plan.pushing.length > 0) {
     git(site.path, ['update-ref', '--stdin'], {
-      input: pushing.map(({ weedClass, tip }) => `update ${unpushedBedRef(weedClass)} ${tip}\n`).join(''),
+      input: plan.pushing.map(({ weedClass, tip }) => `update ${unpushedBedRef(weedClass)} ${tip}\n`).join(''),
     });
   }
 
-  return { pushing, diverged };
+  return { [marked]: plan };
+}
+
+// Only while it marks this tip: a mark another sync moved meanwhile stays for that sync's bed.
+function unmark(site: Site, weedClass: string, tip: string): void {
+  gitSucceeds(site.path, ['update-ref', '-d', unpushedBedRef(weedClass), tip]);
 }
 
 export function pushBeds(
   site: Site,
-  { pushing, diverged }: BedPlan,
+  { [marked]: { pushing, diverged } }: MarkedBeds,
   { pushUrl, timeoutMs }: { readonly pushUrl: string; readonly timeoutMs: number },
 ): readonly string[] {
   if (pushing.length === 0) {
@@ -214,8 +229,7 @@ export function pushBeds(
   outcomes
     .filter(({ why }) => why === undefined)
     .forEach(({ weedClass, tip }) => {
-      // Only while it marks this tip: a mark another sync moved meanwhile stays for that sync's bed.
-      gitSucceeds(site.path, ['update-ref', '-d', unpushedBedRef(weedClass), tip]);
+      unmark(site, weedClass, tip);
     });
 
   return [

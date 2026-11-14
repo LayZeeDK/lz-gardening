@@ -2,7 +2,7 @@
 // the census, and push the log, the census and the beds.
 import { eventPathPattern, parseEvent, planGiveBack, releasesOfLostClaims } from './log.ts';
 import type { LostClaim } from './log.ts';
-import { planBeds, pushBeds } from './store-beds.ts';
+import { markUnpushed, planBeds, pushBeds } from './store-beds.ts';
 import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
 import type { CensusTips, Recorded } from './store-census.ts';
 import {
@@ -395,12 +395,15 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     ...(keptLocal === undefined ? {} : { censusKeptLocal: keptLocal }),
   };
 
-  const beds = planBeds(site, leaving);
+  const plan = planBeds(site, leaving);
 
   if (upToDate && !censusAhead) {
-    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, beds, attempt), recorded };
+    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, markUnpushed(site, plan), attempt), recorded };
   }
 
+  // Marked before the log's push, so a log push that lands unseen (timed out, or the process stopped) leaves the bed
+  // for a later sync.
+  const beds = markUnpushed(site, plan);
   const pushed = networkGit(
     path,
     [
