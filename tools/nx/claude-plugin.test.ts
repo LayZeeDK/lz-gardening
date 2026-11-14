@@ -281,6 +281,18 @@ test('a plugin with no lockfile fails the lockfile check, saying Claude Code ins
   assert.match(stderr, /has no package-lock\.json; Claude Code installs nothing without one/);
 });
 
+test('a package.json that is not JSON fails the lockfile check, naming the file', (t) => {
+  const root = workspace(t, {
+    'package.json': '{',
+    'package-lock.json': JSON.stringify({ lockfileVersion: 3, packages: { '': {} } }),
+  });
+
+  const { status, stderr } = checkLockfile(root);
+
+  assert.equal(status, 1);
+  assert.match(stderr, /package\.json is not JSON/);
+});
+
 test('a package.json the lockfile disagrees with fails the lockfile check, naming the drift and the fix', (t) => {
   const root = workspace(t, {
     'package.json': '{ "dependencies": { "zod": "4.6.6" } }',

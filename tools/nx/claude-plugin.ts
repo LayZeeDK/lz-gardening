@@ -42,10 +42,20 @@ export function parseLockfile(value: unknown, path: string): Lockfile {
   };
 }
 
+function readJson(path: string): unknown {
+  const text = readFileSync(path, 'utf8');
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${path} is not JSON`, { cause: error });
+  }
+}
+
 function readLockfile(folder: string): Lockfile | undefined {
   const path = join(folder, 'package-lock.json');
 
-  return existsSync(path) ? parseLockfile(JSON.parse(readFileSync(path, 'utf8')), path) : undefined;
+  return existsSync(path) ? parseLockfile(readJson(path), path) : undefined;
 }
 
 export function externalNodes(lockfile: Lockfile): Record<string, ProjectGraphExternalNode> {
@@ -147,7 +157,7 @@ export const createNodes: CreateNodes = [
   (manifests, _options, context) =>
     manifests.map((manifest) => {
       const root = dirname(dirname(manifest));
-      const plugin: unknown = JSON.parse(readFileSync(join(context.workspaceRoot, manifest), 'utf8'));
+      const plugin = readJson(join(context.workspaceRoot, manifest));
       const name = isRecord(plugin) ? plugin['name'] : undefined;
 
       if (typeof name !== 'string') {
@@ -208,7 +218,7 @@ function checkLockfile(root: string): number {
     return 1;
   }
 
-  const drift = lockfileDrift(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')), lockfile);
+  const drift = lockfileDrift(readJson(join(root, 'package.json')), lockfile);
 
   if (drift.length > 0) {
     console.error(`${root}: ${drift.join('; ')}. Run npm install --prefix ${root}.`);
