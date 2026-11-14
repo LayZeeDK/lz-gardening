@@ -18,9 +18,10 @@ const { MUTATE: script = '*', LZ_NODE_TEST_RUNNER: nodeTestRunner } = process.en
 const scripts = 'plugins/lz-gardening/skills/*/scripts';
 const testFiles = `${scripts}/${script}*.test.ts`;
 const mutated = [`${scripts}/${script}.ts`, `${scripts}/${script}-*.ts`];
+const notMutated = [`${scripts}/*.test.ts`, `${scripts}/test-*.ts`];
 
 // A MUTATE that names no script would mutate nothing, and a run with no mutants passes the 100% threshold.
-if (globSync(mutated).length === 0) {
+if (globSync(mutated, { exclude: notMutated }).length === 0) {
   throw new Error(`MUTATE=${script} names no script in ${scripts}`);
 }
 
@@ -52,7 +53,7 @@ const config = {
   tsconfigFile: 'plugins/lz-gardening/tsconfig.json',
   reporters: ['clear-text', 'progress', 'html'],
   thresholds: { high: 100, low: 100, break: 100 },
-  mutate: [...mutated, `!${scripts}/*.test.ts`, `!${scripts}/test-*.ts`],
+  mutate: [...mutated, ...notMutated.map((glob) => `!${glob}`)],
 };
 
 export default config;
