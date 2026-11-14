@@ -1,6 +1,6 @@
 // Sharing with origin: fetch origin's garden refs, merge its log into the site's, give back claims a sync lost, settle
 // the census, and push the log, the census and the beds.
-import { eventPathPattern, parseEvent, planGiveBack, releasesFor } from './log.ts';
+import { eventPathPattern, parseEvent, planGiveBack, releasesOfLostClaims } from './log.ts';
 import type { LostClaim } from './log.ts';
 import { pushBeds } from './store-beds.ts';
 import {
@@ -15,13 +15,13 @@ import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
   git,
+  gitReason,
   isAncestor,
   networkGit,
   networkTimeoutMs,
   objectIds,
   optionalGit,
   pushReport,
-  reasonOf,
   timedOut,
 } from './store-git.ts';
 import { append, formatOf, logFormat, logRef, moveLogIfStill, readReplica, writeLogIfStill } from './store-log.ts';
@@ -322,7 +322,7 @@ function giveBackLosingClaims(
     return { lost, released: 0 };
   }
 
-  const { drafts } = append(site, (replica) => ({ drafts: releasesFor(replica.events, lost) }), now);
+  const { drafts } = append(site, (replica) => ({ drafts: releasesOfLostClaims(replica.events, lost) }), now);
 
   return { lost, released: drafts.length };
 }
@@ -344,7 +344,7 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   if (fetched.status !== 0) {
     return {
       state: lostSharedRefLock.test(fetched.stderr) ? 'behind' : 'offline',
-      reason: reasonOf(fetched.stderr),
+      reason: gitReason(fetched.stderr),
       ...nothingShared,
     };
   }
@@ -399,5 +399,5 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
 
   return rejected(pushed.stdout)
     ? { state: 'behind', ...nothingShared, yielded: given.lost, recorded }
-    : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded };
+    : { state: 'read-only', reason: gitReason(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded };
 }

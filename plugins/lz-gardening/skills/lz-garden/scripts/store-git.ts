@@ -219,7 +219,7 @@ export function gitSucceeds(cwd: string, args: readonly string[], options: GitIn
 }
 
 /** The first line of git's message, as a reason to print. */
-export function reasonOf(stderr: string): string {
+export function gitReason(stderr: string): string {
   return stderr.trim().split('\n')[0]?.trim() ?? '';
 }
 

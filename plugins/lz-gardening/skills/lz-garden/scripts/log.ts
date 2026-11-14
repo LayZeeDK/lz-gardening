@@ -214,7 +214,7 @@ export function planClose(
     closed,
     drafts: [
       { op: 'close', ids: closed, class: first.class, ...close },
-      ...('class' in target ? releasesOf(events, first.class, writer, now) : []),
+      ...('class' in target ? releasesOfLiveClaims(events, first.class, writer, now) : []),
     ],
   };
 }
@@ -224,15 +224,24 @@ export type ReleasePlan =
   | { readonly said: 'no claim'; readonly drafts: readonly [] };
 
 export function planRelease(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): ReleasePlan {
-  const drafts = releasesOf(events, weedClass, writer, now);
+  const drafts = releasesOfLiveClaims(events, weedClass, writer, now);
 
   return drafts.length === 0 ? { said: 'no claim', drafts: [] } : { said: 'released', drafts };
 }
 
-function releasesOf(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): EventDraft[] {
+function releasesOfLiveClaims(
+  events: readonly GardenEvent[],
+  weedClass: string,
+  writer: string,
+  now: Date,
+): readonly EventDraft[] {
   return liveClaims(events, now)
     .filter((claim) => claim.writer === writer && claim.class === weedClass)
-    .map((claim): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+    .map(releaseOf);
+}
+
+export function releaseOf(claim: ClaimEvent): EventDraft {
+  return { op: 'release', class: claim.class, claim: claim.uuid };
 }
 
 /** 6 hours: the GitHub-hosted job limit and GITHUB_TOKEN lifetime, so a crashed CI run's claim ends with it. */
@@ -329,12 +338,13 @@ export function planGiveBack(
 }
 
 /** A release of each lost claim the events do not release already. */
-export function releasesFor(events: readonly GardenEvent[], lost: readonly LostClaim[]): readonly EventDraft[] {
+export function releasesOfLostClaims(
+  events: readonly GardenEvent[],
+  lost: readonly LostClaim[],
+): readonly EventDraft[] {
   const released = releasedClaims(events);
 
-  return lost
-    .filter(({ claim }) => !released.has(claim.uuid))
-    .map(({ claim }): EventDraft => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+  return lost.filter(({ claim }) => !released.has(claim.uuid)).map(({ claim }) => releaseOf(claim));
 }
 
 /** The uuids of the claims a release names. */

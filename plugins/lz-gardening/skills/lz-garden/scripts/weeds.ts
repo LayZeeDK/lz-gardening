@@ -18,10 +18,11 @@
 //     holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check the claim of <class>:
 //     <state> (<reason>)`, `this site holds no claim of <class>; run weeds claim --class <class>` or `<class> is
 //     claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of the class. close --id
-//     needs no claim, names a first sync other than synced or local on stderr, and leaves the claim as it is.
+//     needs no claim, names a first sync other than synced or local on stderr, and leaves the claim as it is; it
+//     exits 1 with `<class> is claimed by <holder> until <time>`, closing nothing, while another writer holds one.
 //   node weeds.ts claim [--class <kebab>]
-//     Claims the class, or the first ready one (open weeds in two or more files, claimed by no other writer), for six hours,
-//     and shares the claim: `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
+//     Claims the class, or the first one groups --ready lists, for six hours, and shares the claim:
+//     `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
 //     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state> (<reason>)`, the last
 //     after releasing the claim (`; release pending` when that release is not shared yet).
 //   node weeds.ts release --class <kebab>
@@ -38,9 +39,9 @@
 // An event file the log cannot read, or whose text holds a line break or control character, is skipped and named on
 // stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read the
 // log again, because another writer moved it, names it again.
-// Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, or a claim or release is
-// refused; 2 on a usage error or any other failure: no site, a damaged or newer log, a log that kept moving, or a
-// git error.
+// Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, a close meets another writer's
+// claim, or a claim or release is refused; 2 on a usage error or any other failure: no site, a damaged or newer log,
+// a log that kept moving, or a git error.
 import { parseArgs } from 'node:util';
 import {
   bedCommit,
@@ -52,6 +53,7 @@ import {
   planClaim,
   planClose,
   planRelease,
+  releaseOf,
   releasedClaims,
   replay,
   unprintablePattern,
@@ -307,7 +309,7 @@ function releasesOfClaim(events: readonly GardenEvent[], draft: EventDraft<Claim
         event.until === draft.until &&
         !released.has(event.uuid),
     )
-    .map((claim) => ({ op: 'release', class: claim.class, claim: claim.uuid }));
+    .map(releaseOf);
 }
 
 function takenLine(owner: ClaimEvent): string {
