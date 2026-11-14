@@ -14,7 +14,8 @@ const emailShape = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b/gi;
 const ownTools = [
   /\bpstack\b/i,
   /\blars-[a-z]/i,
-  /\blz-(?:tdd|advisor|engineering)\b/i,
+  /\blz-(?:tdd|advisor|engineering|cybernetics)\b/i,
+  /\blz\.windows\b/i,
   /\bgsd\b/i,
   /\bpoteto-mode\b/i,
   /\bmattpocock\b/i,
@@ -150,6 +151,13 @@ test('CI tests the Node.js version package.json names as its floor', () => {
 
 test('the own-tools scan finds a named tool', () => {
   assert.ok(ownTools.some((needle) => needle.test('run `/correct` after a fix')));
+});
+
+test("the own-tools scan finds the maintainer's other lz plugins", () => {
+  assert.deepEqual(
+    ['install lz.windows first', 'see lz-cybernetics'].filter((line) => !ownTools.some((needle) => needle.test(line))),
+    [],
+  );
 });
 
 test("shipped plugin files name none of the maintainer's own plugins or skills", () => {
