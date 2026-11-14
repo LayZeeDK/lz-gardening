@@ -629,6 +629,59 @@ test('lzGardening.name and lzGardening.email passed in GIT_CONFIG_PARAMETERS sig
   assert.equal(identityOfLog(garden), 'Probe <probe@example.com>|Probe <probe@example.com>');
 });
 
+test('an lzGardening.name holding a line break is refused, naming the setting, and writes nothing', (t) => {
+  const { dir, garden } = planted(t);
+  const tip = git(garden, ['rev-parse', logRef]);
+
+  assert.throws(
+    () => {
+      appendIn(
+        dir,
+        configEnv([
+          ['lzGardening.name', 'Probe\nM 100644 inline garden.json'],
+          ['lzGardening.email', 'probe@example.com'],
+        ]),
+      );
+    },
+    { message: 'lzGardening.name holds a line break, < or >, which a commit cannot name; change it' },
+  );
+  assert.equal(git(garden, ['rev-parse', logRef]), tip);
+});
+
+test('an lzGardening.email holding > is refused, naming the setting', (t) => {
+  const { dir } = planted(t);
+
+  assert.throws(
+    () => {
+      appendIn(
+        dir,
+        configEnv([
+          ['lzGardening.name', 'Probe'],
+          ['lzGardening.email', 'probe@example.com> x'],
+        ]),
+      );
+    },
+    { message: 'lzGardening.email holds a line break, < or >, which a commit cannot name; change it' },
+  );
+});
+
+test('an lzGardening.name holding < is refused, naming the setting', (t) => {
+  const { dir } = planted(t);
+
+  assert.throws(
+    () => {
+      appendIn(
+        dir,
+        configEnv([
+          ['lzGardening.name', 'Ann <QA'],
+          ['lzGardening.email', 'probe@example.com'],
+        ]),
+      );
+    },
+    { message: 'lzGardening.name holds a line break, < or >, which a commit cannot name; change it' },
+  );
+});
+
 function identityOfLog(garden: string): string {
   return git(garden, ['log', '-1', '--format=%an <%ae>|%cn <%ce>', logRef]);
 }

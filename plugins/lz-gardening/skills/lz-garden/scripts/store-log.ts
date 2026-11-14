@@ -25,10 +25,21 @@ function data(text: string): string {
   return `data ${String(Buffer.byteLength(text))}\n${text}\n`;
 }
 
+// A commit's identity line ends at a line break and puts the address between < and >.
+function identityPart(checkout: string, key: string): string | undefined {
+  const value = configValue(checkout, key);
+
+  if (value !== undefined && /[\n<>]/.test(value)) {
+    throw new Error(`${key} holds a line break, < or >, which a commit cannot name; change it`);
+  }
+
+  return value;
+}
+
 function identity(checkout: string, whose: 'author' | 'committer', now: string): string {
   const variable = `GIT_${whose.toUpperCase()}`;
-  const name = configValue(checkout, 'lzGardening.name');
-  const email = configValue(checkout, 'lzGardening.email');
+  const name = identityPart(checkout, 'lzGardening.name');
+  const email = identityPart(checkout, 'lzGardening.email');
   const who = name === undefined || email === undefined ? 'lz-gardening <>' : `${name} <${email}>`;
 
   return `${whose} ${who} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
