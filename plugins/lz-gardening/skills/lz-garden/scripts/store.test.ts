@@ -742,7 +742,7 @@ test('a git that cannot start is named without its arguments, so a token in an o
 
   assert.throws(
     () =>
-      runGit(garden, ['fetch', '--end-of-options', 'https://gardener:s3cret@example.invalid/r.git'], {
+      runGit(garden, ['fetch', '--end-of-options', 'https://gardener:s3cret@example.com/r.git'], {
         env: { PATH: empty, Path: empty },
       }),
     { message: /^git could not start: spawnSync git ENOENT$/ },
