@@ -12,7 +12,7 @@ existing site, queue or census unreadable is a major change.
 
 ## 0.1.0 (unreleased)
 
-First release.
+First release. The scripts use one npm package, Zod, which Claude Code installs with the plugin.
 
 - `lz-garden` skill (`/lz-gardening:lz-garden [--base <branch>]`): one watch tick over the repository, recorded in
   a garden site beside it at `../<repo>.garden`.

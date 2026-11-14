@@ -18,8 +18,8 @@ grow back."
 ```
 
 Requires git 2.55 or later and Node.js 22.18 or later on the `PATH` (the scripts are TypeScript that Node.js runs
-directly, with no dependencies). The git version is the oldest that GitHub's hosted runners carry on Windows, Linux and
-macOS.
+directly, with no build step). The git version is the oldest that GitHub's hosted runners carry on Windows, Linux and
+macOS. The scripts use one npm package, Zod, which Claude Code installs with the plugin.
 
 ## Use
 
