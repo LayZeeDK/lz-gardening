@@ -46,7 +46,6 @@
 // a log that kept moving, or a git error.
 import { parseArgs } from 'node:util';
 import {
-  bedCommit,
   bedPattern,
   claimableGroups,
   classPattern,
@@ -66,10 +65,11 @@ import type { AddInput, AddOutcome, ClaimEvent, CloseRequest, GardenEvent, Tende
 import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
-import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';
+import { offBaseIn } from './weeds-landed.ts';
+import type { BaseLabel } from './weeds-landed.ts';
+import { configValue, objectIdPattern } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import type { Replica, Site } from './store-log.ts';
-import { censusRef, readCensusAt } from './store-census.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions, SyncResult } from './store-sync.ts';
 
@@ -192,9 +192,6 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
-/** What add and list can say of a regrown weed's check and the base; 'no label' when it landed or cannot be judged. */
-export type BaseLabel = 'no label' | 'not on the base' | 'base unknown';
-
 const labelText: Readonly<Record<BaseLabel, string>> = {
   'no label': '',
   'not on the base': ' not on the base',
@@ -203,79 +200,6 @@ const labelText: Readonly<Record<BaseLabel, string>> = {
 
 function after(tended: TendedClose, label: BaseLabel): string {
   return `after ${tended.by} (check: ${tended.check}${labelText[label]})`;
-}
-
-function shaOfReadableCensus(site: string): string | undefined {
-  const recorded = readCensusAt(site, censusRef);
-  const sha = typeof recorded === 'object' ? recorded?.census.sha : undefined;
-
-  return sha !== undefined && objectIdPattern.test(sha) ? sha : undefined;
-}
-
-function checkOffBase(io: Io, site: string, census: string | undefined, tended: TendedClose): BaseLabel {
-  const tip = bedCommit(tended);
-  const base = census ?? shaOfReadableCensus(site);
-  const where = tended.check;
-
-  if (base === undefined) {
-    return 'base unknown';
-  }
-
-  // The bed's commits are in the site, so the checkout reads them through the site's objects, fetching nothing.
-  const withSite = {
-    readsOnly: true,
-    env: {
-      GIT_ALTERNATE_OBJECT_DIRECTORIES: git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
-        readsOnly: true,
-      }),
-      GIT_NO_LAZY_FETCH: '1',
-    },
-  };
-  const hasCheck = (commit: string): boolean => gitSucceeds(io.cwd, ['cat-file', '-e', `${commit}:${where}`], withSite);
-  const fork = optionalGit(io.cwd, ['merge-base', tip, base], withSite);
-
-  if (fork === undefined) {
-    return 'base unknown';
-  }
-
-  if (!hasCheck(tip)) {
-    return 'no label';
-  }
-
-  if (!hasCheck(base)) {
-    return 'not on the base';
-  }
-
-  if (!hasCheck(fork)) {
-    return 'no label';
-  }
-
-  const diffOptions = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
-  const checkPath = ['--', `:(top,literal)${where}`];
-  const patchIdOf = (diffArgs: readonly string[]): string | undefined => {
-    const diff = git(io.cwd, [...diffArgs, ...checkPath], withSite);
-
-    return diff === '' ? undefined : git(io.cwd, ['patch-id'], { ...withSite, input: diff }).split(' ')[0];
-  };
-  const bedChange = patchIdOf(['diff-tree', '-p', ...diffOptions, fork, tip]);
-  const bedLeftCheckAsItWas = bedChange === undefined;
-
-  if (bedLeftCheckAsItWas) {
-    return 'no label';
-  }
-
-  // An empty range prints nothing, which splits into one blank line, and a blank is no commit.
-  const isCommit = (line: string): boolean => line !== '';
-  const patchIdsIn = (range: string): (string | undefined)[] =>
-    git(io.cwd, ['rev-list', '--no-merges', range, ...checkPath], withSite)
-      .split('\n')
-      .filter(isCommit)
-      .map((commit) => patchIdOf(['diff-tree', '-p', '--root', '--no-commit-id', ...diffOptions, commit]));
-  const onBase = new Set(patchIdsIn(`${fork}..${base}`));
-
-  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id))
-    ? 'not on the base'
-    : 'no label';
 }
 
 export function addStatus(outcome: AddOutcome, offBase: (tended: TendedClose) => BaseLabel): string {
@@ -289,18 +213,6 @@ export function addStatus(outcome: AddOutcome, offBase: (tended: TendedClose) =>
       return `regrown ${outcome.id} ${after(outcome.after, offBase(outcome.after))}`;
     }
   }
-}
-
-function offBaseIn(io: Io, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {
-  const known = new Map<TendedClose, BaseLabel>();
-
-  return (tended) => {
-    const offBase = known.get(tended) ?? checkOffBase(io, site, census, tended);
-    // Stryker disable next-line CallExpression: without the cache, each weed works out the same label again
-    known.set(tended, offBase);
-
-    return offBase;
-  };
 }
 
 function eventsReportingSkipped(io: Io, replica: Replica): readonly GardenEvent[] {
@@ -442,7 +354,7 @@ function add(io: Io, flags: Flags, now: Date): number {
   }
 
   const site = openSite(io.cwd);
-  const offBase = offBaseIn(io, site.path, flags.census);
+  const offBase = offBaseIn(io.cwd, site.path, flags.census);
   // The status is worked out before the event is written, so a git failure in the bed check writes nothing.
   const { status } = append(
     site,
@@ -598,7 +510,7 @@ function groups(io: Io, flags: Flags, now: Date): number {
 function list(io: Io, flags: Flags, now: Date): number {
   const only = flags.class;
   const site = openSite(io.cwd);
-  const offBase = offBaseIn(io, site.path, undefined);
+  const offBase = offBaseIn(io.cwd, site.path, undefined);
 
   for (const weed of replay(eventsReportingSkipped(io, readLog(site)), now).open.filter(
     (item) => only === undefined || item.class === only,

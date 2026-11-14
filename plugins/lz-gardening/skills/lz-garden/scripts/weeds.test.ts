@@ -13,7 +13,7 @@ import { planted } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { cli, homeAt, now, script } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
-import type { BaseLabel } from './weeds.ts';
+import type { BaseLabel } from './weeds-landed.ts';
 
 function input(overrides: Partial<AddInput> = {}): AddInput {
   return {
