@@ -188,7 +188,7 @@ test("a plugin's lockfile packages are external nodes of the graph", async (t) =
   ]);
 });
 
-test("a plugin's test target runs its specs from its root without forced color, cached per Node.js and git version", async (t) => {
+test("a plugin's test target runs its specs from its root, cached per Node.js and git version", async (t) => {
   const root = workspace(t, {
     'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
     'plugins/p/skills/.keep': '',
@@ -198,7 +198,7 @@ test("a plugin's test target runs its specs from its root without forced color, 
     (await inferred(root, 'plugins/p/.claude-plugin/plugin.json'))?.projects?.['plugins/p']?.targets?.['test'],
     {
       command: 'node --test "skills/*/scripts/*.test.ts"',
-      options: { cwd: '{projectRoot}', env: { FORCE_COLOR: '0' } },
+      options: { cwd: '{projectRoot}' },
       cache: true,
       inputs: ['default', '^default', { runtime: 'node --version' }, { runtime: 'git --version' }],
       outputs: [],

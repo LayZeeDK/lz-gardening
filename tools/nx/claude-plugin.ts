@@ -124,8 +124,7 @@ function pluginTargets(root: string, scriptNames: readonly string[]): Record<str
   return {
     test: {
       command: 'node --test "skills/*/scripts/*.test.ts"',
-      // Nx sets FORCE_COLOR for tasks; a spec's child that prints its port with console.log would then color it.
-      options: { cwd: '{projectRoot}', env: { FORCE_COLOR: '0' } },
+      options: { cwd: '{projectRoot}' },
       cache: true,
       inputs: ['default', '^default', { runtime: 'node --version' }, { runtime: 'git --version' }],
       outputs: [],
