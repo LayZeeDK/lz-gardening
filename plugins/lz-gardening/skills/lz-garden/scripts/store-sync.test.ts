@@ -10,7 +10,7 @@ import { eventPath } from './log.ts';
 import { censusRef, inRun, logRef, mayPointAtARepository, openSite, sync, writePendingCensus } from './store.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
-import { bareRemote, planted, sharedPair, site } from './test-site.ts';
+import { bareRemote, planted, sharedPair, site, writeCensus } from './test-site.ts';
 import { cli } from './test-weeds.ts';
 
 function addWeed(dir: string, where: string): void {
@@ -448,10 +448,16 @@ test('a sync whose origin already holds the local log fetches, lists the beds an
   );
 });
 
-function syncProcess(dir: string): Promise<{ readonly code: number | null; readonly stdout: string }> {
+function syncProcess(
+  dir: string,
+  args: readonly string[] = [],
+): Promise<{ readonly code: number | null; readonly stdout: string }> {
   return new Promise((resolve, reject) => {
     let stdout = '';
-    const child = spawn(process.execPath, [siteScript, 'sync'], { cwd: dir, stdio: ['ignore', 'pipe', 'inherit'] });
+    const child = spawn(process.execPath, [siteScript, 'sync', ...args], {
+      cwd: dir,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
     });
@@ -502,6 +508,37 @@ test('syncs of one site at once that each move its log to the shared log all exi
   assert.deepEqual(
     runs.map(({ code }) => code),
     [0, 0, 0, 0],
+  );
+});
+
+test('syncs of one site at once that each adopt the shared census all exit 0', async (t) => {
+  const { first, second } = sharedPair(t);
+  writeCensus(first.garden, git(first.dir, ['rev-parse', 'main']));
+  sync(openSite(first.dir), { attempts: 1 });
+
+  const runs = await Promise.all(Array.from({ length: 4 }, () => syncProcess(second.dir)));
+
+  assert.deepEqual(
+    [runs.map(({ code }) => code), git(second.garden, ['rev-parse', censusRef])],
+    [[0, 0, 0, 0], git(first.garden, ['rev-parse', censusRef])],
+  );
+});
+
+test('syncs of one site at once that each record the same pending census all exit 0', async (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  writePendingCensus(garden, sha, JSON.stringify({ rev: 'main', sha, takenAt: '', counts: {}, hits: {} }));
+  const pending = git(garden, ['rev-parse', `refs/garden/pending/${sha}`]);
+
+  const runs = await Promise.all(Array.from({ length: 4 }, () => syncProcess(dir, ['--census', sha])));
+
+  assert.deepEqual(
+    [
+      runs.map(({ code }) => code),
+      git(garden, ['rev-parse', censusRef]),
+      git(garden, ['for-each-ref', 'refs/garden/pending']),
+    ],
+    [[0, 0, 0, 0], pending, ''],
   );
 });
 

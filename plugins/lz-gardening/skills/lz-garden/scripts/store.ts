@@ -195,7 +195,8 @@ export const logRef = 'refs/garden/log';
 
 const logFormat = 1;
 
-const refLockWaitMs = 3000;
+// Another run of this site may hold a ref's lock for a moment; a writer waits for it instead of failing.
+const waitForRefLocks = ['-c', 'core.filesRefLockTimeout=3000'];
 
 function data(text: string): string {
   return `data ${String(Buffer.byteLength(text))}\n${text}\n`;
@@ -234,18 +235,9 @@ function writeLogIfStill(
     ),
     'done\n',
   ].join('');
-  const imported = runGit(
-    site,
-    [
-      '-c',
-      `core.filesRefLockTimeout=${String(refLockWaitMs)}`,
-      'fast-import',
-      '--quiet',
-      '--done',
-      '--date-format=rfc2822',
-    ],
-    { input: stream },
-  );
+  const imported = runGit(site, [...waitForRefLocks, 'fast-import', '--quiet', '--done', '--date-format=rfc2822'], {
+    input: stream,
+  });
 
   if (imported.status === 0) {
     return true;
@@ -613,7 +605,7 @@ function mergeOnce(
 }
 
 function moveLogIfStill(site: string, to: string, from: string): boolean {
-  const args = ['update-ref', logRef, to, from];
+  const args = [...waitForRefLocks, 'update-ref', logRef, to, from];
   const moved = runGit(site, args);
 
   if (moved.status !== 0 && git(site, ['rev-parse', '--verify', logRef]) === from) {
@@ -676,11 +668,10 @@ const networkTimeoutMs = 60_000;
 
 // Messages are in English, as the porcelain classification reads them.
 function networkGit(site: string, args: readonly string[], timeoutMs: number): SpawnSyncReturns<string> {
-  return runGit(
-    site,
-    ['-c', 'credential.interactive=false', '-c', `core.filesRefLockTimeout=${String(refLockWaitMs)}`, ...args],
-    { env: { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' }, timeout: timeoutMs },
-  );
+  return runGit(site, ['-c', 'credential.interactive=false', ...waitForRefLocks, ...args], {
+    env: { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
+    timeout: timeoutMs,
+  });
 }
 
 export function isShared(result: SyncResult): boolean {
@@ -711,7 +702,8 @@ function finishPendingCensus(site: Site, pendingSha: string): void {
 
     return sha === pendingSha || (recorded.sha !== undefined && isAncestorInCheckout(site, sha, recorded.sha));
   });
-  git(site.path, ['update-ref', '--stdin'], {
+  // Another sync of this site may delete them first, failing these deletes; what either leaves, a later sync deletes.
+  gitSucceeds(site.path, ['update-ref', '--stdin'], {
     input: deletes.map(([name = '', oid = '']) => `delete ${name} ${oid}\n`).join(''),
   });
 }
@@ -1236,7 +1228,7 @@ function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: 
     return { local, sha: current?.sha };
   }
 
-  git(site.path, ['update-ref', censusRef, pending, local ?? '']);
+  moveCensusIfStill(site.path, pending, local);
 
   return { local: pending, sha: pendingSha };
 }
@@ -1287,9 +1279,22 @@ function adoptSharedCensus(site: Pick<Site, 'checkout' | 'path'>, { local, share
     return { local, ignored: false };
   }
 
-  git(site.path, ['update-ref', censusRef, shared, local ?? '']);
+  moveCensusIfStill(site.path, shared, local);
 
   return { local: shared, ignored: false };
+}
+
+// Another sync of this site may have moved the census to the same commit first, which is as good as moving it here.
+function moveCensusIfStill(site: string, to: string, from: string | undefined): void {
+  const args = [...waitForRefLocks, 'update-ref', censusRef, to, from ?? ''];
+  const moved = runGit(site, args);
+
+  if (
+    moved.status !== 0 &&
+    optionalGit(site, ['rev-parse', '--verify', '--quiet', censusRef], { readsOnly: true }) !== to
+  ) {
+    throw new Error(`git ${args.join(' ')}: ${moved.stderr.trim()}`);
+  }
 }
 
 // Stryker disable next-line LzJsNumericLiteral: how many tries a writer spends is policy; the bound is tested through append's tries
