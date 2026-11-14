@@ -88,7 +88,8 @@ git log --no-merges --format='%h %an %s' <previousSha>..<sha>
 ```
 
 The output lists the newest commit first. Read the diff (`git show <commit>`) of each commit it lists, the first 30
-at most; the report counts the rest as skipped. Look for the weeds catalogued in
+at most; the report counts the rest as skipped. When the tool result says the output was saved to a file, Read that
+file to its end, in parts when it is long: the commit counts as read only then. Look for the weeds catalogued in
 `${CLAUDE_SKILL_DIR}/references/weeds.md`: the census finds the textual ones, and reading finds the rest (a hollow
 test, a copied workaround, a second way to do what the codebase already does, a lesson the records hold twice).
 Read the catalogue before the first diff. A weed is something an agent will copy; a one-off with no sign of
@@ -156,8 +157,8 @@ shared: <state> (<reason>)
 ```
 
 - `<commits>`: the census's `commits`, as printed.
-- `<read>`: the commits whose whole diff you read with `git show <commit>`. A `--stat` or a path-limited
-  `git show` is not a read. `<skipped>` is `<commits>` minus `<read>`.
+- `<read>`: the commits whose whole diff you read with `git show <commit>`, a diff saved to a file only once you
+  read that file to its end. A `--stat` or a path-limited `git show` is not a read. `<skipped>` is `<commits>` minus `<read>`.
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
