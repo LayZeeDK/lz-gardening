@@ -145,8 +145,12 @@ the next census at a new commit, which carries the new patterns. A `refs/garden/
 with exit 2, naming the command that deletes it. `weeds.ts`, run from the repository's checkout, finds the site beside
 it and appends events to `refs/garden/log` with git plumbing only: a commit per command, moved onto the ref only if no
 other run moved it first, so two runs on one machine both land. An entry in the log it cannot read (an event file that
-does not parse or whose text holds a line break or control character, an object the site lacks, a submodule entry) is
-skipped and named on stderr. A `garden.json` in a newer format stops it with exit 2 (update lz-gardening); one that is
+does not parse or whose text holds a line break or control character, an event the scripts would not write, an object
+the site lacks, a submodule entry) is skipped and named on stderr. The scripts would not write an add whose id is not
+the weed id of its class, where and source, or whose layer is not 1 to 6, whose where is blank or whose source names
+no kind; a close that names no weed, names something other than a weed id, or gives a blank reason or check; a claim that ends more than six hours after
+it was taken; a release that names no event; or a seed of anything but a full commit id. A close ends only the weeds
+of its own class. A `garden.json` in a newer format stops it with exit 2 (update lz-gardening); one that is
 missing, is not JSON or names no format stops it with exit 2, naming the file.
 
 ## The base branch

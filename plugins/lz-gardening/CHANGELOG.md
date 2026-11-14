@@ -26,6 +26,8 @@ First release.
     `.js`, `.jsx`, `.mjs`, `.cjs`).
   - Share: the queue (`refs/garden/log`) and the census (`refs/garden/census`) are shared through the repository's
     `origin`. No ref outside `refs/garden/` is pushed. `git config lzGardening.share false` keeps the garden local.
+    An event in the queue that the scripts would not write, such as an add whose id does not match its class, place
+    and source, is skipped and named on stderr, and a close ends only the weeds of its own class.
   - Privacy: events take repository-relative paths only, and an event that holds this machine's paths is refused. A
     bed that holds them, or that would bring `origin` a commit other than its own, stays in the site, as does a
     census of a commit no branch on `origin` holds. Each census carries the site's `.garden/patterns.json` as it

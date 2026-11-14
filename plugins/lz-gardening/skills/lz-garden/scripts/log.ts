@@ -2,12 +2,15 @@
 // statuses. Every clone holds a replica; replicas merge by union, so the replay must not depend on the order the
 // events arrive in. No I/O here: the store reads and writes the events.
 import { createHash, randomUUID } from 'node:crypto';
+import { objectIdPattern } from './store-git.ts';
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
+
+export const sourcePattern = /^[a-z][a-z-]*:\S/;
 
 export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,40})$/;
 
@@ -19,9 +22,21 @@ export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiCon
 // these print as read; text from anywhere else (paths, git's messages, census data) goes through escapeUnprintable.
 const printedFields: readonly string[] = ['id', 'where', 'source', 'note', 'check', 'by', 'holder'];
 
+/** Text with more than white space in it, as a weed's where, a close's by and a tend close's check need. */
+export function hasText(text: string): boolean {
+  return text.trim() !== '';
+}
+
+/** One of the six layers, 1 the strongest. */
+export function isLayer(layer: number): boolean {
+  return Number.isInteger(layer) && layer >= 1 && layer <= 6;
+}
+
 export function weedId(weedClass: string, where: string, source: string): string {
   return createHash('sha256').update(`${weedClass}\u0000${where}\u0000${source}`).digest('hex').slice(0, 10);
 }
+
+const weedIdPattern = /^[0-9a-f]{10}$/;
 
 export type CloseKind = 'tended' | 'one-off' | 'kept';
 
@@ -147,7 +162,7 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
   }
 
   const closes = events.filter((event) => event.op === 'close').toSorted(byClock);
-  const closesOfId = closes.filter((close) => close.ids.includes(id));
+  const closesOfId = closes.filter((close) => closesWeed(close, input.class, id));
 
   if (closesOfId.some((close) => close.kind === 'kept')) {
     return { said: 'kept', id, drafts: [] };
@@ -165,6 +180,11 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
   return tend === undefined
     ? { said: 'added', id, drafts: [draft(null)] }
     : { said: 'regrown', id, drafts: [draft(tend.uuid)], after: tend };
+}
+
+/** A close ends only weeds of its own class, so one that names a weed of another class leaves it as it was. */
+function closesWeed(close: CloseEvent, weedClass: string, id: string): boolean {
+  return close.class === weedClass && close.ids.includes(id);
 }
 
 export function latestTendedClose(events: readonly GardenEvent[], weedClass: string): TendedClose | undefined {
@@ -497,14 +517,22 @@ export function parseEvent(path: string, text: string): GardenEvent | string {
     case 'release': {
       const claimed = json['claim'];
 
-      return typeof weedClass === 'string' && typeof claimed === 'string'
+      if (typeof weedClass !== 'string' || typeof claimed !== 'string') {
+        return 'malformed release';
+      }
+
+      return uuidPattern.test(claimed)
         ? { op: 'release', ...base, class: weedClass, claim: claimed }
-        : 'malformed release';
+        : 'claim is not a UUID';
     }
     case 'seed': {
       const { sha } = json;
 
-      return typeof sha === 'string' ? { op: 'seed', ...base, sha } : 'malformed seed';
+      if (typeof sha !== 'string') {
+        return 'malformed seed';
+      }
+
+      return objectIdPattern.test(sha) ? { op: 'seed', ...base, sha } : 'sha is not a full commit id';
     }
     case 'add': {
       return parseAdd(json, base);
@@ -547,7 +575,23 @@ function parseClose(json: Record<string, unknown>, base: EventBase): CloseEvent 
     return 'malformed close';
   }
 
+  if (ids.length === 0) {
+    return 'close names no weed';
+  }
+
+  if (!ids.every((id) => weedIdPattern.test(id))) {
+    return 'close names something other than a weed id';
+  }
+
+  if (!hasText(by)) {
+    return 'by is blank';
+  }
+
   if (kind === 'tended' && typeof check === 'string') {
+    if (!hasText(check)) {
+      return 'check is blank';
+    }
+
     return bedPattern.exec(by)?.[1] === weedClass
       ? { op: 'close', ...base, ids, class: weedClass, kind, by, check }
       : 'tend close names no bed/<class>@<commit>';
@@ -577,6 +621,22 @@ function parseAdd(json: Record<string, unknown>, base: EventBase): AddEvent | st
     return 'malformed add';
   }
 
+  if (!hasText(where)) {
+    return 'where is blank';
+  }
+
+  if (!sourcePattern.test(source)) {
+    return 'source is not <kind>:<ref>';
+  }
+
+  if (layer !== null && !isLayer(layer)) {
+    return 'layer is not a whole number from 1 to 6';
+  }
+
+  if (id !== weedId(weedClass, where, source)) {
+    return 'id is not the weed id of its class, where and source';
+  }
+
   return { op: 'add', ...base, id, class: weedClass, where, source, note, layer, sawCloses, sawTend };
 }
 
@@ -596,7 +656,7 @@ function byClock(a: GardenEvent, b: GardenEvent): number {
  */
 function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[]): Map<string, OpenWeed> {
   const ended = (event: AddEvent): boolean =>
-    closes.some((close) => close.ids.includes(event.id) && !event.sawCloses.includes(close.uuid));
+    closes.some((close) => closesWeed(close, event.class, event.id) && !event.sawCloses.includes(close.uuid));
   const openById = new Map<string, OpenWeed>();
 
   for (const event of ordered) {

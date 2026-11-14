@@ -25,16 +25,14 @@ test('a census the label cannot read leaves a regrown weed queued and listed, wi
   );
 });
 
-test('a check emptied by hand in the queue gets no label, since it names no file', (t) => {
-  const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+test('a tend close whose check was emptied by hand is skipped and named, so the weed comes back added', (t) => {
+  const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   editCheckByHand(garden, '');
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
-  assert.equal(
-    back.stdout,
-    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: )\n`,
-  );
+  assert.match(back.stderr, /^weeds: skipped events\/.+\.json: check is blank\n$/);
+  assert.deepEqual([back.code, back.stdout], [0, `added ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')}\n`]);
 });
 
 test('a tend close whose check was given a control character by hand is skipped and named, so the weed comes back added', (t) => {

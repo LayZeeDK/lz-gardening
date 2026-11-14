@@ -17,7 +17,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { eventPath } from './log.ts';
+import { eventPath, weedId } from './log.ts';
 import type { EventDraft } from './log.ts';
 import { configValue, gitAsync, gitEnv, inRun, namedHooksOff, runGit, runGitAsync, treeEntries } from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
@@ -31,11 +31,13 @@ async function exitOf(cwd: string, args: readonly string[]): Promise<number | nu
 }
 
 function addDraft(index: number, note = ''): EventDraft {
+  const where = `src/${String(index)}.ts:1`;
+
   return {
     op: 'add',
-    id: `weed-${String(index)}`,
+    id: weedId('any-type', where, 'census:x'),
     class: 'any-type',
-    where: `src/${String(index)}.ts:1`,
+    where,
     source: 'census:x',
     note,
     layer: null,
@@ -155,6 +157,17 @@ test('an append on a log holding the largest clock a whole number allows is refu
 
   assert.throws(() => append(site, () => ({ drafts: [addDraft(2)] }), now), {
     message: `${logRef} holds clock 9007199254740991; the next clock would pass the largest whole number`,
+  });
+  assert.equal(git(garden, ['rev-parse', logRef]), tip);
+});
+
+test('an append of an event its own reader would skip is refused with the reason, and writes nothing', (t) => {
+  const { dir, garden } = planted(t);
+  const site = openSite(dir);
+  const tip = git(garden, ['rev-parse', logRef]);
+
+  assert.throws(() => append(site, () => ({ drafts: [{ ...addDraft(1), layer: 7 }] }), now), {
+    message: 'an event to append would be skipped by every reader: layer is not a whole number from 1 to 6',
   });
   assert.equal(git(garden, ['rev-parse', logRef]), tip);
 });

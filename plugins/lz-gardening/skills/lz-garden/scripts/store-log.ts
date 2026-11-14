@@ -312,15 +312,19 @@ export function append<T extends { readonly drafts: readonly EventDraft[] }>(
       throw new Error(`${logRef} holds clock ${String(maxClock)}; the next clock would pass the largest whole number`);
     }
 
-    const events = stamp(drafts, maxClock, now);
+    const files = stamp(drafts, maxClock, now).map((event) => ({
+      path: eventPath(event.uuid),
+      text: JSON.stringify(event),
+    }));
+    const skippedBecause = files
+      .map(({ path, text }) => parseEvent(path, text))
+      .find((read) => typeof read === 'string');
 
-    if (
-      writeLogIfStill(
-        site,
-        replica.tip,
-        events.map((event) => ({ path: eventPath(event.uuid), text: JSON.stringify(event) })),
-      )
-    ) {
+    if (skippedBecause !== undefined) {
+      throw new Error(`an event to append would be skipped by every reader: ${skippedBecause}`);
+    }
+
+    if (writeLogIfStill(site, replica.tip, files)) {
       return planned;
     }
 

@@ -36,8 +36,8 @@
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
-// An event file the log cannot read, or whose text holds a line break or control character, is skipped and named on
-// stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read the
+// An event file the log cannot read, whose text holds a line break or control character, or that these commands would
+// not write (references/site.md lists the rules), is skipped and named on stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read the
 // log again, because another writer moved it, names it again.
 // Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, a close meets another writer's
 // claim, or a claim or release is refused; 2 on a usage error or any other failure: no site, a damaged or newer log,
@@ -49,6 +49,8 @@ import {
   claimableGroups,
   classPattern,
   groupWeeds,
+  hasText,
+  isLayer,
   planAdd,
   planClaim,
   planClose,
@@ -56,6 +58,7 @@ import {
   releaseOf,
   releasedClaims,
   replay,
+  sourcePattern,
   unprintablePattern,
 } from './log.ts';
 import type { AddInput, AddOutcome, ClaimEvent, CloseRequest, EventDraft, GardenEvent, TendedClose } from './log.ts';
@@ -67,8 +70,6 @@ import type { Replica, Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions } from './store-sync.ts';
-
-const sourcePattern = /^[a-z][a-z-]*:\S/;
 
 function firstUnprintable(values: Readonly<Record<string, string | undefined>>): string | null {
   // Stryker disable next-line StringLiteral: an absent flag has no text, and the mutant's text has no control character either
@@ -88,7 +89,7 @@ export function validateAdd(input: AddInput): string | null {
     return '--class must be kebab-case';
   }
 
-  if (input.where.trim() === '') {
+  if (!hasText(input.where)) {
     return '--where must not be empty';
   }
 
@@ -114,7 +115,7 @@ export function validateAdd(input: AddInput): string | null {
     return "--class repeated-lesson takes --source lesson:<path>:<line>, a record that holds the lesson; queue a clean-up that did not hold under the mistake's own class";
   }
 
-  if (input.layer !== null && !(Number.isInteger(input.layer) && input.layer >= 1 && input.layer <= 6)) {
+  if (input.layer !== null && !isLayer(input.layer)) {
     return '--layer must be an integer from 1 to 6';
   }
 
@@ -142,7 +143,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
   const chosen = kinds.length === 1 ? kinds[0] : undefined;
   const target = command === 'close' ? flags.id : flags.class;
 
-  if (chosen === undefined || chosen.by.trim() === '' || target === undefined) {
+  if (chosen === undefined || !hasText(chosen.by) || target === undefined) {
     return `needs ${command === 'close' ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep`;
   }
 
@@ -170,7 +171,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     return '--tended closes a whole class; use close-class --class <class>';
   }
 
-  if (check === undefined || check.trim() === '') {
+  if (check === undefined || !hasText(check)) {
     return '--tended needs --check <where the check lives>';
   }
 
@@ -200,10 +201,6 @@ function checkOffBase(io: Io, site: string, census: string | undefined, tended: 
   const where = tended.check;
 
   if (base === undefined) {
-    return false;
-  }
-
-  if (where.trim() === '') {
     return false;
   }
 

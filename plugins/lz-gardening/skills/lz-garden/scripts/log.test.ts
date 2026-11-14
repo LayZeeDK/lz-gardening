@@ -58,6 +58,13 @@ function add(uuid: string, clock: number, id: string, fields: Partial<AddEvent> 
   };
 }
 
+/** An add as its writer stores it, with the weed id of its class, where and source. */
+function storedAdd(uuid: string, clock: number, fields: Partial<Omit<AddEvent, 'id'>> = {}): AddEvent {
+  const event = add(uuid, clock, '', { where: 'src/x.ts:1', ...fields });
+
+  return { ...event, id: weedId(event.class, event.where, event.source) };
+}
+
 function close(
   uuid: string,
   clock: number,
@@ -207,6 +214,12 @@ test('spike 1, scenario 7: two writers closing the same weed leave it closed', (
   assert.deepEqual(statuses(garden, ['x']), { x: 'closed:one-off' });
 });
 
+test('a close of another class leaves a weed open, though it names the weed', () => {
+  const garden = replay([add('a1', 1, 'x'), close('c1', 2, ['x'], 'one-off', 'other')], now);
+
+  assert.deepEqual(statuses(garden, ['x']), { x: 'added' });
+});
+
 test('a closed weed takes the kind of its latest close by clock, then uuid, in whatever order the events arrive', () => {
   const events = [add('a1', 1, 'x'), close('b2', 2, ['x'], 'kept'), close('a2', 2, ['x'], 'one-off')];
 
@@ -347,6 +360,16 @@ test('an add records only the closes that name its weed, so a keep of another we
   const events = [add('a1', 1, 'other'), close('a2', 2, ['other'], 'kept')];
 
   assert.deepEqual(planAdd(events, input(), now), {
+    said: 'added',
+    id,
+    drafts: [{ op: 'add', id, ...input(), sawCloses: [], sawTend: null }],
+  });
+});
+
+test('an add is neither kept nor records the close by a keep of another class that names its weed', () => {
+  const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
+
+  assert.deepEqual(planAdd([close('k1', 1, [id], 'kept', 'other')], input(), now), {
     said: 'added',
     id,
     drafts: [{ op: 'add', id, ...input(), sawCloses: [], sawTend: null }],
@@ -766,21 +789,65 @@ test('an event lives in a shard named by the first two characters of its uuid', 
 });
 
 const uuid = '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6';
+const weed = weedId('any-type', 'src/x.ts:1', 'census:any-type');
 
 test('an event file that is not JSON parses to the reason it was skipped', () => {
   assert.equal(parseEvent(eventPath(uuid), '{"op":'), 'not JSON');
 });
 
 test('an add event file parses back to the event that was written', () => {
-  const event = add(uuid, 3, 'x', { layer: 2, note: 'cast', sawCloses: ['c1'], sawTend: 't1' });
+  const event = storedAdd(uuid, 3, { layer: 2, note: 'cast', sawCloses: ['c1'], sawTend: 't1' });
 
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
+});
+
+test('an add event file whose id is not the weed id of its class, where and source is skipped, so it cannot stand in for another weed', () => {
+  const event = { ...storedAdd(uuid, 3), id: weedId('any-type', 'src/y.ts:1', 'census:any-type') };
+
+  assert.equal(
+    parseEvent(eventPath(uuid), JSON.stringify(event)),
+    'id is not the weed id of its class, where and source',
+  );
+});
+
+test('an add event file whose layer is not a whole number from 1 to 6 is skipped, as add refuses it', () => {
+  const parse = (layer: number): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify(storedAdd(uuid, 3, { layer })));
+
+  assert.deepEqual(
+    [parse(0), parse(7), parse(2.5)],
+    [
+      'layer is not a whole number from 1 to 6',
+      'layer is not a whole number from 1 to 6',
+      'layer is not a whole number from 1 to 6',
+    ],
+  );
+});
+
+test('an add event file whose where is blank is skipped, as add refuses it', () => {
+  const parse = (where: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify(storedAdd(uuid, 3, { where })));
+
+  assert.deepEqual([parse(''), parse(' ')], ['where is blank', 'where is blank']);
+});
+
+test('an add event file whose source does not name its kind is skipped, as add refuses it', () => {
+  const event = storedAdd(uuid, 3, { source: 'abc1234' });
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'source is not <kind>:<ref>');
+});
+
+test('an add event file at layer 1 or 6, the first and last layers, parses', () => {
+  const parse = (layer: number): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify(storedAdd(uuid, 3, { layer })));
+
+  assert.deepEqual([parse(1), parse(6)], [storedAdd(uuid, 3, { layer: 1 }), storedAdd(uuid, 3, { layer: 6 })]);
 });
 
 test('an event file whose uuid is not its file name is skipped, so it cannot shadow another event', () => {
   const other = 'ff3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6';
 
-  assert.equal(parseEvent(eventPath(other), JSON.stringify(add(uuid, 3, 'x'))), 'uuid is not its file name');
+  assert.equal(parseEvent(eventPath(other), JSON.stringify(storedAdd(uuid, 3))), 'uuid is not its file name');
 });
 
 test('an event file whose uuid is not a lowercase UUID is skipped, though it is its file name', () => {
@@ -796,26 +863,26 @@ test('an event file whose uuid has text before or after a UUID is skipped, thoug
 });
 
 test('an event file whose class has text after a kebab-case class id is skipped', () => {
-  const event = add(uuid, 3, 'x', { class: 'any-type!' });
+  const event = storedAdd(uuid, 3, { class: 'any-type!' });
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'class "any-type!" is not a kebab-case class id');
 });
 
 test('the bed commit of a tend close is what its by names after the @', () => {
-  const tended: TendedClose = { ...tend(uuid, 4, ['x']), kind: 'tended', check: 'eslint.config.mjs' };
+  const tended: TendedClose = { ...tend(uuid, 4, [weed]), kind: 'tended', check: 'eslint.config.mjs' };
 
   assert.equal(bedCommit(tended), '1a2b3c4');
 });
 
 test('an event file whose at is not a date is skipped', () => {
-  const event = { ...add(uuid, 3, 'x'), at: 'yesterday' };
+  const event = { ...storedAdd(uuid, 3), at: 'yesterday' };
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'at is not a date');
 });
 
 test('an event file whose clock is past the whole numbers a double holds is skipped, so it cannot stop later clocks', () => {
   const parse = (clock: string): GardenEvent | string =>
-    parseEvent(eventPath(uuid), JSON.stringify(add(uuid, 3, 'x')).replace('"clock":3', `"clock":${clock}`));
+    parseEvent(eventPath(uuid), JSON.stringify(storedAdd(uuid, 3)).replace('"clock":3', `"clock":${clock}`));
 
   assert.deepEqual(
     [parse('1e400'), parse('9007199254740992')],
@@ -824,18 +891,18 @@ test('an event file whose clock is past the whole numbers a double holds is skip
 });
 
 test('an event file whose clock is below 0 is skipped', () => {
-  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(add(uuid, -1, 'x'))), 'clock is not a whole number from 0');
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(storedAdd(uuid, -1))), 'clock is not a whole number from 0');
 });
 
 test('an event file at clock 0 parses, since the clock counts from 0', () => {
-  const event = add(uuid, 0, 'x');
+  const event = storedAdd(uuid, 0);
 
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
 });
 
 test('an event file whose at is a date in another form than the UTC one writers stamp is skipped', () => {
   const parse = (time: string): GardenEvent | string =>
-    parseEvent(eventPath(uuid), JSON.stringify({ ...add(uuid, 3, 'x'), at: time }));
+    parseEvent(eventPath(uuid), JSON.stringify({ ...storedAdd(uuid, 3), at: time }));
 
   assert.deepEqual(
     [parse('Wed, 11 Nov 2026 10:00:00 GMT'), parse('2026-11-11 10:00')],
@@ -844,7 +911,7 @@ test('an event file whose at is a date in another form than the UTC one writers 
 });
 
 test('an event file whose at is past year 9999 is skipped, so string order stays time order', () => {
-  const event = { ...add(uuid, 3, 'x'), at: '+010000-01-01T00:00:00.000Z' };
+  const event = { ...storedAdd(uuid, 3), at: '+010000-01-01T00:00:00.000Z' };
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'at is not a date');
 });
@@ -868,26 +935,60 @@ test('a claim event file whose until is more than six hours after its at is skip
 });
 
 test('a close event file parses back to the event that was written', () => {
-  const event = close(uuid, 4, ['x', 'y'], 'one-off');
+  const event = close(uuid, 4, [weed, weedId('any-type', 'src/y.ts:1', 'census:any-type')], 'one-off');
 
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
 });
 
+test('a close event file that names no weed is skipped, as a close of nothing open writes nothing', () => {
+  const event = close(uuid, 4, [], 'one-off');
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'close names no weed');
+});
+
+test('a close event file that names something other than a weed id is skipped', () => {
+  const parse = (id: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify(close(uuid, 4, [weed, id], 'one-off')));
+
+  assert.deepEqual(
+    [parse('x'), parse(`0${weed}`), parse(`${weed}0`)],
+    [
+      'close names something other than a weed id',
+      'close names something other than a weed id',
+      'close names something other than a weed id',
+    ],
+  );
+});
+
+test('a one-off or kept close event file whose reason is blank is skipped, as close refuses it', () => {
+  const parse = (by: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify({ ...close(uuid, 4, [weed], 'kept'), by }));
+
+  assert.deepEqual([parse(''), parse(' ')], ['by is blank', 'by is blank']);
+});
+
+test('a tend close event file whose check is blank is skipped, as close-class refuses it', () => {
+  const parse = (check: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify({ ...tend(uuid, 4, [weed]), check }));
+
+  assert.deepEqual([parse(''), parse(' ')], ['check is blank', 'check is blank']);
+});
+
 test('a tend close event file parses back with its bed and check', () => {
-  const event = tend(uuid, 4, ['x']);
+  const event = tend(uuid, 4, [weed]);
 
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
 });
 
 test('a tend close event file that names no bed of its own class is skipped', () => {
-  const event = { ...tend(uuid, 4, ['x']), by: 'bed/other@1a2b3c4' };
+  const event = { ...tend(uuid, 4, [weed]), by: 'bed/other@1a2b3c4' };
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'tend close names no bed/<class>@<commit>');
 });
 
 test('a tend close event file whose by holds a bed inside other text is skipped', () => {
   const parse = (by: string): GardenEvent | string =>
-    parseEvent(eventPath(uuid), JSON.stringify({ ...tend(uuid, 4, ['x']), by }));
+    parseEvent(eventPath(uuid), JSON.stringify({ ...tend(uuid, 4, [weed]), by }));
 
   assert.deepEqual(
     [parse('xbed/any-type@1a2b3c4'), parse('bed/any-type@1a2b3c4x')],
@@ -896,13 +997,13 @@ test('a tend close event file whose by holds a bed inside other text is skipped'
 });
 
 test('a kept close event file parses back to the event that was written', () => {
-  const event = close(uuid, 4, ['x'], 'kept');
+  const event = close(uuid, 4, [weed], 'kept');
 
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
 });
 
 test('an add event file with no layer and no tend seen parses back to the event that was written', () => {
-  const event = add(uuid, 3, 'x', { layer: null, sawTend: null });
+  const event = storedAdd(uuid, 3, { layer: null, sawTend: null });
 
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
 });
@@ -914,9 +1015,21 @@ test('a claim event file parses back to the event that was written', () => {
 });
 
 test('a release event file parses back to the event that was written', () => {
-  const event = release(uuid, 6, 'c1');
+  const event = release(uuid, 6, 'ff3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6');
 
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
+});
+
+test('a release event file whose claim is not an event uuid is skipped', () => {
+  const event = release(uuid, 6, 'c1');
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'claim is not a UUID');
+});
+
+test('a seed event file whose sha is not a full commit id is skipped', () => {
+  const event = { op: 'seed', uuid, clock: 7, at, sha: '--x' } as const;
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'sha is not a full commit id');
 });
 
 test('a seed event file parses back to the event that was written', () => {
@@ -943,11 +1056,11 @@ test('an event file whose text holds a line break or control character is skippe
   assert.deepEqual(
     [
       parse(add(uuid, 3, 'x\nforged')),
-      parse(add(uuid, 3, 'x', { where: 'src/a.ts:1\nforged' })),
-      parse(add(uuid, 3, 'x', { source: 'census:\u001b[31m' })),
-      parse(add(uuid, 3, 'x', { note: 'a\u202eb' })),
-      parse({ ...tend(uuid, 4, ['x']), check: 'checks/a\u0000.mjs' }),
-      parse({ ...close(uuid, 4, ['x'], 'one-off'), by: 'reason\rmore' }),
+      parse(storedAdd(uuid, 3, { where: 'src/a.ts:1\nforged' })),
+      parse(storedAdd(uuid, 3, { source: 'census:\u001b[31m' })),
+      parse(storedAdd(uuid, 3, { note: 'a\u202eb' })),
+      parse({ ...tend(uuid, 4, [weed]), check: 'checks/a\u0000.mjs' }),
+      parse({ ...close(uuid, 4, [weed], 'one-off'), by: 'reason\rmore' }),
       parse({ ...claim(uuid, 5, 'writer-a'), holder: 'a\u2028b' }),
     ],
     [
@@ -970,10 +1083,10 @@ test('each malformed event file says what is wrong with it', () => {
     [
       parse([]),
       parse({ op: 'seed', uuid, at }),
-      parse({ ...add(uuid, 1, 'x'), sawCloses: [1] }),
-      parse({ ...add(uuid, 1, 'x'), sawCloses: ['c1', 1] }),
-      parse({ ...close(uuid, 1, ['x'], 'one-off'), ids: 'x' }),
-      parse({ ...close(uuid, 1, ['x'], 'one-off'), check: 'eslint.config.mjs' }),
+      parse({ ...storedAdd(uuid, 1), sawCloses: [1] }),
+      parse({ ...storedAdd(uuid, 1), sawCloses: ['c1', 1] }),
+      parse({ ...close(uuid, 1, [weed], 'one-off'), ids: 'x' }),
+      parse({ ...close(uuid, 1, [weed], 'one-off'), check: 'eslint.config.mjs' }),
       parse({ ...claim(uuid, 1, 'writer-a'), until: 1 }),
       parse({ ...base, op: 'release', class: 'any-type' }),
       parse({ ...base, op: 'seed' }),
