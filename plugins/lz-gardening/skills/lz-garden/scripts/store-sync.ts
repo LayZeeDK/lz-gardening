@@ -86,11 +86,10 @@ interface WithCensusNotes extends Outcome {
   readonly localCensusUnreadable?: boolean;
 }
 
-// A reason comes with every offline result (git's, or that the time ran out) and read-only one, and with a behind
-// one lost to a ref lock.
+// A reason comes with every result but local and synced: git's, the ref a push lost, or that the time ran out.
 export type SyncResult =
   | (WithoutCensusNotes & { readonly state: 'local'; readonly reason?: undefined })
-  | (WithoutCensusNotes & { readonly state: 'behind'; readonly reason?: string })
+  | (WithoutCensusNotes & { readonly state: 'behind'; readonly reason: string })
   | (WithoutCensusNotes & { readonly state: 'offline'; readonly reason: string })
   | (WithCensusNotes & { readonly state: 'read-only'; readonly reason: string })
   | (WithCensusNotes & { readonly state: 'synced'; readonly reason?: undefined });
@@ -233,8 +232,11 @@ export function sleep(ms: number): void {
 const lostRace =
   /\[rejected\]|\[remote rejected\] \(.*(?:cannot lock ref|old value|failed to update|atomic transaction failed)/;
 
-export function rejected(porcelain: string): boolean {
-  return [...pushReport(porcelain).values()].some(({ summary }) => lostRace.test(summary));
+// The ref a push lost to another writer, with origin's summary for it.
+export function lostRaceOf(porcelain: string): string | undefined {
+  const lost = [...pushReport(porcelain)].find(([, { summary }]) => lostRace.test(summary));
+
+  return lost === undefined ? undefined : `${lost[0]}: ${lost[1].summary}`;
 }
 
 // origin answered and left a ref as it was; a push that never reached it reports no ref.
@@ -380,7 +382,7 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   const settledCensus = settleCensus(site, censusTips, pendingSha);
 
   if (settledCensus === lostToAnotherWriter) {
-    return { state: 'behind', ...nothingShared, ...found };
+    return { state: 'behind', reason: 'another sync of the site moved the census first', ...nothingShared, ...found };
   }
 
   const { recorded, ...settled } = settledCensus;
@@ -431,8 +433,10 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     return { state: 'synced', ...merged, divergedBeds: pushBeds(site, beds, attempt), recorded };
   }
 
-  if (rejected(pushed.stdout)) {
-    return { state: 'behind', ...unshared };
+  const lost = lostRaceOf(pushed.stdout);
+
+  if (lost !== undefined) {
+    return { state: 'behind', reason: lost, ...unshared };
   }
 
   return declined(pushed.stdout)

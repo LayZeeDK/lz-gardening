@@ -400,14 +400,16 @@ function anotherSyncMovesTheCensusFirst(t: TestContext, garden: string, to: stri
   });
 }
 
-test('a sync whose move to the shared census another sync of the site beat with another census ends behind', (t) => {
+test('a sync whose move to the shared census another sync of the site beat with another census ends behind, saying so', (t) => {
   const { first, second } = sharedPair(t);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
   const sha = commit(second.dir, { 'src/b.ts': 'export const b = 2;\n' });
   writePendingCensus({ path: second.garden, checkout: second.dir }, sha, censusText(sha));
   anotherSyncMovesTheCensusFirst(t, second.garden, git(second.garden, ['rev-parse', pendingCensusRef(sha)]));
 
-  assert.equal(sync(openSite(second.dir), { attempts: 1 }).state, 'behind');
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.reason], ['behind', 'another sync of the site moved the census first']);
 });
 
 test('a sync whose record of its pending census another sync of the site beat with another census ends behind', (t) => {

@@ -9,7 +9,7 @@ import { eventPath } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
 import { logRef, openSite } from './store-log.ts';
 import { censusRef, writePendingCensus } from './store-census.ts';
-import { mergeShared, rejected, sync } from './store-sync.ts';
+import { lostRaceOf, mergeShared, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo, scriptProcess } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
@@ -248,6 +248,19 @@ test('a push the origin refuses because another push moved the log first is trie
   assert.deepEqual([result.state, git(remote, ['rev-parse', logRef])], ['synced', git(garden, ['rev-parse', logRef])]);
 });
 
+test("a push lost to another push ends behind with the lost ref and origin's summary for it as the reason", (t) => {
+  const { dir } = planted(t);
+  const remote = bareRemote(dir);
+  addWeed(dir, 'src/a.ts:1');
+  sync(openSite(dir), { attempts: 1 });
+  moveWhileMarked(remote, 'moving', true);
+  addWeed(dir, 'src/b.ts:1');
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.match(result.reason ?? '', /^refs\/garden\/log: \[remote rejected\] \(.+\)$/);
+});
+
 function conflictBeforeARace(t: TestContext): {
   readonly second: { readonly dir: string; readonly garden: string };
   readonly remote: string;
@@ -434,7 +447,7 @@ test("a move of the log to origin's that fails while the log has not moved stops
   });
 });
 
-test('a sync waits about one second before its second try and about two before its third, give or take half', (t) => {
+function waitsOfThreeLostTries(t: TestContext, random: number): readonly number[] {
   const { dir } = planted(t);
   const remote = bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
@@ -442,11 +455,22 @@ test('a sync waits about one second before its second try and about two before i
   moveWhileMarked(remote, 'moving', false);
   addWeed(dir, 'src/b.ts:1');
   const waits: number[] = [];
+  t.mock.method(Math, 'random', () => random);
 
   sync(openSite(dir), { attempts: 3, wait: (ms) => waits.push(ms) });
 
+  return waits;
+}
+
+test('a sync waits half a second before its second try and one before its third at the least jitter', (t) => {
+  assert.deepEqual(waitsOfThreeLostTries(t, 0), [500, 1000]);
+});
+
+test('a sync waits under one and a half seconds before its second try and under three before its third at the most jitter', (t) => {
+  const waits = waitsOfThreeLostTries(t, 0.999);
+
   assert.deepEqual(
-    waits.map((ms, index) => ms >= 500 * 2 ** index && ms < 1500 * 2 ** index),
+    waits.map((ms, index) => ms > 1400 * 2 ** index && ms < 1500 * 2 ** index),
     [true, true],
     String(waits),
   );
@@ -789,10 +813,10 @@ test("a sync whose fetch finds a fetched ref's lock left behind ends behind with
 test('a push origin refused for a reason that only mentions a lock lost no race; one git could not lock a ref for did', () => {
   assert.deepEqual(
     [
-      rejected('!\trefs/garden/log:refs/garden/log\t[remote rejected] (repository is locked for maintenance)'),
-      rejected("!\trefs/garden/log:refs/garden/log\t[remote rejected] (cannot lock ref 'refs/garden/log': x)"),
+      lostRaceOf('!\trefs/garden/log:refs/garden/log\t[remote rejected] (repository is locked for maintenance)'),
+      lostRaceOf("!\trefs/garden/log:refs/garden/log\t[remote rejected] (cannot lock ref 'refs/garden/log': x)"),
     ],
-    [false, true],
+    [undefined, "refs/garden/log: [remote rejected] (cannot lock ref 'refs/garden/log': x)"],
   );
 });
 
