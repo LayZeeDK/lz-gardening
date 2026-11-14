@@ -14,12 +14,7 @@ import { sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site, writeCensus } from './test-site.ts';
-import { cli } from './test-weeds.ts';
-
-function addWeed(dir: string, where: string): void {
-  const added = cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:x']);
-  assert.equal(added.code, 0, added.stderr);
-}
+import { addWeed, cli } from './test-weeds.ts';
 
 test('a site whose checkout has no origin stays local and keeps its log as it was', (t) => {
   const { dir, garden } = planted(t);

@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { weedId } from './log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { commit, git } from './test-repo.ts';
 import { planted, writeCensus } from './test-site.ts';
@@ -20,10 +21,11 @@ export interface WeedsRun {
 }
 
 export function cli(cwd: string, args: readonly string[], env = process.env, at?: Date): WeedsRun {
-  return cliWith(cwd, args, {}, at ?? new Date(), env);
+  return cliWith(cwd, args, {}, env, at ?? new Date());
 }
 
-export function cliWith(cwd: string, args: readonly string[], seams: SyncSeams, at = now, env = process.env): WeedsRun {
+// The claim tests that pass sync seams plan against the fixed now.
+export function cliWith(cwd: string, args: readonly string[], seams: SyncSeams, env = process.env, at = now): WeedsRun {
   let stdout = '';
   let stderr = '';
   const code = run(
@@ -43,6 +45,13 @@ export function cliWith(cwd: string, args: readonly string[], seams: SyncSeams, 
   );
 
   return { code, stdout, stderr };
+}
+
+export function addWeed(dir: string, where: string, weedClass = 'any-type'): string {
+  const added = cli(dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:x']);
+  assert.equal(added.code, 0, added.stderr);
+
+  return weedId(weedClass, where, 'census:x');
 }
 
 export function cliProcess(cwd: string, args: readonly string[], env = process.env): WeedsRun {

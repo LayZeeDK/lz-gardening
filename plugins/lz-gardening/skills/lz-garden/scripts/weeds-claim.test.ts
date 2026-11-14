@@ -9,12 +9,7 @@ import { sync } from './store-sync.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { git } from './test-repo.ts';
 import { bareRemote, planted } from './test-site.ts';
-import { cli, cliWith, now } from './test-weeds.ts';
-
-function addWeed(dir: string, where: string, weedClass = 'any-type'): void {
-  const added = cli(dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:x']);
-  assert.equal(added.code, 0, added.stderr);
-}
+import { addWeed, cli, cliWith, now } from './test-weeds.ts';
 
 function claimsIn(gitDir: string): readonly (readonly unknown[])[] {
   if (git(gitDir, ['for-each-ref', logRef]) === '') {

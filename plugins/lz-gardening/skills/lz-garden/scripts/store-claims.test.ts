@@ -9,12 +9,7 @@ import { sync } from './store-sync.ts';
 import { logFiles } from './test-log.ts';
 import { git } from './test-repo.ts';
 import { planted, sharedPair, site } from './test-site.ts';
-import { cli, cliWith as claimWith, now, script } from './test-weeds.ts';
-
-function addWeed(dir: string, where: string, weedClass = 'any-type'): void {
-  const added = cli(dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:x']);
-  assert.equal(added.code, 0, added.stderr);
-}
+import { addWeed, cli, cliWith as claimWith, now, script } from './test-weeds.ts';
 
 function liveClaimWriters(gitDir: string, reader = now): readonly unknown[] {
   const events = [...logFiles(gitDir).values()];

@@ -2,18 +2,11 @@
 import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { claimLifetimeMs, replay, weedId } from './log.ts';
+import { claimLifetimeMs, replay } from './log.ts';
 import { openSite, readLog } from './store-log.ts';
 import { commit, git } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
-import { cli, now } from './test-weeds.ts';
-
-function addWeed(dir: string, where: string): string {
-  const added = cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:x']);
-  assert.equal(added.code, 0, added.stderr);
-
-  return weedId('any-type', where, 'census:x');
-}
+import { addWeed, cli, now } from './test-weeds.ts';
 
 test("close-class after the site's claim expired is refused once its first sync fetches another writer's newer claim", (t) => {
   const { first, second } = sharedPair(t);
