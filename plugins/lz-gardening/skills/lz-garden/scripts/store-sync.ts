@@ -3,7 +3,14 @@
 import { eventPathPattern, parseEvent, planGiveBack, releasesFor, replay } from './log.ts';
 import type { LostClaim } from './log.ts';
 import { pushBeds } from './store-beds.ts';
-import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
+import {
+  censusOffOrigin,
+  censusRef,
+  finishPendingCensus,
+  leaseOnFetchedCensus,
+  recordPendingCensus,
+  settleCensus,
+} from './store-census.ts';
 import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
@@ -257,8 +264,9 @@ export function claimRefusal(site: Site, weedClass: string, pre: SyncResult, now
 export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {
   const { result, recorded } = syncWithOrigin(site, options, now);
 
+  // A try that settled the census recorded the pending one already.
   if (options.census !== undefined) {
-    finishPendingCensus(site, options.census, recorded);
+    finishPendingCensus(site, options.census, recorded ?? recordPendingCensus(site, options.census));
   }
 
   return result;

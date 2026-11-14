@@ -123,7 +123,7 @@ export interface Recorded {
   readonly sha: string | undefined;
 }
 
-function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): Recorded {
+export function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): Recorded {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
   const held = local === undefined ? undefined : censusIn(site.path, local);
 
@@ -207,11 +207,10 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
   }
 }
 
-// A sync that settled the census recorded the pending one already, and passes what it recorded.
 export function finishPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,
-  recorded = recordPendingCensus(site, pendingSha),
+  recorded: Recorded,
 ): void {
   const pendingPrefix = pendingCensusRef('');
   const deletes = [...refsUnder(site.path, [pendingPrefix])].filter(([name]) => {
