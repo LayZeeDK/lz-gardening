@@ -13,7 +13,7 @@ import { openSite } from './store-log.ts';
 import { censusRef, parseCensus, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import type { Census } from './store-census.ts';
 import { sync } from './store-sync.ts';
-import { commit, git, repo } from './test-repo.ts';
+import { capturingIo, commit, git, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'census.ts');
@@ -30,20 +30,10 @@ function censusCli(dir: string, args: readonly string[], env: NodeJS.ProcessEnv 
 }
 
 async function census(dir: string, args: readonly string[]): Promise<Ran> {
-  let stdout = '';
-  let stderr = '';
-  const status = await run(args, {
-    cwd: dir,
-    env: process.env,
-    out: (text) => {
-      stdout += text;
-    },
-    err: (text) => {
-      stderr += text;
-    },
-  });
+  const captured = capturingIo(dir, process.env);
+  const status = await run(args, captured.io);
 
-  return { status, stdout, stderr };
+  return { status, stdout: captured.stdout(), stderr: captured.stderr() };
 }
 
 const set: PatternSet = {

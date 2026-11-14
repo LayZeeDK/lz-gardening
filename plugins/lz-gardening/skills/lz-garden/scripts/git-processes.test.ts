@@ -8,7 +8,7 @@ import { mayPointAtARepository } from './store-git.ts';
 import { writePendingCensus } from './store-census.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, siteProcess } from './test-site.ts';
-import { cliProcess } from './test-weeds.ts';
+import { addWeed, cliProcess } from './test-weeds.ts';
 
 const startsModule = new URL('test-git-starts.ts', import.meta.url).href;
 
@@ -127,13 +127,9 @@ test('sync --census that records the census and pushes it, with no other pending
   );
 });
 
-function addWeed(dir: string, where = 'src/a.ts:1'): void {
-  assert.equal(cliProcess(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:x']).code, 0);
-}
-
 test('bed makes a new bed for a claimed class in a garden with no origin with 9 git processes', (t) => {
   const { dir } = planted(t);
-  addWeed(dir);
+  addWeed(dir, 'src/a.ts:1');
   assert.equal(cliProcess(dir, ['claim', '--class', 'any-type']).code, 0);
 
   assertCount(
@@ -158,7 +154,7 @@ test('an add that adds a weed starts 7 git processes', (t) => {
 test('claim of a class with an origin and no race starts 28 git processes', (t) => {
   const { dir } = planted(t);
   bareRemote(dir);
-  addWeed(dir);
+  addWeed(dir, 'src/a.ts:1');
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
 
   assertCount(
@@ -170,7 +166,7 @@ test('claim of a class with an origin and no race starts 28 git processes', (t) 
 test('close-class --tended with an origin and no shared bed starts 33 git processes', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
-  addWeed(dir);
+  addWeed(dir, 'src/a.ts:1');
   assert.equal(cliProcess(dir, ['claim', '--class', 'any-type']).code, 0);
   assert.equal(siteProcess(dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
   const tip = commit(join(garden, 'beds', 'any-type'), { 'checks/any-type.mjs': 'export {};\n' });

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { isRecord } from './log.ts';
 import { run } from './site.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
-import { commit, git, init } from './test-repo.ts';
+import { capturingIo, commit, git, init } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
 
@@ -28,20 +28,10 @@ function siteRun(status: number | null, stdout: string, stderr: string): SiteRun
 }
 
 export function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
-  let stdout = '';
-  let stderr = '';
-  const status = run(args, {
-    cwd,
-    env,
-    out: (text) => {
-      stdout += text;
-    },
-    err: (text) => {
-      stderr += text;
-    },
-  });
+  const captured = capturingIo(cwd, env);
+  const status = run(args, captured.io);
 
-  return siteRun(status, stdout, stderr);
+  return siteRun(status, captured.stdout(), captured.stderr());
 }
 
 export function siteProcess(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
