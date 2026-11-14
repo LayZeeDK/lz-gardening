@@ -32,7 +32,7 @@ import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
 import {
@@ -483,10 +483,6 @@ function parseCommand(
   }
 
   return undefined;
-}
-
-function printableReason(result: SyncResult): string | undefined {
-  return result.reason === undefined ? undefined : escapeUnprintable(result.reason);
 }
 
 function reportSync(io: Io, result: SyncResult): void {

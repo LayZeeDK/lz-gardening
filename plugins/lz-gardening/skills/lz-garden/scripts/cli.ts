@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { unprintablePattern } from './log.ts';
 import { inRun } from './store-git.ts';
-import type { SyncResult } from './store-sync.ts';
 
 const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
 
@@ -11,8 +10,18 @@ export function escapeUnprintable(text: string): string {
   return text.replace(everyUnprintable, (character) => `\\u{${character.charCodeAt(0).toString(16)}}`);
 }
 
-export function reasonOf(result: SyncResult): string {
-  return result.reason === undefined ? '' : ` (${escapeUnprintable(result.reason)})`;
+interface WithReason {
+  readonly reason?: string | undefined;
+}
+
+export function printableReason(result: WithReason): string | undefined {
+  return result.reason === undefined ? undefined : escapeUnprintable(result.reason);
+}
+
+export function reasonOf(result: WithReason): string {
+  const reason = printableReason(result);
+
+  return reason === undefined ? '' : ` (${reason})`;
 }
 
 export interface Io {
