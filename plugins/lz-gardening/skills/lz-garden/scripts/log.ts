@@ -5,9 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { objectIdPattern } from './store-git.ts';
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+export { isRecord } from './log-guard.ts';
 
 export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
 

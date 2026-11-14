@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ESLint } from 'eslint';
-import { isRecord } from '../plugins/lz-gardening/skills/lz-garden/scripts/log.ts';
+import { isRecord } from '../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
 
 const root = join(import.meta.dirname, '..');
 const pluginPackageJson = join(root, 'plugins/lz-gardening/package.json');

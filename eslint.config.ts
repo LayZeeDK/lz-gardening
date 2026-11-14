@@ -22,14 +22,14 @@ export default tseslint.config(
   },
   {
     files: ['plugins/lz-gardening/skills/*/scripts/**/*.ts', 'tools/**/*.ts'],
-    ignores: ['plugins/lz-gardening/skills/lz-garden/scripts/log.ts'],
+    ignores: ['plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
           selector: 'FunctionDeclaration[id.name="isRecord"], VariableDeclarator[id.name="isRecord"]',
           message:
-            'isRecord is defined once, in lz-garden/scripts/log.ts: import { isRecord } from it instead of redefining it.',
+            'isRecord is defined once, in lz-garden/scripts/log-guard.ts (log.ts re-exports it): import it instead of redefining it.',
         },
       ],
     },

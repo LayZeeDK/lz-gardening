@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { CreateDependencies, CreateNodes, ProjectGraphExternalNode, TargetConfiguration } from '@nx/devkit';
 import { DependencyType } from '@nx/devkit';
 import ts from 'typescript';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log.ts';
+import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
 
 export interface Lockfile {
   readonly packages: Readonly<Record<string, unknown>>;
@@ -123,8 +123,7 @@ function pluginTargets(root: string, scriptNames: readonly string[]): Record<str
         '{projectRoot}/package.json',
         '{projectRoot}/package-lock.json',
         '{workspaceRoot}/tools/nx/claude-plugin.ts',
-        '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/log.ts',
-        '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/store-git.ts',
+        '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts',
         { runtime: 'npm --version' },
       ],
       outputs: [],
