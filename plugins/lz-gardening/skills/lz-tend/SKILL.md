@@ -78,8 +78,9 @@ Such a copy is kept, not removed, and the check pins the copies instead. A class
 whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
 each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule too narrow, a
 suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
-`(check: <where> not on the base)` when its bed has not landed, or the check's file is gone from the base. When the bed
-has not landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to
+`(check: <where> not on the base)` when its bed had not landed as of the garden's last census, or the check's file is
+gone from the base; a tend pass takes no census, so a bed that landed since still reads so. When the bed has not
+landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to
 the base, and change the check only if it misses the new weeds.
 
 Then decide, and say which:
