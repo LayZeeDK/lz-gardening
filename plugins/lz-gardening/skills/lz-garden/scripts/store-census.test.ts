@@ -459,6 +459,24 @@ test('a sync --census whose last record another sync of the site beat says the c
   );
 });
 
+test('a sync --census whose census another sync of the site recorded first counts it recorded', (t) => {
+  const place = planted(t);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
+  const pending = git(place.garden, ['rev-parse', pendingCensusRef(sha)]);
+  anotherSyncMovesTheCensusFirst(t, place.garden, pending);
+
+  const synced = site(place.dir, ['sync', '--census', sha]);
+
+  assert.deepEqual(
+    [
+      synced.stderr,
+      git(place.garden, ['for-each-ref', '--format=%(refname) %(objectname)', censusRef, 'refs/garden/pending']),
+    ],
+    ['', `${censusRef} ${pending}`],
+  );
+});
+
 test('a census move that fails while the census is as it was stops the sync with what git said', (t) => {
   const place = planted(t);
   const sha = git(place.dir, ['rev-parse', 'HEAD']);
