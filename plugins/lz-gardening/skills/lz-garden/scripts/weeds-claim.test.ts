@@ -5,10 +5,10 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { replay } from './log.ts';
 import { logRef, openSite, readLog } from './store-log.ts';
-import { sync } from './store-sync.ts';
+import { sleep, sync } from './store-sync.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { git, now } from './test-repo.ts';
-import { bareRemote, planted } from './test-site.ts';
+import { bareRemote, planted, remoteHook } from './test-site.ts';
 import { addWeed, cli, cliWith } from './test-weeds.ts';
 
 function claimsIn(gitDir: string): readonly (readonly unknown[])[] {
@@ -116,17 +116,13 @@ function waitFor(file: string): void {
   const deadline = Date.now() + 20_000;
 
   while (!existsSync(file) && Date.now() < deadline) {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    sleep(100);
   }
-}
-
-function hook(remote: string, name: string, body: string): void {
-  writeFileSync(join(remote, 'hooks', name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
 }
 
 test('claim --class whose origin declines the push says it cannot claim, read-only, with the reason, and releases', (t) => {
   const { dir, garden } = planted(t);
-  hook(bareRemote(dir), 'pre-receive', 'echo "refs/garden is closed here"\nexit 1');
+  remoteHook(bareRemote(dir), 'pre-receive', 'echo "refs/garden is closed here"\nexit 1');
   addWeed(dir, 'src/a.ts:1');
 
   const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
@@ -147,7 +143,7 @@ test('claim --class whose push the origin takes after the time is up releases th
   addWeed(dir, 'src/a.ts:1');
   assert.equal(sync(openSite(dir), { attempts: 1 }).state, 'synced');
   // The hook holds the claim's push until the claim has given up, so the timeout can leave the release sync room.
-  hook(
+  remoteHook(
     remote,
     'post-receive',
     'if [ -f slow ]; then\n  rm slow\n  i=0\n  while [ ! -f go ] && [ $i -lt 600 ]; do\n    sleep 0.1\n    i=$((i + 1))\n  done\n  touch slept\nfi',

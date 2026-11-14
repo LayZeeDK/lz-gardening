@@ -14,7 +14,16 @@ import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { censusText } from './test-census.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
-import { bareRemote, planted, scriptProcess, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
+import {
+  bareRemote,
+  planted,
+  remoteHook,
+  scriptProcess,
+  sharedPair,
+  site,
+  siteScript,
+  writeCensus,
+} from './test-site.ts';
 import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
 
 test('a site whose checkout has no origin stays local and keeps its log as it was', (t) => {
@@ -141,10 +150,6 @@ test('an origin that cannot be reached leaves the site offline, with what git sa
   assert.equal(git(garden, ['rev-parse', logRef]), tip);
 });
 
-function preReceive(remote: string, body: string): void {
-  writeFileSync(join(remote, 'hooks', 'pre-receive'), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
-}
-
 test('a site whose garden log is gone is refused by a sync, naming the site and the fix', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
@@ -158,7 +163,7 @@ test('a site whose garden log is gone is refused by a sync, naming the site and 
 test('an origin whose hook declines the push leaves the site read-only, with what the hook said', (t) => {
   const { dir } = planted(t);
   const remote = bareRemote(dir);
-  preReceive(remote, 'echo "refs/garden is closed here"\nexit 1');
+  remoteHook(remote, 'pre-receive', 'echo "refs/garden is closed here"\nexit 1');
   addWeed(dir, 'src/a.ts:1');
 
   const result = sync(openSite(dir), { attempts: 1 });
@@ -224,8 +229,9 @@ test('a push the origin rejects as not a fast-forward waits, fetches again, and 
 
 // The quarantine variable is unset so git lets the hook move a ref.
 function moveWhileMarked(remote: string, marker: string, once: boolean): void {
-  preReceive(
+  remoteHook(
     remote,
+    'pre-receive',
     [
       'unset GIT_QUARANTINE_PATH',
       `if [ -f ${marker} ]; then`,
@@ -479,7 +485,7 @@ test('a fetch that finds the shared log locked by another sync of the site waits
 
 test('a push the origin declines counts no event as pushed', (t) => {
   const { dir } = planted(t);
-  preReceive(bareRemote(dir), 'exit 1');
+  remoteHook(bareRemote(dir), 'pre-receive', 'exit 1');
   addWeed(dir, 'src/a.ts:1');
 
   assert.equal(sync(openSite(dir), { attempts: 1 }).pushedEvents, 0);

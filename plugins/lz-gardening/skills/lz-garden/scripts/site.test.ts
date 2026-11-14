@@ -14,6 +14,7 @@ import {
   bareRemote,
   configEnv,
   planted,
+  remoteHook,
   sharedPair,
   writeCensus,
   writeCensusText,
@@ -379,9 +380,7 @@ test('sync names a skipped shared file whose path breaks or reorders a line with
 test('sync prints a reason whose text reorders a line with that character escaped', (t) => {
   const { dir } = planted(t);
   const remote = bareRemote(dir);
-  writeFileSync(join(remote, 'hooks', 'pre-receive'), "#!/bin/sh\nprintf 'closed \\342\\200\\256here\\n'\nexit 1\n", {
-    mode: 0o755,
-  });
+  remoteHook(remote, 'pre-receive', "printf 'closed \\342\\200\\256here\\n'\nexit 1");
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
 
   const result = site(dir, ['sync']);

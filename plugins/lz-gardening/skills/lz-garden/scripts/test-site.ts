@@ -112,6 +112,11 @@ export function bareRemote(dir: string): string {
   return remote;
 }
 
+/** Makes a remote run a shell script as one of its hooks, as git does on every platform the tests run on. */
+export function remoteHook(remote: string, name: string, body: string): void {
+  writeFileSync(join(remote, 'hooks', name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+}
+
 export function sharedPair(t: TestContext): {
   readonly first: Planted;
   readonly second: Planted;

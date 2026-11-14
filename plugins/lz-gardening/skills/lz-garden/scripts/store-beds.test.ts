@@ -7,10 +7,10 @@ import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { logRef, openSite } from './store-log.ts';
-import { sync } from './store-sync.ts';
+import { sleep, sync } from './store-sync.ts';
 import { commit, git } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
-import { bareRemote, planted, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
+import { bareRemote, planted, remoteHook, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
 import type { Planted } from './test-site.ts';
 import { anyTypeBedFromMain, cli, homeAt } from './test-weeds.ts';
 
@@ -125,10 +125,10 @@ test('site sync names a bed it left out on stderr', (t) => {
 
 test("a bed the origin refuses leaves the log synced and is named with git's reason", (t) => {
   const place = withBed(t);
-  writeFileSync(
-    join(place.remote, 'hooks', 'pre-receive'),
-    '#!/bin/sh\nwhile read old new ref; do\n  case "$ref" in refs/garden/beds/*) echo "no beds here"; exit 1;; esac\ndone\n',
-    { mode: 0o755 },
+  remoteHook(
+    place.remote,
+    'pre-receive',
+    'while read old new ref; do\n  case "$ref" in refs/garden/beds/*) echo "no beds here"; exit 1;; esac\ndone',
   );
   git(place.dir, ['config', 'lzGardening.share', 'false']);
   tend(place, { 'checks/any-type.mjs': 'export {};\n' });
@@ -150,7 +150,7 @@ test("a bed the origin refuses leaves the log synced and is named with git's rea
 // The log's push lands and leaves origin no repository, so the bed's push fails before git prints a line for its ref.
 function bedPushFails(t: TestContext): Tended & { readonly tip: string } {
   const place = withBed(t);
-  writeFileSync(join(place.remote, 'hooks', 'post-receive'), '#!/bin/sh\nrm HEAD\n', { mode: 0o755 });
+  remoteHook(place.remote, 'post-receive', 'rm HEAD');
   git(place.dir, ['config', 'lzGardening.share', 'false']);
   const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
   git(place.dir, ['config', 'lzGardening.share', 'true']);
@@ -203,10 +203,10 @@ test('a bed that lands keeps a mark another sync moved to another commit while i
   sync(openSite(place.dir), { attempts: 1 });
   originBack(place);
   const moved = git(place.bed, ['rev-parse', 'HEAD~1']);
-  writeFileSync(
-    join(place.remote, 'hooks', 'post-receive'),
-    `#!/bin/sh\nunset GIT_DIR GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES\ngit -C '${place.garden}' update-ref refs/garden-unpushed/beds/any-type ${moved}\n`,
-    { mode: 0o755 },
+  remoteHook(
+    place.remote,
+    'post-receive',
+    `unset GIT_DIR GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES\ngit -C '${place.garden}' update-ref refs/garden-unpushed/beds/any-type ${moved}`,
   );
 
   sync(openSite(place.dir), { attempts: 1 });
@@ -234,10 +234,10 @@ test('a later sync pushes the bed of a close whose log push landed after the syn
   git(place.dir, ['config', 'lzGardening.share', 'false']);
   const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
   git(place.dir, ['config', 'lzGardening.share', 'true']);
-  writeFileSync(join(place.remote, 'hooks', 'post-receive'), '#!/bin/sh\nsleep 4\n', { mode: 0o755 });
+  remoteHook(place.remote, 'post-receive', 'sleep 4');
   const stopped = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1500 });
   // The hook goes on after the push stopped waiting; it must end before the next push runs it again.
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+  sleep(5000);
   rmSync(join(place.remote, 'hooks', 'post-receive'));
   const landed = git(place.remote, ['rev-parse', logRef]) === git(place.garden, ['rev-parse', logRef]);
 
@@ -250,7 +250,7 @@ test('a later sync pushes the bed of a close whose log push landed after the syn
 function stopOnReceive(pidFile: string): string {
   const stop = `const { existsSync, readFileSync, rmSync } = require("node:fs"); const file = process.argv[1]; if (existsSync(file)) { const pid = Number(readFileSync(file, "utf8")); rmSync(file); process.kill(pid, "SIGKILL"); }`;
 
-  return `#!/bin/sh\n'${process.execPath}' -e '${stop}' '${pidFile}'\n`;
+  return `'${process.execPath}' -e '${stop}' '${pidFile}'`;
 }
 
 test('a later sync pushes the bed of a close whose sync process stopped once its log landed', async (t) => {
@@ -259,7 +259,7 @@ test('a later sync pushes the bed of a close whose sync process stopped once its
   const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
   git(place.dir, ['config', 'lzGardening.share', 'true']);
   const pidFile = join(place.remote, 'sync.pid');
-  writeFileSync(join(place.remote, 'hooks', 'post-receive'), stopOnReceive(pidFile), { mode: 0o755 });
+  remoteHook(place.remote, 'post-receive', stopOnReceive(pidFile));
   const stopped = spawn(process.execPath, [siteScript, 'sync'], { cwd: place.dir, stdio: 'ignore' });
   writeFileSync(pidFile, String(stopped.pid));
   await once(stopped, 'exit');
