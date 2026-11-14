@@ -195,17 +195,23 @@ export async function gitAsync(
   const result = await runGitAsync(cwd, args, env);
 
   if (result.code !== 0) {
-    throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
+    throw gitFailed(args, result.stderr);
   }
 
   return result.stdout.trim();
+}
+
+// The arguments go into the message, so no caller may pass an origin URL, which can hold a token; fetch and push name
+// one only through networkGit, which never throws.
+export function gitFailed(args: readonly string[], stderr: string): Error {
+  return new Error(`git ${args.join(' ')}: ${stderr.trim()}`);
 }
 
 export function git(cwd: string, args: readonly string[], options: GitInput = {}): string {
   const result = runGit(cwd, args, options);
 
   if (result.status !== 0) {
-    throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
+    throw gitFailed(args, result.stderr);
   }
 
   return result.stdout.trim();
@@ -223,7 +229,7 @@ export function gitSucceeds(cwd: string, args: readonly string[], options: GitIn
 
 /** The first line of git's message, as a reason to print. */
 export function gitReason(stderr: string): string {
-  return stderr.trim().split('\n')[0]?.trim() ?? '';
+  return stderr.trim().replace(/\n.*$/s, '').trim();
 }
 
 // Stryker disable next-line LzJsNumericLiteral: how long a fetch or push may take is policy; the limit is tested through timeoutMs
@@ -396,7 +402,7 @@ export function isAncestor(cwd: string, ancestor: string, descendant: string): b
   const result = runGit(cwd, args, { readsOnly: true });
 
   if (result.status !== 0 && result.status !== 1) {
-    throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
+    throw gitFailed(args, result.stderr);
   }
 
   return result.status === 0;

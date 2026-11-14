@@ -11,6 +11,7 @@ import {
   forgetConfig,
   git,
   gitEnv,
+  gitFailed,
   mainCheckout,
   optionalGit,
   runGit,
@@ -105,7 +106,7 @@ export function moveLogIfStill(site: string, to: string, from: string): boolean 
   const moved = runGit(site, args);
 
   if (moved.status !== 0 && git(site, ['rev-parse', '--verify', logRef]) === from) {
-    throw new Error(`git ${args.join(' ')}: ${moved.stderr.trim()}`);
+    throw gitFailed(args, moved.stderr);
   }
 
   return moved.status === 0;
