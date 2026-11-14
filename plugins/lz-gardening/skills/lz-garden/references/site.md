@@ -39,10 +39,11 @@ nothing and gains no refs, and they push no ref outside `refs/garden/`.
 `git config lzGardening.share false` in the checkout keeps the garden local. Events are never edited or deleted, so
 the merge is the union of both logs' event files: the commit takes the site's log and adds the shared log's files.
 A file both logs hold with different content keeps the shared content and is reported as a conflict; a shared file
-that is not an event file (`events/<xx>/<uuid>.json`) or `garden.json` is not copied and is named on stderr. A shared
-log in a format other than this version's stops the sync with exit 2, naming both formats; one that is not a commit
-holding `garden.json` stops it with exit 2 too, saying to delete or fix it on `origin`. Because every site holds
-the whole log, a site made again, or one whose remote ref was deleted, gets the log back on its next sync.
+that is not an event file (`events/<xx>/<uuid>.json`) or `garden.json` is not copied, and `site.ts sync` names it on
+stderr. A shared log in a format other than this version's stops the sync with exit 2, naming both formats; one that
+is not a commit holding `garden.json` stops it with exit 2 too, saying to delete or fix it on `origin`. Because
+every site holds the whole log, a site made again, or one whose remote ref was deleted, gets the log back on its next
+sync.
 
 After the log lands, a sync pushes beds in a push of their own, one ref per bed, so a bed `origin` refuses holds back
 neither the log nor another bed. For each class, the latest tended close in the merged log names the bed: the sync
@@ -83,7 +84,8 @@ Claims decide who tends a class. A sync that shares a claim of this writer's che
 another writer's claim of the class came first, it gives the claim back with a release, pushed in the same sync,
 and names the class and the holder on stderr. `weeds.ts close-class` and `site.ts bed` share one precondition: each
 syncs first and acts only when that sync is `synced` or `local` and this writer then holds a live claim of the
-class; otherwise each exits 1 and changes nothing. `close --id` needs no claim.
+class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
+another writer holds a claim of the weed's class.
 
 The census is decided by the ancestry of its base commit, read in the checkout. A sync takes the shared census over
 the site's unless the site's census is of a commit that descends from the shared one's; a shared census that is not

@@ -49,9 +49,7 @@ the session's working directories (the session's environment lists any added one
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
 - Stop at a refused command: report it and end the tend pass, as when a step's done condition is not met. The
-  refusal is the user's answer, so the pass ends there. A refused `git rm` is not run as `rm`, a refused `sed` is
-  not done with the Edit tool, a refused redirect is not turned into a pipe, and a refused command is not sent again
-  in another form, the forms above included.
+  refusal is the user's answer to the command in every form, the forms above included, so the pass ends there.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.

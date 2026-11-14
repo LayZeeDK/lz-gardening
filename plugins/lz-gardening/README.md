@@ -35,9 +35,10 @@ Run the watch on a loop and tend by hand:
 ```
 
 A tick that finds nothing replies with one line. A tick that finds a class whose open weeds sit in two or more files
-names it in its `ready to tend: <class>` line. Two or more files means several agents took the same shortcut. A
-class whose open weeds all sit in one file waits for a second. Recurring `/loop` tasks expire after seven days; start
-the loop again after that.
+names it in its `ready to tend: <class>` line, unless another clone holds a claim of it or it is a class tended
+another way (`stale-verification`, `repeated-lesson`). Two or more files means several agents took the same
+shortcut. A class whose open weeds all sit in one file waits for a second. Recurring `/loop` tasks expire after
+seven days; start the loop again after that.
 
 ## How it stays out of the way
 
@@ -63,13 +64,14 @@ clone took. A tend pass claims its class in the queue first, so two clones never
 its close and its bed when it ends; a class is closed, like a bed made, only under the closer's own claim. No ref
 outside `refs/garden/` is pushed, and the checkout itself fetches nothing. A clone that cannot reach `origin`, or may
 not push to it, keeps working on its own copy and shares it on a later tick. Whoever can read the repository can read
-the shared queue: each claim names its holder by `lzGardening.name` when you set it, and otherwise by the first 8
-characters of the site's random writer id, never by your `user.name`; the bed commits carry your `user.name` and
-`user.email`. Each census also carries the site's `.garden/patterns.json` byte for byte, and nothing checks that
-file for machine paths, so keep local paths and private text out of it. A clone without the file takes its census
-with the extra patterns of the last census it holds, which a sync takes from `origin`. The queue's and the census's
-own commits are authored and committed as `lz-gardening <>`; to put your own name on them, set both
-`lzGardening.name` and `lzGardening.email` in the repository's git config. To keep the garden local only:
+the shared queue: each claim names its holder by `lzGardening.name` when you set it, and otherwise by `writer` and the
+first 8 characters of the site's random writer id, never by your `user.name`; the bed commits carry the `user.name`
+and `user.email` the site copied from the repository when `site.ts open` made it. Each census also carries the
+site's `.garden/patterns.json` byte for byte, and nothing checks that file for machine paths, so keep local paths
+and private text out of it. A clone without the file takes its census with the extra patterns of the last census it
+holds, which a sync takes from `origin`. The queue's and the census's own commits are authored and committed as
+`lz-gardening <>`; to put your own name on them, set both `lzGardening.name` and `lzGardening.email` in the
+repository's git config. To keep the garden local only:
 
 ```bash
 git config lzGardening.share false
