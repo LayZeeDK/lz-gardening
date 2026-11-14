@@ -469,7 +469,7 @@ test('a census of a commit only a tag and another remote hold stays local', (t) 
   );
 });
 
-test('a census commit is signed lz-gardening with no address, and an origin that checks every object takes it', (t) => {
+test('a census commit is authored as lz-gardening with no address, and an origin that checks every object takes it', (t) => {
   const place = planted(t);
   const remote = bareRemote(place.dir);
   git(remote, ['config', 'receive.fsckObjects', 'true']);

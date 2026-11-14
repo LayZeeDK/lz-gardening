@@ -29,15 +29,15 @@ function identity(checkout: string, whose: 'author' | 'committer', now: string):
   const variable = `GIT_${whose.toUpperCase()}`;
   const name = configValue(checkout, 'lzGardening.name');
   const email = configValue(checkout, 'lzGardening.email');
-  const signer = name === undefined || email === undefined ? 'lz-gardening <>' : `${name} <${email}>`;
+  const who = name === undefined || email === undefined ? 'lz-gardening <>' : `${name} <${email}>`;
 
-  return `${whose} ${signer} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
+  return `${whose} ${who} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
 }
 
 type CommitFile = { readonly path: string; readonly text: string } | { readonly path: string; readonly oid: string };
 
-// A fast-import stream of one commit to ref, on the first parent given and merging the others, signed with the
-// checkout's garden identity.
+// A fast-import stream of one commit to ref, on the first parent given and merging the others, authored and
+// committed as the checkout's garden identity.
 export function commitStream(
   { checkout }: Pick<Site, 'checkout'>,
   ref: string,
