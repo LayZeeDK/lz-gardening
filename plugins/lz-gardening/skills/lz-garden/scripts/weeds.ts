@@ -31,7 +31,7 @@
 //                                        (tending); --min <n> keeps the classes whose open weeds sit in n or more
 //                                        files (places), and defaults to 1; --ready keeps the classes claim without
 //                                        --class may take: ready, not stale-verification or repeated-lesson, and
-//                                        claimed by no other writer
+//                                        claimed by no other writer; both together are a usage error
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
@@ -438,7 +438,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       'one-off': { type: 'string' },
       keep: { type: 'string' },
       check: { type: 'string' },
-      min: { type: 'string', default: '1' },
+      min: { type: 'string' },
       ready: { type: 'boolean', default: false },
     },
   });
@@ -570,10 +570,17 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       return 0;
     }
     case 'groups': {
-      const min = Number(values.min);
+      if (values.ready && values.min !== undefined) {
+        io.err('weeds groups: --ready and --min go apart; give one or the other\n');
+
+        return 2;
+      }
+
+      const minText = values.min ?? '1';
+      const min = Number(minText);
 
       if (!Number.isInteger(min) || min < 1) {
-        io.err(`weeds groups: --min must be a whole number of at least 1, got ${values.min}\n`);
+        io.err(`weeds groups: --min must be a whole number of at least 1, got ${minText}\n`);
 
         return 2;
       }

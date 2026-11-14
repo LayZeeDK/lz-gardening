@@ -359,6 +359,17 @@ test('groups refuses a --min that is not a positive whole number, rather than hi
   }
 });
 
+test('groups refuses --ready with --min, as the usage gives one or the other', (t) => {
+  const dir = checkout(t);
+
+  const result = cli(dir, ['groups', '--ready', '--min', '3']);
+
+  assert.deepEqual(
+    [result.code, result.stdout, result.stderr],
+    [2, '', 'weeds groups: --ready and --min go apart; give one or the other\n'],
+  );
+});
+
 test('validation takes layers 1 and 6, refuses 0 and 1.5, and matches the whole class and source', () => {
   assert.equal(validateAdd(input({ layer: 1 })), null);
   assert.equal(validateAdd(input({ layer: 6 })), null);
