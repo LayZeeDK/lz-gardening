@@ -5,7 +5,7 @@ import {
   git,
   gitReason,
   gitSucceeds,
-  isAncestor,
+  isKnownAncestor,
   networkGit,
   objectIds,
   pushReport,
@@ -118,6 +118,13 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
   return added.some(machinePathTest(site)) ? 'stays local: it holds a path on this machine' : undefined;
 }
 
+// Anyone who can push the log can put any object at origin's bed ref.
+function divergedFrom(site: Site, weedClass: string, shared: string): string {
+  return objectIds(site.path, [`${shared}^{commit}`])[0] === undefined
+    ? `stays local: origin's ${sharedBedRef(weedClass)} is not a commit`
+    : `does not descend from origin's bed`;
+}
+
 interface Bed {
   readonly weedClass: string;
   readonly tip: string;
@@ -170,9 +177,9 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
         : [];
     }
 
-    const why = isAncestor(site.path, shared, bed.tip)
+    const why = isKnownAncestor(site.path, shared, bed.tip)
       ? bedStaysLocal(site, bed.tip, shared)
-      : `does not descend from origin's bed`;
+      : divergedFrom(site, bed.weedClass, shared);
 
     return [{ ...bed, why }];
   });

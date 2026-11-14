@@ -109,6 +109,27 @@ test('a bed ref deleted on the origin after its close was shared is not pushed b
   assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], '']);
 });
 
+test('a bed whose ref on origin is not a commit stays local and is named, and the log still lands', (t) => {
+  const place = withBed(t);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.remote, ['update-ref', 'refs/garden/beds/any-type', `${logRef}^{tree}`]);
+  git(place.dir, ['config', 'lzGardening.share', 'false']);
+  tend(place, { 'checks/any-type.mjs': 'export const later = 1;\n' }, 'src/b.ts:1');
+  git(place.dir, ['config', 'lzGardening.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.divergedBeds, git(place.remote, ['rev-parse', logRef])],
+    [
+      'synced',
+      ["any-type: bed/any-type stays local: origin's refs/garden/beds/any-type is not a commit"],
+      git(place.garden, ['rev-parse', logRef]),
+    ],
+  );
+});
+
 test('site sync names a bed it left out on stderr', (t) => {
   const place = withBed(t);
   tend(place, { 'checks/any-type.mjs': 'export {};\n' });
