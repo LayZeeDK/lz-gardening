@@ -12,7 +12,7 @@ import { commit, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { cli, homeAt, now, script } from './test-weeds.ts';
-import { addStatus, validateAdd } from './weeds.ts';
+import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
 
 function input(overrides: Partial<AddInput> = {}): AddInput {
   return {
@@ -582,6 +582,20 @@ test('a close refuses a reason or check holding a control character, which later
     ],
   );
   assert.equal(logFiles(garden).size, 1);
+});
+
+test('close-class refuses a class that is not kebab-case, so its control characters never reach the output', () => {
+  assert.equal(
+    parseCloseFlags('close-class', { class: 'any-type\u001b[2J', keep: 'on purpose' }),
+    '--class must be kebab-case',
+  );
+});
+
+test('close refuses an id holding a control character, which its output would print raw', () => {
+  assert.equal(
+    parseCloseFlags('close', { id: 'abc\u001b[2J', keep: 'on purpose' }),
+    '--id must be one line of text without control characters',
+  );
 });
 
 test('a close-class under a claim whose class has nothing open any more exits 1 and names its target', (t) => {

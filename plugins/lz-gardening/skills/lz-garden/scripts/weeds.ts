@@ -146,7 +146,12 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     return `needs ${command === 'close' ? '--id' : '--class'} and exactly one of --tended, --one-off or --keep`;
   }
 
+  if (command === 'close-class' && !classPattern.test(target)) {
+    return '--class must be kebab-case';
+  }
+
   const unprintable = firstUnprintable({
+    id: flags.id,
     tended: flags.tended,
     'one-off': flags['one-off'],
     keep: flags.keep,
