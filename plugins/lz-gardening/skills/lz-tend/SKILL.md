@@ -38,9 +38,9 @@ the session's working directories (the session's environment lists any added one
   `npm --prefix "<bed>" exec -- <tool> <args>`, which takes the bed's installed tool but runs in the checkout, so
   give it the bed's files by full path, and use it only for a tool that finds its config beside the files it reads
   (Prettier, say). `site` finds the site from the checkout.
-- When nothing above fits, run `cd "<bed>" && <command>` with nothing after the command, then `cd "<checkout>"` as a
-  call of its own before the next `site` or `weeds` call. Never put git after a `cd`: Claude Code refuses such a
-  chain, whatever the allow list says.
+- When nothing above fits, run `cd "<bed>" && <command>` with nothing after the command, and send `cd "<checkout>"`
+  as your very next call: the shell stays in the bed after a `cd`, and the commands above expect the checkout. Never
+  put git after a `cd`: Claude Code refuses such a chain, whatever the allow list says.
 - Send each command bare: no pipe (`| tail`, `| head`, `| node -e`), no redirect (`>`, `2>&1`) and no second command
   after `;` or `&&` (the `cd "<bed>" &&` above aside). Claude Code refuses those forms in the bed and the site. Read
   the summary lines in the tool result; when a command prints more than the result shows, run a narrower one (one
@@ -48,9 +48,10 @@ the session's working directories (the session's environment lists any added one
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
-- When a command is refused, report it and stop the tend pass, as when a step's done condition is not met. The
-  refusal is the user's answer: reach the same result with no other command or tool (`rm` for a refused `git rm`,
-  the Edit tool for a refused `sed`, a pipe for a refused redirect).
+- Stop at a refused command: report it and end the tend pass, as when a step's done condition is not met. The
+  refusal is the user's answer, so the pass ends there. A refused `git rm` is not run as `rm`, a refused `sed` is
+  not done with the Edit tool, a refused redirect is not turned into a pipe, and a refused command is not sent again
+  in another form, the forms above included.
 - Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.
