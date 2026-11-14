@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { claimLifetimeMs, replay, weedId } from './log.ts';
-import { openSite, readLog } from './store.ts';
+import { openSite, readLog } from './store-log.ts';
 import { commit, git } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 import { cli, now } from './test-weeds.ts';

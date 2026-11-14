@@ -8,7 +8,7 @@ import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from './log.ts';
 import { run } from './site.ts';
-import { censusRef, pendingCensusRef, writePendingCensus } from './store.ts';
+import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { commit, git, init } from './test-repo.ts';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');

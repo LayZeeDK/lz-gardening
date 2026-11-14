@@ -66,21 +66,12 @@ import type {
 } from './log.ts';
 import { claimRefusal, escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import {
-  append,
-  censusRef,
-  configValue,
-  git,
-  gitSucceeds,
-  isShared,
-  objectIdPattern,
-  optionalGit,
-  openSite,
-  readCensusAt,
-  readLog,
-  sync,
-} from './store.ts';
-import type { Replica, Site, SyncOptions } from './store.ts';
+import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';
+import { append, openSite, readLog } from './store-log.ts';
+import type { Replica, Site } from './store-log.ts';
+import { censusRef, readCensusAt } from './store-census.ts';
+import { isShared, sync } from './store-sync.ts';
+import type { SyncOptions } from './store-sync.ts';
 
 export interface Group {
   readonly class: string;

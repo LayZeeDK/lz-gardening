@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { run } from './site.ts';
-import { logRef } from './store.ts';
+import { logRef } from './store-log.ts';
 import { httpRemote } from './test-http-remote.ts';
 import { git } from './test-repo.ts';
 import { planted } from './test-site.ts';

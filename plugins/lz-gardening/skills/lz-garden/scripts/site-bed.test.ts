@@ -14,7 +14,7 @@ import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
-import { logRef } from './store.ts';
+import { logRef } from './store-log.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 import { cli } from './test-weeds.ts';
 

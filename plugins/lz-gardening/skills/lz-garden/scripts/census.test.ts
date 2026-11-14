@@ -9,8 +9,10 @@ import { fileURLToPath } from 'node:url';
 import { diffCensus, diffDuplicates, mergePatternSets, parseGrep, parsePatternSet, run, takeCensus } from './census.ts';
 import { isRecord } from './log.ts';
 import type { PatternSet } from './census.ts';
-import { censusRef, openSite, parseCensus, pendingCensusRef, sync, writePendingCensus } from './store.ts';
-import type { Census } from './store.ts';
+import { openSite } from './store-log.ts';
+import { censusRef, parseCensus, pendingCensusRef, writePendingCensus } from './store-census.ts';
+import type { Census } from './store-census.ts';
+import { sync } from './store-sync.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
 

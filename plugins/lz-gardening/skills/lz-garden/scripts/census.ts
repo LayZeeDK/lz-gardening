@@ -21,8 +21,10 @@ import { parseArgs } from 'node:util';
 import { isMainModule, processIo } from './cli.ts';
 import type { Io } from './cli.ts';
 import { isRecord } from './log.ts';
-import { censusRef, gitEnv, inRun, openSite, readCensusAt, writePendingCensus } from './store.ts';
-import type { Census, StoredCensus } from './store.ts';
+import { gitEnv, inRun } from './store-git.ts';
+import { openSite } from './store-log.ts';
+import { censusRef, readCensusAt, writePendingCensus } from './store-census.ts';
+import type { Census, StoredCensus } from './store-census.ts';
 
 type Env = Readonly<NodeJS.ProcessEnv>;
 

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isRecord } from './log.ts';
-import { logRef } from './store.ts';
+import { logRef } from './store-log.ts';
 import { git } from './test-repo.ts';
 
 export function logFiles(garden: string): ReadonlyMap<string, Readonly<Record<string, unknown>>> {

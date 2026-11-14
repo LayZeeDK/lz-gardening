@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { censusRef, openSite, pendingCensusRef, readCensusAt, sync, writePendingCensus } from './store.ts';
-import type { StoredCensus } from './store.ts';
+import { openSite } from './store-log.ts';
+import { censusRef, pendingCensusRef, readCensusAt, writePendingCensus } from './store-census.ts';
+import type { StoredCensus } from './store-census.ts';
+import { sync } from './store-sync.ts';
 import { commit, git } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 

@@ -1,6 +1,6 @@
 // The garden site: a clone beside the repository. Its refs/garden/log holds the queue and its refs/garden/census the
-// census (see store.ts), both shared with the checkout's origin under the same refs, as are the beds of tended closes
-// under refs/garden/beds/<class>; its `garden` branch holds only the .gitignore for the beds.
+// census (see store-log.ts and store-census.ts), both shared with the checkout's origin under the same refs, as are
+// the beds of tended closes under refs/garden/beds/<class>; its `garden` branch holds only the .gitignore for the beds.
 // Usage, from the repository:
 //   node site.ts open [--base <branch>]     create the site if missing, plant the garden log and the writer id if
 //                                           missing, resolve the base (--base, else the census's base, else
@@ -29,30 +29,25 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { claimRefusal, escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import type { Site, SyncResult } from './store.ts';
-import { classPattern, isRecord, replay } from './log.ts';
+import { configValue, git, gitSucceeds, objectIdPattern, objectIds, optionalGit } from './store-git.ts';
 import {
   append,
-  censusRef,
-  configValue,
-  fetchedBedRef,
-  git,
-  gitSucceeds,
   logRef,
-  objectIdPattern,
-  objectIds,
   openSite,
-  optionalGit,
   plantWriter,
-  readCensusAt,
   readLog,
   requireSite,
   siteOf,
   startLog,
-  sync,
   withWriter,
   writerKey,
-} from './store.ts';
+} from './store-log.ts';
+import type { Site } from './store-log.ts';
+import { censusRef, readCensusAt } from './store-census.ts';
+import { fetchedBedRef } from './store-beds.ts';
+import { sync } from './store-sync.ts';
+import type { SyncResult } from './store-sync.ts';
+import { classPattern, isRecord, replay } from './log.ts';
 
 export interface BaseFacts {
   readonly base: string | undefined;

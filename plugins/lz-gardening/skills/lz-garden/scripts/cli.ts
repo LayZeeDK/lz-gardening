@@ -2,8 +2,11 @@ import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { replay, unprintablePattern } from './log.ts';
-import { inRun, isShared, readLog } from './store.ts';
-import type { Site, SyncResult } from './store.ts';
+import { inRun } from './store-git.ts';
+import { readLog } from './store-log.ts';
+import type { Site } from './store-log.ts';
+import { isShared } from './store-sync.ts';
+import type { SyncResult } from './store-sync.ts';
 
 const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
 

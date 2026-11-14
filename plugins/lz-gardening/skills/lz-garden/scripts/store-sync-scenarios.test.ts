@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { replay, weedId } from './log.ts';
 import type { GardenEvent } from './log.ts';
-import { openSite, readLog, sync } from './store.ts';
+import { openSite, readLog } from './store-log.ts';
+import { sync } from './store-sync.ts';
 import { configEnv, sharedPair } from './test-site.ts';
 import { cli, now } from './test-weeds.ts';
 

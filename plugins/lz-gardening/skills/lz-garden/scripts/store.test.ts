@@ -19,18 +19,8 @@ import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
 import { eventPath } from './log.ts';
 import type { EventDraft } from './log.ts';
-import {
-  append,
-  configValue,
-  inRun,
-  logRef,
-  namedHooksOff,
-  openSite,
-  plantWriter,
-  readLog,
-  startLog,
-  treeEntries,
-} from './store.ts';
+import { configValue, inRun, namedHooksOff, treeEntries } from './store-git.ts';
+import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
 import { git, repo } from './test-repo.ts';
 import { configEnv, planted } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
