@@ -328,6 +328,30 @@ export function diffDuplicates(before: Census | null, after: Census): string[] {
     .map(([name]) => name);
 }
 
+/**
+ * One `+ duplicate` line per new duplicate: its files that define the name since the previous census apart from
+ * those that did before, by the previous census or, for a name it did not list, by the definitions at its commit.
+ */
+function duplicateLines(
+  before: Census | null,
+  after: Census,
+  newDuplicates: readonly string[],
+  earlier: readonly Definition[],
+): readonly string[] {
+  return Object.entries(after.duplicates)
+    .filter(([name]) => newDuplicates.includes(name))
+    .map(([name, paths]) => {
+      const already = paths.filter(
+        (path) =>
+          before?.duplicates[name]?.includes(path) === true ||
+          earlier.some((item) => item.name === name && item.path === path),
+      );
+      const added = paths.filter((path) => !already.includes(path));
+
+      return `+ duplicate ${name}: new ${added.join(', ')}${already.length === 0 ? '' : `; already ${already.join(', ')}`}`;
+    });
+}
+
 export function diffCensus(before: Census | null, after: Census): PatternDelta[] {
   return Object.entries(after.counts).map(([id, count]) => {
     const previous = before?.hits[id];
@@ -464,18 +488,6 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   // A name that was defined in one file only had no entry in the previous census, so that file is found at its commit.
   const earlier =
     previousSha === null || newDuplicates.length === 0 ? [] : await definitionsAt(io.cwd, previousSha, set.exclude);
-  const duplicateLines = Object.entries(after.duplicates)
-    .filter(([name]) => newDuplicates.includes(name))
-    .map(([name, paths]) => {
-      const already = paths.filter(
-        (path) =>
-          before?.duplicates[name]?.includes(path) === true ||
-          earlier.some((item) => item.name === name && item.path === path),
-      );
-      const added = paths.filter((path) => !already.includes(path));
-
-      return `+ duplicate ${name}: new ${added.join(', ')}${already.length === 0 ? '' : `; already ${already.join(', ')}`}`;
-    });
   const summary = {
     sha: after.sha,
     previousSha,
@@ -494,7 +506,9 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     newDuplicates,
   };
   const seed = values.seed ? seedList(after) : [];
-  io.out(`${[formatDelta(deltas), ...duplicateLines, ...seed].join('\n')}\n${JSON.stringify(summary)}\n`);
+  io.out(
+    `${[formatDelta(deltas), ...duplicateLines(before, after, newDuplicates, earlier), ...seed].join('\n')}\n${JSON.stringify(summary)}\n`,
+  );
 
   return 0;
 }
