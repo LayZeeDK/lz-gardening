@@ -25,8 +25,11 @@ export function hasText(text: string): boolean {
   return text.trim() !== '';
 }
 
+const strongestLayer = 1;
+const layerCount = 6;
+
 export function isLayer(layer: number): boolean {
-  return Number.isInteger(layer) && layer >= 1 && layer <= 6;
+  return Number.isInteger(layer) && layer >= strongestLayer && layer <= layerCount;
 }
 
 export function weedId(weedClass: string, where: string, source: string): string {
