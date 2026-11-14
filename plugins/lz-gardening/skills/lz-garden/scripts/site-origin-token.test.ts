@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { run } from './site.ts';
 import { logRef } from './store-log.ts';
 import { httpRemote } from './test-http-remote.ts';
-import { git } from './test-repo.ts';
+import { capturingIo, git, summaryOf } from './test-repo.ts';
 import { planted } from './test-site.ts';
 import { cli } from './test-weeds.ts';
 
@@ -30,20 +30,12 @@ test('a sync through an origin URL holding a token pushes the queue, and prints 
   const port = await httpRemote(t, dirname(dir), credentials);
   git(dir, ['remote', 'add', 'origin', `http://${credentials}@127.0.0.1:${port}/remote.git`]);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
-  let output = '';
+  const captured = capturingIo(dir, process.env);
 
-  const status = run(['sync'], {
-    cwd: dir,
-    env: process.env,
-    out: (text) => {
-      output += text;
-    },
-    err: (text) => {
-      output += text;
-    },
-  });
+  const status = run(['sync'], captured.io);
 
-  const summary: unknown = JSON.parse(output.trim().split('\n').at(-1) ?? '');
+  const output = captured.stdout() + captured.stderr();
+  const summary = Object.fromEntries(summaryOf(captured.stdout()));
   const needles = [token, Buffer.from(credentials).toString('base64')];
   assert.deepEqual(
     [status, summary, git(join(dirname(dir), 'remote.git'), ['for-each-ref', '--format=%(objectname)', logRef])],
@@ -65,29 +57,21 @@ test("a sync through an origin URL whose token origin refuses, with git's tracin
   git(dirname(dir), ['clone', '-q', '--bare', dir, 'remote.git']);
   const port = await httpRemote(t, dirname(dir), `x-access-token:${randomUUID()}`);
   git(dir, ['remote', 'add', 'origin', `http://${credentials}@127.0.0.1:${port}/remote.git`]);
-  let output = '';
-
-  run(['sync'], {
-    cwd: dir,
-    env: {
-      ...process.env,
-      GIT_TRACE: '1',
-      GIT_TRACE2: '1',
-      GIT_TRACE_CURL: '1',
-      GIT_CURL_VERBOSE: '1',
-      GIT_TRACE_REDACT: 'false',
-    },
-    out: (text) => {
-      output += text;
-    },
-    err: (text) => {
-      output += text;
-    },
+  const captured = capturingIo(dir, {
+    ...process.env,
+    GIT_TRACE: '1',
+    GIT_TRACE2: '1',
+    GIT_TRACE_CURL: '1',
+    GIT_CURL_VERBOSE: '1',
+    GIT_TRACE_REDACT: 'false',
   });
 
+  run(['sync'], captured.io);
+
+  const output = captured.stdout() + captured.stderr();
   const needles = [token, Buffer.from(credentials).toString('base64')];
   assert.deepEqual(
-    [JSON.parse(output.trim().split('\n').at(-1) ?? ''), needles.filter((needle) => output.includes(needle))],
+    [Object.fromEntries(summaryOf(captured.stdout())), needles.filter((needle) => output.includes(needle))],
     [
       {
         shared: 'offline',
