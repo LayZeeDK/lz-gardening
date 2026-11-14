@@ -141,7 +141,7 @@ test('an origin that cannot be reached leaves the site offline, with what git sa
   const result = sync(openSite(dir), { attempts: 1 });
 
   assert.equal(result.state, 'offline');
-  assert.match(result.reason ?? '', /^fatal: '.*missing\.git' does not appear to be a git repository$/);
+  assert.match(result.reason, /^fatal: '.*missing\.git' does not appear to be a git repository$/);
   assert.equal(git(garden, ['rev-parse', logRef]), tip);
 });
 
