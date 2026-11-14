@@ -264,9 +264,13 @@ export function claimRefusal(site: Site, weedClass: string, pre: SyncResult, now
 export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {
   const { result, recorded } = syncWithOrigin(site, options, now);
 
-  // A try that settled the census recorded the pending one already.
   if (options.census !== undefined) {
-    finishPendingCensus(site, options.census, recorded ?? recordPendingCensus(site, options.census));
+    // A try that settled the census recorded the pending one already. A record another sync beat keeps the pending one.
+    const settled = recorded ?? recordPendingCensus(site, options.census);
+
+    if (settled !== 'lost to another writer') {
+      finishPendingCensus(site, options.census, settled);
+    }
   }
 
   return result;
@@ -372,7 +376,13 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
   const given = giveBackLosingClaims(site, sharedTip, leaving, attempt.now);
-  const { recorded, ...settled } = settleCensus(site, censusTips, pendingSha);
+  const settledCensus = settleCensus(site, censusTips, pendingSha);
+
+  if (settledCensus === 'lost to another writer') {
+    return { state: 'behind', ...nothingShared, yielded: given.lost };
+  }
+
+  const { recorded, ...settled } = settledCensus;
   const pushedEvents = mergedLog.pushedEvents + given.released;
   const newerCensus = settled.local === censusTips.shared ? undefined : settled.local;
   const keptLocal = newerCensus === undefined ? undefined : censusOffOrigin(site, newerCensus);
