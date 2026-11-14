@@ -482,13 +482,6 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
-
-  if (changed) {
-    inRun(io.env, () => {
-      writePendingCensus(site, after.sha, serialize(after), extraFile?.text);
-    });
-  }
-
   const previousSha = before !== null && (await hasCommit(io.cwd, env, before.sha)) ? before.sha : null;
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
@@ -513,6 +506,14 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
   };
+
+  // Written once the summary's git calls are through, so a census that exits 2 leaves nothing pending.
+  if (changed) {
+    inRun(io.env, () => {
+      writePendingCensus(site, after.sha, serialize(after), extraFile?.text);
+    });
+  }
+
   const seed = values.seed ? seedList(after) : [];
   const capped = Object.entries(after.counts)
     .filter(([, count]) => count > hitCap)

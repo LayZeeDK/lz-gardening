@@ -514,6 +514,22 @@ test('a census that differs from the recorded one is left pending for its commit
   assert.equal(git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending']), pendingCensusRef(later));
 });
 
+test('a census whose summary git cannot work out exits 2 and leaves nothing pending', async (t) => {
+  const { dir, garden } = planted(t);
+  await takeAndRecord(dir);
+  const between = commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+  commit(dir, { 'src/t.ts': '// TODO: one\n' });
+  rmSync(join(dir, '.git', 'objects', between.slice(0, 2), between.slice(2)));
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.deepEqual(
+    [result.status, git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending'])],
+    [2, ''],
+    result.stderr,
+  );
+});
+
 test('the summary counts the commits in the range from the previous census to this one', async (t) => {
   const { dir } = planted(t);
   await takeAndRecord(dir);
