@@ -725,19 +725,15 @@ function syncWithOrigin(
   const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
   const yielded: LostClaim[] = [];
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  for (let attempt = 1; ; attempt += 1) {
     const result = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, look, now, yielded });
 
-    if (result !== 'lost to another writer') {
+    if (result.state !== 'behind' || attempt >= attempts) {
       return { ...result, yielded };
     }
 
-    if (attempt < attempts) {
-      wait(2 ** (attempt - 1) * 1000 * (0.5 + Math.random()));
-    }
+    wait(2 ** (attempt - 1) * 1000 * (0.5 + Math.random()));
   }
-
-  return { state: 'behind', ...nothingShared, yielded };
 }
 
 interface Attempt {
@@ -819,7 +815,8 @@ function censusOffOrigin(site: Site, ref: string): string | undefined {
   return holders === undefined || holders === '' ? sha : undefined;
 }
 
-function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> | 'lost to another writer' {
+// A try lost to another writer ends behind, which the next try, if any, takes up.
+function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> {
   const { path } = site;
   const { fetchUrl, pushUrl, timeoutMs, pendingSha } = attempt;
   const fetched = networkGit(
@@ -833,9 +830,11 @@ function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> | '
   }
 
   if (fetched.status !== 0) {
-    return lostSharedRefLock.test(fetched.stderr)
-      ? 'lost to another writer'
-      : { state: 'offline', reason: reasonOf(fetched.stderr), ...nothingShared };
+    return {
+      state: lostSharedRefLock.test(fetched.stderr) ? 'behind' : 'offline',
+      reason: reasonOf(fetched.stderr),
+      ...nothingShared,
+    };
   }
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
@@ -880,7 +879,7 @@ function syncOnce(site: Site, attempt: Attempt): Omit<SyncResult, 'yielded'> | '
   }
 
   return rejected(pushed.stdout)
-    ? 'lost to another writer'
+    ? { state: 'behind', ...nothingShared }
     : { state: 'read-only', reason: reasonOf(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [] };
 }
 

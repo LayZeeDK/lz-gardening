@@ -542,6 +542,22 @@ test('syncs of one site at once that each record the same pending census all exi
   );
 });
 
+test("a sync whose fetch finds a fetched ref's lock left behind ends behind with git's reason", (t) => {
+  const { dir, garden } = planted(t);
+  bareRemote(dir);
+  addWeed(dir, 'src/a.ts:1');
+  sync(openSite(dir), { attempts: 1 });
+  mkdirSync(join(garden, '.git', 'refs', 'garden-shared'), { recursive: true });
+  writeFileSync(join(garden, '.git', 'refs', 'garden-shared', 'log.lock'), '');
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.reason?.includes("cannot lock ref 'refs/garden-shared/log'")],
+    ['behind', true],
+  );
+});
+
 function wheres(dir: string): readonly string[] {
   return cli(dir, ['list'])
     .stdout.trimEnd()

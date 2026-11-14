@@ -35,7 +35,8 @@ First release.
   report the share state in a `shared` field: `local` (no `origin`, or
   `git config lzGardening.share false`), `synced`, `offline` (with git's reason; a fetch or push never asks for
   credentials and gives up after a minute), `read-only` (the push was declined, with git's reason) or `behind` (every
-  try lost to another push or another sync of the site; the next run pushes the events). `site.ts sync` also prints how many events it shared and
+  try lost to another push or another sync of the site, with git's reason when a ref lock stopped the fetch; the next
+  run pushes the events). `site.ts sync` also prints how many events it shared and
   the files whose shared content it kept over the site's, and exits 0 in every state. A `sync --census` deletes the
   pending censuses of older base commits that an interrupted tick left. The garden log's and the census's commits
   are signed `lz-gardening <>`, or by `lzGardening.name` and `lzGardening.email` when the checkout's git config sets

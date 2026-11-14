@@ -121,7 +121,9 @@ The share states:
 - `read-only`: the fetch worked but `origin` declined the push, for a reason other than another push landing first;
   `reason` gives git's message, such as what a server hook said.
 - `behind`: every try lost the race to another push, or to another sync of the same site. The site's events stay in
-  the site and the next run pushes them.
+  the site and the next run pushes them. When the last try could not lock a ref the fetch writes, `reason` gives
+  git's message; a lock a killed run left in the site's `.git/refs/garden-shared/` reads that way on every run until
+  it is deleted.
 
 Fetch and push never ask for a password or wait for input: a URL that needs credentials git cannot find is
 `offline`. A try that another push or sync beat waits 1, 2, 4 and 8 seconds (give or take half) before the next try.
