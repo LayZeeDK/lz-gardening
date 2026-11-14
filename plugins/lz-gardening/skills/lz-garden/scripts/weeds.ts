@@ -25,9 +25,11 @@
 //   node weeds.ts release --class <kebab>
 //     Ends this writer's claim and shares the release: `released <class>; <share state>`; exit 1 with
 //     `no claim of <class> held here`.
-//   node weeds.ts groups [--min <n>]     open weeds per class, most first, and who holds a claim of it (tending);
-//                                        --min <n> keeps the classes whose open weeds sit in n or more files
-//                                        (places); it defaults to 1
+//   node weeds.ts groups [--min <n>|--ready]  open weeds per class, most first, and who holds a claim of it
+//                                        (tending); --min <n> keeps the classes whose open weeds sit in n or more
+//                                        files (places), and defaults to 1; --ready keeps the classes claim without
+//                                        --class may take: ready, not stale-verification or repeated-lesson, and
+//                                        claimed by no other writer
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
@@ -42,6 +44,7 @@ import { parseArgs } from 'node:util';
 import {
   bedCommit,
   bedPattern,
+  claimableClasses,
   classPattern,
   planAdd,
   planClaim,
@@ -448,6 +451,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       keep: { type: 'string' },
       check: { type: 'string' },
       min: { type: 'string', default: '1' },
+      ready: { type: 'boolean', default: false },
     },
   });
   const command = positionals.length === 1 ? positionals[0] : undefined;
@@ -607,7 +611,10 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const site = openSite(io.cwd);
       const garden = replay(eventsReportingSkipped(io, readLog(site)), now);
-      const groups = groupWeeds(garden.open).filter((group) => group.places >= min);
+      const claimable = claimableClasses(garden, site.writer);
+      const groups = groupWeeds(garden.open).filter((group) =>
+        values.ready ? claimable.includes(group.class) : group.places >= min,
+      );
       write(`${'class'.padEnd(36)} open places regrown layer first-seen tending`);
 
       for (const group of groups) {

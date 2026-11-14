@@ -57,7 +57,9 @@ First release.
   `lesson:<path>:<line>` record. A class is ready to tend when its open weeds sit in two or more files (places), not
   when it has two open weeds: `weeds.ts groups --min <n>` keeps the classes with `n` or more places, and
   `weeds.ts claim` without a class takes only such a class. `weeds.ts groups` shows who holds a claim of each class in
-  a last `tending` column (`-` for none).
+  a last `tending` column (`-` for none), and `weeds.ts groups --ready` keeps the classes `claim` without a class may
+  take, which the tick's `ready to tend` line lists: no `stale-verification`, no `repeated-lesson`, and no class
+  another clone holds.
 - `lz-tend` skill: takes one class of queued weeds and adds the check that keeps it from growing back, then fixes or
   baselines every instance, in a bed (a worktree of the site) for a human to fetch and land. Closes the class in
   the queue as tended, one-off or kept; a tended close records the bed and where its check lives, and the weeds of

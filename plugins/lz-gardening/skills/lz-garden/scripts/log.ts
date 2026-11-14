@@ -241,9 +241,16 @@ export type ClaimPlan =
   | { readonly said: 'nothing ready' }
   | { readonly said: 'nothing open'; readonly class: string };
 
+/** The ready classes a claim without a class may take: not tended directly and claimed by no other writer. */
+export function claimableClasses(garden: Garden, writer: string): readonly string[] {
+  return readyClasses(garden.open).filter(
+    (weedClass) => !notTendedDirectly.includes(weedClass) && heldByAnother(garden, weedClass, writer) === undefined,
+  );
+}
+
 /**
  * Which class to claim. With a class: taken if another writer holds it, else claimed (a holder's claim renews it).
- * Without: the first ready class not claimed by another writer and not tended directly, in groups order.
+ * Without: the first claimable class, in groups order.
  */
 export function planClaim(
   events: readonly GardenEvent[],
@@ -253,11 +260,7 @@ export function planClaim(
   now: Date,
 ): ClaimPlan {
   const garden = replay(events, now);
-  const chosen =
-    wanted ??
-    readyClasses(garden.open).find(
-      (weedClass) => !notTendedDirectly.includes(weedClass) && heldByAnother(garden, weedClass, writer) === undefined,
-    );
+  const chosen = wanted ?? claimableClasses(garden, writer)[0];
 
   if (chosen === undefined) {
     return { said: 'nothing ready' };

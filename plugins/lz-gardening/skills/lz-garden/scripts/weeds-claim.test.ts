@@ -198,6 +198,41 @@ test('claim --class of a class another writer holds prints taken with the holder
   );
 });
 
+function readyRows(dir: string): readonly unknown[] {
+  const listed = cli(dir, ['groups', '--ready'], process.env, now);
+  assert.equal(listed.code, 0, listed.stderr);
+
+  return listed.stdout
+    .trimEnd()
+    .split('\n')
+    .slice(1)
+    .map((row) => row.split(' ')[0]);
+}
+
+test('groups --ready lists the classes a claim would take, not stale-verification', (t) => {
+  const { dir } = planted(t);
+  ['any-type', 'stale-verification'].forEach((weedClass) => {
+    addWeed(dir, 'src/a.ts:1', weedClass);
+    addWeed(dir, 'src/b.ts:1', weedClass);
+  });
+
+  assert.deepEqual(readyRows(dir), ['any-type']);
+});
+
+test('groups --ready leaves out a class another writer holds and keeps one this writer holds', (t) => {
+  const { dir, garden } = planted(t);
+  ['any-type', 'todo-marker'].forEach((weedClass) => {
+    addWeed(dir, 'src/a.ts:1', weedClass);
+    addWeed(dir, 'src/b.ts:1', weedClass);
+  });
+  cli(dir, ['claim', '--class', 'todo-marker'], process.env, now);
+  const uuid = '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6';
+  const held = { op: 'claim', uuid, clock: 99, at: now.toISOString(), class: 'any-type', writer: 'w', holder: 'Bea' };
+  writeToLogByHand(garden, `events/0f/${uuid}.json`, JSON.stringify({ ...held, until: '2026-11-07T15:00:00.000Z' }));
+
+  assert.deepEqual(readyRows(dir), ['todo-marker']);
+});
+
 test('release --class by a site holding no claim of the class says so, exits 1 and pushes nothing', (t) => {
   const { dir } = planted(t);
   const remote = bareRemote(dir);

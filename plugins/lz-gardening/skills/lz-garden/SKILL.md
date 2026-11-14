@@ -127,7 +127,7 @@ and 3 printed one of those words.
 ## 5. Group, record, report
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --min 2
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" groups --ready
 node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>
 ```
 
@@ -136,7 +136,8 @@ later commit, and shares it and the queue's new events with the repository's `or
 `shared` (the share state), `events` (how many events it shared), and `reason` when the state has one.
 
 A class whose open weeds sit in two or more places (files) is ready to tend: several agents took the same shortcut.
-`groups --min 2` prints those classes.
+`groups --ready` prints the ready classes `lz-tend` takes on its own: not `stale-verification` or `repeated-lesson`,
+and claimed by no other clone.
 
 Done when `site.ts sync --census <sha>` exits 0. Then reply with this form, every `<slot>` filled as the list below
 says. The reply is these four lines and ends after the last one; the reason for each weed is in its `--note`.
@@ -154,6 +155,6 @@ shared: <state> (<reason>)
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
-- `ready to tend`: one entry per row of `groups --min 2`, its `open` and `places` columns, and the first row's class
+- `ready to tend`: one entry per row of `groups --ready`, its `open` and `places` columns, and the first row's class
   after `lz-tend`; `ready to tend: none` when it printed no row.
 - `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.
