@@ -1,5 +1,7 @@
 // Run: node --test store-beds.test.ts
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -8,7 +10,7 @@ import { logRef, openSite } from './store-log.ts';
 import { sync } from './store-sync.ts';
 import { commit, git } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
-import { bareRemote, planted, sharedPair, site, writeCensus } from './test-site.ts';
+import { bareRemote, planted, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
 import { cli, homeAt } from './test-weeds.ts';
 
 interface Tended {
@@ -212,6 +214,48 @@ test('a bed whose push takes longer than the time allowed is named as timed out'
   const result = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1000 });
 
   assert.deepEqual([result.state, result.divergedBeds], ['synced', ['any-type: timed out']]);
+});
+
+test('a later sync pushes the bed of a close whose log push landed after the sync stopped waiting', (t) => {
+  const place = withBed(t);
+  git(place.dir, ['config', 'lzGardening.share', 'false']);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'lzGardening.share', 'true']);
+  writeFileSync(join(place.remote, 'hooks', 'post-receive'), '#!/bin/sh\nsleep 4\n', { mode: 0o755 });
+  const stopped = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1500 });
+  // The hook goes on after the push stopped waiting; it must end before the next push runs it again.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+  rmSync(join(place.remote, 'hooks', 'post-receive'));
+  const landed = git(place.remote, ['rev-parse', logRef]) === git(place.garden, ['rev-parse', logRef]);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([stopped.reason, landed, result.state, bedRef(place.remote)], ['timed out', true, 'synced', tip]);
+});
+
+// A post-receive hook that stops the process whose id the file holds, once: the sync dies after its log landed.
+function stopOnReceive(pidFile: string): string {
+  const stop = `const { existsSync, readFileSync, rmSync } = require("node:fs"); const file = process.argv[1]; if (existsSync(file)) { const pid = Number(readFileSync(file, "utf8")); rmSync(file); process.kill(pid, "SIGKILL"); }`;
+
+  return `#!/bin/sh\n'${process.execPath}' -e '${stop}' '${pidFile}'\n`;
+}
+
+test('a later sync pushes the bed of a close whose sync process stopped once its log landed', async (t) => {
+  const place = withBed(t);
+  git(place.dir, ['config', 'lzGardening.share', 'false']);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'lzGardening.share', 'true']);
+  const pidFile = join(place.remote, 'sync.pid');
+  writeFileSync(join(place.remote, 'hooks', 'post-receive'), stopOnReceive(pidFile), { mode: 0o755 });
+  const stopped = spawn(process.execPath, [siteScript, 'sync'], { cwd: place.dir, stdio: 'ignore' });
+  writeFileSync(pidFile, String(stopped.pid));
+  await once(stopped, 'exit');
+  const landed = git(place.remote, ['rev-parse', logRef]) === git(place.garden, ['rev-parse', logRef]);
+  const before = bedRef(place.remote);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([landed, before, result.state, bedRef(place.remote)], [true, '', 'synced', tip]);
 });
 
 test('a bed made from a commit no branch fetched from origin holds stays local and is named', (t) => {

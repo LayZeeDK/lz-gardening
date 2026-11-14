@@ -42,8 +42,8 @@ First release.
     linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). A class tended again before its bed
     lands is tended in the same bed.
   - Close: closes the class as tended, one-off or kept. A tended close names the bed and where its check lives, and
-    shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a bed whose push failed
-    is pushed again by the next sync. Bed commits carry the identity of whoever commits them.
+    shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a bed a sync did not see
+    land (a failed or timed-out push, or a sync stopped once its log landed) is pushed again by the next sync. Bed commits carry the identity of whoever commits them.
   - Permissions: carries its own rules for reading the `lz-tend` skill and the `lz-garden` references and for running
     the site and weeds scripts, and asks you to add the site as a working directory.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the

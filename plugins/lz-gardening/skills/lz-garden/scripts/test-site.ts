@@ -11,7 +11,7 @@ import { run } from './site.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { capturingIo, commit, git, init } from './test-repo.ts';
 
-const script = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
+export const siteScript = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
 
 export interface SiteRun {
   readonly status: number | null;
@@ -35,7 +35,7 @@ export function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEn
 }
 
 export function siteProcess(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
-  const result = spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env });
+  const result = spawnSync(process.execPath, [siteScript, ...args], { cwd, encoding: 'utf8', env });
 
   return siteRun(result.status, result.stdout, result.stderr);
 }

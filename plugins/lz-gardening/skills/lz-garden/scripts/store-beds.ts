@@ -17,8 +17,12 @@ function sharedBedRef(weedClass: string): string {
   return `refs/garden/beds/${weedClass}`;
 }
 
-// A bed whose push failed, kept in the site so a later sync pushes it again once its close is on origin.
+// A bed a sync is to push, marked in the site until a sync sees it land on origin.
 const unpushedBeds = 'refs/garden-unpushed/beds/';
+
+function unpushedBedRef(weedClass: string): string {
+  return `${unpushedBeds}${weedClass}`;
+}
 
 // A hunk's lines are counted from its header, so no line inside it is taken for a header by how its text starts. A
 // merge's combined diff (--cc) marks each line once per parent; a line with no - is in the result, and one with a +
@@ -100,11 +104,19 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
   return added.some(machinePathTest(site)) ? 'stays local: it holds a path on this machine' : undefined;
 }
 
-export function pushBeds(
-  site: Site,
-  leaving: readonly { readonly path: string }[],
-  { pushUrl, timeoutMs }: { readonly pushUrl: string; readonly timeoutMs: number },
-): readonly string[] {
+interface Bed {
+  readonly weedClass: string;
+  readonly tip: string;
+}
+
+export interface BedPlan {
+  readonly pushing: readonly Bed[];
+  readonly diverged: readonly string[];
+}
+
+// Judged before the log's push: each bed to push is marked until a sync sees it land, so a log push that lands
+// unseen (timed out, or the process stopped) or a bed push that fails leaves the bed for a later sync.
+export function planBeds(site: Site, leaving: readonly { readonly path: string }[]): BedPlan {
   const tips = refsUnder(site.path, [bedBranches, sharedBeds, unpushedBeds]);
   const tipOf = (prefix: string, weedClass: string): string | undefined => tips.get(`${prefix}${weedClass}`);
   const candidates = [...tips].flatMap(([name, oid]) => {
@@ -114,7 +126,7 @@ export function pushBeds(
   });
 
   if (candidates.length === 0) {
-    return [];
+    return { pushing: [], diverged: [] };
   }
 
   const { events } = readReplica(site.path, logRef);
@@ -139,11 +151,25 @@ export function pushBeds(
 
     return [{ ...bed, why }];
   });
-  const pushing = judged.filter(({ why }) => why === undefined);
+  const pushing = judged.flatMap(({ weedClass, tip, why }) => (why === undefined ? [{ weedClass, tip }] : []));
   const diverged = judged.flatMap(({ weedClass, why }) =>
     why === undefined ? [] : [`${weedClass}: bed/${weedClass} ${why}`],
   );
 
+  if (pushing.length > 0) {
+    git(site.path, ['update-ref', '--stdin'], {
+      input: pushing.map(({ weedClass, tip }) => `update ${unpushedBedRef(weedClass)} ${tip}\n`).join(''),
+    });
+  }
+
+  return { pushing, diverged };
+}
+
+export function pushBeds(
+  site: Site,
+  { pushing, diverged }: BedPlan,
+  { pushUrl, timeoutMs }: { readonly pushUrl: string; readonly timeoutMs: number },
+): readonly string[] {
   if (pushing.length === 0) {
     return diverged;
   }
@@ -170,19 +196,15 @@ export function pushBeds(
 
     return { weedClass, tip, why: line.flag === '!' ? line.summary : undefined };
   });
-  const refused = outcomes.flatMap(({ weedClass, why }) => (why === undefined ? [] : [{ weedClass, why }]));
-  const marks = outcomes.flatMap(({ weedClass, tip, why }) => {
-    if (why !== undefined) {
-      return [`update ${unpushedBeds}${weedClass} ${tip}\n`];
-    }
 
-    return tipOf(unpushedBeds, weedClass) === undefined ? [] : [`delete ${unpushedBeds}${weedClass}\n`];
-  });
+  outcomes
+    .filter(({ why }) => why === undefined)
+    .forEach(({ weedClass }) => {
+      git(site.path, ['update-ref', '-d', unpushedBedRef(weedClass)]);
+    });
 
-  // Stryker disable next-line ConditionalExpression: an update-ref with nothing to do changes no ref; this saves a git run
-  if (marks.length > 0) {
-    git(site.path, ['update-ref', '--stdin'], { input: marks.join('') });
-  }
-
-  return [...diverged, ...refused.map(({ weedClass, why }) => `${weedClass}: ${why}`)];
+  return [
+    ...diverged,
+    ...outcomes.flatMap(({ weedClass, why }) => (why === undefined ? [] : [`${weedClass}: ${why}`])),
+  ];
 }
