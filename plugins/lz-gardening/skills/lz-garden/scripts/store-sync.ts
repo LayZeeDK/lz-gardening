@@ -331,8 +331,13 @@ function giveBackLosingClaims(
     return { lost: [], released: 0 };
   }
 
-  const events = catFileBatch(site.path, leaving, ({ localOid }) => localOid).flatMap(([{ path }, { text }]) => {
-    const event = parseEvent(path, text ?? '');
+  // An event the site cannot read gives nothing back; the log's reader names it.
+  const events = catFileBatch(site.path, leaving, ({ localOid }) => localOid).flatMap(([{ path }, object]) => {
+    if (object.kind !== 'blob') {
+      return [];
+    }
+
+    const event = parseEvent(path, object.text);
 
     return typeof event === 'string' ? [] : [event];
   });

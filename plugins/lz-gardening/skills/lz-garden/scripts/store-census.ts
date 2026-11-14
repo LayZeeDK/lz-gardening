@@ -97,7 +97,7 @@ export function writePendingCensus(
 
 export function readCensusAt(site: string, ref: string): StoredCensus | null | 'not a census' {
   const [text, patterns] = catFileBatch(site, [`${ref}:census.json`, `${ref}:patterns.json`], (name) => name).map(
-    ([, object]) => object.text,
+    ([, object]) => (object.kind === 'blob' ? object.text : undefined),
   );
 
   if (text === undefined) {

@@ -245,15 +245,15 @@ export function treeEntries(listed: string): readonly TreeEntry[] {
     });
 }
 
-export interface BatchObject {
-  readonly header: string;
-  readonly type: string | undefined;
-  readonly text: string | undefined;
-}
+// A blob with its text, an object git does not have, or an object of another type with the header git printed for it.
+export type BatchObject =
+  | { readonly kind: 'blob'; readonly text: string }
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'other'; readonly header: string };
 
-// Reads each item's object, named by nameOf, with its header, and its text when it is a blob. An object git does not
-// have prints its header alone ("<name> missing"); any other prints its size and content. cat-file sizes are in
-// bytes, so the output is read as bytes and each blob decoded on its own.
+// Reads each item's object, named by nameOf. An object git does not have prints its header alone ("<name> missing");
+// any other prints its size and content. cat-file sizes are in bytes, so the output is read as bytes, a cursor at the
+// next header, and each blob decoded on its own.
 export function catFileBatch<T>(
   cwd: string,
   items: readonly T[],
@@ -271,28 +271,30 @@ export function catFileBatch<T>(
   }
 
   const output = batch.stdout;
-  let at = 0;
 
-  return items.map((item) => {
-    const headerEnd = output.indexOf('\n', at);
-    const header = output.subarray(at, headerEnd).toString();
-    const [, type, size] = header.split(' ');
-    const start = headerEnd + 1;
+  return items.reduce<{ readonly at: number; readonly read: (readonly [T, BatchObject])[] }>(
+    ({ at, read }, item) => {
+      const headerEnd = output.indexOf('\n', at);
+      const header = output.subarray(at, headerEnd).toString();
+      const [, type, size] = header.split(' ');
+      const start = headerEnd + 1;
 
-    if (size === undefined) {
-      at = start;
+      if (size === undefined) {
+        read.push([item, { kind: 'missing' }]);
 
-      return [item, { header, type, text: undefined }] as const;
-    }
+        return { at: start, read };
+      }
 
-    const end = start + Number(size);
-    at = end + 1;
+      const end = start + Number(size);
+      read.push([
+        item,
+        type === 'blob' ? { kind: 'blob', text: output.subarray(start, end).toString() } : { kind: 'other', header },
+      ]);
 
-    return [
-      item,
-      { header, type, text: type === 'blob' ? output.subarray(start, end).toString() : undefined },
-    ] as const;
-  });
+      return { at: end + 1, read };
+    },
+    { at: 0, read: [] },
+  ).read;
 }
 
 // merge-base says no with exit 1; any other failure, an unknown commit included, is an error, not a no.

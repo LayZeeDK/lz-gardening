@@ -172,17 +172,17 @@ function blobsAt(
     listed.filter(({ type }) => type === 'blob'),
     ({ oid }) => oid,
   );
-  const texts = new Map(read.flatMap(([{ path }, { text }]) => (text === undefined ? [] : [[path, text] as const])));
-  const missing = read.flatMap(([{ oid, path }, { header, type, text }]) => {
-    if (text !== undefined) {
-      return [];
+  const texts = new Map(
+    read.flatMap(([{ path }, object]) => (object.kind === 'blob' ? [[path, object.text] as const] : [])),
+  );
+  const missing = read.flatMap(([{ oid, path }, object]) => {
+    if (object.kind === 'other') {
+      throw new Error(
+        `git cat-file --batch: read ${JSON.stringify(object.header)} for ${path}, not ${oid} blob <size>`,
+      );
     }
 
-    if (type !== 'missing') {
-      throw new Error(`git cat-file --batch: read ${JSON.stringify(header)} for ${path}, not ${oid} blob <size>`);
-    }
-
-    return [{ path, why: 'missing from the site' }];
+    return object.kind === 'missing' ? [{ path, why: 'missing from the site' }] : [];
   });
   const skipped = [
     ...listed.filter(({ type }) => type !== 'blob').map(({ type, path }) => ({ path, why: `a ${type}, not a file` })),
