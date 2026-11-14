@@ -516,7 +516,15 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     newDuplicates,
   };
   const seed = values.seed ? seedList(after) : [];
-  const lines = [...formatDelta(deltas), ...duplicateLines(before, after, newDuplicates, earlier), ...seed];
+  const capped = Object.entries(after.counts)
+    .filter(([, count]) => count > hitCap)
+    .map(([id]) => id);
+  const lines = [
+    ...formatDelta(deltas),
+    ...(capped.length === 0 ? [] : [`hits capped at ${String(hitCap)}: ${capped.join(', ')}`]),
+    ...duplicateLines(before, after, newDuplicates, earlier),
+    ...seed,
+  ];
   io.out(`${lines.map(escapeUnprintable).join('\n')}\n${JSON.stringify(summary)}\n`);
 
   return 0;

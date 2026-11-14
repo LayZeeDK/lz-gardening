@@ -64,7 +64,9 @@ When `seeded` is false, add `--seed` at the end: the output then holds the seed 
 The census compares the base with the garden's census, which every clone shares, and sets the new census aside until
 step 5 records it. The last line of output is a JSON summary: `sha`, `previousSha`, `behind`, `commits` (the
 commits from `previousSha` to `sha`, merges left out), `grew`, `newHits`, `newDuplicates`. Lines above it starting
-`+ [<pattern>]` are new hits, each hit's text cut to 200 characters. A line
+`+ [<pattern>]` are new hits, each hit's text cut to 200 characters. A line `hits capped at 1000: <pattern>, ...`
+names patterns with more hits than the census keeps: a new hit of one of them may be missing from the `+` lines, so
+when such a pattern is in `grew`, read its new hits in the commits by hand. A line
 `+ duplicate <name>: new <path>, ...[; already <path>, ...]` is a name newly defined in another file: the files
 after `new` define it since the last census, those after `already` defined it before. Below, `<short sha>` is `sha`
 shortened with `git rev-parse --short <sha>`. Done when it exits 0; then take the first case below that holds.

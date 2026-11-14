@@ -422,6 +422,26 @@ test('a function named after a method every object has prints as a new duplicate
   assert.ok(second.stdout.split('\n').includes('+ duplicate toString: new src/a.ts, src/b.ts'), second.stdout);
 });
 
+test('a pattern with more hits than the census keeps is named, as its new hits may go unlisted', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/t.ts': '// TODO x\n'.repeat(1001) });
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(result.stdout.split('\n').includes('hits capped at 1000: todo-marker'), result.stdout);
+});
+
+test('a pattern with exactly as many hits as the census keeps is not named as capped', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/t.ts': '// TODO x\n'.repeat(1000) });
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /^hits capped/m);
+});
+
 test('the table shows each count and its change in fixed columns, then the new hits, and the summary counts them', async (t) => {
   const { dir } = planted(t);
   commit(dir, { 'src/a.ts': '// eslint-disable\n// eslint-disable\n', 'src/t.ts': '// TODO one\n' });
