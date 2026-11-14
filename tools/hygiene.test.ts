@@ -38,10 +38,15 @@ function git(args: readonly string[]): string {
   return result.stdout;
 }
 
-function textFiles(prefix = ''): { readonly path: string; readonly text: string }[] {
-  return git(['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', `${prefix}.`])
+function gitPaths(args: readonly string[]): readonly string[] {
+  return git(['ls-files', '-z', ...args])
     .split('\0')
-    .filter((path) => path !== '' && existsSync(join(root, path)))
+    .filter((path) => path !== '');
+}
+
+function textFiles(prefix = ''): { readonly path: string; readonly text: string }[] {
+  return gitPaths(['--cached', '--others', '--exclude-standard', '--', `${prefix}.`])
+    .filter((path) => existsSync(join(root, path)))
     .map((path) => ({ path, text: readFileSync(join(root, path), 'utf8') }))
     .filter((file) => !file.text.includes('\0'));
 }
@@ -126,12 +131,7 @@ test('the plugin ships the same license as the repository', () => {
 });
 
 test('no file under a node_modules folder is committed, the plugin folder included', () => {
-  const committed = git(['ls-files', '-z', '--', ':(glob)**/node_modules/**']).split('\0');
-
-  assert.deepEqual(
-    committed.filter((path) => path !== ''),
-    [],
-  );
+  assert.deepEqual(gitPaths(['--', ':(glob)**/node_modules/**']), []);
 });
 
 test('CI tests the Node.js version package.json names as its floor', () => {
