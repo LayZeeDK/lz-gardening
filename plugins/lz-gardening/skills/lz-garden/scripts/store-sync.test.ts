@@ -9,7 +9,7 @@ import { eventPath } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
 import { logRef, openSite } from './store-log.ts';
 import { censusRef, writePendingCensus } from './store-census.ts';
-import { sync } from './store-sync.ts';
+import { mergeShared, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
@@ -390,6 +390,71 @@ test('a site whose origin keeps moving is behind after its attempts, and one syn
   assert.deepEqual(
     [result.state, raced.length, after.state, wheres(first.dir), git(remote, ['rev-parse', logRef])],
     ['behind', 2, 'synced', ['src/a.ts:1', 'src/b.ts:1', ...raced], git(first.garden, ['rev-parse', logRef])],
+  );
+});
+
+test('a merge whose log another writer moves under each of its tries gives up after that many and says the log kept moving', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  addWeed(second.dir, 'src/b.ts:1');
+  git(second.garden, ['fetch', '-q', remote, '+refs/garden/*:refs/garden-shared/*']);
+  const { spawnSync } = childProcess;
+  let imports = 0;
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const [, gitArgs] = args;
+
+    if (Array.isArray(gitArgs) && gitArgs.includes('fast-import')) {
+      imports += 1;
+      const tip = git(second.garden, ['rev-parse', logRef]);
+      git(second.garden, [
+        'update-ref',
+        logRef,
+        git(second.garden, ['commit-tree', `${tip}^{tree}`, '-p', tip, '-m', 'moved']),
+      ]);
+    }
+
+    return Reflect.apply(spawnSync, childProcess, args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  assert.throws(() => mergeShared(openSite(second.dir), 3), {
+    message: 'refs/garden/log kept moving; 3 tries to merge the shared log failed',
+  });
+  assert.equal(imports, 3);
+});
+
+test("a move of the log to origin's that fails while the log has not moved stops the sync with what git said", (t) => {
+  const { first, second } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  mkdirSync(join(second.garden, '.git', 'refs', 'garden'), { recursive: true });
+  writeFileSync(join(second.garden, '.git', 'refs', 'garden', 'log.lock'), '');
+
+  assert.throws(() => sync(openSite(second.dir), { attempts: 1 }), {
+    message: /^git update-ref refs\/garden\/log \S+ \S+: .*cannot lock ref 'refs\/garden\/log'/s,
+  });
+});
+
+test('a sync waits about one second before its second try and about two before its third, give or take half', (t) => {
+  const { dir } = planted(t);
+  const remote = bareRemote(dir);
+  addWeed(dir, 'src/a.ts:1');
+  sync(openSite(dir), { attempts: 1 });
+  moveWhileMarked(remote, 'moving', false);
+  addWeed(dir, 'src/b.ts:1');
+  const waits: number[] = [];
+
+  sync(openSite(dir), { attempts: 3, wait: (ms) => waits.push(ms) });
+
+  assert.deepEqual(
+    waits.map((ms, index) => ms >= 500 * 2 ** index && ms < 1500 * 2 ** index),
+    [true, true],
+    String(waits),
   );
 });
 

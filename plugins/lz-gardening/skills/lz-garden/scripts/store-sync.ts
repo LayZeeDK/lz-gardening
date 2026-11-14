@@ -186,11 +186,12 @@ function mergeOnce(
     : 'lost to another writer';
 }
 
-// Stryker disable next-line LzJsNumericLiteral: how many tries a merge spends is policy, as with appendTries
+// Stryker disable next-line LzJsNumericLiteral: how many tries a merge spends is policy; the bound is tested through mergeShared's tries
 const mergeTries = 50;
 
-function mergeShared(
+export function mergeShared(
   site: Pick<Site, 'path' | 'checkout'>,
+  tries = mergeTries,
 ): Merged & { readonly census: CensusTips; readonly sharedTip: string | undefined } {
   for (let attempt = 1; ; attempt += 1) {
     const [shared, local, sharedFormatFile, localFormatFile, localCensus, sharedCensus] = objectIds(site.path, [
@@ -212,8 +213,8 @@ function mergeShared(
       return { ...merged, census: { local: localCensus, shared: sharedCensus }, sharedTip: shared };
     }
 
-    if (attempt >= mergeTries) {
-      throw new Error(`${logRef} kept moving; ${String(mergeTries)} tries to merge the shared log failed`);
+    if (attempt >= tries) {
+      throw new Error(`${logRef} kept moving; ${String(tries)} tries to merge the shared log failed`);
     }
   }
 }
