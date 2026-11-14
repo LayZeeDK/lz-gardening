@@ -261,6 +261,26 @@ test("a git grep that fails is an error that names the search and carries git's 
   });
 });
 
+test('a repository set to color git output always counts its hits all the same', async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1; // eslint-disable-line\n' });
+  git(dir, ['config', 'color.ui', 'always']);
+
+  const census = await takeCensusInRun(dir, 'main', set, now);
+
+  assert.equal(census.counts['eslint-disable'], 1);
+});
+
+test('a hit in a file with a non-ASCII name names the file as it is', async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/é.ts': 'const a = 1; // eslint-disable-line\n' });
+  git(dir, ['config', 'core.quotePath', 'true']);
+
+  const census = await takeCensusInRun(dir, 'main', set, now);
+
+  assert.deepEqual(census.hits['eslint-disable'], ['src/é.ts:1: const a = 1; // eslint-disable-line']);
+});
+
 test('git grep output counts only lines of the revision asked for that carry a line number', () => {
   assert.deepEqual(parseGrep('abc:a.ts:1:x\nxyz:b.ts:2:y\nabc:no line number\n', 'abc'), ['a.ts:1: x']);
 });

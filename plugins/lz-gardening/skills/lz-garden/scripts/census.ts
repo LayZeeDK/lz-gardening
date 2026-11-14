@@ -216,7 +216,11 @@ async function grepRevision(
   specs: readonly string[],
   what: string,
 ): Promise<readonly string[]> {
-  const grep = await runGitAsync(cwd, ['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], env);
+  const grep = await runGitAsync(
+    cwd,
+    ['-c', 'core.quotePath=false', 'grep', '--no-color', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs],
+    env,
+  );
 
   // git grep exits 1 when nothing matches; anything else above 0 is an error.
   // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
