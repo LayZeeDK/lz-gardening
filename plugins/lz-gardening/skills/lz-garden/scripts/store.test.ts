@@ -736,7 +736,9 @@ test('a log in a newer format than this version reads is refused, saying to upda
 test('a git that cannot start is named without its arguments, so a token in an origin URL stays out of the message', (t) => {
   const { garden } = planted(t);
   const empty = mkdtempSync(join(tmpdir(), 'no-git-'));
-  t.after(() => rmSync(empty, { recursive: true, force: true }));
+  t.after(() => {
+    rmSync(empty, { recursive: true, force: true });
+  });
 
   assert.throws(
     () =>
