@@ -45,7 +45,7 @@ import {
 import type { Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
-import { sync } from './store-sync.ts';
+import { sync, syncTries } from './store-sync.ts';
 import type { SyncResult } from './store-sync.ts';
 import { classPattern, isRecord, replay } from './log.ts';
 
@@ -274,7 +274,7 @@ function checkBed(site: string, bedClass: string, base: string): void {
 function bedRefusal(site: Site, bedClass: string): string | undefined {
   const now = new Date();
 
-  return claimRefusal(site, bedClass, sync(site, { attempts: 1 }, now), now);
+  return claimRefusal(site, bedClass, sync(site, { attempts: syncTries.quick }, now), now);
 }
 
 function mergeInto(bed: string, commitId: string, name: string): void {
@@ -475,7 +475,7 @@ function main(argv: readonly string[], io: Io): number {
   switch (parsed.command) {
     case 'open': {
       const opened = openOrPlant(top, site, parsed.base);
-      const shared = sync(withWriter({ checkout: top, path: site }), { attempts: 1 });
+      const shared = sync(withWriter({ checkout: top, path: site }), { attempts: syncTries.quick });
       reportSync(io, shared);
       const seeded = replay(readLog({ path: site }).events, new Date()).seeded;
       summary = { ...opened, seeded, shared: shared.state };
@@ -486,7 +486,10 @@ function main(argv: readonly string[], io: Io): number {
         recordSeed(io.cwd, parsed.census);
       }
 
-      const shared = sync(withWriter({ checkout: top, path: site }), { attempts: 5, census: parsed.census });
+      const shared = sync(withWriter({ checkout: top, path: site }), {
+        attempts: syncTries.sharing,
+        census: parsed.census,
+      });
       reportSync(io, shared);
       shared.skipped.forEach((path) => {
         io.err(`site: skipped ${escapeUnprintable(path)}: not an event file\n`);

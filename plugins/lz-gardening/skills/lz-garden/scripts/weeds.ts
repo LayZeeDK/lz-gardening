@@ -70,7 +70,7 @@ import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './s
 import { append, openSite, readLog } from './store-log.ts';
 import type { Replica, Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
-import { isShared, sync } from './store-sync.ts';
+import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions } from './store-sync.ts';
 
 export interface Group {
@@ -360,7 +360,7 @@ const claimRounds = 3;
 
 function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: SyncSeams): number {
   const holder = holderOf(site);
-  sync(site, { ...seams, attempts: 1 }, now);
+  sync(site, { ...seams, attempts: syncTries.quick }, now);
   let owner: ClaimEvent | undefined;
 
   for (let round = 1; round <= (wanted === null ? claimRounds : 1); round += 1) {
@@ -391,11 +391,11 @@ function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: Sync
       }
     }
 
-    const shared = sync(site, { ...seams, attempts: 5 }, now);
+    const shared = sync(site, { ...seams, attempts: syncTries.sharing }, now);
 
     if (!isShared(shared)) {
       append(site, (replica) => ({ drafts: releasesOfClaim(replica.events, planned.drafts[0]) }), now);
-      const pending = isShared(sync(site, { ...seams, attempts: 1 }, now)) ? '' : '; release pending';
+      const pending = isShared(sync(site, { ...seams, attempts: syncTries.quick }, now)) ? '' : '; release pending';
       io.out(`cannot claim ${planned.class}: ${shared.state}${reasonOf(shared)}${pending}\n`);
 
       return 1;
@@ -479,7 +479,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
       }
 
       const site = openSite(io.cwd);
-      const before = sync(site, { ...seams, attempts: 1 }, now);
+      const before = sync(site, { ...seams, attempts: syncTries.quick }, now);
       const refusal = 'class' in request.target ? claimRefusal(site, request.target.class, before, now) : undefined;
 
       if (refusal !== undefined) {
@@ -513,7 +513,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
         }
         case 'closed':
         case 'kept': {
-          const shared = sync(site, { ...seams, attempts: 5 }, now);
+          const shared = sync(site, { ...seams, attempts: syncTries.sharing }, now);
           write(`${outcome.said} ${String(outcome.closed.length)}; ${shared.state}`);
 
           if (shared.reason !== undefined) {
@@ -559,7 +559,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
         return 1;
       }
 
-      write(`released ${weedClass}; ${sync(site, { ...seams, attempts: 5 }, now).state}`);
+      write(`released ${weedClass}; ${sync(site, { ...seams, attempts: syncTries.sharing }, now).state}`);
 
       return 0;
     }

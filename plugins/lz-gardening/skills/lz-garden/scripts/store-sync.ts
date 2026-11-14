@@ -196,6 +196,15 @@ function rejected(porcelain: string): boolean {
 // A fetch lost to another sync of this site, which held or moved the shared ref first.
 const lostSharedRefLock = /cannot lock ref 'refs\/garden-shared\//;
 
+// How many tries a command's sync spends: one for a quick look at origin, before planning or after a share already
+// failed, and more, each after a longer wait, to share what the command wrote.
+export const syncTries = {
+  // Stryker disable next-line LzJsNumericLiteral: how many tries a sync spends is policy; the bound is tested through attempts
+  quick: 1,
+  // Stryker disable next-line LzJsNumericLiteral: as above
+  sharing: 5,
+} as const;
+
 export function isShared(result: SyncResult): boolean {
   return result.state === 'synced' || result.state === 'local';
 }
