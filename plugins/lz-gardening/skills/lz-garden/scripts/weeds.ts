@@ -74,7 +74,7 @@ import type {
 } from './log.ts';
 import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import { claimRefusalLine } from './weeds-claim.ts';
+import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { configValue, objectIdPattern } from './store-git.ts';
@@ -422,8 +422,7 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
 
   switch (outcome.said) {
     case 'claimed by another': {
-      const { claim: owner } = outcome;
-      io.err(`weeds ${command}: ${owner.class} is claimed by ${owner.holder} until ${owner.until}\n`);
+      io.err(`weeds ${command}: ${claimedByLine(outcome.claim)}\n`);
 
       return 1;
     }

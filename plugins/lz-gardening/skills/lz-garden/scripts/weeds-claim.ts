@@ -1,4 +1,5 @@
 import { claimRefusal, replay } from './log.ts';
+import type { ClaimEvent } from './log.ts';
 import { reasonOf } from './cli.ts';
 import { readLog } from './store-log.ts';
 import type { Site } from './store-log.ts';
@@ -23,7 +24,11 @@ export function claimRefusalLine(site: Site, weedClass: string, pre: SyncResult,
       return `this site holds no claim of ${weedClass}; run weeds claim --class ${weedClass}`;
     }
     case 'held': {
-      return `${weedClass} is claimed by ${refusal.owner.holder} until ${refusal.owner.until}`;
+      return claimedByLine(refusal.owner);
     }
   }
+}
+
+export function claimedByLine(owner: ClaimEvent): string {
+  return `${owner.class} is claimed by ${owner.holder} until ${owner.until}`;
 }
