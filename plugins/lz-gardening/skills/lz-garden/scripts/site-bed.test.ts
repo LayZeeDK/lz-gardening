@@ -99,6 +99,24 @@ test('bed refuses a base that would overwrite uncommitted work in the bed, names
   assert.equal(readFileSync(join(bed, 'src', 'a.ts'), 'utf8'), 'export const a: number = 1;\n');
 });
 
+test('bed whose merge git refuses over an untracked file names git reason, not a merge to finish by hand', (t) => {
+  const { dir, garden } = claimed(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.status, 0, first.stderr);
+  const bed = join(garden, 'beds', 'any-type');
+  writeFileSync(join(bed, 'src', 'b.ts'), 'export const b = 99;\n');
+  commit(dir, { 'src/b.ts': 'export const b = 2;\n' });
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 2);
+  assert.match(
+    again.stderr,
+    /^site: main does not merge into .*beds[\\/]any-type: error: The following untracked working tree files would be overwritten by merge:\n$/,
+  );
+  assert.equal(readFileSync(join(bed, 'src', 'b.ts'), 'utf8'), 'export const b = 99;\n');
+});
+
 test('bed leaves a merge someone started in the bed alone, and names the bed', (t) => {
   const { dir, garden } = claimed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);

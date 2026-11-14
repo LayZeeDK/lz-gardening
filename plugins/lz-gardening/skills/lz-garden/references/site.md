@@ -196,10 +196,11 @@ merge commit, like every git command of the site, runs no git hooks and is not s
 `branch`, `start`, `created` and `deps`, and `install` when `deps` is `install`. `start` is the base commit it fetched,
 written `<start>` below, so `git diff <start>` shows the bed's own change. `bed` exits 2 on a class that is not a
 kebab-case class id; when a merge is already in progress in a bed that exists (it is left alone; finish or abort it,
-then run `bed` again); when the base, or `origin`'s bed, does not merge into the bed cleanly (a conflict with the bed's
-commits, or a change to a file the bed holds uncommitted work in; the bed is left as it was and the message names it; a
-new bed made at `origin`'s bed whose base merge conflicts stays at `origin`'s bed, and a rerun reports the same conflict
-until it is merged by hand in the bed); on a base that is not a plain branch name or commit (one that starts with `-`,
+then run `bed` again); when the base, or `origin`'s bed, conflicts with the bed's commits (the bed is left as it was
+and the message names it; a new bed made at `origin`'s bed whose base merge conflicts stays at `origin`'s bed, and a
+rerun reports the same conflict until it is merged by hand in the bed); when git refuses the merge before it starts,
+such as over a change to a file the bed holds uncommitted or untracked work in (the message names the bed and gives
+git's reason; the work is kept); on a base that is not a plain branch name or commit (one that starts with `-`,
 or holds characters such as `~`, `^` or `:`); on a base the site cannot fetch; when `site.ts open` has not made the
 site; when something other than the worktree of `bed/<class>` is at `<bed>`, such as a file or a folder left from an
 earlier bed (the message names it; move it aside and run `bed` again); and when it must read a bed `package.json` that

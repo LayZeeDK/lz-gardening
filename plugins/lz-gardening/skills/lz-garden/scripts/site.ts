@@ -29,7 +29,16 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { claimRefusalLine, escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import { configValue, git, gitSucceeds, objectIdPattern, objectIds, optionalGit } from './store-git.ts';
+import {
+  configValue,
+  git,
+  gitReason,
+  gitSucceeds,
+  objectIdPattern,
+  objectIds,
+  optionalGit,
+  runGit,
+} from './store-git.ts';
 import {
   append,
   logRef,
@@ -299,10 +308,19 @@ function bedRefusal(site: Site, bedClass: string): string | undefined {
 }
 
 function mergeInto(bed: string, commitId: string, name: string): void {
-  if (!gitSucceeds(bed, ['merge', '-q', '--no-edit', commitId])) {
-    gitSucceeds(bed, ['merge', '--abort']);
-    throw new Error(`${name} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
+  const merged = runGit(bed, ['merge', '-q', '--no-edit', commitId]);
+
+  if (merged.status === 0) {
+    return;
   }
+
+  // A merge git refused before it began, such as over a file in the way, leaves nothing to merge by hand.
+  if (!gitSucceeds(bed, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])) {
+    throw new Error(`${name} does not merge into ${bed}: ${gitReason(merged.stderr)}`);
+  }
+
+  gitSucceeds(bed, ['merge', '--abort']);
+  throw new Error(`${name} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
 }
 
 interface BedSummary {
