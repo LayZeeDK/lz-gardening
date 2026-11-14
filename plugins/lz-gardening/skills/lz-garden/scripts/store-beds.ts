@@ -62,8 +62,12 @@ function readBedLog(log: string): { readonly commits: readonly string[]; readonl
 
     if (left === 0) {
       const hunk = /^(@@+) (?:-\d+(?:,\d+)? )+\+\d+(?:,(\d+))? \1/.exec(line);
-      parents = (hunk?.[1]?.length ?? 2) - 1;
-      left = hunk === null ? 0 : Number(hunk[2] ?? '1');
+
+      if (hunk !== null) {
+        // One @ per parent and one more: the header's first space follows them.
+        parents = line.indexOf(' ') - 1;
+        left = Number(hunk[2] ?? '1');
+      }
 
       return;
     }
