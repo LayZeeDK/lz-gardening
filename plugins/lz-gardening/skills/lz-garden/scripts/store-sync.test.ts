@@ -297,9 +297,13 @@ test('a try whose push takes longer than the time allowed still reports what its
   const port = await serve(t, silentServer);
   git(second.dir, ['remote', 'set-url', '--push', 'origin', `git://127.0.0.1:${port}/repo.git`]);
 
-  const result = sync(openSite(second.dir), { attempts: 1, timeoutMs: 1000 });
+  // Time enough for the fetch from the local origin on a loaded machine, so only the push runs out of it.
+  const result = sync(openSite(second.dir), { attempts: 1, timeoutMs: 5000 });
 
-  assert.deepEqual([result.state, result.conflicts, result.skipped], ['offline', [path], [stray]]);
+  assert.deepEqual(
+    [result.state, result.reason, result.conflicts, result.skipped],
+    ['offline', 'timed out', [path], [stray]],
+  );
 });
 
 test('a try whose census another sync of the site moved first still reports what its merge found', (t) => {
