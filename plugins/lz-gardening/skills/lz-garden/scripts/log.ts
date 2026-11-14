@@ -342,6 +342,19 @@ export function releasedClaims(events: readonly GardenEvent[]): ReadonlySet<stri
   return new Set(events.flatMap((event) => (event.op === 'release' ? [event.claim] : [])));
 }
 
+export type ClaimRefusal = { readonly kind: 'unclaimed' } | { readonly kind: 'held'; readonly owner: ClaimEvent };
+
+/** Why a writer may not act on a class under its claim: no live claim, or another writer's; undefined when it holds it. */
+export function claimRefusal(garden: Garden, weedClass: string, writer: string): ClaimRefusal | undefined {
+  const owner = garden.claims.get(weedClass);
+
+  if (owner === undefined) {
+    return { kind: 'unclaimed' };
+  }
+
+  return owner.writer === writer ? undefined : { kind: 'held', owner };
+}
+
 /** The active claim of a class when a writer other than this one owns it. */
 function heldByAnother(garden: Garden, weedClass: string, writer: string): ClaimEvent | undefined {
   const held = garden.claims.get(weedClass);

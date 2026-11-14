@@ -65,13 +65,13 @@ import type {
   GardenEvent,
   TendedClose,
 } from './log.ts';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { claimRefusalLine, escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import type { Replica, Site } from './store-log.ts';
 import { censusRef, readCensusAt } from './store-census.ts';
-import { claimRefusal, isShared, sync, syncTries } from './store-sync.ts';
+import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions } from './store-sync.ts';
 
 const sourcePattern = /^[a-z][a-z-]*:\S/;
@@ -451,10 +451,10 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const site = openSite(io.cwd);
       const before = sync(site, { ...seams, attempts: syncTries.quick }, now);
-      const refusal = 'class' in request.target ? claimRefusal(site, request.target.class, before, now) : undefined;
+      const refusal = 'class' in request.target ? claimRefusalLine(site, request.target.class, before, now) : undefined;
 
       if (refusal !== undefined) {
-        io.err(`weeds ${command}: ${escapeUnprintable(refusal)}\n`);
+        io.err(`weeds ${command}: ${refusal}\n`);
 
         return 1;
       }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   bedCommit,
+  claimRefusal,
   eventPath,
   groupWeeds,
   losingClaims,
@@ -626,6 +627,20 @@ test('groups sort by open weeds, then by regrowth, then by name', () => {
   assert.deepEqual(
     groups.map((group) => group.class),
     ['d-three', 'c-regrown', 'a-one', 'b-one'],
+  );
+});
+
+test('a writer may act on a class under its own live claim, and is refused one it holds no claim of or another holds', () => {
+  const owner = claim('c1', 1, 'writer-b');
+  const garden = replay([owner, claim('c2', 2, 'writer-a', later, 'other')], now);
+
+  assert.deepEqual(
+    [
+      claimRefusal(garden, 'other', 'writer-a'),
+      claimRefusal(garden, 'unclaimed-class', 'writer-a'),
+      claimRefusal(garden, 'any-type', 'writer-a'),
+    ],
+    [undefined, { kind: 'unclaimed' }, { kind: 'held', owner }],
   );
 });
 
