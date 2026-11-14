@@ -106,11 +106,17 @@ export function moveLogIfStill(site: string, to: string, from: string): boolean 
   const args = ['update-ref', logRef, to, from];
   const moved = runGit(site, args);
 
-  if (moved.status !== 0 && git(site, ['rev-parse', '--verify', logRef]) === from) {
+  if (moved.status === 0) {
+    return true;
+  }
+
+  const now = optionalGit(site, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true });
+
+  if (now === from) {
     throw gitFailed(args, moved.stderr);
   }
 
-  return moved.status === 0;
+  return now === to;
 }
 
 export const writerKey = 'lzGardening.writer';

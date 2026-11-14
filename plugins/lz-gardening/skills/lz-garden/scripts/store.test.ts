@@ -30,7 +30,7 @@ import {
   runGitAsync,
   treeEntries,
 } from './store-git.ts';
-import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
+import { append, logRef, moveLogIfStill, openSite, plantWriter, readLog, startLog } from './store-log.ts';
 import { commit, git, now, repo, scriptProcess } from './test-repo.ts';
 import { configEnv, planted } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
@@ -821,6 +821,23 @@ test("an ancestry question about a commit git does not know is an error with git
   assert.throws(() => isAncestor(dir, 'f'.repeat(40), 'HEAD'), {
     message: new RegExp(`^git merge-base --is-ancestor ${'f'.repeat(40)} HEAD: fatal: .*${'f'.repeat(40)}`),
   });
+});
+
+test('a move of the log that another writer deleted first is lost to that writer, not an error', (t) => {
+  const { garden } = planted(t);
+  const tip = git(garden, ['rev-parse', logRef]);
+  git(garden, ['update-ref', '-d', logRef]);
+
+  assert.equal(moveLogIfStill(garden, tip, tip), false);
+});
+
+test('a move of the log that another writer made to the same commit first counts as moved', (t) => {
+  const { garden } = planted(t);
+  const tip = git(garden, ['rev-parse', logRef]);
+  const next = git(garden, ['commit-tree', `${tip}^{tree}`, '-p', tip, '-m', 'next']);
+  git(garden, ['update-ref', logRef, next]);
+
+  assert.equal(moveLogIfStill(garden, next, tip), true);
 });
 
 test('an event file whose object is not a file is refused with the header git read for it', (t) => {
