@@ -104,6 +104,11 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
   return added.some(machinePathTest(site)) ? 'stays local: it holds a path on this machine' : undefined;
 }
 
+// The tab-separated fields of a porcelain line, split from git's output, reach the summary only on a ref's line.
+function holdsSummary(fields: string[]): fields is [string, string, string, ...string[]] {
+  return fields[2] !== undefined;
+}
+
 export function pushBeds(
   site: Site,
   leaving: readonly { readonly path: string }[],
@@ -166,11 +171,11 @@ export function pushBeds(
   // A porcelain line per ref: "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as it was. A push
   // that failed before it reached the refs prints no line for them.
   const reported = new Map(
-    pushed.stdout.split('\n').flatMap((line) => {
-      const [flag, refs, summary] = line.split('\t');
-
-      return refs === undefined ? [] : [[refs.slice(refs.indexOf(':') + 1), { flag, summary }] as const];
-    }),
+    pushed.stdout
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .filter(holdsSummary)
+      .map(([flag, refs, summary]) => [refs.slice(refs.indexOf(':') + 1), { flag, summary }] as const),
   );
   const outcomes = pushing.map(({ weedClass, tip }) => {
     const line = reported.get(sharedBedRef(weedClass));
@@ -179,7 +184,7 @@ export function pushBeds(
       return { weedClass, tip, why: timedOut(pushed) ? 'timed out' : reasonOf(pushed.stderr) };
     }
 
-    return { weedClass, tip, why: line.flag === '!' ? (line.summary ?? '') : undefined };
+    return { weedClass, tip, why: line.flag === '!' ? line.summary : undefined };
   });
   const refused = outcomes.flatMap(({ weedClass, why }) => (why === undefined ? [] : [{ weedClass, why }]));
   const marks = outcomes.flatMap(({ weedClass, tip, why }) => {
