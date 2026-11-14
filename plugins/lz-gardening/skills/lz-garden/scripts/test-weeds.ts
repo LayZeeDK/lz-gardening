@@ -1,45 +1,43 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { weedId } from './log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { capturingIo, commit, git, now } from './test-repo.ts';
+import { capturingIo, commit, git, now, scriptRun } from './test-repo.ts';
+import type { ScriptRun } from './test-repo.ts';
 import { planted, writeCensus } from './test-site.ts';
 import { run } from './weeds.ts';
 import type { SyncSeams } from './weeds.ts';
 
 export const script = join(import.meta.dirname, 'weeds.ts');
 
-export interface WeedsRun {
-  readonly code: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-export function cli(cwd: string, args: readonly string[], env = process.env, at?: Date): WeedsRun {
+export function cli(cwd: string, args: readonly string[], env = process.env, at?: Date): ScriptRun {
   return cliWith(cwd, args, {}, env, at ?? new Date());
 }
 
 // The claim tests that pass sync seams plan against the fixed now.
-export function cliWith(cwd: string, args: readonly string[], seams: SyncSeams, env = process.env, at = now): WeedsRun {
+export function cliWith(
+  cwd: string,
+  args: readonly string[],
+  seams: SyncSeams,
+  env = process.env,
+  at = now,
+): ScriptRun {
   const captured = capturingIo(cwd, env);
-  const code = run(args, captured.io, at, seams);
+  const status = run(args, captured.io, at, seams);
 
-  return { code, stdout: captured.stdout(), stderr: captured.stderr() };
+  return { status, stdout: captured.stdout(), stderr: captured.stderr() };
 }
 
 export function addWeed(dir: string, where: string, weedClass = 'any-type'): string {
   const added = cli(dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:x']);
-  assert.equal(added.code, 0, added.stderr);
+  assert.equal(added.status, 0, added.stderr);
 
   return weedId(weedClass, where, 'census:x');
 }
 
-export function cliProcess(cwd: string, args: readonly string[], env = process.env): WeedsRun {
-  const result = spawnSync(process.execPath, [script, ...args], { cwd, env, encoding: 'utf8' });
-
-  return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+export function cliProcess(cwd: string, args: readonly string[], env = process.env): ScriptRun {
+  return scriptRun(script, cwd, args, env);
 }
 
 export function eslintConfig(files: string, rules: string): string {
@@ -67,11 +65,11 @@ export function tendedBed(
   const tip = commit(bed, check);
   const base = commit(dir, { 'src/b.ts': 'export const b = 1;\n' });
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
-  assert.equal(added.code, 0, added.stderr);
+  assert.equal(added.status, 0, added.stderr);
   writeCensus(garden, base);
-  assert.equal(cli(dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type']).status, 0);
   const closed = cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', where]);
-  assert.equal(closed.code, 0, closed.stderr);
+  assert.equal(closed.status, 0, closed.stderr);
 
   return { dir, garden, bed, tip };
 }

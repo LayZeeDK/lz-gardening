@@ -15,12 +15,12 @@ const laterId = weedId(later.class, later.where, later.source);
 
 function run(dir: string, args: readonly string[]): void {
   const result = cli(dir, args);
-  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.status, 0, result.stderr);
 }
 
 function cliWithShareOff(dir: string, args: readonly string[]): void {
   const result = cli(dir, args, configEnv([['lzGardening.share', 'false']]));
-  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.status, 0, result.stderr);
 }
 
 function add(dir: string, found: typeof weed | typeof later): void {

@@ -1,7 +1,6 @@
 // The census tests' shared utilities: the command line run in this process or as a child, the patterns and censuses
 // the tests build, and a census recorded by a sync.
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { run, takeCensus } from './census.ts';
@@ -10,21 +9,16 @@ import { gitEnv, inRun } from './store-git.ts';
 import { openSite } from './store-log.ts';
 import type { Census } from './store-census.ts';
 import { sync } from './store-sync.ts';
-import { capturingIo, now, summaryOf } from './test-repo.ts';
+import { capturingIo, now, scriptRun, summaryOf } from './test-repo.ts';
+import type { ScriptRun } from './test-repo.ts';
 
 export const script = join(import.meta.dirname, 'census.ts');
 
-export interface Ran {
-  readonly status: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
+export function censusCli(dir: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): ScriptRun {
+  return scriptRun(script, dir, args, env);
 }
 
-export function censusCli(dir: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): Ran {
-  return spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: 'utf8', env });
-}
-
-export async function census(dir: string, args: readonly string[]): Promise<Ran> {
+export async function census(dir: string, args: readonly string[]): Promise<ScriptRun> {
   const captured = capturingIo(dir, process.env);
   const status = await run(args, captured.io);
 
@@ -79,7 +73,7 @@ export function censusText(sha: string, extra: Readonly<Record<string, unknown>>
   return `${JSON.stringify(census, null, 2)}\n`;
 }
 
-export async function takeAndRecord(dir: string, args: readonly string[] = []): Promise<Ran> {
+export async function takeAndRecord(dir: string, args: readonly string[] = []): Promise<ScriptRun> {
   const result = await census(dir, ['--rev', 'HEAD', ...args]);
   assert.equal(result.status, 0, result.stderr);
   const sha = summaryOf(result.stdout).get('sha');

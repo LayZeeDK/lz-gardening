@@ -68,7 +68,7 @@ test('sync of a site with an event the origin lacks starts 12 git processes', (t
   bareRemote(dir);
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
   assert.equal(
-    cliProcess(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']).code,
+    cliProcess(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']).status,
     0,
   );
 
@@ -81,12 +81,12 @@ test('sync of a site with an event the origin lacks starts 12 git processes', (t
 test('sync of a site whose events the origin lacks while the origin holds events it lacks starts 14 git processes', (t) => {
   const { first, second } = sharedPair(t);
   assert.equal(
-    cliProcess(first.dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']).code,
+    cliProcess(first.dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']).status,
     0,
   );
   assert.equal(siteProcess(first.dir, ['sync']).summary.get('shared'), 'synced');
   assert.equal(
-    cliProcess(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:x']).code,
+    cliProcess(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:x']).status,
     0,
   );
 
@@ -123,7 +123,7 @@ test('sync --census that records the census and pushes it, with no other pending
 test('bed makes a new bed for a claimed class in a garden with no origin with 9 git processes', (t) => {
   const { dir } = planted(t);
   addWeed(dir, 'src/a.ts:1');
-  assert.equal(cliProcess(dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cliProcess(dir, ['claim', '--class', 'any-type']).status, 0);
 
   assertCount(
     gitStarts(t, (env) => siteProcess(dir, ['bed', '--class', 'any-type', '--base', 'main'], env).status),
@@ -138,7 +138,7 @@ test('an add that adds a weed starts 7 git processes', (t) => {
     gitStarts(
       t,
       (env) =>
-        cliProcess(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'], env).code,
+        cliProcess(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'], env).status,
     ),
     7,
   );
@@ -151,7 +151,7 @@ test('claim of a class with an origin and no race starts 28 git processes', (t) 
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
 
   assertCount(
-    gitStarts(t, (env) => cliProcess(dir, ['claim', '--class', 'any-type'], env).code),
+    gitStarts(t, (env) => cliProcess(dir, ['claim', '--class', 'any-type'], env).status),
     28,
   );
 });
@@ -160,7 +160,7 @@ test('close-class --tended with an origin and no shared bed starts 35 git proces
   const { dir, garden } = planted(t);
   bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
-  assert.equal(cliProcess(dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cliProcess(dir, ['claim', '--class', 'any-type']).status, 0);
   assert.equal(siteProcess(dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
   const tip = commit(join(garden, 'beds', 'any-type'), { 'checks/any-type.mjs': 'export {};\n' });
   const close = [
@@ -174,7 +174,7 @@ test('close-class --tended with an origin and no shared bed starts 35 git proces
   ];
 
   assertCount(
-    gitStarts(t, (env) => cliProcess(dir, close, env).code),
+    gitStarts(t, (env) => cliProcess(dir, close, env).status),
     35,
   );
 });
@@ -199,7 +199,7 @@ test('list starts 5 git processes', (t) => {
   const { dir } = planted(t);
 
   assertCount(
-    gitStarts(t, (env) => cliProcess(dir, ['list'], env).code),
+    gitStarts(t, (env) => cliProcess(dir, ['list'], env).status),
     5,
   );
 });
@@ -215,8 +215,8 @@ test('git settings in the environment start no extra git process', (t) => {
   };
 
   assert.deepEqual(
-    gitStarts(t, (env) => cliProcess(dir, ['list'], { ...env, ...settings }).code),
-    gitStarts(t, (env) => cliProcess(dir, ['list'], env).code),
+    gitStarts(t, (env) => cliProcess(dir, ['list'], { ...env, ...settings }).status),
+    gitStarts(t, (env) => cliProcess(dir, ['list'], env).status),
   );
 });
 
@@ -224,7 +224,7 @@ test('a git variable that is not a setting makes the script ask git which variab
   const { dir } = planted(t);
 
   assert.equal(
-    gitStarts(t, (env) => cliProcess(dir, ['list'], { ...env, GIT_TRACE: '0' }).code)[0],
+    gitStarts(t, (env) => cliProcess(dir, ['list'], { ...env, GIT_TRACE: '0' }).status)[0],
     'git rev-parse --local-env-vars',
   );
 });

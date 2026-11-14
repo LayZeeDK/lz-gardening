@@ -581,7 +581,7 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   addWeed(second.dir, 'src/b.ts:1');
   const tip = commit(anyTypeBedFromMain(second.garden), { 'checks/any-type.mjs': 'export {};\n' });
   git(second.dir, ['config', 'lzGardening.share', 'false']);
-  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).status, 0);
   const closed = cli(second.dir, [
     'close-class',
     '--class',
@@ -591,7 +591,7 @@ test('every push a sync starts names only the garden log, the census or a bed, a
     '--check',
     'checks/any-type.mjs',
   ]);
-  assert.equal(closed.code, 0, closed.stderr);
+  assert.equal(closed.status, 0, closed.stderr);
   git(second.dir, ['config', 'lzGardening.share', 'true']);
   const base = git(second.dir, ['rev-parse', 'HEAD']);
   writePendingCensus({ path: second.garden, checkout: second.dir }, base, censusText(base));
@@ -696,7 +696,7 @@ test('a fetch for a user who set GIT_SSH runs their ssh program as it is', (t) =
 function syncProcess(
   dir: string,
   args: readonly string[] = [],
-): Promise<{ readonly code: number | null; readonly stdout: string }> {
+): Promise<{ readonly status: number | null; readonly stdout: string }> {
   return scriptProcess(siteScript, dir, ['sync', ...args]);
 }
 
@@ -713,8 +713,8 @@ test('two syncs of one site at once both end synced or behind, and no event is l
 
   assert.deepEqual(
     [
-      runs.map(({ code, stdout }) => [
-        code,
+      runs.map(({ status, stdout }) => [
+        status,
         ['synced', 'behind'].some((state) => stdout.includes(`"shared":"${state}"`)),
       ]),
       wheres(first.dir),
@@ -739,7 +739,7 @@ test('syncs of one site at once that each move its log to the shared log all exi
   const runs = await Promise.all(Array.from({ length: 4 }, () => syncProcess(second.dir)));
 
   assert.deepEqual(
-    runs.map(({ code }) => code),
+    runs.map(({ status }) => status),
     [0, 0, 0, 0],
   );
 });
@@ -752,7 +752,7 @@ test('syncs of one site at once that each adopt the shared census all exit 0', a
   const runs = await Promise.all(Array.from({ length: 4 }, () => syncProcess(second.dir)));
 
   assert.deepEqual(
-    [runs.map(({ code }) => code), git(second.garden, ['rev-parse', censusRef])],
+    [runs.map(({ status }) => status), git(second.garden, ['rev-parse', censusRef])],
     [[0, 0, 0, 0], git(first.garden, ['rev-parse', censusRef])],
   );
 });
@@ -767,7 +767,7 @@ test('syncs of one site at once that each record the same pending census all exi
 
   assert.deepEqual(
     [
-      runs.map(({ code }) => code),
+      runs.map(({ status }) => status),
       git(garden, ['rev-parse', censusRef]),
       git(garden, ['for-each-ref', 'refs/garden/pending']),
     ],

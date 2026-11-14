@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { run } from './site.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
-import { capturingIo, commit, git, init, summaryOf } from './test-repo.ts';
+import { capturingIo, commit, git, init, scriptRun, summaryOf } from './test-repo.ts';
 
 export const siteScript = join(import.meta.dirname, 'site.ts');
 
@@ -29,7 +29,7 @@ export function site(cwd: string, args: readonly string[], env: NodeJS.ProcessEn
 }
 
 export function siteProcess(cwd: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): SiteRun {
-  const result = spawnSync(process.execPath, [siteScript, ...args], { cwd, encoding: 'utf8', env });
+  const result = scriptRun(siteScript, cwd, args, env);
 
   return siteRun(result.status, result.stdout, result.stderr);
 }
@@ -39,7 +39,7 @@ export function scriptProcess(
   script: string,
   cwd: string,
   args: readonly string[],
-): Promise<{ readonly code: number | null; readonly stdout: string }> {
+): Promise<{ readonly status: number | null; readonly stdout: string }> {
   return new Promise((resolve, reject) => {
     let stdout = '';
     const child = spawn(process.execPath, [script, ...args], { cwd, stdio: ['ignore', 'pipe', 'inherit'] });
@@ -47,8 +47,8 @@ export function scriptProcess(
     child.stdout.on('data', (chunk: string) => {
       stdout += chunk;
     });
-    child.on('error', reject).on('close', (code) => {
-      resolve({ code, stdout });
+    child.on('error', reject).on('close', (status) => {
+      resolve({ status, stdout });
     });
   });
 }

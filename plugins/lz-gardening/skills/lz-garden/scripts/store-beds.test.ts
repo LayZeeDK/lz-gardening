@@ -33,9 +33,9 @@ function withBed(t: TestContext): Tended {
 function tend(place: Tended, files: Readonly<Record<string, string>>, where = 'src/a.ts:1'): string {
   const tip = commit(place.bed, files);
   const added = cli(place.dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:x']);
-  assert.equal(added.code, 0, added.stderr);
+  assert.equal(added.status, 0, added.stderr);
   const claimed = cli(place.dir, ['claim', '--class', 'any-type']);
-  assert.equal(claimed.code, 0, claimed.stderr);
+  assert.equal(claimed.status, 0, claimed.stderr);
   const closed = cli(place.dir, [
     'close-class',
     '--class',
@@ -45,7 +45,7 @@ function tend(place: Tended, files: Readonly<Record<string, string>>, where = 's
     '--check',
     'checks/any-type.mjs',
   ]);
-  assert.equal(closed.code, 0, closed.stderr);
+  assert.equal(closed.status, 0, closed.stderr);
 
   return tip;
 }
@@ -432,7 +432,7 @@ function tendedInFirstClone(
   const added = cli(first.dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
   const claimed = cli(first.dir, ['claim', '--class', 'any-type']);
   const made = site(first.dir, ['bed', '--class', 'any-type', '--base', 'main']);
-  assert.deepEqual([added.code, claimed.code, made.status], [0, 0, 0], made.stderr);
+  assert.deepEqual([added.status, claimed.status, made.status], [0, 0, 0], made.stderr);
   const tip = commit(join(first.garden, 'beds', 'any-type'), files);
   const closed = cli(first.dir, [
     'close-class',
@@ -453,7 +453,7 @@ test("a bed continued from origin's bed reads only the commits origin lacks for 
   const { second, remote } = tendedInFirstClone(t, { 'checks/notes.txt': `built in ${home}\\src\n` });
   homeAt(t, home);
   cli(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:y']);
-  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).status, 0);
   assert.equal(site(second.dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
   const tip = commit(join(second.garden, 'beds', 'any-type'), { 'checks/any-type.mjs': 'export const later = 1;\n' });
 
@@ -473,7 +473,7 @@ test("a bed continued from origin's bed reads only the commits origin lacks for 
 test("a class tended in one clone and claimed in another continues the same bed from the first clone's bed", (t) => {
   const { second, tip } = tendedInFirstClone(t);
   cli(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:y']);
-  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).status, 0);
 
   const made = site(second.dir, ['bed', '--class', 'any-type', '--base', 'main']);
 

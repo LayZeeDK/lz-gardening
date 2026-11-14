@@ -29,7 +29,7 @@ test('claim --class with an origin pushes the claim and prints the class and unt
   const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
 
   assert.deepEqual(
-    [claimed.code, claimed.stdout, claimsIn(remote)],
+    [claimed.status, claimed.stdout, claimsIn(remote)],
     [0, 'claimed any-type until 2026-11-07T18:00:00.000Z\n', [['any-type', '2026-11-07T18:00:00.000Z']]],
   );
 });
@@ -41,7 +41,7 @@ test('claim with nothing ready prints nothing ready to tend, exits 1 and pushes 
 
   const claimed = cli(dir, ['claim'], process.env, now);
 
-  assert.deepEqual([claimed.code, claimed.stdout, claimsIn(remote)], [1, 'nothing ready to tend\n', []]);
+  assert.deepEqual([claimed.status, claimed.stdout, claimsIn(remote)], [1, 'nothing ready to tend\n', []]);
 });
 
 test('claim --class of a class with nothing open prints nothing open for it and exits 1', (t) => {
@@ -49,7 +49,7 @@ test('claim --class of a class with nothing open prints nothing open for it and 
 
   const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
 
-  assert.deepEqual([claimed.code, claimed.stdout, claimsIn(garden)], [1, 'nothing open for any-type\n', []]);
+  assert.deepEqual([claimed.status, claimed.stdout, claimsIn(garden)], [1, 'nothing open for any-type\n', []]);
 });
 
 function holders(gitDir: string): readonly unknown[] {
@@ -103,7 +103,7 @@ test('claim --class whose origin cannot be reached says it cannot claim, offline
 
   const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
 
-  assert.equal(claimed.code, 1);
+  assert.equal(claimed.status, 1);
   assert.match(
     claimed.stdout,
     /^cannot claim any-type: offline \(fatal: '.*missing\.git' does not appear to be a git repository\); release pending\n$/,
@@ -128,7 +128,7 @@ test('claim --class whose origin declines the push says it cannot claim, read-on
   const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
 
   assert.deepEqual(
-    [claimed.code, claimed.stdout, releasedClaims(garden)],
+    [claimed.status, claimed.stdout, releasedClaims(garden)],
     [
       1,
       'cannot claim any-type: read-only (remote: refs/garden is closed here); release pending\n',
@@ -155,7 +155,7 @@ test('claim --class whose push the origin takes after the time is up releases th
   waitFor(join(remote, 'slept'));
 
   assert.deepEqual(
-    [claimed.code, claimed.stdout, releasedClaims(remote)],
+    [claimed.status, claimed.stdout, releasedClaims(remote)],
     [1, 'cannot claim any-type: offline (timed out)\n', [['any-type', true]]],
   );
 });
@@ -164,14 +164,14 @@ test("a holder that claims again renews: claimed with the later until, and the o
   const { dir, garden } = planted(t);
   const remote = bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
-  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
   const later = new Date(now.getTime() + 60 * 60 * 1000);
 
   const renewed = cli(dir, ['claim', '--class', 'any-type'], process.env, later);
   const owner = replay(readLog({ path: remote }).events, later).claims.get('any-type');
 
   assert.deepEqual(
-    [renewed.code, renewed.stdout, owner?.writer, owner?.until],
+    [renewed.status, renewed.stdout, owner?.writer, owner?.until],
     [
       0,
       'claimed any-type until 2026-11-07T19:00:00.000Z\n',
@@ -191,14 +191,14 @@ test('claim --class of a class another writer holds prints taken with the holder
   const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
 
   assert.deepEqual(
-    [claimed.code, claimed.stdout, claimsIn(garden)],
+    [claimed.status, claimed.stdout, claimsIn(garden)],
     [1, 'taken any-type by Bea until 2026-11-07T15:00:00.000Z\n', [['any-type', '2026-11-07T15:00:00.000Z']]],
   );
 });
 
 function readyRows(dir: string): readonly unknown[] {
   const listed = cli(dir, ['groups', '--ready'], process.env, now);
-  assert.equal(listed.code, 0, listed.stderr);
+  assert.equal(listed.status, 0, listed.stderr);
 
   return listed.stdout
     .trimEnd()
@@ -238,7 +238,7 @@ test('release --class by a site holding no claim of the class says so, exits 1 a
   const released = cli(dir, ['release', '--class', 'any-type'], process.env, now);
 
   assert.deepEqual(
-    [released.code, released.stdout, git(remote, ['for-each-ref', 'refs/garden'])],
+    [released.status, released.stdout, git(remote, ['for-each-ref', 'refs/garden'])],
     [1, 'no claim of any-type held here\n', ''],
   );
 });
@@ -247,12 +247,12 @@ test('release whose origin can no longer be reached releases, exits 0, and says 
   const { dir } = planted(t);
   bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
-  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
   git(dir, ['remote', 'set-url', 'origin', join(dirname(dir), 'missing.git')]);
 
   const released = cli(dir, ['release', '--class', 'any-type'], process.env, now);
 
-  assert.deepEqual([released.code, released.stdout], [0, 'released any-type; offline\n']);
+  assert.deepEqual([released.status, released.stdout], [0, 'released any-type; offline\n']);
   assert.match(released.stderr, /^weeds release: fatal: '.*missing\.git' does not appear to be a git repository\n$/);
 });
 
@@ -266,7 +266,7 @@ test('claim and release with a class that is not a kebab-case class id are usage
   ];
 
   assert.deepEqual(
-    results.map(({ code, stderr }) => [code, stderr]),
+    results.map(({ status, stderr }) => [status, stderr]),
     [
       [2, 'weeds claim: --class must be kebab-case\n'],
       [2, 'weeds release: --class must be kebab-case\n'],
@@ -297,7 +297,7 @@ test('claim --class with no origin claims in the local log', (t) => {
   const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
 
   assert.deepEqual(
-    [claimed.code, claimed.stdout, claimsIn(garden)],
+    [claimed.status, claimed.stdout, claimsIn(garden)],
     [0, 'claimed any-type until 2026-11-07T18:00:00.000Z\n', [['any-type', '2026-11-07T18:00:00.000Z']]],
   );
 });

@@ -152,7 +152,7 @@ test('add refuses a layer written other than as plain digits, as hex or with spa
   );
 
   assert.deepEqual(
-    results.map((result) => [result.code, result.stderr]),
+    results.map((result) => [result.status, result.stderr]),
     Array.from({ length: 2 }, () => [2, 'weeds add: --layer must be an integer from 1 to 6\n']),
   );
 });
@@ -161,7 +161,7 @@ test('groups refuses a --min written other than as plain digits, as an exponent'
   const result = cli(tmpdir(), ['groups', '--min', '1e0']);
 
   assert.deepEqual(
-    [result.code, result.stderr],
+    [result.status, result.stderr],
     [2, 'weeds groups: --min must be a whole number of at least 1, got 1e0\n'],
   );
 });
@@ -211,7 +211,7 @@ test('validation takes the joiners that words and emoji need in paths and notes'
 // close-class acts only under the site's own claim of the class.
 function closeUnderClaim(dir: string, args: readonly string[]): ReturnType<typeof cli> {
   const claimed = cli(dir, ['claim', '--class', args[args.indexOf('--class') + 1] ?? '']);
-  assert.equal(claimed.code, 0, claimed.stdout);
+  assert.equal(claimed.status, 0, claimed.stdout);
 
   return cli(dir, args);
 }
@@ -331,7 +331,7 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
 
   const result = cli(dir, ['list', '--clas', 'hollow-assertion']);
 
-  assert.equal(result.code, 2);
+  assert.equal(result.status, 2);
   assert.match(result.stderr, /--clas/);
 });
 
@@ -341,7 +341,7 @@ test('groups refuses a --min that is not a positive whole number, rather than hi
   for (const min of ['two', '0']) {
     const result = cli(dir, ['groups', '--min', min]);
 
-    assert.equal(result.code, 2);
+    assert.equal(result.status, 2);
     assert.match(result.stderr, /--min/);
   }
 });
@@ -352,7 +352,7 @@ test('groups refuses --ready with --min, as the usage gives one or the other', (
   const result = cli(dir, ['groups', '--ready', '--min', '3']);
 
   assert.deepEqual(
-    [result.code, result.stdout, result.stderr],
+    [result.status, result.stdout, result.stderr],
     [2, '', 'weeds groups: --ready and --min go apart; give one or the other\n'],
   );
 });
@@ -382,7 +382,7 @@ test('the CLI takes no --file, so it writes nowhere but the site', (t) => {
     target,
   ]);
 
-  assert.equal(result.code, 2);
+  assert.equal(result.status, 2);
   assert.match(result.stderr, /--file/);
   assert.equal(existsSync(target), false);
 });
@@ -395,7 +395,7 @@ test('groups prints a header, then a row per class with its layer or a dash and 
   const result = cli(dir, ['groups']);
   const lines = result.stdout.trimEnd().split('\n');
 
-  assert.equal(result.code, 0);
+  assert.equal(result.status, 0);
   assert.equal(lines[0], `${'class'.padEnd(36)} open places regrown layer first-seen tending`);
   assert.match(
     lines[1] ?? '',
@@ -446,7 +446,7 @@ test('close takes one weed by id and leaves the rest of its class open', (t) => 
 
   const result = cli(dir, ['close', '--id', target, '--one-off', 'generated code']);
 
-  assert.equal(result.code, 0);
+  assert.equal(result.status, 0);
   assert.equal(result.stdout, 'closed 1; local\n');
   assert.deepEqual(
     cli(dir, ['list'])
@@ -472,7 +472,7 @@ test('a close needs its target and exactly one non-blank kind of close, and writ
   ];
 
   assert.deepEqual(
-    results.map((result) => [result.code, result.stderr]),
+    results.map((result) => [result.status, result.stderr]),
     [
       [2, 'weeds close: needs --id and exactly one of --tended, --one-off or --keep\n'],
       [2, 'weeds close-class: needs --class and exactly one of --tended, --one-off or --keep\n'],
@@ -497,7 +497,7 @@ test('a tend close needs a bed of the class it closes and a check, and a check g
   ];
 
   assert.deepEqual(
-    results.map((result) => [result.code, result.stderr]),
+    results.map((result) => [result.status, result.stderr]),
     [
       [2, 'weeds close-class: --tended needs --check <where the check lives>\n'],
       [2, 'weeds close-class: --check goes with --tended only\n'],
@@ -523,7 +523,7 @@ test('a tend close refuses a bed with anything in front of bed/<class>@<commit>'
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr],
+    [result.status, result.stderr],
     [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got xbed/any-type@1a2b3c4\n'],
   );
   assert.equal(logFiles(garden).size, 1);
@@ -544,7 +544,7 @@ test('a tend close refuses a bed with anything after bed/<class>@<commit>', (t) 
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr],
+    [result.status, result.stderr],
     [2, 'weeds close-class: --tended must be bed/any-type@<commit>, got bed/any-type@1a2b3c4-extra\n'],
   );
   assert.equal(logFiles(garden).size, 1);
@@ -557,7 +557,7 @@ test('a tend close refuses a check of only spaces, which names no place', (t) =>
   const result = cli(dir, ['close-class', '--class', 'any-type', '--tended', 'bed/any-type@1a2b3c4', '--check', '   ']);
 
   assert.deepEqual(
-    [result.code, result.stderr],
+    [result.status, result.stderr],
     [2, 'weeds close-class: --tended needs --check <where the check lives>\n'],
   );
   assert.equal(logFiles(garden).size, 1);
@@ -573,7 +573,7 @@ test('a tend close refuses a check that is not repository-relative and writes no
   );
 
   assert.deepEqual(
-    results.map((result) => [result.code, result.stderr]),
+    results.map((result) => [result.status, result.stderr]),
     Array.from({ length: 3 }, () => [2, 'weeds close-class: --check must be a repository-relative path\n']),
   );
   assert.equal(logFiles(garden).size, 1);
@@ -589,7 +589,7 @@ test('a tend close takes a whole class: close by id refuses --tended and leaves 
   const next = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
 
   assert.deepEqual(
-    [result.code, result.stderr],
+    [result.status, result.stderr],
     [2, 'weeds close: --tended closes a whole class; use close-class --class <class>\n'],
   );
   assert.match(next.stdout, /^added /);
@@ -606,7 +606,7 @@ test('a close refuses a reason or check holding a control character, which later
   ];
 
   assert.deepEqual(
-    results.map((result) => [result.code, result.stderr]),
+    results.map((result) => [result.status, result.stderr]),
     [
       [2, 'weeds close-class: --check must be one line of text without control characters\n'],
       [2, 'weeds close-class: --one-off must be one line of text without control characters\n'],
@@ -632,12 +632,12 @@ test('close refuses an id holding a control character, which its output would pr
 test('a close-class under a claim whose class has nothing open any more exits 1 and names its target', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
-  assert.equal(cli(dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type']).status, 0);
   cli(dir, ['close', '--id', weedId('any-type', 'src/a.ts:1', 'census:any-type'), '--one-off', 'fixed by hand']);
 
   const result = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
 
-  assert.equal(result.code, 1);
+  assert.equal(result.status, 1);
   assert.equal(result.stderr, 'weeds close-class: nothing open for any-type\n');
 });
 
@@ -646,7 +646,7 @@ test('a close by id that finds nothing open exits 1 and names the id', (t) => {
 
   const result = cli(dir, ['close', '--id', '0123456789', '--one-off', 'generated code']);
 
-  assert.deepEqual([result.code, result.stderr], [1, 'weeds close: nothing open for 0123456789\n']);
+  assert.deepEqual([result.status, result.stderr], [1, 'weeds close: nothing open for 0123456789\n']);
 });
 
 test('closing a class of several weeds appends one close event naming each weed', (t) => {
@@ -668,7 +668,7 @@ test('add says which flag is wrong', (t) => {
 
   const result = cli(dir, ['add', '--class', 'any-type', '--source', 'census:any-type']);
 
-  assert.equal(result.code, 2);
+  assert.equal(result.status, 2);
   assert.equal(result.stderr, 'weeds add: --where must not be empty\n');
 });
 
@@ -688,7 +688,7 @@ test('add refuses a --census that is not a full commit id, as git would read an 
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr],
+    [result.status, result.stderr],
     [2, 'weeds add: --census must be the full commit id census.ts printed\n'],
   );
 });
@@ -703,7 +703,7 @@ test('list prints each open weed as id, class, place, source and note, and --cla
   const listed = cli(dir, ['list', '--class', 'any-type']);
   const all = cli(dir, ['list']).stdout.trimEnd().split('\n');
 
-  assert.equal(listed.code, 0);
+  assert.equal(listed.status, 0);
   assert.equal(listed.stdout, `${id} any-type src/a.ts:1 [census:any-type] \n`);
   assert.equal(all.length, 2);
   assert.match(all[1] ?? '', / todo-marker src\/b\.ts:2 \[commit:abc1234\] later$/);
@@ -714,7 +714,7 @@ test('a word after the command is a usage error and queues nothing', (t) => {
 
   const result = cli(dir, ['add', 'any-type', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
 
-  assert.equal(result.code, 2);
+  assert.equal(result.status, 2);
   assert.match(result.stderr, /^usage: weeds\.ts/);
   assert.equal(logFiles(garden).size, 0);
 });
@@ -743,7 +743,7 @@ test('an event file the log cannot read is skipped and named, and the rest of th
   const listed = cli(dir, ['list']);
 
   assert.deepEqual(
-    [listed.code, listed.stdout, listed.stderr],
+    [listed.status, listed.stdout, listed.stderr],
     [0, `${id} any-type src/a.ts:1 [census:x] \n`, 'weeds: skipped events/ab/abc.json: not JSON\n'],
   );
 });
@@ -764,7 +764,7 @@ test('a command that fails after reading the log still names the event files it 
 
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
 
-  assert.equal(added.code, 2);
+  assert.equal(added.status, 2);
   assert.match(
     added.stderr,
     /^weeds: skipped events\/ab\/abc\.json: not JSON\nweeds: git fast-import refs\/garden\/log: .*cannot lock ref/s,
@@ -778,7 +778,7 @@ test('a log in a newer format is refused with exit 2, and nothing is added to it
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
 
   assert.deepEqual(
-    [added.code, added.stderr, logFiles(garden).size],
+    [added.status, added.stderr, logFiles(garden).size],
     [2, 'weeds: refs/garden/log is in format 2, which this version cannot read; update lz-gardening\n', 0],
   );
 });
@@ -804,7 +804,7 @@ test('a close of a class another writer holds a claim on exits 1, names the hold
   const result = cli(dir, ['close-class', '--class', 'any-type', '--one-off', 'generated code']);
 
   assert.deepEqual(
-    [result.code, result.stderr, logFiles(garden).size],
+    [result.status, result.stderr, logFiles(garden).size],
     [1, `weeds close-class: any-type is claimed by ci on runner until ${until}\n`, 2],
   );
 });
@@ -812,7 +812,7 @@ test('a close of a class another writer holds a claim on exits 1, names the hold
 test('an unknown command prints the usage line', (t) => {
   const result = cli(checkout(t), ['prune']);
 
-  assert.equal(result.code, 2);
+  assert.equal(result.status, 2);
   assert.match(result.stderr, /^usage: weeds\.ts add\|close\|close-class\|claim\|release\|groups\|list/);
 });
 
@@ -823,7 +823,7 @@ test('a usage error in a repository with no site names the usage error, not the 
   const results = [cli(dir, ['prune']), cli(dir, ['groups', '--min', '0'])];
 
   assert.deepEqual(
-    results.map(({ code, stderr }) => [code, stderr]),
+    results.map(({ status, stderr }) => [status, stderr]),
     [
       [2, 'usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
       [2, 'weeds groups: --min must be a whole number of at least 1, got 0\n'],
@@ -834,7 +834,7 @@ test('a usage error in a repository with no site names the usage error, not the 
 test('add takes a note that only looks like a path of this machine: a longer folder name, or a home folder at the root', (t) => {
   const { dir } = planted(t);
   const add = (where: string, note: string) =>
-    cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:any-type', '--note', note]).code;
+    cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:any-type', '--note', note]).status;
 
   homeAt(t, join(sep, 'ada'));
   const longer = add('src/a.ts:1', `copied from ${join(sep, 'adams', 'notes.txt')}`);
@@ -847,7 +847,7 @@ test('add takes a note that only looks like a path of this machine: a longer fol
 test("close-class refuses a reason holding the checkout's or the site's path, in any case and with either slash", (t) => {
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
-  assert.equal(cli(dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type']).status, 0);
   const flipped = (path: string): string =>
     path.includes('\\') ? path.replaceAll('\\', '/') : path.replaceAll('/', '\\');
 
@@ -862,7 +862,7 @@ test("close-class refuses a reason holding the checkout's or the site's path, in
   ];
 
   assert.deepEqual(
-    [...results.map((result) => [result.code, result.stderr]), logFiles(garden).size],
+    [...results.map((result) => [result.status, result.stderr]), logFiles(garden).size],
     [
       ...Array.from({ length: 2 }, () => [
         2,
@@ -891,7 +891,7 @@ test("add refuses a note holding the checkout's path with its backslashes escape
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr, logFiles(garden).size],
+    [result.status, result.stderr, logFiles(garden).size],
     [
       2,
       'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
@@ -917,7 +917,7 @@ test("add refuses a note holding a drive's folder in Git Bash's form, /<drive>/ 
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr, logFiles(garden).size],
+    [result.status, result.stderr, logFiles(garden).size],
     [
       2,
       'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
@@ -943,7 +943,7 @@ test("add refuses a note holding a drive's folder in WSL's form, /mnt/<drive>/ i
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr, logFiles(garden).size],
+    [result.status, result.stderr, logFiles(garden).size],
     [
       2,
       'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
@@ -969,7 +969,7 @@ test("add refuses a note holding a drive's folder in Cygwin's form, /cygdrive/<d
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr, logFiles(garden).size],
+    [result.status, result.stderr, logFiles(garden).size],
     [
       2,
       'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',
@@ -994,7 +994,7 @@ test("add takes a note whose repository path holds the home folder's name inside
     'mirrors src/root/a.ts',
   ]);
 
-  assert.deepEqual([result.code, result.stderr, logFiles(garden).size], [0, '', 1]);
+  assert.deepEqual([result.status, result.stderr, logFiles(garden).size], [0, '', 1]);
 });
 
 test("add refuses a note holding this machine's home folder and writes nothing", (t) => {
@@ -1013,7 +1013,7 @@ test("add refuses a note holding this machine's home folder and writes nothing",
   ]);
 
   assert.deepEqual(
-    [result.code, result.stderr, logFiles(garden).size],
+    [result.status, result.stderr, logFiles(garden).size],
     [
       2,
       'weeds: the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative\n',

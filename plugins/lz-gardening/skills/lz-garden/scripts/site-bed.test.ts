@@ -24,7 +24,7 @@ import { cli } from './test-weeds.ts';
 function claimAnyType(dir: string): void {
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   const claimed = cli(dir, ['claim', '--class', 'any-type']);
-  assert.deepEqual([added.code, claimed.code], [0, 0], added.stderr + claimed.stderr);
+  assert.deepEqual([added.status, claimed.status], [0, 0], added.stderr + claimed.stderr);
 }
 
 function claimed(t: TestContext): { readonly dir: string; readonly garden: string } {
@@ -274,7 +274,7 @@ test('bed for a class another writer holds exits 1 and names the holder', (t) =>
 test("bed after this site's claim expired exits 1 and makes no branch", (t) => {
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
-  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, new Date('2026-01-01T00:00:00.000Z')).code, 0);
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, new Date('2026-01-01T00:00:00.000Z')).status, 0);
 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 

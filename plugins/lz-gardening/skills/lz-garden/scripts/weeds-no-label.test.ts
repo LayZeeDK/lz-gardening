@@ -15,7 +15,7 @@ test('a census the label cannot read leaves a regrown weed queued and listed, it
 
   const id = weedId('any-type', 'src/b.ts:1', 'commit:ccc3333');
   assert.deepEqual(
-    [back.code, back.stdout, listed.code, listed.stdout],
+    [back.status, back.stdout, listed.status, listed.stdout],
     [
       0,
       `regrown ${id} after bed/any-type@${tip} (check: checks/any-type.test.mjs, base unknown)\n`,
@@ -47,7 +47,7 @@ test('a tend close whose check was emptied by hand is skipped and named, so the 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
   assert.match(back.stderr, /^weeds: skipped events\/.+\.json: check is blank\n$/);
-  assert.deepEqual([back.code, back.stdout], [0, `added ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')}\n`]);
+  assert.deepEqual([back.status, back.stdout], [0, `added ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')}\n`]);
 });
 
 test('a tend close whose check was given a control character by hand is skipped and named, so the weed comes back added', (t) => {
@@ -57,7 +57,7 @@ test('a tend close whose check was given a control character by hand is skipped 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
   assert.match(back.stderr, /^weeds: skipped events\/.+\.json: check holds a line break or control character\n$/);
-  assert.deepEqual([back.code, back.stdout], [0, `added ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')}\n`]);
+  assert.deepEqual([back.status, back.stdout], [0, `added ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')}\n`]);
 });
 
 test('a check that names no file at the bed commit gets no label, since nothing says where it lives', (t) => {

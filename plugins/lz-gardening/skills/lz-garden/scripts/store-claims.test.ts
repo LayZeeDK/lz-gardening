@@ -80,20 +80,20 @@ test('two claim processes started together against one origin: one prints claime
 
 test('a claim whose push loses to another writer that claimed first, on the merge path, yields and prints taken', (t) => {
   const { first, second, remote, catchUp } = racedPair(t);
-  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
   addWeed(second.dir, 'src/b.ts:1');
 
   const claimed = claimWith(second.dir, ['claim', '--class', 'any-type'], { wait: catchUp });
 
   assert.deepEqual(
-    [claimed.code, claimed.stdout, liveClaimWriters(remote)],
+    [claimed.status, claimed.stdout, liveClaimWriters(remote)],
     [1, `taken any-type by ${holderOf(first.dir)} until 2026-11-07T18:00:00.000Z\n`, [writerOf(first.dir)]],
   );
 });
 
 test('a claim that yields on its first attempt and lands on a later one prints taken, from the replay', (t) => {
   const { first, second, third, remote, catchUp } = racedTrio(t);
-  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
   const waits: number[] = [];
 
   const claimed = claimWith(second.dir, ['claim', '--class', 'any-type'], {
@@ -109,7 +109,7 @@ test('a claim that yields on its first attempt and lands on a later one prints t
   });
 
   assert.deepEqual(
-    [claimed.code, claimed.stdout, waits.length, liveClaimWriters(remote)],
+    [claimed.status, claimed.stdout, waits.length, liveClaimWriters(remote)],
     [1, `taken any-type by ${holderOf(first.dir)} until 2026-11-07T18:00:00.000Z\n`, 2, [writerOf(first.dir)]],
   );
 });
@@ -130,7 +130,7 @@ test('a claim appended and never pushed is given back by the next open once anot
   sync(openSite(first.dir), { attempts: 1 });
   sync(openSite(second.dir), { attempts: 1 });
   crashedClaim(second.dir, new Date());
-  assert.equal(cli(first.dir, ['claim', '--class', 'any-type']).code, 0);
+  assert.equal(cli(first.dir, ['claim', '--class', 'any-type']).status, 0);
 
   const opened = site(second.dir, ['open', '--base', 'main']);
 
@@ -168,11 +168,11 @@ test('claim with no class, losing the first ready class to another writer in a r
   sync(openSite(first.dir), { attempts: 1 });
   catchUp();
   sync(openSite(second.dir), { attempts: 1 });
-  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
 
   const claimed = claimWith(second.dir, ['claim'], { wait: catchUp });
 
-  assert.deepEqual([claimed.code, claimed.stdout], [0, 'claimed other until 2026-11-07T18:00:00.000Z\n']);
+  assert.deepEqual([claimed.status, claimed.stdout], [0, 'claimed other until 2026-11-07T18:00:00.000Z\n']);
 });
 
 test("claim with no class whose first sync fetches another writer's claim of the first ready class claims the next one", (t) => {
@@ -184,32 +184,32 @@ test("claim with no class whose first sync fetches another writer's claim of the
 
   const claimed = cli(second.dir, ['claim'], process.env, now);
 
-  assert.deepEqual([claimed.code, claimed.stdout], [0, 'claimed other until 2026-11-07T18:00:00.000Z\n']);
+  assert.deepEqual([claimed.status, claimed.stdout], [0, 'claimed other until 2026-11-07T18:00:00.000Z\n']);
 });
 
 test('a claim whose until has passed lets another writer claim the class', (t) => {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   sync(openSite(first.dir), { attempts: 1 });
-  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
   const afterUntil = new Date(now.getTime() + claimLifetimeMs);
 
   const claimed = cli(second.dir, ['claim', '--class', 'any-type'], process.env, afterUntil);
 
-  assert.deepEqual([claimed.code, claimed.stdout], [0, 'claimed any-type until 2026-11-08T00:00:00.000Z\n']);
+  assert.deepEqual([claimed.status, claimed.stdout], [0, 'claimed any-type until 2026-11-08T00:00:00.000Z\n']);
 });
 
 test('release --class by the holder pushes the release, says so, and another site can then claim the class', (t) => {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   sync(openSite(first.dir), { attempts: 1 });
-  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).code, 0);
+  assert.equal(cli(first.dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
 
   const released = cli(first.dir, ['release', '--class', 'any-type'], process.env, now);
   const claimed = cli(second.dir, ['claim', '--class', 'any-type'], process.env, now);
 
   assert.deepEqual(
-    [released.code, released.stdout, claimed.stdout],
+    [released.status, released.stdout, claimed.stdout],
     [0, 'released any-type; synced\n', 'claimed any-type until 2026-11-07T18:00:00.000Z\n'],
   );
 });

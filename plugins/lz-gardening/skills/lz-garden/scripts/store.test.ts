@@ -37,7 +37,7 @@ import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { cli, cliProcess, script } from './test-weeds.ts';
 
 async function exitOf(cwd: string, args: readonly string[]): Promise<number | null> {
-  return (await scriptProcess(script, cwd, args)).code;
+  return (await scriptProcess(script, cwd, args)).status;
 }
 
 function addDraft(index: number, note = ''): EventDraft {
@@ -431,7 +431,7 @@ test('an add that writes the log runs none of the user hooks, set in a hooks fol
 
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'], env);
 
-  assert.deepEqual([added.code, existsSync(ran) ? readFileSync(ran, 'utf8') : ''], [0, '']);
+  assert.deepEqual([added.status, existsSync(ran) ? readFileSync(ran, 'utf8') : ''], [0, '']);
 });
 
 test('a hook set up by name with no value after its command key is turned off too', (t) => {
@@ -458,7 +458,7 @@ test('an add run with GIT_DIR naming another repository lands in the garden log 
   });
 
   assert.deepEqual(
-    [added.code, readLog(openSite(dir)).events.length, git(other, ['for-each-ref', 'refs/garden'])],
+    [added.status, readLog(openSite(dir)).events.length, git(other, ['for-each-ref', 'refs/garden'])],
     [0, 1, ''],
   );
   assert.equal(git(garden, ['rev-parse', '--verify', logRef]).length, 40);
@@ -559,7 +559,7 @@ test('an add leaves no scratch folder in the temp directory', (t) => {
     TMPDIR: temp,
   });
 
-  assert.deepEqual([added.code, readdirSync(temp)], [0, []]);
+  assert.deepEqual([added.status, readdirSync(temp)], [0, []]);
 });
 
 test('a command run inside another leaves the outer one its own environment when it returns', (t) => {

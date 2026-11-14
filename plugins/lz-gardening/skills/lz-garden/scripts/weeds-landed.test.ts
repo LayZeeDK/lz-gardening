@@ -103,7 +103,7 @@ test('a regrown weed whose check git cannot judge exits 2 and is not added', (t)
   spawned.mock.restore();
   syncBuiltinESMExports();
 
-  assert.deepEqual([failed.code, failed.stdout, cli(dir, ['list', '--class', 'any-type']).stdout], [2, '', '']);
+  assert.deepEqual([failed.status, failed.stdout, cli(dir, ['list', '--class', 'any-type']).stdout], [2, '', '']);
 });
 
 test('a check added to a file the base already has is on the base once its bed lands by squash', (t) => {

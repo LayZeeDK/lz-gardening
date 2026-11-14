@@ -28,6 +28,22 @@ export function git(cwd: string, args: readonly string[]): string {
   return result.stdout.trim();
 }
 
+export interface ScriptRun {
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+// Runs a script in a child process, as a user runs it from the command line.
+export function scriptRun(
+  script: string,
+  cwd: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): ScriptRun {
+  return spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env });
+}
+
 export interface CapturingIo {
   readonly io: Io;
   readonly stdout: () => string;
