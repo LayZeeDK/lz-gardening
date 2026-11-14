@@ -17,10 +17,10 @@ import type { Site } from './store-log.ts';
 
 const bedBranches = 'refs/heads/bed/';
 
-const sharedBeds = 'refs/garden-shared/beds/';
+const fetchedBeds = 'refs/garden-shared/beds/';
 
 export function fetchedBedRef(weedClass: string): string {
-  return `${sharedBeds}${weedClass}`;
+  return `${fetchedBeds}${weedClass}`;
 }
 
 function sharedBedRef(weedClass: string): string {
@@ -127,12 +127,12 @@ export interface BedPlan {
 // Judged before the log's push: each bed to push is marked until a sync sees it land, so a log push that lands
 // unseen (timed out, or the process stopped) or a bed push that fails leaves the bed for a later sync.
 export function planBeds(site: Site, leaving: readonly { readonly path: string }[]): BedPlan {
-  const tips = refsUnder(site.path, [bedBranches, sharedBeds, unpushedBeds]);
+  const tips = refsUnder(site.path, [bedBranches, fetchedBeds, unpushedBeds]);
   const tipOf = (prefix: string, weedClass: string): string | undefined => tips.get(`${prefix}${weedClass}`);
   const candidates = [...tips].flatMap(([name, oid]) => {
     const weedClass = name.slice(bedBranches.length);
 
-    return name.startsWith(bedBranches) && tipOf(sharedBeds, weedClass) !== oid ? [{ weedClass, tip: oid }] : [];
+    return name.startsWith(bedBranches) && tipOf(fetchedBeds, weedClass) !== oid ? [{ weedClass, tip: oid }] : [];
   });
 
   if (candidates.length === 0) {
@@ -143,7 +143,7 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
   const leavingPaths = new Set(leaving.map(({ path }) => path));
   const judged = candidates.flatMap((bed) => {
     const close = latestTendedClose(events, bed.weedClass);
-    const shared = tipOf(sharedBeds, bed.weedClass);
+    const shared = tipOf(fetchedBeds, bed.weedClass);
 
     if (close === undefined || !bed.tip.startsWith(bedCommit(close))) {
       return [];
