@@ -1,7 +1,8 @@
 // Run: node --test weeds-landed.test.ts
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import { commit } from './test-repo.ts';
+import { commit, repo } from './test-repo.ts';
 import { site, writeCensus } from './test-site.ts';
 import { cli, eslintConfig, tendedBed } from './test-weeds.ts';
 import { weedId } from './log.ts';
@@ -10,6 +11,21 @@ test('a weed that comes back before its bed lands names the check as not on the 
   const { dir, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs not on the base)\n`,
+  );
+});
+
+test('a weed that comes back in a run with GIT_DIR naming another repository still names the check as not on the base', (t) => {
+  const { dir, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const other = repo(t);
+
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'], {
+    ...process.env,
+    GIT_DIR: join(other, '.git'),
+  });
 
   assert.equal(
     back.stdout,

@@ -39,7 +39,6 @@
 // Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, or a claim or release is
 // refused; 2 on a usage error or any other failure: no site, a damaged or newer log, a log that kept moving, or a
 // git error.
-import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
   bedCommit,
@@ -70,8 +69,11 @@ import {
   append,
   censusRef,
   configValue,
+  git,
+  gitSucceeds,
   isShared,
   objectIdPattern,
+  optionalGit,
   openSite,
   readCensusAt,
   readLog,
@@ -252,27 +254,26 @@ function checkOffBase(io: Io, site: string, tended: TendedClose): boolean {
     return false;
   }
 
-  const siteObjects = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
-    cwd: site,
-    env: io.env,
-    encoding: 'utf8',
-  });
-  const env = { ...io.env, GIT_ALTERNATE_OBJECT_DIRECTORIES: siteObjects.stdout.trim(), GIT_NO_LAZY_FETCH: '1' };
-  const gitInCheckoutWithSite = (args: readonly string[]) =>
-    spawnSync('git', args, { cwd: io.cwd, env, encoding: 'utf8' });
-  const hasCheck = (commit: string): boolean =>
-    gitInCheckoutWithSite(['cat-file', '-e', `${commit}:${where}`]).status === 0;
-  const merged = gitInCheckoutWithSite(['merge-base', tip, base]);
+  // The bed's commits are in the site, so the checkout reads them through the site's objects, fetching nothing.
+  const withSite = {
+    readsOnly: true,
+    env: {
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
+        readsOnly: true,
+      }),
+      GIT_NO_LAZY_FETCH: '1',
+    },
+  };
+  const hasCheck = (commit: string): boolean => gitSucceeds(io.cwd, ['cat-file', '-e', `${commit}:${where}`], withSite);
+  const fork = optionalGit(io.cwd, ['merge-base', tip, base], withSite);
 
-  if (merged.status !== 0 || !hasCheck(tip)) {
+  if (fork === undefined || !hasCheck(tip)) {
     return false;
   }
 
   if (!hasCheck(base)) {
     return true;
   }
-
-  const fork = merged.stdout.trim();
 
   if (!hasCheck(fork)) {
     return false;
@@ -281,11 +282,9 @@ function checkOffBase(io: Io, site: string, tended: TendedClose): boolean {
   const diffOptions = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
   const checkPath = ['--', `:(top,literal)${where}`];
   const patchIdOf = (diffArgs: readonly string[]): string | undefined => {
-    const diff = gitInCheckoutWithSite([...diffArgs, ...checkPath]).stdout;
+    const diff = git(io.cwd, [...diffArgs, ...checkPath], withSite);
 
-    return diff === ''
-      ? undefined
-      : spawnSync('git', ['patch-id'], { cwd: io.cwd, env, input: diff, encoding: 'utf8' }).stdout.split(' ')[0];
+    return diff === '' ? undefined : git(io.cwd, ['patch-id'], { ...withSite, input: diff }).split(' ')[0];
   };
   const bedChange = patchIdOf(['diff', ...diffOptions, fork, tip]);
   const bedLeftCheckAsItWas = bedChange === undefined;
@@ -294,13 +293,11 @@ function checkOffBase(io: Io, site: string, tended: TendedClose): boolean {
     return false;
   }
 
-  // rev-list's last line is always blank. Kept in, it fails git diff-tree, and both sides gain the same undefined id.
-  // Stryker disable next-line ConditionalExpression,StringLiteral: the blank line matches its twin, see above
+  // An empty range prints nothing, which splits into one blank line, and a blank is no commit.
   const isCommit = (line: string): boolean => line !== '';
   const patchIdsIn = (range: string): (string | undefined)[] =>
-    // Stryker disable next-line MethodExpression: the blank line matches its twin, see above
-    gitInCheckoutWithSite(['rev-list', '--no-merges', range, ...checkPath])
-      .stdout.split('\n')
+    git(io.cwd, ['rev-list', '--no-merges', range, ...checkPath], withSite)
+      .split('\n')
       .filter(isCommit)
       .map((commit) => patchIdOf(['diff-tree', '-p', '--root', '--no-commit-id', ...diffOptions, commit]));
   const onBase = new Set(patchIdsIn(`${fork}..${base}`));

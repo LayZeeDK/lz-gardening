@@ -42,7 +42,7 @@ export function mayPointAtARepository(variable: string): boolean {
   return variable.startsWith('GIT_') && !variable.startsWith('GIT_CONFIG_');
 }
 
-function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
+export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
   // Stryker disable next-line ConditionalExpression: the cache only saves a git run within one command
   if (current.gitEnv === undefined) {
     // Every variable git lists with --local-env-vars starts with GIT_; the only ones that start with GIT_CONFIG_ are the

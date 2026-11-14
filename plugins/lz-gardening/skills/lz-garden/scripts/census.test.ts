@@ -23,8 +23,8 @@ interface Ran {
   readonly stderr: string;
 }
 
-function censusCli(dir: string, args: readonly string[]): Ran {
-  return spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: 'utf8' });
+function censusCli(dir: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): Ran {
+  return spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: 'utf8', env });
 }
 
 async function census(dir: string, args: readonly string[]): Promise<Ran> {
@@ -499,6 +499,20 @@ test('the CLI writes its census to the pending ref of the commit the rev names, 
       parseCensus(JSON.parse(git(garden, ['show', `${pendingCensusRef(sha)}:census.json`])))?.sha,
     ],
     [pendingCensusRef(sha), sha],
+  );
+});
+
+test('the CLI run with GIT_DIR naming another repository takes the census of the checkout it runs in', (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  const other = repo(t);
+
+  const result = censusCli(dir, ['--rev', 'main'], { ...process.env, GIT_DIR: join(other, '.git') });
+
+  assert.deepEqual(
+    [result.status, git(garden, ['for-each-ref', '--format=%(refname)', 'refs/garden/pending'])],
+    [0, pendingCensusRef(sha)],
+    result.stderr,
   );
 });
 

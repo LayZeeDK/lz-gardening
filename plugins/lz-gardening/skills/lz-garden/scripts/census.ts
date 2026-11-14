@@ -21,8 +21,10 @@ import { parseArgs } from 'node:util';
 import { isMainModule, processIo } from './cli.ts';
 import type { Io } from './cli.ts';
 import { isRecord } from './log.ts';
-import { censusRef, inRun, openSite, readCensusAt, writePendingCensus } from './store.ts';
+import { censusRef, gitEnv, inRun, openSite, readCensusAt, writePendingCensus } from './store.ts';
 import type { Census, StoredCensus } from './store.ts';
+
+type Env = Readonly<NodeJS.ProcessEnv>;
 
 export interface Pattern {
   readonly id: string;
@@ -136,13 +138,18 @@ function branchName(rev: string): string {
   return rev.replace(/^origin\//, '');
 }
 
-async function hasCommit(cwd: string, sha: string): Promise<boolean> {
-  return (await gitAsync(['cat-file', '-e', `${sha}^{commit}`], cwd)).code === 0;
+async function hasCommit(cwd: string, env: Env, sha: string): Promise<boolean> {
+  return (await gitAsync(['cat-file', '-e', `${sha}^{commit}`], cwd, env)).code === 0;
 }
 
-function gitAsync(args: readonly string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
+// env is the store's git environment for the run (gitEnv), which drops what would point git at another repository.
+function gitAsync(
+  args: readonly string[],
+  cwd: string,
+  env: Env,
+): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn('git', args, { cwd });
+    const child = spawn('git', args, { cwd, env });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
@@ -217,12 +224,13 @@ export function hitKey(hit: string): string {
 
 async function grepRevision(
   cwd: string,
+  env: Env,
   sha: string,
   regex: string,
   specs: readonly string[],
   what: string,
 ): Promise<string[]> {
-  const grep = await gitAsync(['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], cwd);
+  const grep = await gitAsync(['grep', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs], cwd, env);
 
   // git grep exits 1 when nothing matches; anything else above 0 is an error.
   // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
@@ -233,8 +241,14 @@ async function grepRevision(
   return parseGrep(grep.stdout, sha);
 }
 
-export async function takeCensus(cwd: string, rev: string, set: PatternSet, now: Date): Promise<Census> {
-  const parsed = await gitAsync(['rev-parse', '--verify', `${rev}^{commit}`], cwd);
+export async function takeCensus(
+  cwd: string,
+  rev: string,
+  set: PatternSet,
+  now: Date,
+  env: Env = process.env,
+): Promise<Census> {
+  const parsed = await gitAsync(['rev-parse', '--verify', `${rev}^{commit}`], cwd, env);
 
   if (parsed.code !== 0) {
     throw new Error(`git rev-parse ${rev}: ${parsed.stderr.trim()}`);
@@ -248,6 +262,7 @@ export async function takeCensus(cwd: string, rev: string, set: PatternSet, now:
           pattern.id,
           await grepRevision(
             cwd,
+            env,
             sha,
             pattern.regex,
             pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
@@ -263,7 +278,7 @@ export async function takeCensus(cwd: string, rev: string, set: PatternSet, now:
     takenAt: now.toISOString(),
     counts: Object.fromEntries(results.map(([id, hits]) => [id, hits.length])),
     hits: Object.fromEntries(results.map(([id, hits]) => [id, hits.slice(0, hitCap)])),
-    duplicates: await findDuplicates(cwd, sha, set.exclude),
+    duplicates: await findDuplicates(cwd, env, sha, set.exclude),
   };
 }
 
@@ -283,9 +298,14 @@ interface Definition {
 }
 
 /** Every top-level function definition in the source files of a commit. */
-async function definitionsAt(cwd: string, sha: string, exclude: readonly string[]): Promise<readonly Definition[]> {
+async function definitionsAt(
+  cwd: string,
+  env: Env,
+  sha: string,
+  exclude: readonly string[],
+): Promise<readonly Definition[]> {
   const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', dotDirectories]);
-  const hits = await grepRevision(cwd, sha, definitionPrefilter, specs, 'definitions');
+  const hits = await grepRevision(cwd, env, sha, definitionPrefilter, specs, 'definitions');
 
   return hits.flatMap((hit) => {
     const parts = splitHit(hit);
@@ -298,8 +318,13 @@ async function definitionsAt(cwd: string, sha: string, exclude: readonly string[
 }
 
 /** Top-level function names defined in two or more files, each with its sorted file list. */
-async function findDuplicates(cwd: string, sha: string, exclude: readonly string[]): Promise<Record<string, string[]>> {
-  const byName = Map.groupBy(await definitionsAt(cwd, sha, exclude), (item) => item.name);
+async function findDuplicates(
+  cwd: string,
+  env: Env,
+  sha: string,
+  exclude: readonly string[],
+): Promise<Record<string, string[]>> {
+  const byName = Map.groupBy(await definitionsAt(cwd, env, sha, exclude), (item) => item.name);
 
   return Object.fromEntries(
     [...byName.entries()]
@@ -428,13 +453,13 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     return 2;
   }
 
-  const { site, recorded, extraFile } = inRun(io.env, () => readSite(io.cwd));
+  const { site, recorded, extraFile, env } = inRun(io.env, () => ({ ...readSite(io.cwd), env: gitEnv(io.cwd) }));
   const bundled = join(dirname(fileURLToPath(import.meta.url)), 'patterns.json');
   const before = recorded?.census ?? null;
   const extra = extraFile === undefined ? null : parsePatternSet(JSON.parse(extraFile.text), extraFile.source);
   // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message
   const set = mergePatternSets(parsePatternSet(readJson(bundled), 'patterns.json'), extra);
-  const after = await takeCensus(io.cwd, rev, set, new Date());
+  const after = await takeCensus(io.cwd, rev, set, new Date(), env);
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
@@ -445,13 +470,15 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     });
   }
 
-  const previousSha = before !== null && (await hasCommit(io.cwd, before.sha)) ? before.sha : null;
+  const previousSha = before !== null && (await hasCommit(io.cwd, env, before.sha)) ? before.sha : null;
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
   const newDuplicates = diffDuplicates(before, after);
   // A name that was defined in one file only had no entry in the previous census, so that file is found at its commit.
   const earlier =
-    previousSha === null || newDuplicates.length === 0 ? [] : await definitionsAt(io.cwd, previousSha, set.exclude);
+    previousSha === null || newDuplicates.length === 0
+      ? []
+      : await definitionsAt(io.cwd, env, previousSha, set.exclude);
   const duplicateLines = Object.entries(after.duplicates)
     .filter(([name]) => newDuplicates.includes(name))
     .map(([name, paths]) => {
@@ -470,12 +497,13 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     behind:
       previousSha !== null &&
       previousSha !== after.sha &&
-      (await gitAsync(['merge-base', '--is-ancestor', after.sha, previousSha], io.cwd)).code === 0,
+      (await gitAsync(['merge-base', '--is-ancestor', after.sha, previousSha], io.cwd, env)).code === 0,
     commits:
       previousSha === null
         ? null
         : Number(
-            (await gitAsync(['rev-list', '--no-merges', '--count', `${previousSha}..${after.sha}`], io.cwd)).stdout,
+            (await gitAsync(['rev-list', '--no-merges', '--count', `${previousSha}..${after.sha}`], io.cwd, env))
+              .stdout,
           ),
     grew,
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
