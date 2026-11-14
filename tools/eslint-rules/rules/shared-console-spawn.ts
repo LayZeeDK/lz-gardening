@@ -1,11 +1,11 @@
 import { ESLintUtils } from '@typescript-eslint/utils';
 
 // Stryker disable next-line StringLiteral: eslint.config.ts enables the rule by this name, so any other name fails every lint run
-export const RULE_NAME = 'shared-console-spawn';
+export const ruleName = 'shared-console-spawn';
 
 // Stryker disable next-line ArrowFunction: the docs URL only links the rule's file in an editor
 export const rule = ESLintUtils.RuleCreator(() => import.meta.filename)({
-  name: RULE_NAME,
+  name: ruleName,
   meta: {
     type: 'problem',
     docs: {

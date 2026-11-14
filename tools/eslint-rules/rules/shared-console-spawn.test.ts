@@ -1,7 +1,7 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
 import assert from 'node:assert/strict';
 import { after, describe, it, test } from 'node:test';
-import { rule, RULE_NAME } from './shared-console-spawn.ts';
+import { rule, ruleName } from './shared-console-spawn.ts';
 
 RuleTester.afterAll = after;
 RuleTester.describe = (text, callback) => {
@@ -14,7 +14,7 @@ RuleTester.itOnly = (text, callback) => {
   it(text, { only: true }, callback);
 };
 
-new RuleTester().run(RULE_NAME, rule, {
+new RuleTester().run(ruleName, rule, {
   valid: [
     `spawnSync('git', ['--version'], { encoding: 'utf8' });`,
     `spawn('node', ['server.js'], { detached: false });`,
