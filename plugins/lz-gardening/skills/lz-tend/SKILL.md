@@ -127,6 +127,9 @@ instructions, and run in the bed:
   `cd "<bed>" && npx nx run-many -t test -p <project>,<project>` (Nx finds its workspace from the directory it runs
   in, so it needs the `cd`). Run the whole suite only when the repository's done check requires it (CI,
   `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes, report it as not run.
+- the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
+  the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
+  file (a root `node --test` suite that loads a module alone, say). A project's test script often leaves these out.
 
 Keep each command and its summary lines. Step 6 runs the same commands. Done when each has run before any edit.
 
@@ -145,9 +148,11 @@ risky for one pass, record the rest in a baseline that can only shrink (the tool
 file, or a count the check enforces as a maximum) and never raise one. Every exception left in the code names its
 rule and a reason.
 
-Then run every command of step 4's starting results again in the bed, and the tests of any project the change
-touched that step 4 did not run. Done when each passes, apart from the same failures as in the starting results.
-Quote their summary lines.
+Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
+file the change touched that step 4 did not run. Done when each has run again and passes, apart from the same
+failures as in the starting results. Quote their summary lines. A command that fails after the change and has no
+starting result may be a failure your change caused: stop before step 7 and report it with its output, so a human
+judges it. The class stays open and the bed stays as it is.
 
 ## 7. Commit and close
 
