@@ -45,12 +45,12 @@ import { parseArgs } from 'node:util';
 import {
   bedCommit,
   bedPattern,
-  claimableClasses,
+  claimableGroups,
   classPattern,
+  groupWeeds,
   planAdd,
   planClaim,
   planClose,
-  placeOf,
   planRelease,
   releasedClaims,
   replay,
@@ -63,7 +63,6 @@ import type {
   CloseRequest,
   EventDraft,
   GardenEvent,
-  OpenWeed,
   TendedClose,
 } from './log.ts';
 import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
@@ -75,15 +74,6 @@ import { censusRef, readCensusAt } from './store-census.ts';
 import { claimRefusal, isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions } from './store-sync.ts';
 
-export interface Group {
-  readonly class: string;
-  readonly open: number;
-  readonly places: number;
-  readonly regrown: number;
-  readonly firstAt: string;
-  readonly layer: number | null;
-}
-
 const sourcePattern = /^[a-z][a-z-]*:\S/;
 
 function firstUnprintable(values: Readonly<Record<string, string | undefined>>): string | null {
@@ -91,31 +81,6 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
   const flag = Object.entries(values).find(([, value]) => unprintablePattern.test(value ?? ''))?.[0];
 
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
-}
-
-export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
-  const byClass = new Map<string, OpenWeed[]>();
-
-  for (const weed of weeds) {
-    byClass.set(weed.class, [...(byClass.get(weed.class) ?? []), weed]);
-  }
-
-  return [...byClass.entries()]
-    .map(([weedClass, members]): Group => {
-      const times = members.map((weed) => weed.firstAt).sort();
-      const layers = members.flatMap((weed) => (weed.layer === null ? [] : [weed.layer]));
-
-      return {
-        class: weedClass,
-        open: members.length,
-        places: new Set(members.map((weed) => placeOf(weed.where))).size,
-        regrown: members.filter((weed) => weed.regrownAfter !== null).length,
-        // Stryker disable next-line StringLiteral: a group always has a member, so times[0] is never missing
-        firstAt: times[0] ?? '',
-        layer: layers.length === 0 ? null : Math.min(...layers),
-      };
-    })
-    .sort((a, b) => b.open - a.open || b.regrown - a.regrown || a.class.localeCompare(b.class));
 }
 
 const fromRootDriveOrHome = /^(?:[/\\~]|[a-z]:)/i;
@@ -587,10 +552,9 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const site = openSite(io.cwd);
       const garden = replay(eventsReportingSkipped(io, readLog(site)), now);
-      const claimable = claimableClasses(garden, site.writer);
-      const groups = groupWeeds(garden.open).filter((group) =>
-        values.ready ? claimable.includes(group.class) : group.places >= min,
-      );
+      const groups = values.ready
+        ? claimableGroups(garden, site.writer)
+        : groupWeeds(garden.open).filter((group) => group.places >= min);
       write(`${'class'.padEnd(36)} open places regrown layer first-seen tending`);
 
       for (const group of groups) {

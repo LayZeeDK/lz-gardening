@@ -7,12 +7,12 @@ import { join, parse, sep } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { planAdd, replay, stamp, weedId } from './log.ts';
-import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent, OpenWeed, TendedClose } from './log.ts';
+import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './log.ts';
 import { commit, repo } from './test-repo.ts';
 import { planted } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { cli, homeAt, now, script } from './test-weeds.ts';
-import { addStatus, groupWeeds, validateAdd } from './weeds.ts';
+import { addStatus, validateAdd } from './weeds.ts';
 
 function input(overrides: Partial<AddInput> = {}): AddInput {
   return {
@@ -24,32 +24,6 @@ function input(overrides: Partial<AddInput> = {}): AddInput {
     ...overrides,
   };
 }
-
-function weed(fields: Partial<OpenWeed>): OpenWeed {
-  return {
-    id: `${fields.where ?? 'src/a.ts:1'}@${fields.firstAt ?? now.toISOString()}`,
-    firstAt: now.toISOString(),
-    class: 'any-type',
-    where: 'src/a.ts:1',
-    source: 'census:any-type',
-    note: '',
-    layer: null,
-    regrownAfter: null,
-    ...fields,
-  };
-}
-
-const tendClose: TendedClose = {
-  op: 'close',
-  uuid: '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6',
-  clock: 1,
-  at: now.toISOString(),
-  ids: ['x'],
-  class: 'any-type',
-  by: 'bed/any-type@1a2b3c4',
-  kind: 'tended',
-  check: 'eslint.config.mjs',
-};
 
 function grow(events: readonly GardenEvent[], ...drafts: EventDraft[]): GardenEvent[] {
   return [...events, ...stamp(drafts, replay(events, now).maxClock, now)];
@@ -111,24 +85,6 @@ test('add prints kept for a weed closed with keep, which stays out of the queue'
 
   assert.equal(addStatus(back, notOffBase), `kept ${back.id}`);
   assert.deepEqual(replay(events, now).open, []);
-});
-
-test('groups count open weeds and distinct files per class, most first', () => {
-  const drafts = [
-    input(),
-    input({ where: 'src/a.spec.ts:9', source: 'census:hollow-assertion' }),
-    input({ where: 'src/b.spec.ts:1' }),
-    input({ class: 'double-cast', where: 'src/c.ts:4', source: 'census:double-cast', layer: 1 }),
-  ].map((item) => draftOf(planAdd([], item, now)));
-
-  const groups = groupWeeds(replay(grow([], ...drafts), now).open);
-  assert.deepEqual(
-    groups.map((group) => [group.class, group.open, group.places, group.layer]),
-    [
-      ['hollow-assertion', 3, 2, 2],
-      ['double-cast', 1, 1, 1],
-    ],
-  );
 });
 
 test('validation refuses a bad class, an empty place, a source without a kind, and a layer out of range', () => {
@@ -379,44 +335,6 @@ test('validation takes layers 1 and 6, refuses 0 and 1.5, and matches the whole 
   assert.match(validateAdd(input({ source: 'see commit:abc' })) ?? '', /kind/);
 });
 
-test('a group counts a file once with or without a line, counts regrown weeds, and takes the lowest layer and first sighting', () => {
-  const [group] = groupWeeds([
-    weed({ where: 'src/a.ts:12', firstAt: '2026-11-07T10:00:00.000Z', layer: 3, regrownAfter: tendClose }),
-    weed({ where: 'src/a.ts:34', firstAt: '2026-11-06T09:00:00.000Z', layer: 1, regrownAfter: tendClose }),
-    weed({ where: 'src/a.ts', firstAt: '2026-11-08T00:00:00.000Z' }),
-    weed({ where: 'src/x:1.ts:4' }),
-    weed({ where: 'src/x:1.ts:9' }),
-  ]);
-
-  assert.deepEqual(group, {
-    class: 'any-type',
-    open: 5,
-    places: 2,
-    regrown: 2,
-    firstAt: '2026-11-06T09:00:00.000Z',
-    layer: 1,
-  });
-});
-
-test('a class whose weeds name no layer has no layer', () => {
-  assert.equal(groupWeeds([weed({})])[0]?.layer, null);
-});
-
-test('groups sort by open weeds, then by regrowth, then by name', () => {
-  const groups = groupWeeds([
-    weed({ class: 'b-one', where: 'b' }),
-    weed({ class: 'a-one', where: 'a' }),
-    weed({ class: 'c-regrown', where: 'c', regrownAfter: tendClose }),
-    weed({ class: 'd-three', where: 'd1' }),
-    weed({ class: 'd-three', where: 'd2' }),
-    weed({ class: 'd-three', where: 'd3' }),
-  ]);
-
-  assert.deepEqual(
-    groups.map((group) => group.class),
-    ['d-three', 'c-regrown', 'a-one', 'b-one'],
-  );
-});
 
 test('the CLI takes no --file, so it writes nowhere but the site', (t) => {
   const dir = checkout(t);

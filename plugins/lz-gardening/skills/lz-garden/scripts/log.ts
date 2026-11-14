@@ -247,16 +247,22 @@ export type ClaimPlan =
   | { readonly said: 'nothing ready'; readonly drafts: readonly [] }
   | { readonly said: 'nothing open'; readonly class: string; readonly drafts: readonly [] };
 
-/** The ready classes a claim without a class may take: not tended directly and claimed by no other writer. */
-export function claimableClasses(garden: Garden, writer: string): readonly string[] {
-  return readyClasses(garden.open).filter(
-    (weedClass) => !notTendedDirectly.includes(weedClass) && heldByAnother(garden, weedClass, writer) === undefined,
+/**
+ * The groups a claim without a class may take, in groups order: ready (open weeds in two or more places), not tended
+ * directly, and claimed by no other writer.
+ */
+export function claimableGroups(garden: Garden, writer: string): readonly Group[] {
+  return groupWeeds(garden.open).filter(
+    (group) =>
+      group.places >= 2 &&
+      !notTendedDirectly.includes(group.class) &&
+      heldByAnother(garden, group.class, writer) === undefined,
   );
 }
 
 /**
  * Which class to claim. With a class: taken if another writer holds it, else claimed (a holder's claim renews it).
- * Without: the first claimable class, in groups order.
+ * Without: the first claimable group's class.
  */
 export function planClaim(
   events: readonly GardenEvent[],
@@ -266,7 +272,7 @@ export function planClaim(
   now: Date,
 ): ClaimPlan {
   const garden = replay(events, now);
-  const chosen = wanted ?? claimableClasses(garden, writer)[0];
+  const chosen = wanted ?? claimableGroups(garden, writer)[0]?.class;
 
   if (chosen === undefined) {
     return { said: 'nothing ready', drafts: [] };
@@ -344,20 +350,38 @@ function heldByAnother(garden: Garden, weedClass: string, writer: string): Claim
 }
 
 /** The file a weed sits in: its `--where` without the line. */
-export function placeOf(where: string): string {
+function placeOf(where: string): string {
   return where.replace(/:\d+$/, '');
 }
 
-/** Classes whose open weeds sit in two or more places, in groups order: most open, then most regrown, then by name. */
-function readyClasses(open: readonly OpenWeed[]): string[] {
-  const regrownIn = (weeds: readonly OpenWeed[]): number => weeds.filter((weed) => weed.regrownAfter !== null).length;
+export interface Group {
+  readonly class: string;
+  readonly open: number;
+  /** The files its open weeds sit in. */
+  readonly places: number;
+  readonly regrown: number;
+  readonly firstAt: string;
+  readonly layer: number | null;
+}
 
-  return [...Map.groupBy(open, (weed) => weed.class)]
-    .filter(([, weeds]) => new Set(weeds.map((weed) => placeOf(weed.where))).size >= 2)
-    .toSorted(
-      ([aClass, a], [bClass, b]) => b.length - a.length || regrownIn(b) - regrownIn(a) || aClass.localeCompare(bClass),
-    )
-    .map(([weedClass]) => weedClass);
+/** Open weeds per class, in groups order: most open, then most regrown, then by name. */
+export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
+  return [...Map.groupBy(weeds, (weed) => weed.class)]
+    .map(([weedClass, members]): Group => {
+      const times = members.map((weed) => weed.firstAt).sort();
+      const layers = members.flatMap((weed) => (weed.layer === null ? [] : [weed.layer]));
+
+      return {
+        class: weedClass,
+        open: members.length,
+        places: new Set(members.map((weed) => placeOf(weed.where))).size,
+        regrown: members.filter((weed) => weed.regrownAfter !== null).length,
+        // Stryker disable next-line StringLiteral: a group always has a member, so times[0] is never missing
+        firstAt: times[0] ?? '',
+        layer: layers.length === 0 ? null : Math.min(...layers),
+      };
+    })
+    .sort((a, b) => b.open - a.open || b.regrown - a.regrown || a.class.localeCompare(b.class));
 }
 
 /** Stamps drafts with uuid, clock (maxClock + 1, + 2, ...) and at. */
