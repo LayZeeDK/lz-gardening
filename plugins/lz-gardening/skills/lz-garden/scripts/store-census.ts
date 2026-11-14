@@ -137,9 +137,17 @@ export interface Recorded {
 // Whether a census of pendingSha waits to be recorded, or the garden's census is of that commit or a later one.
 export function hasCensusOf(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): boolean {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
-  const held = pending !== undefined || local === undefined ? undefined : censusIn(site.path, local);
 
-  return pending !== undefined || (held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha));
+  return pending !== undefined || covers(site, censusAt(site, local), pendingSha);
+}
+
+function censusAt(site: Pick<Site, 'path'>, local: string | undefined): Census | undefined {
+  return local === undefined ? undefined : censusIn(site.path, local);
+}
+
+// Whether the held census is of pendingSha or a commit that descends from it.
+function covers(site: Pick<Site, 'checkout'>, held: Census | undefined, pendingSha: string): boolean {
+  return held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha);
 }
 
 function recordPendingCensus(
@@ -147,9 +155,9 @@ function recordPendingCensus(
   pendingSha: string,
 ): Recorded | 'lost to another writer' {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
-  const held = local === undefined ? undefined : censusIn(site.path, local);
+  const held = censusAt(site, local);
 
-  if (pending === undefined || (held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha))) {
+  if (pending === undefined || covers(site, held, pendingSha)) {
     return { local, sha: held?.sha };
   }
 
@@ -157,7 +165,7 @@ function recordPendingCensus(
 }
 
 function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string | undefined, theirs: Census): boolean {
-  const mine = local === undefined ? undefined : censusIn(site.path, local);
+  const mine = censusAt(site, local);
 
   return mine !== undefined && mine.sha !== theirs.sha && isKnownAncestor(site.checkout, theirs.sha, mine.sha);
 }
