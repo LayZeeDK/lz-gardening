@@ -17,9 +17,10 @@ import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { eventPath, weedId } from './log.ts';
+import { eventPath, isRecord, weedId } from './log.ts';
 import type { EventDraft } from './log.ts';
 import {
+  catFileBatch,
   configValue,
   gitAsync,
   gitEnv,
@@ -838,6 +839,36 @@ test('a move of the log that another writer made to the same commit first counts
   git(garden, ['update-ref', logRef, next]);
 
   assert.equal(moveLogIfStill(garden, next, tip), true);
+});
+
+test('a batch read whose output ends before an object is refused, not read as missing', (t) => {
+  const { garden } = planted(t);
+  const { spawnSync } = childProcess;
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const result: unknown = Reflect.apply(spawnSync, childProcess, args);
+
+    return isRecord(result) && Buffer.isBuffer(result['stdout']) ? { ...result, stdout: Buffer.alloc(0) } : result;
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  assert.throws(() => catFileBatch(garden, [`${logRef}:garden.json`], (name) => name), {
+    message: `git cat-file --batch: the output ends before the object of ${logRef}:garden.json`,
+  });
+});
+
+test('a batch read of a missing object whose name holds a space reads it as missing and the next object as its own', (t) => {
+  const { garden } = planted(t);
+
+  const read = catFileBatch(garden, [`${logRef}:no such file.json`, `${logRef}:garden.json`], (name) => name);
+
+  assert.deepEqual(
+    read.map(([, object]) => object),
+    [{ kind: 'missing' }, { kind: 'blob', text: JSON.stringify({ format: 1 }) }],
+  );
 });
 
 test('an event file whose object is not a file is refused with the header git read for it', (t) => {

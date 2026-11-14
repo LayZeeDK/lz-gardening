@@ -379,16 +379,23 @@ export function catFileBatch<T>(
   return items.reduce<{ readonly at: number; readonly read: (readonly [T, BatchObject])[] }>(
     ({ at, read }, item) => {
       const headerEnd = output.indexOf('\n', at);
+
+      if (headerEnd === -1) {
+        throw new Error(`git cat-file --batch: the output ends before the object of ${nameOf(item)}`);
+      }
+
       const header = output.subarray(at, headerEnd).toString();
-      const [, type, size] = header.split(' ');
+      // "<oid> <type> <size>"; a name that names no object, which may hold spaces, ends in "missing" instead.
+      const found = /^\S+ (\S+) (\d+)$/.exec(header);
       const start = headerEnd + 1;
 
-      if (size === undefined) {
+      if (found === null) {
         read.push([item, { kind: 'missing' }]);
 
         return { at: start, read };
       }
 
+      const [, type, size] = found;
       const end = start + Number(size);
       read.push([
         item,
