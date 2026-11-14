@@ -10,7 +10,6 @@ import {
   optionalGit,
   refsUnder,
   runGit,
-  waitForRefLocks,
 } from './store-git.ts';
 import { commitStream } from './store-log.ts';
 import type { Site } from './store-log.ts';
@@ -63,7 +62,7 @@ export function parseCensus(json: unknown): Census | null {
   };
 }
 
-function stringLists(value: unknown): Record<string, string[]> {
+function stringLists(value: unknown): Readonly<Record<string, readonly string[]>> {
   if (!isRecord(value)) {
     return {};
   }
@@ -98,7 +97,7 @@ export function writePendingCensus(
 
 export function readCensusAt(site: string, ref: string): StoredCensus | null | 'not a census' {
   const [text, patterns] = catFileBatch(site, [`${ref}:census.json`, `${ref}:patterns.json`], (name) => name).map(
-    ([, object]) => object.text,
+    ([, object]) => (object.kind === 'blob' ? object.text : undefined),
   );
 
   if (text === undefined) {
@@ -123,7 +122,10 @@ export interface Recorded {
   readonly sha: string | undefined;
 }
 
-function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): Recorded {
+export function recordPendingCensus(
+  site: Pick<Site, 'checkout' | 'path'>,
+  pendingSha: string,
+): Recorded | 'lost to another writer' {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
   const held = local === undefined ? undefined : censusIn(site.path, local);
 
@@ -131,9 +133,7 @@ function recordPendingCensus(site: Pick<Site, 'checkout' | 'path'>, pendingSha: 
     return { local, sha: held?.sha };
   }
 
-  moveCensusIfStill(site.path, pending, local);
-
-  return { local: pending, sha: pendingSha };
+  return moveCensusIfStill(site.path, pending, local) ? { local: pending, sha: pendingSha } : 'lost to another writer';
 }
 
 function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string | undefined, theirs: Census): boolean {
@@ -162,8 +162,12 @@ export function settleCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   tips: CensusTips,
   pendingSha: string | undefined,
-): Settled & { readonly recorded: Recorded | undefined } {
+): (Settled & { readonly recorded: Recorded | undefined }) | 'lost to another writer' {
   const adopted = adoptSharedCensus(site, tips);
+
+  if (adopted === 'lost to another writer') {
+    return adopted;
+  }
 
   if (pendingSha === undefined) {
     return { ...adopted, recorded: undefined };
@@ -171,10 +175,13 @@ export function settleCensus(
 
   const recorded = recordPendingCensus(site, pendingSha);
 
-  return { ...adopted, local: recorded.local, recorded };
+  return recorded === 'lost to another writer' ? recorded : { ...adopted, local: recorded.local, recorded };
 }
 
-function adoptSharedCensus(site: Pick<Site, 'checkout' | 'path'>, { local, shared }: CensusTips): Settled {
+function adoptSharedCensus(
+  site: Pick<Site, 'checkout' | 'path'>,
+  { local, shared }: CensusTips,
+): Settled | 'lost to another writer' {
   if (shared === undefined || shared === local) {
     return { local, ignored: false };
   }
@@ -189,29 +196,32 @@ function adoptSharedCensus(site: Pick<Site, 'checkout' | 'path'>, { local, share
     return { local, ignored: false };
   }
 
-  moveCensusIfStill(site.path, shared, local);
-
-  return { local: shared, ignored: false };
+  return moveCensusIfStill(site.path, shared, local) ? { local: shared, ignored: false } : 'lost to another writer';
 }
 
-// Another sync of this site may have moved the census to the same commit first, which is as good as moving it here.
-function moveCensusIfStill(site: string, to: string, from: string | undefined): void {
-  const args = [...waitForRefLocks, 'update-ref', censusRef, to, from ?? ''];
+// Another sync of this site may have moved the census first: to the same commit, which is as good as moving it here,
+// or to another, which loses this move.
+function moveCensusIfStill(site: string, to: string, from: string | undefined): boolean {
+  const args = ['update-ref', censusRef, to, from ?? ''];
   const moved = runGit(site, args);
 
-  if (
-    moved.status !== 0 &&
-    optionalGit(site, ['rev-parse', '--verify', '--quiet', censusRef], { readsOnly: true }) !== to
-  ) {
+  if (moved.status === 0) {
+    return true;
+  }
+
+  const now = optionalGit(site, ['rev-parse', '--verify', '--quiet', censusRef], { readsOnly: true });
+
+  if (now === from) {
     throw new Error(`git ${args.join(' ')}: ${moved.stderr.trim()}`);
   }
+
+  return now === to;
 }
 
-// A sync that settled the census recorded the pending one already, and passes what it recorded.
 export function finishPendingCensus(
   site: Pick<Site, 'checkout' | 'path'>,
   pendingSha: string,
-  recorded = recordPendingCensus(site, pendingSha),
+  recorded: Recorded,
 ): void {
   const pendingPrefix = pendingCensusRef('');
   const deletes = [...refsUnder(site.path, [pendingPrefix])].filter(([name]) => {

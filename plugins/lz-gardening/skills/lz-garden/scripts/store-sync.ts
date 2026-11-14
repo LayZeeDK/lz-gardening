@@ -3,7 +3,14 @@
 import { eventPathPattern, parseEvent, planGiveBack, releasesFor, replay } from './log.ts';
 import type { LostClaim } from './log.ts';
 import { pushBeds } from './store-beds.ts';
-import { censusOffOrigin, censusRef, finishPendingCensus, leaseOnFetchedCensus, settleCensus } from './store-census.ts';
+import {
+  censusOffOrigin,
+  censusRef,
+  finishPendingCensus,
+  leaseOnFetchedCensus,
+  recordPendingCensus,
+  settleCensus,
+} from './store-census.ts';
 import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
@@ -13,6 +20,7 @@ import {
   networkTimeoutMs,
   objectIds,
   optionalGit,
+  pushReport,
   reasonOf,
   timedOut,
 } from './store-git.ts';
@@ -50,7 +58,7 @@ interface Change {
 
 // diff-tree -z prints each change as ":<mode> <mode> <oid> <oid> <status>" and its path, NUL after each.
 function diffTree(site: string, shared: string, local: string): readonly Change[] {
-  const fields = git(site, ['diff-tree', '-r', '--no-renames', '-z', shared, local]).split('\0');
+  const fields = git(site, ['diff-tree', '-r', '--no-renames', '-z', shared, local], { readsOnly: true }).split('\0');
 
   return Array.from({ length: Math.floor(fields.length / 2) }, (_, index) => {
     // Stryker disable next-line StringLiteral: diff-tree prints five fields and a path for every change, so no default applies
@@ -209,12 +217,11 @@ function sleep(ms: number): void {
 }
 
 // A push lost to another writer: a fast-forward or lease refused by this git, or the remote's ref moved or locked
-// under it, which an atomic push reports as a failed transaction.
-const lostRace =
-  /\t(?:\[rejected\]|\[remote rejected\] \(.*(?:lock|old value|failed to update|atomic transaction failed))/;
+// under it, which an atomic push reports as a failed transaction. Only a ref the push left as it was has such a summary.
+const lostRace = /\[rejected\]|\[remote rejected\] \(.*(?:lock|old value|failed to update|atomic transaction failed)/;
 
 function rejected(porcelain: string): boolean {
-  return porcelain.split('\n').some((line) => line.startsWith('!\t') && lostRace.test(line));
+  return [...pushReport(porcelain).values()].some(({ summary }) => lostRace.test(summary));
 }
 
 // A fetch lost to another sync of this site, which held or moved the shared ref first.
@@ -258,7 +265,12 @@ export function sync(site: Site, options: SyncOptions, now = new Date()): SyncRe
   const { result, recorded } = syncWithOrigin(site, options, now);
 
   if (options.census !== undefined) {
-    finishPendingCensus(site, options.census, recorded);
+    // A try that settled the census recorded the pending one already. A record another sync beat keeps the pending one.
+    const settled = recorded ?? recordPendingCensus(site, options.census);
+
+    if (settled !== 'lost to another writer') {
+      finishPendingCensus(site, options.census, settled);
+    }
   }
 
   return result;
@@ -319,8 +331,13 @@ function giveBackLosingClaims(
     return { lost: [], released: 0 };
   }
 
-  const events = catFileBatch(site.path, leaving, ({ localOid }) => localOid).flatMap(([{ path }, { text }]) => {
-    const event = parseEvent(path, text ?? '');
+  // An event the site cannot read gives nothing back; the log's reader names it.
+  const events = catFileBatch(site.path, leaving, ({ localOid }) => localOid).flatMap(([{ path }, object]) => {
+    if (object.kind !== 'blob') {
+      return [];
+    }
+
+    const event = parseEvent(path, object.text);
 
     return typeof event === 'string' ? [] : [event];
   });
@@ -364,7 +381,13 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
   const given = giveBackLosingClaims(site, sharedTip, leaving, attempt.now);
-  const { recorded, ...settled } = settleCensus(site, censusTips, pendingSha);
+  const settledCensus = settleCensus(site, censusTips, pendingSha);
+
+  if (settledCensus === 'lost to another writer') {
+    return { state: 'behind', ...nothingShared, yielded: given.lost };
+  }
+
+  const { recorded, ...settled } = settledCensus;
   const pushedEvents = mergedLog.pushedEvents + given.released;
   const newerCensus = settled.local === censusTips.shared ? undefined : settled.local;
   const keptLocal = newerCensus === undefined ? undefined : censusOffOrigin(site, newerCensus);

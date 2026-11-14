@@ -15,7 +15,6 @@ import {
   optionalGit,
   runGit,
   treeEntries,
-  waitForRefLocks,
 } from './store-git.ts';
 
 export const logRef = 'refs/garden/log';
@@ -30,15 +29,15 @@ function identity(checkout: string, whose: 'author' | 'committer', now: string):
   const variable = `GIT_${whose.toUpperCase()}`;
   const name = configValue(checkout, 'lzGardening.name');
   const email = configValue(checkout, 'lzGardening.email');
-  const signer = name === undefined || email === undefined ? 'lz-gardening <>' : `${name} <${email}>`;
+  const who = name === undefined || email === undefined ? 'lz-gardening <>' : `${name} <${email}>`;
 
-  return `${whose} ${signer} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
+  return `${whose} ${who} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
 }
 
 type CommitFile = { readonly path: string; readonly text: string } | { readonly path: string; readonly oid: string };
 
-// A fast-import stream of one commit to ref, on the first parent given and merging the others, signed with the
-// checkout's garden identity.
+// A fast-import stream of one commit to ref, on the first parent given and merging the others, authored and
+// committed as the checkout's garden identity.
 export function commitStream(
   { checkout }: Pick<Site, 'checkout'>,
   ref: string,
@@ -71,11 +70,9 @@ export function writeLogIfStill(
   merge?: string,
 ): boolean {
   const parents = [...(tip === null ? [] : [tip]), ...(merge === undefined ? [] : [merge])];
-  const imported = runGit(
-    site.path,
-    [...waitForRefLocks, 'fast-import', '--quiet', '--done', '--date-format=rfc2822'],
-    { input: commitStream(site, logRef, 'garden: log\n', files, parents) },
-  );
+  const imported = runGit(site.path, ['fast-import', '--quiet', '--done', '--date-format=rfc2822'], {
+    input: commitStream(site, logRef, 'garden: log\n', files, parents),
+  });
 
   if (imported.status === 0) {
     return true;
@@ -89,7 +86,7 @@ export function writeLogIfStill(
 }
 
 export function moveLogIfStill(site: string, to: string, from: string): boolean {
-  const args = [...waitForRefLocks, 'update-ref', logRef, to, from];
+  const args = ['update-ref', logRef, to, from];
   const moved = runGit(site, args);
 
   if (moved.status !== 0 && git(site, ['rev-parse', '--verify', logRef]) === from) {
@@ -175,17 +172,17 @@ function blobsAt(
     listed.filter(({ type }) => type === 'blob'),
     ({ oid }) => oid,
   );
-  const texts = new Map(read.flatMap(([{ path }, { text }]) => (text === undefined ? [] : [[path, text] as const])));
-  const missing = read.flatMap(([{ oid, path }, { header, type, text }]) => {
-    if (text !== undefined) {
-      return [];
+  const texts = new Map(
+    read.flatMap(([{ path }, object]) => (object.kind === 'blob' ? [[path, object.text] as const] : [])),
+  );
+  const missing = read.flatMap(([{ oid, path }, object]) => {
+    if (object.kind === 'other') {
+      throw new Error(
+        `git cat-file --batch: read ${JSON.stringify(object.header)} for ${path}, not ${oid} blob <size>`,
+      );
     }
 
-    if (type !== 'missing') {
-      throw new Error(`git cat-file --batch: read ${JSON.stringify(header)} for ${path}, not ${oid} blob <size>`);
-    }
-
-    return [{ path, why: 'missing from the site' }];
+    return object.kind === 'missing' ? [{ path, why: 'missing from the site' }] : [];
   });
   const skipped = [
     ...listed.filter(({ type }) => type !== 'blob').map(({ type, path }) => ({ path, why: `a ${type}, not a file` })),

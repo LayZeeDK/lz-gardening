@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import childProcess, { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
+import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { openSite } from './store-log.ts';
 import { censusRef, pendingCensusRef, readCensusAt, writePendingCensus } from './store-census.ts';
@@ -37,6 +41,28 @@ test('a pending census reads back byte for byte', (t) => {
   writePendingCensus({ path: garden, checkout: dir }, sha, text);
 
   assert.equal(storedAt(garden, pendingCensusRef(sha)).text, text);
+});
+
+test('a pending census written while another run holds its ref lock waits for the lock and lands', async (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+  const lock = join(garden, '.git', 'refs', 'garden', 'pending', `${sha}.lock`);
+  mkdirSync(dirname(lock), { recursive: true });
+  writeFileSync(lock, '');
+  const holder = spawn(
+    process.execPath,
+    [
+      '-e',
+      'console.log("held"); setTimeout(() => require("node:fs").rmSync(process.argv[1], { force: true }), 500);',
+      lock,
+    ],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  await new Promise((held) => holder.stdout.once('data', held));
+
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
+
+  assert.equal(storedAt(garden, pendingCensusRef(sha)).text, censusText(sha));
 });
 
 test('a pending census taken with extra patterns carries them as written', (t) => {
@@ -333,6 +359,81 @@ test('a census push whose lease another clone took first is decided again agains
   );
 });
 
+// Another sync of the site moves the census to `to` just before each census move this process makes.
+function anotherSyncMovesTheCensusFirst(t: TestContext, garden: string, to: string): void {
+  const { spawnSync } = childProcess;
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const [, gitArgs] = args;
+
+    if (Array.isArray(gitArgs) && gitArgs.includes('update-ref') && gitArgs.includes(censusRef)) {
+      spawnSync('git', ['update-ref', censusRef, to], { cwd: garden });
+    }
+
+    return Reflect.apply(spawnSync, childProcess, args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+}
+
+test('a sync whose move to the shared census another sync of the site beat with another census ends behind', (t) => {
+  const { first, second } = sharedPair(t);
+  record(first, git(first.dir, ['rev-parse', 'HEAD']));
+  const sha = commit(second.dir, { 'src/b.ts': 'export const b = 2;\n' });
+  writePendingCensus({ path: second.garden, checkout: second.dir }, sha, censusText(sha));
+  anotherSyncMovesTheCensusFirst(t, second.garden, git(second.garden, ['rev-parse', pendingCensusRef(sha)]));
+
+  assert.equal(sync(openSite(second.dir), { attempts: 1 }).state, 'behind');
+});
+
+test('a sync whose record of its pending census another sync of the site beat with another census ends behind', (t) => {
+  const place = planted(t);
+  bareRemote(place.dir);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
+  const other = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
+  writePendingCensus({ path: place.garden, checkout: place.dir }, other, censusText(other));
+  anotherSyncMovesTheCensusFirst(t, place.garden, git(place.garden, ['rev-parse', pendingCensusRef(other)]));
+
+  assert.equal(sync(openSite(place.dir), { attempts: 1, census: sha }).state, 'behind');
+});
+
+test('a sync --census whose last record another sync of the site beat keeps the pending census', (t) => {
+  const place = planted(t);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
+  const pending = git(place.garden, ['rev-parse', pendingCensusRef(sha)]);
+  const other = commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' });
+  writePendingCensus({ path: place.garden, checkout: place.dir }, other, censusText(other));
+  const theirs = git(place.garden, ['rev-parse', pendingCensusRef(other)]);
+  anotherSyncMovesTheCensusFirst(t, place.garden, theirs);
+
+  sync(openSite(place.dir), { attempts: 1, census: sha });
+
+  assert.deepEqual(
+    [
+      git(place.garden, ['rev-parse', censusRef]),
+      git(place.garden, ['for-each-ref', '--format=%(objectname)', pendingCensusRef(sha)]),
+    ],
+    [theirs, pending],
+  );
+});
+
+test('a census move that fails while the census is as it was stops the sync with what git said', (t) => {
+  const place = planted(t);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
+  mkdirSync(join(place.garden, '.git', 'refs', 'garden'), { recursive: true });
+  writeFileSync(join(place.garden, '.git', 'refs', 'garden', 'census.lock'), '');
+
+  assert.throws(
+    () => sync(openSite(place.dir), { attempts: 1, census: sha }),
+    /cannot lock ref 'refs\/garden\/census'/,
+  );
+});
+
 test('a census of a commit no branch fetched from origin holds stays local, and the sync says so on stderr', (t) => {
   const place = planted(t);
   const remote = bareRemote(place.dir);
@@ -368,7 +469,7 @@ test('a census of a commit only a tag and another remote hold stays local', (t) 
   );
 });
 
-test('a census commit is signed lz-gardening with no address, and an origin that checks every object takes it', (t) => {
+test('a census commit is authored as lz-gardening with no address, and an origin that checks every object takes it', (t) => {
   const place = planted(t);
   const remote = bareRemote(place.dir);
   git(remote, ['config', 'receive.fsckObjects', 'true']);

@@ -4,7 +4,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { eventPath } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
@@ -13,6 +12,7 @@ import { censusRef, writePendingCensus } from './store-census.ts';
 import { sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
+import { serve, silentServer } from './test-serve.ts';
 import { bareRemote, planted, sharedPair, site, writeCensus } from './test-site.ts';
 import { addWeed, cli } from './test-weeds.ts';
 
@@ -280,24 +280,6 @@ test('a push the origin declines counts no event as pushed', (t) => {
 
   assert.equal(sync(openSite(dir), { attempts: 1 }).pushedEvents, 0);
 });
-
-const silentServerCloseMs = 15_000;
-
-const silentServer = `require("node:net").createServer((s) => { s.on("error", () => {}); setTimeout(() => s.destroy(), ${String(silentServerCloseMs)}); }).listen(0, "127.0.0.1", function () { console.log(this.address().port); });`;
-
-function serve(t: TestContext, script: string): Promise<string> {
-  const server = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
-  t.after(() => {
-    server.kill();
-  });
-
-  return new Promise((resolve, reject) => {
-    server.on('error', reject);
-    server.stdout.once('data', (chunk: Buffer) => {
-      resolve(chunk.toString().trim());
-    });
-  });
-}
 
 test('an origin that takes the connection and never answers leaves the site offline once the time is up', async (t) => {
   const { dir } = planted(t);

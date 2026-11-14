@@ -53,12 +53,15 @@ export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
   return env;
 }
 
-const withoutHooksOrSigning = [
+// Every write runs no hook, signs nothing, and waits for a ref lock another run of this site may hold for a moment.
+const writeSettings = [
   '-c',
   // Stryker disable next-line StringLiteral: the scripts folder itself holds no file named after a git hook either
   `core.hooksPath=${join(dirname(fileURLToPath(import.meta.url)), 'no-hooks')}`,
   '-c',
   'commit.gpgsign=false',
+  '-c',
+  'core.filesRefLockTimeout=3000',
 ];
 
 function configOf(cwd: string): ReadonlyMap<string, string> {
@@ -128,7 +131,7 @@ export function runGit(
   args: readonly string[],
   { input, env = {}, readsOnly = false, timeout }: GitInput = {},
 ): SpawnSyncReturns<string> {
-  const settings = readsOnly ? [] : [...withoutHooksOrSigning, ...namedHooksOff(cwd)];
+  const settings = readsOnly ? [] : [...writeSettings, ...namedHooksOff(cwd)];
 
   return spawnGit(cwd, [...settings, ...args], { ...gitEnv(cwd), ...env }, input, timeout);
 }
@@ -178,18 +181,37 @@ export function reasonOf(stderr: string): string {
   return stderr.trim().split('\n')[0]?.trim() ?? '';
 }
 
-// Another run of this site may hold a ref's lock for a moment; a writer waits for it instead of failing.
-export const waitForRefLocks = ['-c', 'core.filesRefLockTimeout=3000'];
-
 // Stryker disable next-line LzJsNumericLiteral: how long a fetch or push may take is policy; the limit is tested through timeoutMs
 export const networkTimeoutMs = 60_000;
 
 // Messages are in English, as the porcelain classification reads them.
 export function networkGit(site: string, args: readonly string[], timeoutMs: number): SpawnSyncReturns<string> {
-  return runGit(site, ['-c', 'credential.interactive=false', ...waitForRefLocks, ...args], {
+  return runGit(site, ['-c', 'credential.interactive=false', ...args], {
     env: { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
     timeout: timeoutMs,
   });
+}
+
+interface PushedRef {
+  readonly flag: string;
+  readonly summary: string;
+}
+
+// The tab-separated fields of a porcelain line, split from git's output, reach the summary only on a ref's line.
+function holdsSummary(fields: string[]): fields is [string, string, string, ...string[]] {
+  return fields[2] !== undefined;
+}
+
+// git push --porcelain prints a line per ref, "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as
+// it was; its other lines hold no tab. Each ref's flag and summary, by the ref it pushed to.
+export function pushReport(porcelain: string): ReadonlyMap<string, PushedRef> {
+  return new Map(
+    porcelain
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .filter(holdsSummary)
+      .map(([flag, refs, summary]) => [refs.slice(refs.indexOf(':') + 1), { flag, summary }] as const),
+  );
 }
 
 export function mainCheckout(cwd: string): string {
@@ -222,8 +244,13 @@ export function refsUnder(cwd: string, prefixes: readonly string[]): ReadonlyMap
   );
 }
 
-export function objectIds(cwd: string, names: readonly string[]): readonly (string | undefined)[] {
+export function objectIds(
+  cwd: string,
+  names: readonly string[],
+  options: Pick<GitInput, 'env'> = {},
+): readonly (string | undefined)[] {
   return git(cwd, ['cat-file', '--batch-check=%(objectname)'], {
+    ...options,
     input: names.map((name) => `${name}\n`).join(''),
     readsOnly: true,
   })
@@ -252,15 +279,15 @@ export function treeEntries(listed: string): readonly TreeEntry[] {
     });
 }
 
-export interface BatchObject {
-  readonly header: string;
-  readonly type: string | undefined;
-  readonly text: string | undefined;
-}
+// A blob with its text, an object git does not have, or an object of another type with the header git printed for it.
+export type BatchObject =
+  | { readonly kind: 'blob'; readonly text: string }
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'other'; readonly header: string };
 
-// Reads each item's object, named by nameOf, with its header, and its text when it is a blob. An object git does not
-// have prints its header alone ("<name> missing"); any other prints its size and content. cat-file sizes are in
-// bytes, so the output is read as bytes and each blob decoded on its own.
+// Reads each item's object, named by nameOf. An object git does not have prints its header alone ("<name> missing");
+// any other prints its size and content. cat-file sizes are in bytes, so the output is read as bytes, a cursor at the
+// next header, and each blob decoded on its own.
 export function catFileBatch<T>(
   cwd: string,
   items: readonly T[],
@@ -278,28 +305,30 @@ export function catFileBatch<T>(
   }
 
   const output = batch.stdout;
-  let at = 0;
 
-  return items.map((item) => {
-    const headerEnd = output.indexOf('\n', at);
-    const header = output.subarray(at, headerEnd).toString();
-    const [, type, size] = header.split(' ');
-    const start = headerEnd + 1;
+  return items.reduce<{ readonly at: number; readonly read: (readonly [T, BatchObject])[] }>(
+    ({ at, read }, item) => {
+      const headerEnd = output.indexOf('\n', at);
+      const header = output.subarray(at, headerEnd).toString();
+      const [, type, size] = header.split(' ');
+      const start = headerEnd + 1;
 
-    if (size === undefined) {
-      at = start;
+      if (size === undefined) {
+        read.push([item, { kind: 'missing' }]);
 
-      return [item, { header, type, text: undefined }] as const;
-    }
+        return { at: start, read };
+      }
 
-    const end = start + Number(size);
-    at = end + 1;
+      const end = start + Number(size);
+      read.push([
+        item,
+        type === 'blob' ? { kind: 'blob', text: output.subarray(start, end).toString() } : { kind: 'other', header },
+      ]);
 
-    return [
-      item,
-      { header, type, text: type === 'blob' ? output.subarray(start, end).toString() : undefined },
-    ] as const;
-  });
+      return { at: end + 1, read };
+    },
+    { at: 0, read: [] },
+  ).read;
 }
 
 // merge-base says no with exit 1; any other failure, an unknown commit included, is an error, not a no.

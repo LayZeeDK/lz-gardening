@@ -49,7 +49,8 @@ neither the log nor another bed. For each class, the latest tended close in the 
 pushes the site's `bed/<class>` as `refs/garden/beds/<class>` when that branch's commit is the close's, and either
 `origin`'s bed is an ancestor of it or `origin` has no bed of the class and either the close is shared by this very
 sync or an earlier push of that commit failed. A bed that does not descend from `origin`'s is named on stderr and left
-in the site. So is a bed `origin` refuses or whose push fails, with git's reason, and the next sync pushes it again. The
+in the site. So is a bed `origin` refuses or whose push fails, with git's reason (`timed out` for a push that took
+longer than a minute), and the next sync pushes it again. The
 only commits a bed may bring `origin` are its own, made in the site: a bed that would bring any commit the checkout
 holds (a base on an unpushed branch, a tag, a detached commit or another remote's branch) stays in the site and is
 named too. So is a bed whose commits add a line, or hold a message, with this machine's home folder, the checkout's
