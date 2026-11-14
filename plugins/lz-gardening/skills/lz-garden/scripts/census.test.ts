@@ -2,7 +2,7 @@
 // Each test builds a throwaway git repository and counts weeds at one of its commits, or checks the pure functions
 // that read and compare censuses.
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { diffCensus, diffDuplicates, mergePatternSets, parseGrep, parsePatternSet, takeCensus } from './census.ts';
@@ -255,8 +255,10 @@ test("an unknown revision's error carries git's own reason", async (t) => {
 test("a git grep that fails is an error that names the search and carries git's reason", async (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'function f() {}\n' });
+  const tree = git(dir, ['rev-parse', 'HEAD^{tree}']);
+  rmSync(join(dir, '.git', 'objects', tree.slice(0, 2), tree.slice(2)));
 
-  await assert.rejects(takeCensusInRun(dir, 'HEAD', { exclude: ['../outside'], patterns: [] }, now), {
+  await assert.rejects(takeCensusInRun(dir, 'HEAD', { exclude: [], patterns: [] }, now), {
     message: /^git grep for definitions: \S[^\n]*$/,
   });
 });
@@ -279,6 +281,15 @@ test('a hit in a file with a non-ASCII name names the file as it is', async (t) 
   const census = await takeCensusInRun(dir, 'main', set, now);
 
   assert.deepEqual(census.hits['eslint-disable'], ['src/é.ts:1: const a = 1; // eslint-disable-line']);
+});
+
+test('a census taken from a subdirectory counts the whole repository', async (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'const a = 1; // eslint-disable-line\n', 'sub/b.ts': 'const b = 2;\n' });
+
+  const census = await takeCensusInRun(join(dir, 'sub'), 'main', set, now);
+
+  assert.deepEqual(census.hits['eslint-disable'], ['src/a.ts:1: const a = 1; // eslint-disable-line']);
 });
 
 test('git grep output counts only lines of the revision asked for that carry a line number', () => {

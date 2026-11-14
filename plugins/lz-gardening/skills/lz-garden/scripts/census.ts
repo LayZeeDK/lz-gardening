@@ -154,7 +154,7 @@ async function hasCommit(cwd: string, env: Env, sha: string): Promise<boolean> {
 }
 
 function pathspecs(paths: readonly string[], exclude: readonly string[]): string[] {
-  return [...paths.map((glob) => `:(glob)${glob}`), ...exclude.map((glob) => `:(exclude,glob)${glob}`)];
+  return [...paths.map((glob) => `:(top,glob)${glob}`), ...exclude.map((glob) => `:(top,exclude,glob)${glob}`)];
 }
 
 // A hit's text is cut to this many characters, so a minified or scraped line does not swell the shared census.
@@ -218,7 +218,21 @@ async function grepRevision(
 ): Promise<readonly string[]> {
   const grep = await runGitAsync(
     cwd,
-    ['-c', 'core.quotePath=false', 'grep', '--no-color', '-n', '-I', '-E', '-e', regex, sha, '--', ...specs],
+    [
+      '-c',
+      'core.quotePath=false',
+      'grep',
+      '--no-color',
+      '--full-name',
+      '-n',
+      '-I',
+      '-E',
+      '-e',
+      regex,
+      sha,
+      '--',
+      ...specs,
+    ],
     env,
   );
 
