@@ -102,7 +102,7 @@ Done when every commit in the range is read or counted as skipped.
 Queue each weed with `weeds.ts`. The script dedupes, so queueing the same weed twice is safe:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>]
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>] --census <sha>
 ```
 
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`.
@@ -124,13 +124,13 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   symptom. Plain words only: no backticks, `$` or double quotes inside the note, which the shell would run or end.
 - `--layer`: the strongest layer that could stop it growing back, from the catalogue's layer list, when the evidence
   shows it.
+- `--census`: the census's `sha` from step 2, in full.
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
-`(check: <where> not on the base)`, the bed's change to that check was not on the base as of the garden's last
-census, the one recorded before this tick: the bed had not landed by then, or the check's file is gone from the base.
-The bed may have landed in this tick's range. Report it that way, not as a check that failed. Done when every weed
-from steps 2 and 3 printed one of those words.
+`(check: <where> not on the base)`, the bed's change to that check is not on the base at this tick's census: the bed
+has not landed, or the check's file is gone from the base. Report it that way, not as a check that failed. Done when
+every weed from steps 2 and 3 printed one of those words.
 
 ## 5. Group, record, report
 

@@ -60,6 +60,29 @@ test('a new check file on the base is on the base, though its bed landed by squa
   );
 });
 
+test("add --census judges the check at this tick's census, so a bed that landed since the garden's census is on the base", (t) => {
+  const check = { 'checks/any-type.test.mjs': 'export {};\n' };
+  const { dir, tip } = tendedBed(t, check);
+  const landed = commit(dir, check);
+
+  const back = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    'src/b.ts:1',
+    '--source',
+    'commit:ccc3333',
+    '--census',
+    landed,
+  ]);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
+  );
+});
+
 test('a check added to a file the base already has is on the base once its bed lands by squash', (t) => {
   const check = { 'eslint.config.mjs': "export default [{ rules: { 'no-explicit-any': 'error' } }];\n" };
   const { dir, garden, tip } = tendedBed(t, check);
