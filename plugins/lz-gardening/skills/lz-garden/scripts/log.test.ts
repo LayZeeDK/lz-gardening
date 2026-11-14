@@ -980,6 +980,18 @@ test('a tend close event file parses back with its bed and check', () => {
   assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
 });
 
+test('a tend close event file naming a bed commit by its full SHA-256 id parses back', () => {
+  const event = { ...tend(uuid, 4, [weed]), by: `bed/any-type@${'a'.repeat(64)}` };
+
+  assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
+});
+
+test('a tend close event file naming a bed commit longer than any object id is skipped', () => {
+  const event = { ...tend(uuid, 4, [weed]), by: `bed/any-type@${'a'.repeat(65)}` };
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'tend close names no bed/<class>@<commit>');
+});
+
 test('a tend close event file that names no bed of its own class is skipped', () => {
   const event = { ...tend(uuid, 4, [weed]), by: 'bed/other@1a2b3c4' };
 

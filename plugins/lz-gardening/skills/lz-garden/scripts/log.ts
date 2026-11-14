@@ -12,7 +12,7 @@ export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
 
 export const sourcePattern = /^[a-z][a-z-]*:\S/;
 
-export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,40})$/;
+export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,64})$/;
 
 const controlsAndLineBreaks = String.raw`\p{Cc}\p{Zl}\p{Zp}`;
 const bidiControls = String.raw`\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}`;
