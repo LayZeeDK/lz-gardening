@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import childProcess, { spawn, spawnSync } from 'node:child_process';
+import childProcess, { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   appendFileSync,
@@ -701,59 +701,39 @@ function appendIn(dir: string, env: NodeJS.ProcessEnv): void {
   });
 }
 
-function commitTreeOfLastAppend(garden: string, env: NodeJS.ProcessEnv): string {
-  const gardenIdentity = {
-    GIT_AUTHOR_NAME: 'lz-gardening',
-    GIT_AUTHOR_EMAIL: '',
-    GIT_COMMITTER_NAME: 'lz-gardening',
-    GIT_COMMITTER_EMAIL: '',
-  };
-  const result = spawnSync('git', ['commit-tree', `${logRef}^{tree}`, '-p', `${logRef}^`, '-m', 'garden: log'], {
-    cwd: garden,
-    encoding: 'utf8',
-    env: { ...process.env, ...gardenIdentity, ...env },
-  });
-  assert.equal(result.status, 0, result.stderr);
+function assertDatedNowInUtc(dir: string, garden: string, env: NodeJS.ProcessEnv): void {
+  const before = Math.floor(Date.now() / 1000);
 
-  return result.stdout.trim();
+  appendIn(dir, env);
+  const after = Math.ceil(Date.now() / 1000);
+  const [authorTime = '', committerTime = '', authorZone, committerZone] = git(garden, [
+    'log',
+    '-1',
+    '--format=%at %ct %ad %cd',
+    '--date=format:%z',
+    logRef,
+  ]).split(' ');
+  const isNow = (time: string): boolean => before <= Number(time) && Number(time) <= after;
+
+  assert.deepEqual(
+    [isNow(authorTime), isNow(committerTime), authorZone, committerZone],
+    [true, true, '+0000', '+0000'],
+  );
 }
 
-test('an append dated by GIT_COMMITTER_DATE in ISO 8601 writes the commit git commit-tree writes', (t) => {
+test('an append run with author and committer dates in the env is dated now in UTC, so no offset reaches a shared commit', (t) => {
   const { dir, garden } = planted(t);
-  const env = { GIT_AUTHOR_DATE: '2001-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2001-01-01T00:00:00Z' };
 
-  appendIn(dir, env);
-
-  assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
-});
-
-test('an append run with an author date other than its committer date writes the commit git commit-tree writes', (t) => {
-  const { dir, garden } = planted(t);
-  const env = { GIT_AUTHOR_DATE: 'Thu, 07 Apr 2005 22:13:13 +0200', GIT_COMMITTER_DATE: '1700000000 +0100' };
-
-  appendIn(dir, env);
-
-  assert.equal(git(garden, ['rev-parse', logRef]), commitTreeOfLastAppend(garden, env));
+  assertDatedNowInUtc(dir, garden, {
+    GIT_AUTHOR_DATE: 'Thu, 07 Apr 2005 22:13:13 +0200',
+    GIT_COMMITTER_DATE: '1700000000 +0100',
+  });
 });
 
 test("an append with no date in the env is dated now in UTC, not in the machine's offset", (t) => {
   const { dir, garden } = planted(t);
-  const before = Math.floor(Date.now() / 1000);
 
-  appendIn(dir, { TZ: 'EST5' });
-  const after = Math.ceil(Date.now() / 1000);
-  const [time = '', authorZone, committerZone] = git(garden, [
-    'log',
-    '-1',
-    '--format=%ct %ad %cd',
-    '--date=format:%z',
-    logRef,
-  ]).split(' ');
-
-  assert.deepEqual(
-    [before <= Number(time) && Number(time) <= after, authorZone, committerZone],
-    [true, '+0000', '+0000'],
-  );
+  assertDatedNowInUtc(dir, garden, { TZ: 'EST5' });
 });
 
 test("an append starts git only to read the log, the checkout's settings for who signs it, and to write it", (t) => {

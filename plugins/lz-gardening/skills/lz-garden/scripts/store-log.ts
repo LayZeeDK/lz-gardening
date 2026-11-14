@@ -11,7 +11,6 @@ import {
   configValue,
   forgetConfig,
   git,
-  gitEnv,
   gitFailed,
   mainCheckout,
   optionalGit,
@@ -37,13 +36,13 @@ function identityPart(checkout: string, key: string): string | undefined {
   return value;
 }
 
+// The time is the commit's own, in UTC: a date from the environment would put the machine's offset in a shared commit.
 function identity(checkout: string, whose: 'author' | 'committer', now: string): string {
-  const variable = `GIT_${whose.toUpperCase()}`;
   const name = identityPart(checkout, 'lzGardening.name');
   const email = identityPart(checkout, 'lzGardening.email');
   const who = name === undefined || email === undefined ? 'lz-gardening <>' : `${name} <${email}>`;
 
-  return `${whose} ${who} ${gitEnv(checkout)[`${variable}_DATE`] ?? now}\n`;
+  return `${whose} ${who} ${now}\n`;
 }
 
 type CommitFile = { readonly path: string; readonly text: string } | { readonly path: string; readonly oid: string };
