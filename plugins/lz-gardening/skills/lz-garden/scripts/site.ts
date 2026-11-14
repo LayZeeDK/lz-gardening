@@ -28,8 +28,9 @@ import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { claimRefusalLine, escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
+import { claimRefusalLine } from './weeds-claim.ts';
 import {
   configValue,
   git,

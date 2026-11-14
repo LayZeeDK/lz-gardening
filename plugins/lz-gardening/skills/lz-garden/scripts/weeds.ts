@@ -63,8 +63,9 @@ import {
   unprintablePattern,
 } from './log.ts';
 import type { AddInput, AddOutcome, ClaimEvent, CloseRequest, GardenEvent, TendedClose } from './log.ts';
-import { claimRefusalLine, escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
+import { claimRefusalLine } from './weeds-claim.ts';
 import { configValue, git, gitSucceeds, objectIdPattern, optionalGit } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import type { Replica, Site } from './store-log.ts';
