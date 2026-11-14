@@ -270,9 +270,7 @@ const claimRounds = 3;
 
 function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: SyncSeams): number {
   const holder = holderOf(site);
-  sync(site, { ...seams, attempts: syncTries.quick }, now).divergedBeds.forEach((bed) => {
-    io.err(`weeds claim: ${escapeUnprintable(bed)}\n`);
-  });
+  reportDivergedBeds(io, 'claim', sync(site, { ...seams, attempts: syncTries.quick }, now).divergedBeds);
   let owner: ClaimEvent | undefined;
 
   for (let round = 1; round <= (wanted === null ? claimRounds : 1); round += 1) {
@@ -392,7 +390,11 @@ function reportShared(io: Io, command: string, shared: SyncResult): void {
     io.err(`weeds ${command}: ${escapeUnprintable(shared.reason)}\n`);
   }
 
-  shared.divergedBeds.forEach((bed) => {
+  reportDivergedBeds(io, command, shared.divergedBeds);
+}
+
+function reportDivergedBeds(io: Io, command: string, beds: readonly string[]): void {
+  beds.forEach((bed) => {
     io.err(`weeds ${command}: ${escapeUnprintable(bed)}\n`);
   });
 }
