@@ -30,7 +30,7 @@ check was written), or kept.
 Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
 A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it. When the
 weed reads `not on the base`, the bed's change to its check is not on the base the census was taken of: the bed has
-not landed, or the check's file is gone from the base.
+not landed, or the check's file is gone from the base. When it reads `base unknown`, the site could not tell.
 
 **Kept**:
 Said of a weed a human or a tend pass judged deliberate; it is never queued again.

@@ -13,6 +13,7 @@ import { planted } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { cli, homeAt, now, script } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
+import type { BaseLabel } from './weeds.ts';
 
 function input(overrides: Partial<AddInput> = {}): AddInput {
   return {
@@ -37,7 +38,7 @@ function draftOf(outcome: AddOutcome): EventDraft<AddEvent> {
   throw new Error(`${outcome.said} plans no add`);
 }
 
-const notOffBase = (): boolean => false;
+const notOffBase = (): BaseLabel => 'no label';
 
 function closing(id: string, kind: 'one-off' | 'kept', by: string, weedClass = 'hollow-assertion'): EventDraft {
   return { op: 'close', ids: [id], class: weedClass, kind, by, check: null };
@@ -233,7 +234,10 @@ test('through the CLI a tend close records its bed and check, and a weed of the 
   const close = [...logFiles(garden).values()].find((event) => event['op'] === 'close');
 
   assert.equal(closed.stdout, 'closed 1; local\n');
-  assert.match(back.stdout, /^regrown [0-9a-f]{10} after bed\/any-type@bbb2222 \(check: eslint\.config\.mjs\)\n$/);
+  assert.match(
+    back.stdout,
+    /^regrown [0-9a-f]{10} after bed\/any-type@bbb2222 \(check: eslint\.config\.mjs, base unknown\)\n$/,
+  );
   assert.deepEqual(
     ['ids', 'class', 'by', 'kind', 'check'].map((field) => close?.[field]),
     [
@@ -291,7 +295,7 @@ test('list shows a regrown weed with the bed and check it came back after', (t) 
 
   assert.equal(
     cli(dir, ['list', '--class', 'any-type']).stdout,
-    `${id} any-type src/b.ts:4 [commit:ccc3333] [regrown after bed/any-type@bbb2222 (check: eslint.config.mjs)] cast\n`,
+    `${id} any-type src/b.ts:4 [commit:ccc3333] [regrown after bed/any-type@bbb2222 (check: eslint.config.mjs, base unknown)] cast\n`,
   );
 });
 

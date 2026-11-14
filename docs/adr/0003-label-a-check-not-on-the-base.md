@@ -30,10 +30,13 @@ lazy fetch off, so git writes to neither.
 
 ## Consequences
 
-- The label is advisory. No label means either that the change landed or that the label could not tell: no readable
-  census, a missing commit, a bed that shares no history with the base, a check the command line would refuse, or a
-  check that names no file at the bed's commit. The weed is queued and listed either
-  way.
+- The label is advisory. No label means either that the change landed or that the label could not tell from the
+  check: a check the command line would refuse, or a check that names no file at the bed's commit. The weed is queued
+  and listed either way.
+- Update 2026-11-14: when the site cannot judge the base at all, the check ends with `, base unknown` instead of no
+  label: no readable census, a bed or census commit missing from the site and the checkout, or a bed that shares no
+  history with the base. Before, such a weed read as if its check had landed, and the tick reported a check that
+  never reached the base as one that failed.
 - A check file the bed created reads as on the base as soon as the base has a file at that path, whatever it holds.
 - A bed change that exists only in a merge commit, such as a merge resolved or edited by hand in the bed, is not seen,
   so its weeds get no label even when the base lacks the change. The clean merges `site.ts bed` makes cannot cause

@@ -128,7 +128,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
 `(check: <where> not on the base)`, the bed's change to that check is not on the base at this tick's census: the bed
-has not landed, or the check's file is gone from the base. Report it that way, not as a check that failed. Done when
+has not landed, or the check's file is gone from the base. Report it that way, not as a check that failed. When it
+reads `(check: <where>, base unknown)`, the site could not judge the base: the census is missing or unreadable, or the
+bed's or the census's commit is not in the site or the checkout. Report the check's landing as unknown. Done when
 every weed from steps 2 and 3 printed one of those words.
 
 ## 5. Group, record, report
@@ -153,7 +155,7 @@ reply holds nothing the form has no line for.
 
 ```text
 garden: <base> <short previousSha>..<short sha>, <commits> commits, <read> read, <skipped> skipped
-queued <total> (<class> x<n>, ...); regrown: <class> (check: <where>[ not on the base]), ...
+queued <total> (<class> x<n>, ...); regrown: <class> (check: <where>[ not on the base|, base unknown]), ...
 left out: <path> (<reason>), ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)

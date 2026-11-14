@@ -6,7 +6,7 @@ import { writeCensus, writeCensusText } from './test-site.ts';
 import { cli, editCheckByHand, tendedBed } from './test-weeds.ts';
 import { weedId } from './log.ts';
 
-test('a census the label cannot read leaves a regrown weed queued and listed, without the label', (t) => {
+test('a census the label cannot read leaves a regrown weed queued and listed, its base unknown', (t) => {
   const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   writeCensusText(garden, '{ not json');
 
@@ -18,10 +18,25 @@ test('a census the label cannot read leaves a regrown weed queued and listed, wi
     [back.code, back.stdout, listed.code, listed.stdout],
     [
       0,
-      `regrown ${id} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
+      `regrown ${id} after bed/any-type@${tip} (check: checks/any-type.test.mjs, base unknown)\n`,
       0,
-      `${id} any-type src/b.ts:1 [commit:ccc3333] [regrown after bed/any-type@${tip} (check: checks/any-type.test.mjs)] \n`,
+      `${id} any-type src/b.ts:1 [commit:ccc3333] [regrown after bed/any-type@${tip} (check: checks/any-type.test.mjs, base unknown)] \n`,
     ],
+  );
+});
+
+test('a bed commit the site no longer holds reads base unknown, not as a check on the base', (t) => {
+  const { dir, garden, bed, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  git(garden, ['worktree', 'remove', '--force', bed]);
+  git(garden, ['branch', '-D', 'bed/any-type']);
+  git(garden, ['reflog', 'expire', '--expire=now', '--all']);
+  git(garden, ['gc', '-q', '--prune=now']);
+
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs, base unknown)\n`,
   );
 });
 
@@ -56,7 +71,7 @@ test('a check that names no file at the bed commit gets no label, since nothing 
   );
 });
 
-test('a census whose commit is not a commit id gets no label, rather than reaching git as an option', (t) => {
+test('a census whose commit is not a commit id reads base unknown, rather than reaching git as an option', (t) => {
   const check = { 'checks/any-type.test.mjs': 'export {};\n' };
   const { dir, garden, tip } = tendedBed(t, check);
   commit(dir, check);
@@ -66,11 +81,11 @@ test('a census whose commit is not a commit id gets no label, rather than reachi
 
   assert.equal(
     back.stdout,
-    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs, base unknown)\n`,
   );
 });
 
-test('a census commit that is a branch name, even one shaped like a commit id, gets no label', (t) => {
+test('a census commit that is a branch name, even one shaped like a commit id, reads base unknown', (t) => {
   const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   const branches = [`${'a'.repeat(40)}x`, `x${'a'.repeat(40)}`, 'a', 'z'.repeat(64)];
 
@@ -86,12 +101,12 @@ test('a census commit that is a branch name, even one shaped like a commit id, g
     labels,
     branches.map(
       (_, line) =>
-        `regrown ${weedId('any-type', `src/b.ts:${String(line + 1)}`, 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
+        `regrown ${weedId('any-type', `src/b.ts:${String(line + 1)}`, 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs, base unknown)\n`,
     ),
   );
 });
 
-test('a census commit the checkout does not hold gets no label, since nothing shows the check missing from it', (t) => {
+test('a census commit the checkout does not hold reads base unknown, since nothing shows the check on it or not', (t) => {
   const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   writeCensus(garden, 'f'.repeat(40));
 
@@ -99,6 +114,6 @@ test('a census commit the checkout does not hold gets no label, since nothing sh
 
   assert.equal(
     back.stdout,
-    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs)\n`,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/any-type.test.mjs, base unknown)\n`,
   );
 });

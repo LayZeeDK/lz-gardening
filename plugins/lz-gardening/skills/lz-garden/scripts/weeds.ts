@@ -7,7 +7,8 @@
 //     class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
 //     `(check: <where> not on the base)` when it is not on the census commit: <sha>, the full commit id of the
 //     census this tick took, else the commit of the site's census. Then the bed has not landed, or the check's file
-//     is gone from the base.
+//     is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, or the bed's or
+//     the census's commit is in neither the site nor the checkout.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
@@ -188,8 +189,17 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
-function after(tended: TendedClose, offBase: boolean): string {
-  return `after ${tended.by} (check: ${tended.check}${offBase ? ' not on the base' : ''})`;
+/** What add and list can say of a regrown weed's check and the base; 'no label' when it landed or cannot be judged. */
+export type BaseLabel = 'no label' | 'not on the base' | 'base unknown';
+
+const labelText: Readonly<Record<BaseLabel, string>> = {
+  'no label': '',
+  'not on the base': ' not on the base',
+  'base unknown': ', base unknown',
+};
+
+function after(tended: TendedClose, label: BaseLabel): string {
+  return `after ${tended.by} (check: ${tended.check}${labelText[label]})`;
 }
 
 function shaOfReadableCensus(site: string): string | undefined {
@@ -199,13 +209,13 @@ function shaOfReadableCensus(site: string): string | undefined {
   return sha !== undefined && objectIdPattern.test(sha) ? sha : undefined;
 }
 
-function checkOffBase(io: Io, site: string, census: string | undefined, tended: TendedClose): boolean {
+function checkOffBase(io: Io, site: string, census: string | undefined, tended: TendedClose): BaseLabel {
   const tip = bedCommit(tended);
   const base = census ?? shaOfReadableCensus(site);
   const where = tended.check;
 
   if (base === undefined) {
-    return false;
+    return 'base unknown';
   }
 
   // The bed's commits are in the site, so the checkout reads them through the site's objects, fetching nothing.
@@ -221,16 +231,20 @@ function checkOffBase(io: Io, site: string, census: string | undefined, tended: 
   const hasCheck = (commit: string): boolean => gitSucceeds(io.cwd, ['cat-file', '-e', `${commit}:${where}`], withSite);
   const fork = optionalGit(io.cwd, ['merge-base', tip, base], withSite);
 
-  if (fork === undefined || !hasCheck(tip)) {
-    return false;
+  if (fork === undefined) {
+    return 'base unknown';
+  }
+
+  if (!hasCheck(tip)) {
+    return 'no label';
   }
 
   if (!hasCheck(base)) {
-    return true;
+    return 'not on the base';
   }
 
   if (!hasCheck(fork)) {
-    return false;
+    return 'no label';
   }
 
   const diffOptions = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
@@ -244,7 +258,7 @@ function checkOffBase(io: Io, site: string, census: string | undefined, tended: 
   const bedLeftCheckAsItWas = bedChange === undefined;
 
   if (bedLeftCheckAsItWas) {
-    return false;
+    return 'no label';
   }
 
   // An empty range prints nothing, which splits into one blank line, and a blank is no commit.
@@ -256,10 +270,12 @@ function checkOffBase(io: Io, site: string, census: string | undefined, tended: 
       .map((commit) => patchIdOf(['diff-tree', '-p', '--root', '--no-commit-id', ...diffOptions, commit]));
   const onBase = new Set(patchIdsIn(`${fork}..${base}`));
 
-  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
+  return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id))
+    ? 'not on the base'
+    : 'no label';
 }
 
-export function addStatus(outcome: AddOutcome, offBase: (tended: TendedClose) => boolean): string {
+export function addStatus(outcome: AddOutcome, offBase: (tended: TendedClose) => BaseLabel): string {
   switch (outcome.said) {
     case 'seen':
     case 'kept':
@@ -272,8 +288,8 @@ export function addStatus(outcome: AddOutcome, offBase: (tended: TendedClose) =>
   }
 }
 
-function offBaseIn(io: Io, site: string, census: string | undefined): (tended: TendedClose) => boolean {
-  const known = new Map<TendedClose, boolean>();
+function offBaseIn(io: Io, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {
+  const known = new Map<TendedClose, BaseLabel>();
 
   return (tended) => {
     const offBase = known.get(tended) ?? checkOffBase(io, site, census, tended);
