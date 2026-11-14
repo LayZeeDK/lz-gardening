@@ -197,6 +197,7 @@ later weed of the class, anywhere, is then queued as `regrown` and names this be
 - The lint, type-check and test commands run in the bed, with their summary lines from step 4's starting results
   and from after the change.
 - A layer 3 proposal, if one would help, described but not built.
-- How to land it, from the repository: `git fetch origin refs/garden/beds/<class>` (or
-  `git fetch ../<repo>.garden bed/<class>` when the close was not shared), then review and merge the fetched commit
-  the way the repository lands work, and delete `refs/garden/beds/<class>` on `origin` once it has landed.
+- How to land it, from the repository: `git fetch origin refs/garden/beds/<class>` when the bed was shared, or
+  `git fetch ../<repo>.garden bed/<class>` when it was not (the close did not end `synced`, or a line on stderr named
+  the bed); say which applies. Then review and merge the fetched commit the way the repository lands work, and
+  delete `refs/garden/beds/<class>` on `origin` once it has landed.

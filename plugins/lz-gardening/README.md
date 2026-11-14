@@ -81,7 +81,8 @@ the bed's ref on `origin`:
 git fetch origin refs/garden/beds/<class>
 ```
 
-A bed whose close was never shared is only in the site: `git fetch ../<repo>.garden bed/<class>`.
+A bed that was not shared is only in the site: fetch it with `git fetch ../<repo>.garden bed/<class>`. The tend
+pass's report says when this applies: its close did not end `synced`, or the close named the bed on stderr.
 
 The watch runs in the `lz-gardener` agent. It reads the repository with read-only git commands and writes only
 through its three scripts, which keep the queue and the census in the site. It never edits planning records, agent

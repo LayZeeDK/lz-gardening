@@ -26,8 +26,9 @@ the checkout, write into a **site** instead: a local clone beside the repository
 census is its own commit with no parent, written to `refs/garden/census`. Bed branches (`bed/<class>`, since git cannot hold a `garden/<class>`
 branch beside `garden`) start from the base branch and carry one proposed bed change each. A tended close shares
 its bed on `origin` as `refs/garden/beds/<class>`. A human lands a bed by fetching it into the repository with
-`git fetch origin refs/garden/beds/<class>` (or `git fetch ../<repo>.garden bed/<class>` when its close was never
-shared) and merging it the way the repository lands work.
+`git fetch origin refs/garden/beds/<class>` (or `git fetch ../<repo>.garden bed/<class>` when the bed was not
+shared: its close did not end `synced`, or the sync named the bed on stderr) and merging it the way the repository
+lands work.
 
 The site shares two refs, the garden log and the census: `site.ts open` and `site.ts sync` fetch the repository's
 `origin` `refs/garden/log` and `refs/garden/census` into the site's `refs/garden-shared/`, merge the log with the
