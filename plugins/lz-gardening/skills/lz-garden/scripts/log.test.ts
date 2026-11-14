@@ -91,7 +91,7 @@ function tend(uuid: string, clock: number, ids: readonly string[], weedClass = '
   };
 }
 
-/** Each id as the spike printed it: added, regrown, or closed:<kind>. */
+/** Each id's status: added, regrown, or closed:<kind>. */
 function statuses(garden: Garden, ids: readonly string[]): Record<string, string | undefined> {
   return Object.fromEntries(
     ids.map((id) => {

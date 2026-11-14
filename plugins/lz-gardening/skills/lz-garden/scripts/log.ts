@@ -45,7 +45,7 @@ interface EventBase {
   readonly uuid: string;
   /** Lamport clock: the highest clock in the writer's replica + 1. Orders only for "earliest" and "latest". */
   readonly clock: number;
-  /** Writer's wall time, ISO 8601. Display, firstAt and claim expiry only; never ordering. */
+  /** Writer's wall time, ISO 8601. Display, firstAt and the bound on a claim's until only; never ordering. */
   readonly at: string;
 }
 
@@ -152,7 +152,7 @@ export type AddOutcome =
       readonly after: TendedClose;
     };
 
-/** Today's writer rules over the replica: no add of a weed seen open or kept; records what the writer saw. */
+/** The writer's rules over the replica: no add of a weed seen open or kept; records what the writer saw. */
 export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Date): AddOutcome {
   const id = weedId(input.class, input.where, input.source);
   const status = replay(events, now).statusOf(id);
@@ -283,7 +283,7 @@ export function releasesOfClaim(
     .map(releaseOf);
 }
 
-/** 6 hours: the GitHub-hosted job limit and GITHUB_TOKEN lifetime, so a crashed CI run's claim ends with it. */
+/** 6 hours: the GitHub-hosted job limit, so a crashed CI run's claim ends with it. */
 export const claimLifetimeMs = 6 * 60 * 60 * 1000;
 
 /** Classes a claim never picks on its own: they are tended through another class or job. */
@@ -309,8 +309,8 @@ export function claimableGroups(garden: Garden, writer: string): readonly Group[
 }
 
 /**
- * Which class to claim. With a class: taken if another writer holds it, else claimed (a holder's claim renews it).
- * Without: the first claimable group's class.
+ * Which class to claim. With a class: taken if another writer holds it, nothing open if no weed of it is open, else
+ * claimed (a holder's claim renews it). Without: the first claimable group's class, or nothing ready when there is none.
  */
 export function planClaim(
   events: readonly GardenEvent[],
@@ -456,7 +456,7 @@ export function stamp(drafts: readonly EventDraft[], maxClock: number, now: Date
   }));
 }
 
-/** Where an event lives in the log tree: events/<uuid[0..2]>/<uuid>.json (256 shards, 3,000 each). */
+/** Where an event lives in the log tree: events/<uuid[0..2]>/<uuid>.json, in 256 shards by the uuid's first byte. */
 export function eventPath(uuid: string): string {
   return `events/${uuid.slice(0, 2)}/${uuid}.json`;
 }
