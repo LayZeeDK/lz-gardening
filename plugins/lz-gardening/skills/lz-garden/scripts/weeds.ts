@@ -464,7 +464,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
       const site = openSite(io.cwd);
       const outcome = append(site, (replica) => planAdd(eventsReportingSkipped(io, replica), input, now), now);
-      write(addStatus(outcome, (tended) => checkOffBase(io, site.path, tended)));
+      write(addStatus(outcome, offBaseIn(io, site.path)));
 
       return 0;
     }
