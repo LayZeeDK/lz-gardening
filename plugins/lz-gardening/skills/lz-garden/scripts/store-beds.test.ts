@@ -204,6 +204,25 @@ test('a bed a later sync pushed is not pushed back once origin deletes it', (t) 
   assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], '']);
 });
 
+test('a bed that lands keeps a mark another sync moved to another commit while it pushed', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  const moved = git(place.bed, ['rev-parse', 'HEAD~1']);
+  writeFileSync(
+    join(place.remote, 'hooks', 'post-receive'),
+    `#!/bin/sh\nunset GIT_DIR GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES\ngit -C '${place.garden}' update-ref refs/garden-unpushed/beds/any-type ${moved}\n`,
+    { mode: 0o755 },
+  );
+
+  sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [bedRef(place.remote), git(place.garden, ['for-each-ref', '--format=%(objectname)', 'refs/garden-unpushed/'])],
+    [place.tip, moved],
+  );
+});
+
 test('a bed whose push takes longer than the time allowed is named as timed out', async (t) => {
   const place = bedPushFails(t);
   sync(openSite(place.dir), { attempts: 1 });

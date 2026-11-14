@@ -1,7 +1,17 @@
 // The shared beds: which bed branches a sync pushes to origin as refs/garden/beds/<class>, which stay local and why.
 import { join } from 'node:path';
 import { bedCommit, eventPath, latestTendedClose } from './log.ts';
-import { git, gitReason, isAncestor, networkGit, objectIds, pushReport, refsUnder, timedOut } from './store-git.ts';
+import {
+  git,
+  gitReason,
+  gitSucceeds,
+  isAncestor,
+  networkGit,
+  objectIds,
+  pushReport,
+  refsUnder,
+  timedOut,
+} from './store-git.ts';
 import { logRef, machinePathTest, readReplica } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
@@ -199,8 +209,9 @@ export function pushBeds(
 
   outcomes
     .filter(({ why }) => why === undefined)
-    .forEach(({ weedClass }) => {
-      git(site.path, ['update-ref', '-d', unpushedBedRef(weedClass)]);
+    .forEach(({ weedClass, tip }) => {
+      // Only while it marks this tip: a mark another sync moved meanwhile stays for that sync's bed.
+      gitSucceeds(site.path, ['update-ref', '-d', unpushedBedRef(weedClass), tip]);
     });
 
   return [
