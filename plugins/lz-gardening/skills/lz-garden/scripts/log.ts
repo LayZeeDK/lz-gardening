@@ -240,7 +240,7 @@ export function planClose(
 }
 
 export type ReleasePlan =
-  | { readonly said: 'released'; readonly drafts: readonly EventDraft[] }
+  | { readonly said: 'released'; readonly drafts: readonly EventDraft<ReleaseEvent>[] }
   | { readonly said: 'no claim'; readonly drafts: readonly [] };
 
 export function planRelease(events: readonly GardenEvent[], weedClass: string, writer: string, now: Date): ReleasePlan {
@@ -254,13 +254,13 @@ function releasesOfLiveClaims(
   weedClass: string,
   writer: string,
   now: Date,
-): readonly EventDraft[] {
+): readonly EventDraft<ReleaseEvent>[] {
   return liveClaims(events, now)
     .filter((claim) => claim.writer === writer && claim.class === weedClass)
     .map(releaseOf);
 }
 
-export function releaseOf(claim: ClaimEvent): EventDraft {
+export function releaseOf(claim: ClaimEvent): EventDraft<ReleaseEvent> {
   return { op: 'release', class: claim.class, claim: claim.uuid };
 }
 
@@ -361,7 +361,7 @@ export function planGiveBack(
 export function releasesOfLostClaims(
   events: readonly GardenEvent[],
   lost: readonly LostClaim[],
-): readonly EventDraft[] {
+): readonly EventDraft<ReleaseEvent>[] {
   const released = releasedClaims(events);
 
   return lost.filter(({ claim }) => !released.has(claim.uuid)).map(({ claim }) => releaseOf(claim));
