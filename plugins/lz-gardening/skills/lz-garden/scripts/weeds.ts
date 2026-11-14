@@ -20,7 +20,8 @@
 //     the claim of <class>: <state>[ (<reason>)]`, `this site holds no claim of <class>; run weeds claim --class
 //     <class>` or `<class> is claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of
 //     the class. close --id needs no claim, names a first sync other than synced or local on stderr, and leaves the
-//     claim as it is; it exits 1 with `<class> is claimed by <holder> until <time>`, closing nothing, while another writer holds one.
+//     claim as it is; it exits 1 with `<class> is claimed by <holder> until <time>`, closing nothing, while another
+//     writer holds one.
 //   node weeds.ts claim [--class <kebab>]
 //     Claims the class, or the first one groups --ready lists, for six hours, and shares the claim:
 //     `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
@@ -39,8 +40,9 @@
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
 // An event file the log cannot read, whose text holds a line break or control character, or that these commands would
-// not write (references/site.md lists the rules), is skipped and named on stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read the
-// log again, because another writer moved it, names it again.
+// not write (references/site.md lists the rules), is skipped and named on stderr, with the characters that break or
+// reorder a line written as \u{<hex>}; an add or close that has to read the log again, because another writer moved
+// it, names it again.
 // Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, a close meets another writer's
 // claim, or a claim or release is refused; 2 on a usage error or any other failure: no site, a damaged or newer log,
 // a log that kept moving, or a git error.
