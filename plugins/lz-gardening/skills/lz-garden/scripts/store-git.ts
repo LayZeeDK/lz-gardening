@@ -229,10 +229,17 @@ export function gitReason(stderr: string): string {
 // Stryker disable next-line LzJsNumericLiteral: how long a fetch or push may take is policy; the limit is tested through timeoutMs
 export const networkTimeoutMs = 60_000;
 
+// git's tracing prints the command line, and a token in the origin URL with it, where the reason is read from.
+const tracing = /^GIT_(?:TRACE|CURL_VERBOSE$)/;
+
 // Messages are in English, as the porcelain classification reads them.
 export function networkGit(site: string, args: readonly string[], timeoutMs: number): SpawnSyncReturns<string> {
+  const tracingOff = Object.keys(gitEnv(site))
+    .filter((name) => tracing.test(name))
+    .map((name) => [name, undefined] as const);
+
   return runGit(site, ['-c', 'credential.interactive=false', ...args], {
-    env: { LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
+    env: { ...Object.fromEntries(tracingOff), LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
     timeout: timeoutMs,
   });
 }

@@ -57,3 +57,45 @@ test('a sync through an origin URL holding a token pushes the queue, and prints 
   // The scan finds the token where it is: in the checkout's config.
   assert.deepEqual(filesHolding(join(dir, '.git'), needles), [join(dir, '.git', 'config')]);
 });
+
+test("a sync through an origin URL whose token origin refuses, with git's tracing on, prints git's reason and none of the token", async (t) => {
+  const { dir } = planted(t);
+  const token = randomUUID();
+  const credentials = `x-access-token:${token}`;
+  git(dirname(dir), ['clone', '-q', '--bare', dir, 'remote.git']);
+  const port = await httpRemote(t, dirname(dir), `x-access-token:${randomUUID()}`);
+  git(dir, ['remote', 'add', 'origin', `http://${credentials}@127.0.0.1:${port}/remote.git`]);
+  let output = '';
+
+  run(['sync'], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      GIT_TRACE: '1',
+      GIT_TRACE2: '1',
+      GIT_TRACE_CURL: '1',
+      GIT_CURL_VERBOSE: '1',
+      GIT_TRACE_REDACT: 'false',
+    },
+    out: (text) => {
+      output += text;
+    },
+    err: (text) => {
+      output += text;
+    },
+  });
+
+  const needles = [token, Buffer.from(credentials).toString('base64')];
+  assert.deepEqual(
+    [JSON.parse(output.trim().split('\n').at(-1) ?? ''), needles.filter((needle) => output.includes(needle))],
+    [
+      {
+        shared: 'offline',
+        events: 0,
+        reason: `fatal: Authentication failed for 'http://127.0.0.1:${port}/remote.git/'`,
+      },
+      [],
+    ],
+    output,
+  );
+});
