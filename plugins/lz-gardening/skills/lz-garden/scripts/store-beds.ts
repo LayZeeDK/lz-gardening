@@ -1,7 +1,7 @@
 // The shared beds: which bed branches a sync pushes to origin as refs/garden/beds/<class>, which stay local and why.
 import { join } from 'node:path';
 import { bedCommit, eventPath, latestTendedClose } from './log.ts';
-import { git, isAncestor, networkGit, objectIdPattern, reasonOf, refsUnder } from './store-git.ts';
+import { git, isAncestor, networkGit, objectIdPattern, reasonOf, refsUnder, timedOut } from './store-git.ts';
 import { logRef, machinePathTest, readReplica } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
@@ -176,7 +176,7 @@ export function pushBeds(
     const line = reported.get(sharedBedRef(weedClass));
 
     if (line === undefined) {
-      return { weedClass, tip, why: reasonOf(pushed.stderr) };
+      return { weedClass, tip, why: timedOut(pushed) ? 'timed out' : reasonOf(pushed.stderr) };
     }
 
     return { weedClass, tip, why: line.flag === '!' ? (line.summary ?? '') : undefined };

@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { logRef, openSite } from './store-log.ts';
 import { sync } from './store-sync.ts';
 import { commit, git } from './test-repo.ts';
+import { serve, silentServer } from './test-serve.ts';
 import { bareRemote, planted, sharedPair, site, writeCensus } from './test-site.ts';
 import { cli, homeAt } from './test-weeds.ts';
 
@@ -199,6 +200,18 @@ test('a bed a later sync pushed is not pushed back once origin deletes it', (t) 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], '']);
+});
+
+test('a bed whose push takes longer than the time allowed is named as timed out', async (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  const port = await serve(t, silentServer);
+  git(place.dir, ['remote', 'set-url', '--push', 'origin', `git://127.0.0.1:${port}/repo.git`]);
+
+  const result = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1000 });
+
+  assert.deepEqual([result.state, result.divergedBeds], ['synced', ['any-type: timed out']]);
 });
 
 test('a bed made from a commit no branch fetched from origin holds stays local and is named', (t) => {
