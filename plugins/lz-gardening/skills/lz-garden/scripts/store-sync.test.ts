@@ -154,6 +154,20 @@ test('an origin whose hook declines the push leaves the site read-only, with wha
   assert.deepEqual([result.state, result.reason], ['read-only', 'remote: refs/garden is closed here']);
 });
 
+test('a site set to sign every push still shares its log, unsigned', (t) => {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+  git(garden, ['config', 'push.gpgSign', 'true']);
+  addWeed(dir, 'src/a.ts:1');
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.reason, git(remote, ['for-each-ref', '--format=%(objectname)', logRef])],
+    ['synced', undefined, git(garden, ['rev-parse', logRef])],
+  );
+});
+
 test('an origin with a push URL of its own is fetched from its URL and pushed to its push URL', (t) => {
   const { first, second, remote } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
