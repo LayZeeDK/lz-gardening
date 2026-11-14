@@ -626,7 +626,7 @@ test('a sync whose origin already holds the local log fetches, lists the beds an
           : undefined,
       ),
     ],
-    ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'fetch', 'cat-file', 'for-each-ref']],
+    ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'config', 'fetch', 'cat-file', 'for-each-ref']],
   );
 });
 
@@ -640,11 +640,12 @@ function fetchArgs(t: TestContext, dir: string, env: NodeJS.ProcessEnv): readonl
 
   inRun(env, () => sync(openSite(dir), { attempts: 1 }));
 
-  return (
-    spawned.mock.calls
-      .map(({ arguments: [, args] }) => (Array.isArray(args) ? args.filter((arg) => typeof arg === 'string') : []))
-      .find((args) => args.includes('fetch')) ?? []
-  );
+  const fetch = spawned.mock.calls
+    .map(({ arguments: [, args] }) => (Array.isArray(args) ? args.filter((arg) => typeof arg === 'string') : []))
+    .find((args) => args.includes('fetch'));
+  assert.ok(fetch !== undefined, 'the sync ran a fetch');
+
+  return fetch;
 }
 
 const sshInBatchMode = 'core.sshCommand=ssh -o BatchMode=yes';
@@ -662,6 +663,14 @@ test('a fetch for a user who set core.sshCommand runs their ssh command as it is
   git(garden, ['config', 'core.sshCommand', 'ssh -i ~/.ssh/garden']);
 
   assert.ok(!fetchArgs(t, dir, process.env).includes(sshInBatchMode));
+});
+
+test("a fetch for a user who set core.sshCommand in the checkout's own config runs that ssh command", (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['config', 'core.sshCommand', 'ssh -i ~/.ssh/garden']);
+
+  assert.ok(fetchArgs(t, dir, process.env).includes('core.sshCommand=ssh -i ~/.ssh/garden'));
 });
 
 test('a fetch for a user who set GIT_SSH_COMMAND runs their ssh command as it is', (t) => {

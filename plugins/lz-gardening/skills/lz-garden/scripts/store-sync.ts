@@ -353,10 +353,9 @@ function giveBackLosingClaims(
 
 // A try lost to another writer ends behind, which the next try, if any, takes up.
 function syncOnce(site: Site, attempt: Attempt): Tried {
-  const { path } = site;
   const { fetchUrl, pushUrl, timeoutMs, pendingSha } = attempt;
   const fetched = networkGit(
-    path,
+    site,
     ['fetch', '--prune', '--no-tags', '--end-of-options', fetchUrl, '+refs/garden/*:refs/garden-shared/*'],
     timeoutMs,
   );
@@ -405,7 +404,7 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   // for a later sync.
   const beds = markUnpushed(site, plan);
   const pushed = networkGit(
-    path,
+    site,
     [
       'push',
       '--porcelain',

@@ -3,6 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
+import type { Site } from './store-log.ts';
 
 interface Run {
   readonly env: Readonly<NodeJS.ProcessEnv>;
@@ -239,19 +240,23 @@ export const networkTimeoutMs = 60_000;
 const tracing = /^GIT_(?:TRACE|CURL_VERBOSE$)/;
 
 // Messages are in English, as the porcelain classification reads them.
-export function networkGit(site: string, args: readonly string[], timeoutMs: number): SpawnSyncReturns<string> {
-  const env = gitEnv(site);
+export function networkGit(
+  { path, checkout }: Pick<Site, 'path' | 'checkout'>,
+  args: readonly string[],
+  timeoutMs: number,
+): SpawnSyncReturns<string> {
+  const env = gitEnv(path);
   const tracingOff = Object.keys(env)
     .filter((name) => tracing.test(name))
     .map((name) => [name, undefined] as const);
-  // ssh asks for a passphrase or a new host key by itself; batch mode stops it, unless the user chose their own ssh.
-  const ownSsh =
-    env['GIT_SSH_COMMAND'] !== undefined ||
-    env['GIT_SSH'] !== undefined ||
-    configValue(site, 'core.sshCommand') !== undefined;
-  const sshInBatchMode = ownSsh ? [] : ['-c', 'core.sshCommand=ssh -o BatchMode=yes'];
+  // ssh asks for a passphrase or a new host key by itself; batch mode stops it, unless the user chose their own ssh,
+  // in the environment or in the checkout's config, which the site, a clone of its own, does not read.
+  const sshCommand =
+    configValue(path, 'core.sshCommand') ?? configValue(checkout, 'core.sshCommand') ?? 'ssh -o BatchMode=yes';
+  const ssh =
+    env['GIT_SSH_COMMAND'] !== undefined || env['GIT_SSH'] !== undefined ? [] : ['-c', `core.sshCommand=${sshCommand}`];
 
-  return runGit(site, ['-c', 'credential.interactive=false', ...sshInBatchMode, ...args], {
+  return runGit(path, ['-c', 'credential.interactive=false', ...ssh, ...args], {
     env: { ...Object.fromEntries(tracingOff), LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
     timeout: timeoutMs,
   });

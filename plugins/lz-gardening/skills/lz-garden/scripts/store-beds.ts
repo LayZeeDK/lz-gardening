@@ -221,7 +221,7 @@ export function pushBeds(
   }
 
   const pushed = networkGit(
-    site.path,
+    site,
     [
       'push',
       '--porcelain',
