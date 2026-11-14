@@ -10,11 +10,19 @@
 //     node --conditions=@layzee/source node_modules/@stryker-mutator/core/bin/stryker.js run
 // While iterating with that runner, add --incremental (and --mutate "<file>:<from>-<to>" for the changed lines) to
 // rerun only the mutants whose code or covering tests changed. Run once without it before calling a change done: an
-// incremental run copies older results into the report, and it misses changes to helpers, fixtures and config.
+// incremental run copies older results into the report, and it misses changes to test utilities, fixtures and config.
+import { globSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const { MUTATE: script = '*', LZ_NODE_TEST_RUNNER: nodeTestRunner } = process.env;
-const testFiles = `plugins/lz-gardening/skills/*/scripts/${script}*.test.ts`;
+const scripts = 'plugins/lz-gardening/skills/*/scripts';
+const testFiles = `${scripts}/${script}*.test.ts`;
+const mutated = [`${scripts}/${script}.ts`, `${scripts}/${script}-*.ts`];
+
+// A MUTATE that names no script would mutate nothing, and a run with no mutants passes the 100% threshold.
+if (globSync(mutated).length === 0) {
+  throw new Error(`MUTATE=${script} names no script in ${scripts}`);
+}
 
 if (nodeTestRunner !== undefined) {
   const packages = new URL('../../', pathToFileURL(nodeTestRunner));
@@ -44,12 +52,7 @@ const config = {
   tsconfigFile: 'plugins/lz-gardening/tsconfig.json',
   reporters: ['clear-text', 'progress', 'html'],
   thresholds: { high: 100, low: 100, break: 100 },
-  mutate: [
-    `plugins/lz-gardening/skills/*/scripts/${script}.ts`,
-    `plugins/lz-gardening/skills/*/scripts/${script}-*.ts`,
-    '!plugins/lz-gardening/skills/*/scripts/*.test.ts',
-    '!plugins/lz-gardening/skills/*/scripts/test-*.ts',
-  ],
+  mutate: [...mutated, `!${scripts}/*.test.ts`, `!${scripts}/test-*.ts`],
 };
 
 export default config;
