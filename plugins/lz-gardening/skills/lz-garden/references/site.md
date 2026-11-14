@@ -16,6 +16,7 @@ the checkout, write into a **site** instead: a local clone beside the repository
   refs/garden/pending/<sha>      (git ref) a census taken at <sha> and not yet recorded
   refs/garden-shared/            (git refs) what the last sync fetched of origin's refs/garden/: log, census and
                                  beds/<class>, the beds other clones closed
+  refs/garden-unpushed/beds/<class>  (git ref) a bed whose push failed, which the next sync pushes again
   .garden/patterns.json          optional, not committed on `garden`: this repository's own census patterns; each
                                  census the site records holds a copy, pushed to `origin` as it is
   .gitignore                     ignores /beds/
@@ -45,8 +46,9 @@ the whole log, a site made again, or one whose remote ref was deleted, gets the 
 After the log lands, a sync pushes beds in a push of their own, one ref per bed, so a bed `origin` refuses holds back
 neither the log nor another bed. For each class, the latest tended close in the merged log names the bed: the sync
 pushes the site's `bed/<class>` as `refs/garden/beds/<class>` when that branch's commit is the close's, and either
-`origin`'s bed is an ancestor of it or `origin` has no bed of the class and the close is shared by this very sync.
-A bed that does not descend from `origin`'s, or that `origin` refuses, is named on stderr and left in the site. The
+`origin`'s bed is an ancestor of it or `origin` has no bed of the class and either the close is shared by this very
+sync or an earlier push of that commit failed. A bed that does not descend from `origin`'s is named on stderr and left
+in the site. So is a bed `origin` refuses or whose push fails, with git's reason, and the next sync pushes it again. The
 only commits a bed may bring `origin` are its own, made in the site: a bed that would bring any commit the checkout
 holds (a base on an unpushed branch, a tag, a detached commit or another remote's branch) stays in the site and is
 named too. So is a bed whose commits add a line, or hold a message, with this machine's home folder, the checkout's

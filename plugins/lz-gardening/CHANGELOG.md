@@ -79,7 +79,8 @@ First release.
   claim of the class, and `close --id` leaves it. `close-class`, like `site.ts bed`, exits 1 and closes nothing
   unless its first sync is `synced` or `local` and this writer then holds a live claim of the class. A tended close
   shares its bed as `refs/garden/beds/<class>`, in a push of its own after the log; a bed that does not descend from
-  `origin`'s, or that `origin` refuses, is named on stderr. `site.ts bed` syncs first and exits 1 unless this site
+  `origin`'s, that `origin` refuses or whose push fails, is named on stderr, and the last two are pushed again by the
+  next sync. `site.ts bed` syncs first and exits 1 unless this site
   holds the claim of the class, and starts from, or merges in, the bed another clone shared.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the
   garden scripts, which keep the queue and the census in the site.

@@ -1,6 +1,6 @@
 // Run: node --test store-beds.test.ts
 import assert from 'node:assert/strict';
-import { realpathSync, writeFileSync } from 'node:fs';
+import { realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
@@ -147,6 +147,57 @@ test("a bed the origin refuses leaves the log synced and is named with git's rea
       git(place.garden, ['rev-parse', logRef]),
     ],
   );
+});
+
+// The log's push lands and leaves origin no repository, so the bed's push fails before git prints a line for its ref.
+function bedPushFails(t: TestContext): Tended & { readonly tip: string } {
+  const place = withBed(t);
+  writeFileSync(join(place.remote, 'hooks', 'post-receive'), '#!/bin/sh\nrm HEAD\n', { mode: 0o755 });
+  git(place.dir, ['config', 'lzGardening.share', 'false']);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'lzGardening.share', 'true']);
+
+  return { ...place, tip };
+}
+
+function originBack(place: Tended): void {
+  writeFileSync(join(place.remote, 'HEAD'), 'ref: refs/heads/main\n');
+  rmSync(join(place.remote, 'hooks', 'post-receive'));
+}
+
+test("a bed whose push fails before git names its ref is named with git's reason", (t) => {
+  const place = bedPushFails(t);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+
+  assert.deepEqual(
+    [result.state, result.divergedBeds.map((bed) => /^any-type: fatal: .+/.test(bed)), bedRef(place.remote)],
+    ['synced', [true], ''],
+    result.divergedBeds.join('\n'),
+  );
+});
+
+test('a later sync pushes a bed whose push failed, though its close is already on origin', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], place.tip]);
+});
+
+test('a bed a later sync pushed is not pushed back once origin deletes it', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.remote, ['update-ref', '-d', 'refs/garden/beds/any-type']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], '']);
 });
 
 test('a bed made from a commit no branch fetched from origin holds stays local and is named', (t) => {

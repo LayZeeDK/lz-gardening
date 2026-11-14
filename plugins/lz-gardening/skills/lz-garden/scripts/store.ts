@@ -904,6 +904,9 @@ function sharedBedRef(weedClass: string): string {
   return `refs/garden/beds/${weedClass}`;
 }
 
+// A bed whose push failed, kept in the site so a later sync pushes it again once its close is on origin.
+const unpushedBeds = 'refs/garden-unpushed/beds/';
+
 // A hunk's lines are counted from its header, so no line inside it is taken for a header by how its text starts. A
 // merge's combined diff (--cc) marks each line once per parent; a line with no - is in the result, and one with a +
 // is new to some parent. A commit starts with a NUL and its id, and its message ends at a NUL, which no message holds.
@@ -989,9 +992,11 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
 }
 
 function pushBeds(site: Site, leaving: readonly Leaving[], { pushUrl, timeoutMs }: Attempt): readonly string[] {
-  const tips = git(site.path, ['for-each-ref', '--format=%(refname) %(objectname)', bedBranches, sharedBeds], {
-    readsOnly: true,
-  })
+  const tips = git(
+    site.path,
+    ['for-each-ref', '--format=%(refname) %(objectname)', bedBranches, sharedBeds, unpushedBeds],
+    { readsOnly: true },
+  )
     .split('\n')
     .filter((line) => line !== '')
     .map((line) => line.split(' '));
@@ -1018,7 +1023,9 @@ function pushBeds(site: Site, leaving: readonly Leaving[], { pushUrl, timeoutMs 
     }
 
     if (shared === undefined) {
-      return leavingPaths.has(eventPath(close.uuid)) ? [{ ...bed, descends: true }] : [];
+      return leavingPaths.has(eventPath(close.uuid)) || tipOf(unpushedBeds, bed.weedClass) === bed.tip
+        ? [{ ...bed, descends: true }]
+        : [];
     }
 
     return [{ ...bed, descends: isAncestor(site.path, shared, bed.tip) }];
@@ -1048,15 +1055,39 @@ function pushBeds(site: Site, leaving: readonly Leaving[], { pushUrl, timeoutMs 
     ],
     timeoutMs,
   );
-  // A porcelain line per ref: "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as it was.
-  const refused = pushed.stdout.split('\n').flatMap((line) => {
-    const [flag, refs = '', summary = ''] = line.split('\t');
-    const weedClass = refs.slice(refs.indexOf(':') + 1).slice(sharedBedRef('').length);
+  // A porcelain line per ref: "<flag>\t<from>:<to>\t<summary>", the flag ! for a ref the push left as it was. A push
+  // that failed before it reached the refs prints no line for them.
+  const reported = new Map(
+    pushed.stdout.split('\n').flatMap((line) => {
+      const [flag, refs, summary] = line.split('\t');
 
-    return flag === '!' ? [`${weedClass}: ${summary}`] : [];
+      return refs === undefined ? [] : [[refs.slice(refs.indexOf(':') + 1), { flag, summary }] as const];
+    }),
+  );
+  const outcomes = pushing.map(({ weedClass, tip }) => {
+    const line = reported.get(sharedBedRef(weedClass));
+
+    if (line === undefined) {
+      return { weedClass, tip, why: reasonOf(pushed.stderr) };
+    }
+
+    return { weedClass, tip, why: line.flag === '!' ? (line.summary ?? '') : undefined };
+  });
+  const refused = outcomes.flatMap(({ weedClass, why }) => (why === undefined ? [] : [{ weedClass, why }]));
+  const marks = outcomes.flatMap(({ weedClass, tip, why }) => {
+    if (why !== undefined) {
+      return [`update ${unpushedBeds}${weedClass} ${tip}\n`];
+    }
+
+    return tipOf(unpushedBeds, weedClass) === undefined ? [] : [`delete ${unpushedBeds}${weedClass}\n`];
   });
 
-  return [...diverged, ...refused];
+  // Stryker disable next-line ConditionalExpression: an update-ref with nothing to do changes no ref; this saves a git run
+  if (marks.length > 0) {
+    git(site.path, ['update-ref', '--stdin'], { input: marks.join('') });
+  }
+
+  return [...diverged, ...refused.map(({ weedClass, why }) => `${weedClass}: ${why}`)];
 }
 
 export const censusRef = 'refs/garden/census';
