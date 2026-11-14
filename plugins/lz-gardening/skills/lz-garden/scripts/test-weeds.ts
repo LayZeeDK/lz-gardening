@@ -88,7 +88,7 @@ export function editCheckByHand(garden: string, check: string): void {
 }
 
 export function homeAt(t: TestContext, folder: string): void {
-  for (const name of ['HOME', 'USERPROFILE']) {
+  ['HOME', 'USERPROFILE'].forEach((name) => {
     const was = process.env[name];
     t.after(() => {
       if (was === undefined) {
@@ -98,5 +98,5 @@ export function homeAt(t: TestContext, folder: string): void {
       }
     });
     process.env[name] = folder;
-  }
+  });
 }

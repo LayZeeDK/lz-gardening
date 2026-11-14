@@ -68,6 +68,8 @@ import type {
   ClaimPlan,
   CloseRequest,
   GardenEvent,
+  Group,
+  OpenWeed,
   TendedClose,
 } from './log.ts';
 import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
@@ -504,15 +506,22 @@ function groups(io: Io, flags: Flags, now: Date): number {
     : groupWeeds(garden.open).filter((group) => group.places >= min);
   writeLine(io, `${'class'.padEnd(36)} open places regrown layer first-seen tending`);
 
-  for (const group of listed) {
-    const tending = garden.claims.get(group.class)?.holder ?? '-';
-    writeLine(
-      io,
-      `${group.class.padEnd(36)} ${String(group.open).padStart(4)} ${String(group.places).padStart(6)} ${String(group.regrown).padStart(7)} ${String(group.layer ?? '-').padStart(5)} ${group.firstAt.slice(0, 10)} ${tending}`,
-    );
-  }
+  listed.forEach((group) => {
+    writeLine(io, groupRow(group, garden.claims.get(group.class)?.holder ?? '-'));
+  });
 
   return 0;
+}
+
+function groupRow(group: Group, tending: string): string {
+  return `${group.class.padEnd(36)} ${String(group.open).padStart(4)} ${String(group.places).padStart(6)} ${String(group.regrown).padStart(7)} ${String(group.layer ?? '-').padStart(5)} ${group.firstAt.slice(0, 10)} ${tending}`;
+}
+
+function weedRow(weed: OpenWeed, offBase: (tended: TendedClose) => BaseLabel): string {
+  const regrown =
+    weed.regrownAfter === null ? '' : ` [regrown ${after(weed.regrownAfter, offBase(weed.regrownAfter))}]`;
+
+  return `${weed.id} ${weed.class} ${weed.where} [${weed.source}]${regrown} ${weed.note}`;
 }
 
 function list(io: Io, flags: Flags, now: Date): number {
@@ -520,13 +529,11 @@ function list(io: Io, flags: Flags, now: Date): number {
   const site = openSite(io.cwd);
   const offBase = offBaseIn(io.cwd, site.path, undefined);
 
-  for (const weed of replay(eventsReportingSkipped(io, readLog(site)), now).open.filter(
-    (item) => only === undefined || item.class === only,
-  )) {
-    const regrown =
-      weed.regrownAfter === null ? '' : ` [regrown ${after(weed.regrownAfter, offBase(weed.regrownAfter))}]`;
-    writeLine(io, `${weed.id} ${weed.class} ${weed.where} [${weed.source}]${regrown} ${weed.note}`);
-  }
+  replay(eventsReportingSkipped(io, readLog(site)), now)
+    .open.filter((weed) => only === undefined || weed.class === only)
+    .forEach((weed) => {
+      writeLine(io, weedRow(weed, offBase));
+    });
 
   return 0;
 }

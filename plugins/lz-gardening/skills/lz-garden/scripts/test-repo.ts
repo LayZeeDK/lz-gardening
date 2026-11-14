@@ -62,10 +62,10 @@ export function init(dir: string): void {
 }
 
 export function commit(dir: string, files: Readonly<Record<string, string>>): string {
-  for (const [path, content] of Object.entries(files)) {
+  Object.entries(files).forEach(([path, content]) => {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), content);
-  }
+  });
 
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-q', '-m', 'x']);
