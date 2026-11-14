@@ -8,16 +8,38 @@ import { DependencyType } from '@nx/devkit';
 import ts from 'typescript';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
 
-export interface Lockfile {
-  readonly packages: Readonly<Record<string, unknown>>;
+interface InstalledPackage {
+  readonly version: string;
+  readonly hash: string;
 }
+
+export interface Lockfile {
+  readonly root: unknown;
+  readonly installed: Readonly<Record<string, InstalledPackage>>;
+}
+
+const installed = 'node_modules/';
 
 export function parseLockfile(value: unknown, path: string): Lockfile {
   if (!isRecord(value) || value['lockfileVersion'] !== 3 || !isRecord(value['packages'])) {
     throw new Error(`${path} is not an npm lockfile of version 3`);
   }
 
-  return { packages: value['packages'] };
+  const { packages } = value;
+
+  return {
+    root: packages[''],
+    installed: Object.fromEntries(
+      Object.entries(packages).flatMap(([key, entry]) => {
+        const version = isRecord(entry) ? entry['version'] : undefined;
+        const integrity = isRecord(entry) ? entry['integrity'] : undefined;
+
+        return key.startsWith(installed) && typeof version === 'string'
+          ? [[key, { version, hash: typeof integrity === 'string' ? integrity : version }]]
+          : [];
+      }),
+    ),
+  };
 }
 
 function readLockfile(folder: string): Lockfile | undefined {
@@ -26,26 +48,13 @@ function readLockfile(folder: string): Lockfile | undefined {
   return existsSync(path) ? parseLockfile(JSON.parse(readFileSync(path, 'utf8')), path) : undefined;
 }
 
-const installed = 'node_modules/';
-
 export function externalNodes(lockfile: Lockfile): Record<string, ProjectGraphExternalNode> {
   return Object.fromEntries(
-    Object.entries(lockfile.packages).flatMap(([path, entry]) => {
-      if (!path.startsWith(installed) || !isRecord(entry)) {
-        return [];
-      }
-
-      const { version, integrity, link } = entry;
-
-      if (typeof version !== 'string' || link === true) {
-        return [];
-      }
-
-      const packageName = path.slice(path.lastIndexOf(installed) + installed.length);
+    Object.entries(lockfile.installed).map(([key, { version, hash }]) => {
+      const packageName = key.slice(key.lastIndexOf(installed) + installed.length);
       const name = `npm:${packageName}@${version}` as const;
-      const hash = typeof integrity === 'string' ? integrity : version;
 
-      return [[name, { type: 'npm', name, data: { packageName, version, hash } }]];
+      return [name, { type: 'npm', name, data: { packageName, version, hash } }];
     }),
   );
 }
@@ -65,10 +74,9 @@ export function importTarget(
   lockfile: Lockfile | undefined,
   workspaceNodes: Readonly<Record<string, unknown>>,
 ): string | undefined {
-  const entry = lockfile?.packages[`${installed}${packageName}`];
-  const version = isRecord(entry) ? entry['version'] : undefined;
+  const version = lockfile?.installed[`${installed}${packageName}`]?.version;
 
-  if (typeof version === 'string') {
+  if (version !== undefined) {
     return `npm:${packageName}@${version}`;
   }
 
@@ -78,12 +86,12 @@ export function importTarget(
 }
 
 export function lockfileDrift(packageJson: unknown, lockfile: Lockfile): readonly string[] {
-  const root = lockfile.packages[''];
   const sections = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const;
 
   return sections.flatMap((section) => {
-    const declared = (isRecord(packageJson) ? packageJson[section] : undefined) ?? {};
-    const locked = (isRecord(root) ? root[section] : undefined) ?? {};
+    const sectionOf = (record: unknown): unknown => (isRecord(record) ? record[section] : undefined) ?? {};
+    const declared = sectionOf(packageJson);
+    const locked = sectionOf(lockfile.root);
 
     return isDeepStrictEqual(declared, locked)
       ? []

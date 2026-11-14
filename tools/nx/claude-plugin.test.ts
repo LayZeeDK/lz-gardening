@@ -34,12 +34,16 @@ async function inferred(root: string, manifest: string) {
   return first?.[1];
 }
 
+function lockfile(packages: Readonly<Record<string, unknown>>) {
+  return parseLockfile({ lockfileVersion: 3, packages }, 'package-lock.json');
+}
+
 test('a lockfile with no installed packages gives no external nodes', () => {
-  assert.deepEqual(externalNodes({ packages: { '': { dependencies: {} } } }), {});
+  assert.deepEqual(externalNodes(lockfile({ '': { dependencies: {} } })), {});
 });
 
 test('an installed package becomes npm:<name>@<version>, its integrity the hash', () => {
-  assert.deepEqual(externalNodes({ packages: { 'node_modules/zod': { version: '4.6.7', integrity: 'sha512-x' } } }), {
+  assert.deepEqual(externalNodes(lockfile({ 'node_modules/zod': { version: '4.6.7', integrity: 'sha512-x' } })), {
     'npm:zod@4.6.7': {
       type: 'npm',
       name: 'npm:zod@4.6.7',
@@ -50,47 +54,44 @@ test('an installed package becomes npm:<name>@<version>, its integrity the hash'
 
 test('an installed package with no integrity hashes by its version', () => {
   assert.deepEqual(
-    Object.values(externalNodes({ packages: { 'node_modules/ms': { version: '2.1.3' } } })).map(
-      ({ data }) => data.hash,
-    ),
+    Object.values(externalNodes(lockfile({ 'node_modules/ms': { version: '2.1.3' } }))).map(({ data }) => data.hash),
     ['2.1.3'],
   );
 });
 
 test('a nested scoped package is named by its own path segment', () => {
-  assert.deepEqual(
-    Object.keys(externalNodes({ packages: { 'node_modules/a/node_modules/@s/b': { version: '1.0.0' } } })),
-    ['npm:@s/b@1.0.0'],
-  );
+  assert.deepEqual(Object.keys(externalNodes(lockfile({ 'node_modules/a/node_modules/@s/b': { version: '1.0.0' } }))), [
+    'npm:@s/b@1.0.0',
+  ]);
 });
 
-test('a linked entry gives no node', () => {
-  assert.deepEqual(externalNodes({ packages: { 'node_modules/x': { version: '1.0.0', link: true } } }), {});
+test('an entry with no version, as npm writes a link, gives no node', () => {
+  assert.deepEqual(externalNodes(lockfile({ 'node_modules/x': { resolved: '../x', link: true } })), {});
 });
 
 test('equal dependency lists drift nowhere', () => {
   assert.deepEqual(
-    lockfileDrift({ dependencies: { zod: '4.6.7' } }, { packages: { '': { dependencies: { zod: '4.6.7' } } } }),
+    lockfileDrift({ dependencies: { zod: '4.6.7' } }, lockfile({ '': { dependencies: { zod: '4.6.7' } } })),
     [],
   );
 });
 
 test('a range the locked version satisfies still drifts, named with both lists', () => {
   assert.deepEqual(
-    lockfileDrift({ dependencies: { zod: '^4.6.7' } }, { packages: { '': { dependencies: { zod: '4.6.7' } } } }),
+    lockfileDrift({ dependencies: { zod: '^4.6.7' } }, lockfile({ '': { dependencies: { zod: '4.6.7' } } })),
     ['package.json dependencies {"zod":"^4.6.7"} but package-lock.json {"zod":"4.6.7"}'],
   );
 });
 
 test('an empty dependency list matches a lockfile root that lists none, as npm writes it', () => {
-  assert.deepEqual(lockfileDrift({ dependencies: {} }, { packages: { '': { name: 'lz-gardening' } } }), []);
+  assert.deepEqual(lockfileDrift({ dependencies: {} }, lockfile({ '': { name: 'lz-gardening' } })), []);
 });
 
 test('optional and peer dependencies drift each in their own section', () => {
   assert.deepEqual(
     lockfileDrift(
       { optionalDependencies: { a: '1.0.0' }, peerDependencies: { b: '2.0.0' } },
-      { packages: { '': { optionalDependencies: { a: '1.0.1' } } } },
+      lockfile({ '': { optionalDependencies: { a: '1.0.1' } } }),
     ),
     [
       'package.json optionalDependencies {"a":"1.0.0"} but package-lock.json {"a":"1.0.1"}',
@@ -100,7 +101,7 @@ test('optional and peer dependencies drift each in their own section', () => {
 });
 
 test('an entry only the lockfile lists drifts', () => {
-  assert.deepEqual(lockfileDrift({ dependencies: {} }, { packages: { '': { dependencies: { ms: '2.1.3' } } } }), [
+  assert.deepEqual(lockfileDrift({ dependencies: {} }, lockfile({ '': { dependencies: { ms: '2.1.3' } } })), [
     'package.json dependencies {} but package-lock.json {"ms":"2.1.3"}',
   ]);
 });
@@ -121,13 +122,13 @@ test('a relative path, an absolute path, a node: built-in and a bare built-in na
 
 test("an import reaches the version the project's own lockfile holds at its top level", () => {
   assert.equal(
-    importTarget('zod', { packages: { 'node_modules/zod': { version: '4.6.7' } } }, { 'npm:zod': {} }),
+    importTarget('zod', lockfile({ 'node_modules/zod': { version: '4.6.7' } }), { 'npm:zod': {} }),
     'npm:zod@4.6.7',
   );
 });
 
 test("an import the project's lockfile lacks reaches the workspace's hoisted node", () => {
-  assert.equal(importTarget('semver', { packages: {} }, { 'npm:semver': {} }), 'npm:semver');
+  assert.equal(importTarget('semver', lockfile({}), { 'npm:semver': {} }), 'npm:semver');
 });
 
 test('an import nothing holds reaches no node', () => {
@@ -140,10 +141,14 @@ test('a lockfile of another version than 3 is refused, naming its path', () => {
   });
 });
 
-test('a lockfile of version 3 gives its packages', () => {
-  const packages = { '': { name: 'lz-gardening' } };
+test('a lockfile of version 3 gives its root entry and its installed packages', () => {
+  const root = { name: 'lz-gardening', version: '0.1.0' };
+  const packages = { '': root, 'node_modules/ms': { version: '2.1.3', integrity: 'sha512-x' } };
 
-  assert.deepEqual(parseLockfile({ lockfileVersion: 3, requires: true, packages }, 'package-lock.json'), { packages });
+  assert.deepEqual(parseLockfile({ lockfileVersion: 3, requires: true, packages }, 'package-lock.json'), {
+    root,
+    installed: { 'node_modules/ms': { version: '2.1.3', hash: 'sha512-x' } },
+  });
 });
 
 test('a lockfile of version 3 with no packages object, or no object at all, is refused', () => {
