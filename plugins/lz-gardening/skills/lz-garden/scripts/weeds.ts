@@ -61,7 +61,15 @@ import {
   sourcePattern,
   unprintablePattern,
 } from './log.ts';
-import type { AddInput, AddOutcome, ClaimEvent, CloseRequest, GardenEvent, TendedClose } from './log.ts';
+import type {
+  AddInput,
+  AddOutcome,
+  ClaimEvent,
+  ClaimPlan,
+  CloseRequest,
+  GardenEvent,
+  TendedClose,
+} from './log.ts';
 import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
@@ -234,6 +242,20 @@ function takenLine(owner: ClaimEvent): string {
   return `taken ${owner.class} by ${owner.holder} until ${owner.until}\n`;
 }
 
+function claimRefusalOut(planned: Exclude<ClaimPlan, { readonly said: 'claimed' }>): string {
+  switch (planned.said) {
+    case 'taken': {
+      return takenLine(planned.claim);
+    }
+    case 'nothing open': {
+      return `nothing open for ${planned.class}\n`;
+    }
+    case 'nothing ready': {
+      return 'nothing ready to tend\n';
+    }
+  }
+}
+
 // Stryker disable next-line LzJsNumericLiteral: how many classes a claim without --class tries is policy
 const claimRounds = 3;
 
@@ -251,25 +273,10 @@ function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: Sync
       now,
     );
 
-    switch (planned.said) {
-      case 'taken': {
-        io.out(takenLine(planned.claim));
+    if (planned.said !== 'claimed') {
+      io.out(claimRefusalOut(planned));
 
-        return 1;
-      }
-      case 'nothing open': {
-        io.out(`nothing open for ${planned.class}\n`);
-
-        return 1;
-      }
-      case 'nothing ready': {
-        io.out('nothing ready to tend\n');
-
-        return 1;
-      }
-      case 'claimed': {
-        break;
-      }
+      return 1;
     }
 
     const shared = sync(site, { ...seams, attempts: syncTries.sharing }, now);
