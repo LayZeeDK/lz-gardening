@@ -16,8 +16,7 @@
 // Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
 // or, when the site has none, by the patterns the site's census carries. A pattern without paths searches sourceGlobs.
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { escapeUnprintable, isMainModule, processIo } from './cli.ts';
 import type { Io } from './cli.ts';
@@ -481,7 +480,7 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   }
 
   const { site, recorded, extraFile, env } = inRun(io.env, () => ({ ...readSite(io.cwd), env: gitEnv(io.cwd) }));
-  const bundled = join(dirname(fileURLToPath(import.meta.url)), 'patterns.json');
+  const bundled = join(import.meta.dirname, 'patterns.json');
   const before = recorded?.census ?? null;
   const extra = extraFile === undefined ? null : parsePatternSet(parseNamed(extraFile), extraFile.source);
   // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message

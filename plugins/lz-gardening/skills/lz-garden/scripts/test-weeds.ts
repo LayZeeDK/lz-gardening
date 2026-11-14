@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { weedId } from './log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { capturingIo, commit, git, now } from './test-repo.ts';
@@ -10,7 +9,7 @@ import { planted, writeCensus } from './test-site.ts';
 import { run } from './weeds.ts';
 import type { SyncSeams } from './weeds.ts';
 
-export const script = join(dirname(fileURLToPath(import.meta.url)), 'weeds.ts');
+export const script = join(import.meta.dirname, 'weeds.ts');
 
 export interface WeedsRun {
   readonly code: number | null;

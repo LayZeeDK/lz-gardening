@@ -2,8 +2,7 @@
 // without the variables that point git at another repository, and every write with no hook and no signing.
 import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 interface Run {
   readonly env: Readonly<NodeJS.ProcessEnv>;
@@ -57,7 +56,7 @@ export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
 const writeSettings = [
   '-c',
   // Stryker disable next-line StringLiteral: the scripts folder itself holds no file named after a git hook either
-  `core.hooksPath=${join(dirname(fileURLToPath(import.meta.url)), 'no-hooks')}`,
+  `core.hooksPath=${join(import.meta.dirname, 'no-hooks')}`,
   '-c',
   'commit.gpgsign=false',
   '-c',

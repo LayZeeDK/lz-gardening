@@ -3,8 +3,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { run, takeCensus } from './census.ts';
 import type { PatternSet } from './census.ts';
 import { gitEnv, inRun } from './store-git.ts';
@@ -13,7 +12,7 @@ import type { Census } from './store-census.ts';
 import { sync } from './store-sync.ts';
 import { capturingIo, now, summaryOf } from './test-repo.ts';
 
-export const script = join(dirname(fileURLToPath(import.meta.url)), 'census.ts');
+export const script = join(import.meta.dirname, 'census.ts');
 
 export interface Ran {
   readonly status: number | null;

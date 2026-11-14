@@ -5,12 +5,11 @@ import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { run } from './site.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { capturingIo, commit, git, init, summaryOf } from './test-repo.ts';
 
-export const siteScript = join(dirname(fileURLToPath(import.meta.url)), 'site.ts');
+export const siteScript = join(import.meta.dirname, 'site.ts');
 
 export interface SiteRun {
   readonly status: number | null;

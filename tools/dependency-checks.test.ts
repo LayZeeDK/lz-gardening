@@ -1,13 +1,12 @@
 // Repository-only checks; nothing here ships with the plugin.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { isRecord } from '../plugins/lz-gardening/skills/lz-garden/scripts/log.ts';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const root = join(import.meta.dirname, '..');
 const pluginPackageJson = join(root, 'plugins/lz-gardening/package.json');
 
 test('@nx/dependency-checks lints the plugin package.json and reports a dependency no script imports', async () => {
