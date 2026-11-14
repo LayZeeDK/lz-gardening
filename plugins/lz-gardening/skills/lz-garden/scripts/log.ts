@@ -447,7 +447,7 @@ export function groupWeeds(weeds: readonly OpenWeed[]): readonly Group[] {
 }
 
 /** Stamps drafts with uuid, clock (maxClock + 1, + 2, ...) and at. */
-export function stamp(drafts: readonly EventDraft[], maxClock: number, now: Date): GardenEvent[] {
+export function stamp(drafts: readonly EventDraft[], maxClock: number, now: Date): readonly GardenEvent[] {
   return drafts.map((draft, index) => ({
     ...draft,
     uuid: randomUUID(),
