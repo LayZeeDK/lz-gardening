@@ -49,13 +49,12 @@ nothing, and the scripts fail when they import a package.
   `npm uninstall <pkg> --prefix plugins/lz-gardening`. A test-only or tooling package goes to the root:
   `npm install -D -E <pkg>`.
 - The tests, Stryker and `claude --plugin-dir` all run on the plugin's own `node_modules`, and `--plugin-dir`
-  installs nothing. `npm ci` at the root fills it through `postinstall`
-  (`npm ci --prefix plugins/lz-gardening --ignore-scripts`); `npm install <pkg>` at the root skips that step, so run
-  `npm ci` after it.
+  installs nothing. `npm ci` at the root fills it through the root `postinstall` script; `npm install <pkg>` at the
+  root skips that step, so run `npm ci` after it.
 - Run Nx as `npm exec -- nx`. A local Nx plugin, `tools/nx/claude-plugin.ts`, infers the plugin's `test`,
   `lockfile` and `mutate` targets and adds its lockfile's packages to the project graph, which
-  `@nx/dependency-checks` reads (ADR 0005). Nx keeps the edges it drew until the files they come from change, so after
-  changing that plugin run `npm exec -- nx reset` before `npm run check`.
+  `@nx/dependency-checks` reads (ADR 0005). Nx keeps the edges that plugin drew until the files they come from change,
+  so after changing the plugin run `npm exec -- nx reset` before `npm run check`.
 
 Develop the scripts test-first, one `node:test` test per red-green-refactor cycle. Give each test its own state from a
 setup function it calls (a throwaway git repository for census tests), not shared `before` hooks. Mutation-test
