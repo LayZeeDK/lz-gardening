@@ -237,8 +237,13 @@ export function refsUnder(cwd: string, prefixes: readonly string[]): ReadonlyMap
   );
 }
 
-export function objectIds(cwd: string, names: readonly string[]): readonly (string | undefined)[] {
+export function objectIds(
+  cwd: string,
+  names: readonly string[],
+  options: Pick<GitInput, 'env'> = {},
+): readonly (string | undefined)[] {
   return git(cwd, ['cat-file', '--batch-check=%(objectname)'], {
+    ...options,
     input: names.map((name) => `${name}\n`).join(''),
     readsOnly: true,
   })

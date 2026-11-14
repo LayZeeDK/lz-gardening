@@ -1,16 +1,7 @@
 // The shared beds: which bed branches a sync pushes to origin as refs/garden/beds/<class>, which stay local and why.
 import { join } from 'node:path';
 import { bedCommit, eventPath, latestTendedClose } from './log.ts';
-import {
-  git,
-  isAncestor,
-  networkGit,
-  objectIdPattern,
-  pushReport,
-  reasonOf,
-  refsUnder,
-  timedOut,
-} from './store-git.ts';
+import { git, isAncestor, networkGit, objectIds, pushReport, reasonOf, refsUnder, timedOut } from './store-git.ts';
 import { logRef, machinePathTest, readReplica } from './store-log.ts';
 import type { Site } from './store-log.ts';
 
@@ -100,13 +91,9 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
     ),
   );
   // The bed's own commits were made in the site, so the checkout lacks them; one it holds came from somewhere else.
-  const held = git(site.checkout, ['cat-file', '--batch-check=%(objectname)'], {
-    input: commits.map((commit) => `${commit}\n`).join(''),
-    readsOnly: true,
-    env: { GIT_NO_LAZY_FETCH: '1' },
-  });
+  const held = objectIds(site.checkout, commits, { env: { GIT_NO_LAZY_FETCH: '1' } });
 
-  if (held.split('\n').some((line) => objectIdPattern.test(line))) {
+  if (held.some((oid) => oid !== undefined)) {
     return 'stays local: its base is on no branch fetched from origin';
   }
 
