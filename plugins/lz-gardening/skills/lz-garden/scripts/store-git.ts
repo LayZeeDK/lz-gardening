@@ -52,6 +52,8 @@ export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
   return env;
 }
 
+// Every write, a push included, runs no hook, signs no commit or push, and waits for a ref lock another run of this
+// site may hold for a moment.
 const writeSettings = [
   '-c',
   // Stryker disable next-line StringLiteral: the scripts folder itself holds no file named after a git hook either

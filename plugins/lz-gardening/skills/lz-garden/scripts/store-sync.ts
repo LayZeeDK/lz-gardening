@@ -70,6 +70,7 @@ interface Outcome {
   readonly skipped: readonly string[];
   readonly yielded: readonly LostClaim[];
   readonly divergedBeds: readonly string[];
+  // The commit of a pending census another sync of the site beat to the move, so a later sync records it.
   readonly censusStillPending?: string;
 }
 
@@ -83,6 +84,8 @@ interface WithCensusNotes extends Outcome {
   readonly censusKeptLocal?: string;
 }
 
+// A reason comes with every offline result (git's, or that the time ran out) and read-only one, and with a behind
+// one lost to a ref lock.
 export type SyncResult =
   | (WithoutCensusNotes & { readonly state: 'local'; readonly reason?: undefined })
   | (WithoutCensusNotes & { readonly state: 'behind'; readonly reason?: string })
@@ -232,6 +235,7 @@ export function rejected(porcelain: string): boolean {
   return [...pushReport(porcelain).values()].some(({ summary }) => lostRace.test(summary));
 }
 
+// origin answered and left a ref as it was; a push that never reached it reports no ref.
 function declined(porcelain: string): boolean {
   return [...pushReport(porcelain).values()].some(({ flag }) => flag === '!');
 }
@@ -287,6 +291,7 @@ function syncWithOrigin(
     const { recorded, ...result } = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
     yielded = [...yielded, ...result.yielded];
     conflicts = [...conflicts, ...result.conflicts];
+    // A file origin holds that is not an event file stays there, so each try that merges skips it again.
     skipped = [...new Set([...skipped, ...result.skipped])];
 
     if (result.state !== 'behind' || attempt >= attempts) {

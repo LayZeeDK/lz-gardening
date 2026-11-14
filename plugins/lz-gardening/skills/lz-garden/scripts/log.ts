@@ -682,6 +682,8 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
     }, new Map<string, OpenWeed>());
 }
 
+// How far a writer's clock may run ahead of the reader's: another process, or another machine, takes a claim after the
+// reader read the time. Dropping such a claim as dated in the future would let two writers hold one class.
 const clockSkewAllowanceMs = 60 * 60 * 1000;
 
 function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
