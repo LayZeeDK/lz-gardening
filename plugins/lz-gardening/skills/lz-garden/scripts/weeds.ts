@@ -54,6 +54,7 @@ import {
   groupWeeds,
   hasText,
   isLayer,
+  objectIdPattern,
   planAdd,
   planClaim,
   planClose,
@@ -79,7 +80,7 @@ import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
-import { configValue, objectIdPattern } from './store-git.ts';
+import { configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';

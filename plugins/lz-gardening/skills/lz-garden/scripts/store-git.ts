@@ -3,6 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
+import { objectIdPattern } from './log.ts';
 import type { Site } from './store-log.ts';
 
 interface Run {
@@ -301,8 +302,6 @@ export function mainCheckout(cwd: string): string {
 
   return list.slice('worktree '.length, list.indexOf('\n'));
 }
-
-export const objectIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 // The refs under the prefixes given, each name with the object it names. A ref name holds no space.
 export function refsUnder(cwd: string, prefixes: readonly string[]): ReadonlyMap<string, string> {

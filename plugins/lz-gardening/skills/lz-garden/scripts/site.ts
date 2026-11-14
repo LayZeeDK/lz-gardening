@@ -35,16 +35,7 @@ import { parseArgs } from 'node:util';
 import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
-import {
-  configValue,
-  git,
-  gitReason,
-  gitSucceeds,
-  objectIdPattern,
-  objectIds,
-  optionalGit,
-  runGit,
-} from './store-git.ts';
+import { configValue, git, gitReason, gitSucceeds, objectIds, optionalGit, runGit } from './store-git.ts';
 import {
   append,
   logRef,
@@ -61,7 +52,7 @@ import { censusRef, hasCensusOf, readableCensus } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
-import { classPattern, isRecord, replay } from './log.ts';
+import { classPattern, isRecord, objectIdPattern, replay } from './log.ts';
 
 export interface BaseFacts {
   readonly base: string | undefined;

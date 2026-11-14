@@ -1,14 +1,13 @@
 // The census refs: the census a site holds (refs/garden/census), the census a run took and left pending
 // (refs/garden/pending/<sha>), and which of them, or of origin's, the site keeps.
 import { z } from 'zod';
-import { isRecord, isStampedTime } from './log.ts';
+import { isRecord, isStampedTime, objectIdPattern } from './log.ts';
 import {
   catFileBatch,
   git,
   gitFailed,
   gitSucceeds,
   isKnownAncestor,
-  objectIdPattern,
   objectIds,
   optionalGit,
   refsUnder,

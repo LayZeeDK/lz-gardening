@@ -3,7 +3,8 @@
 // events arrive in. No I/O here: the store reads and writes the events.
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { objectIdPattern } from './store-git.ts';
+
+export const objectIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 export { isRecord } from './log-guard.ts';
 
