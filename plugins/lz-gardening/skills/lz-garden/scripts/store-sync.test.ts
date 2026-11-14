@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
-import childProcess, { spawn } from 'node:child_process';
+import childProcess from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { eventPath } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
@@ -13,8 +12,8 @@ import { sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
-import { bareRemote, planted, sharedPair, site, writeCensus } from './test-site.ts';
-import { addWeed, cli } from './test-weeds.ts';
+import { bareRemote, planted, scriptProcess, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
+import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
 
 test('a site whose checkout has no origin stays local and keeps its log as it was', (t) => {
   const { dir, garden } = planted(t);
@@ -355,10 +354,7 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   addWeed(second.dir, 'src/b.ts:1');
-  const bed = join(second.garden, 'beds', 'any-type');
-  git(second.garden, ['fetch', '-q', 'origin', 'main']);
-  git(second.garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
-  const tip = commit(bed, { 'checks/any-type.mjs': 'export {};\n' });
+  const tip = commit(anyTypeBedFromMain(second.garden), { 'checks/any-type.mjs': 'export {};\n' });
   git(second.dir, ['config', 'lzGardening.share', 'false']);
   assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).code, 0);
   const closed = cli(second.dir, [
@@ -398,8 +394,6 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   );
 });
 
-const siteScript = fileURLToPath(new URL('site.ts', import.meta.url));
-
 test('a sync whose origin already holds the local log fetches, lists the beds and stops, with no merge and no push', (t) => {
   const { dir } = planted(t);
   bareRemote(dir);
@@ -432,19 +426,7 @@ function syncProcess(
   dir: string,
   args: readonly string[] = [],
 ): Promise<{ readonly code: number | null; readonly stdout: string }> {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    const child = spawn(process.execPath, [siteScript, 'sync', ...args], {
-      cwd: dir,
-      stdio: ['ignore', 'pipe', 'inherit'],
-    });
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.on('error', reject).on('close', (code) => {
-      resolve({ code, stdout });
-    });
-  });
+  return scriptProcess(siteScript, dir, ['sync', ...args]);
 }
 
 test('two syncs of one site at once both end synced or behind, and no event is lost', async (t) => {

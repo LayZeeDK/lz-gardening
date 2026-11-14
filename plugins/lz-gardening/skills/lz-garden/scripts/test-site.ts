@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -40,6 +40,25 @@ export function siteProcess(cwd: string, args: readonly string[], env: NodeJS.Pr
   return siteRun(result.status, result.stdout, result.stderr);
 }
 
+// Runs a script in a child process without waiting for it, so a test can start several at once.
+export function scriptProcess(
+  script: string,
+  cwd: string,
+  args: readonly string[],
+): Promise<{ readonly code: number | null; readonly stdout: string }> {
+  return new Promise((resolve, reject) => {
+    let stdout = '';
+    const child = spawn(process.execPath, [script, ...args], { cwd, stdio: ['ignore', 'pipe', 'inherit'] });
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.on('error', reject).on('close', (code) => {
+      resolve({ code, stdout });
+    });
+  });
+}
+
 // A repository with one commit on main and its site, planted once per test process and outside every test. A child
 // process plants it, so a mutation-test runner does not count what site.ts open reaches as reached by every test.
 // Each test plants a copy.
@@ -59,7 +78,13 @@ function plantTemplate(): string {
   return folder;
 }
 
-export function planted(t: TestContext): { readonly dir: string; readonly garden: string } {
+// A repository and its site.
+export interface Planted {
+  readonly dir: string;
+  readonly garden: string;
+}
+
+export function planted(t: TestContext): Planted {
   const folder = mkdtempSync(join(tmpdir(), 'garden-'));
   t.after(() => {
     rmSync(folder, { recursive: true, force: true });
@@ -94,8 +119,8 @@ export function bareRemote(dir: string): string {
 }
 
 export function sharedPair(t: TestContext): {
-  readonly first: { readonly dir: string; readonly garden: string };
-  readonly second: { readonly dir: string; readonly garden: string };
+  readonly first: Planted;
+  readonly second: Planted;
   readonly remote: string;
 } {
   const first = planted(t);

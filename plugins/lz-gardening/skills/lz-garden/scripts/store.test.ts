@@ -22,16 +22,12 @@ import type { EventDraft } from './log.ts';
 import { configValue, gitAsync, gitEnv, inRun, namedHooksOff, runGit, runGitAsync, treeEntries } from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
 import { git, repo } from './test-repo.ts';
-import { configEnv, planted } from './test-site.ts';
+import { configEnv, planted, scriptProcess } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { cli, cliProcess, now, script } from './test-weeds.ts';
 
-function exitOf(cwd: string, args: readonly string[]): Promise<number | null> {
-  return new Promise((resolve, reject) => {
-    spawn(process.execPath, [script, ...args], { cwd, stdio: 'ignore' })
-      .on('error', reject)
-      .on('close', resolve);
-  });
+async function exitOf(cwd: string, args: readonly string[]): Promise<number | null> {
+  return (await scriptProcess(script, cwd, args)).code;
 }
 
 function addDraft(index: number, note = ''): EventDraft {

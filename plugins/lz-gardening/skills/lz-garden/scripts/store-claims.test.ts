@@ -1,6 +1,5 @@
 // Run: node --test store-claims.test.ts
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
@@ -9,7 +8,7 @@ import { append, openSite } from './store-log.ts';
 import { sync } from './store-sync.ts';
 import { logFiles } from './test-log.ts';
 import { git } from './test-repo.ts';
-import { planted, sharedPair, site } from './test-site.ts';
+import { planted, scriptProcess, sharedPair, site } from './test-site.ts';
 import { addWeed, cli, cliWith as claimWith, now, script } from './test-weeds.ts';
 
 function liveClaimWriters(gitDir: string, reader = now): readonly unknown[] {
@@ -56,19 +55,8 @@ function racedTrio(t: TestContext) {
   return { ...raced, third };
 }
 
-function claimProcess(cwd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script, 'claim', '--class', 'any-type'], { cwd });
-    let stdout = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      stdout += chunk;
-    });
-    child.on('error', reject);
-    child.on('close', () => {
-      resolve(stdout);
-    });
-  });
+async function claimProcess(cwd: string): Promise<string> {
+  return (await scriptProcess(script, cwd, ['claim', '--class', 'any-type'])).stdout;
 }
 
 test('two claim processes started together against one origin: one prints claimed, the other taken, in each of 5 rounds', async (t) => {

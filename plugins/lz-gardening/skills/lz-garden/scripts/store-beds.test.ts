@@ -11,11 +11,10 @@ import { sync } from './store-sync.ts';
 import { commit, git } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
 import { bareRemote, planted, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
-import { cli, homeAt } from './test-weeds.ts';
+import type { Planted } from './test-site.ts';
+import { anyTypeBedFromMain, cli, homeAt } from './test-weeds.ts';
 
-interface Tended {
-  readonly dir: string;
-  readonly garden: string;
+interface Tended extends Planted {
   readonly bed: string;
   readonly remote: string;
 }
@@ -27,11 +26,8 @@ function bedRef(remote: string, weedClass = 'any-type'): string {
 function withBed(t: TestContext): Tended {
   const { dir, garden } = planted(t);
   const remote = bareRemote(dir);
-  const bed = join(garden, 'beds', 'any-type');
-  git(garden, ['fetch', '-q', 'origin', 'main']);
-  git(garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
 
-  return { dir, garden, bed, remote };
+  return { dir, garden, bed: anyTypeBedFromMain(garden), remote };
 }
 
 function tend(place: Tended, files: Readonly<Record<string, string>>, where = 'src/a.ts:1'): string {
@@ -79,9 +75,7 @@ test("a tended close made in another clone is not pushed from this site's own be
   const other = planted(t);
   git(other.dir, ['remote', 'add', 'origin', place.remote]);
   git(other.dir, ['fetch', '-q', 'origin']);
-  const otherBed = join(other.garden, 'beds', 'any-type');
-  git(other.garden, ['fetch', '-q', 'origin', 'main']);
-  git(other.garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', otherBed, 'FETCH_HEAD']);
+  const otherBed = anyTypeBedFromMain(other.garden);
   const theirs = tend({ ...other, bed: otherBed, remote: place.remote }, { 'checks/any-type.mjs': 'export {};\n' });
   commit(place.bed, { 'src/mine.ts': 'export const mine = 1;\n' });
 
@@ -401,7 +395,7 @@ function tendedInFirstClone(
   t: TestContext,
   files: Readonly<Record<string, string>> = { 'checks/any-type.mjs': 'export {};\n' },
 ): {
-  readonly second: { dir: string; garden: string };
+  readonly second: Planted;
   readonly tip: string;
   readonly remote: string;
 } {
