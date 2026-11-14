@@ -363,7 +363,8 @@ test('the lockfile check names its usage when it gets no plugin root', () => {
 function dependencyContext(root: string, files: readonly string[]) {
   return {
     externalNodes: {},
-    projects: { p: { root: 'plugins/p' } },
+    // q has no changed files, so Nx leaves it out of filesToProcess.
+    projects: { p: { root: 'plugins/p' }, q: { root: 'q' } },
     nxJsonConfiguration: {},
     fileMap: { projectFileMap: {}, nonProjectFiles: [] },
     filesToProcess: { projectFileMap: { p: files.map((file) => ({ file, hash: '' })) }, nonProjectFiles: [] },
@@ -393,6 +394,15 @@ test('an import written in a file that is not source, such as a skill document, 
       lockfileVersion: 3,
       packages: { 'node_modules/zod': { version: '4.6.7' } },
     }),
+  });
+
+  assert.deepEqual(await createDependencies(undefined, dependencyContext(root, ['plugins/p/SKILL.md'])), []);
+});
+
+test('a project whose changed files hold no source is not read for its lockfile', async (t) => {
+  const root = workspace(t, {
+    'plugins/p/SKILL.md': '',
+    'plugins/p/package-lock.json': JSON.stringify({ lockfileVersion: 2 }),
   });
 
   assert.deepEqual(await createDependencies(undefined, dependencyContext(root, ['plugins/p/SKILL.md'])), []);

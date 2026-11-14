@@ -182,29 +182,33 @@ const sourceFile = /\.[cm]?[jt]sx?$/;
 // Edges come from the project's lockfile, never node_modules: Nx caches a resolved import until the root lockfile
 // changes, and installing or bumping a plugin's packages changes no root file.
 export const createDependencies: CreateDependencies = (_options, context) =>
-  Object.entries(context.filesToProcess.projectFileMap).flatMap(([project, files]) => {
-    const root = context.projects[project]?.root ?? '';
+  Object.entries(context.projects).flatMap(([project, { root }]) => {
+    const files = context.filesToProcess.projectFileMap[project] ?? [];
+    const sources = files.filter(({ file }) => sourceFile.test(file));
+
+    if (sources.length === 0) {
+      return [];
+    }
+
     const lockfile = readLockfile(join(context.workspaceRoot, root));
 
-    return files
-      .filter(({ file }) => sourceFile.test(file))
-      .flatMap(({ file }) => {
-        const text = readFileSync(join(context.workspaceRoot, file), 'utf8');
-        const targets = ts.preProcessFile(text, true, true).importedFiles.flatMap(({ fileName }) => {
-          const packageName = importedPackage(fileName);
-          const target =
-            packageName === undefined ? undefined : importTarget(packageName, lockfile, context.externalNodes ?? {});
+    return sources.flatMap(({ file }) => {
+      const text = readFileSync(join(context.workspaceRoot, file), 'utf8');
+      const targets = ts.preProcessFile(text, true, true).importedFiles.flatMap(({ fileName }) => {
+        const packageName = importedPackage(fileName);
+        const target =
+          packageName === undefined ? undefined : importTarget(packageName, lockfile, context.externalNodes ?? {});
 
-          return target === undefined ? [] : [target];
-        });
-
-        return targets.map((target) => ({
-          source: project,
-          target,
-          sourceFile: file,
-          type: DependencyType.static,
-        }));
+        return target === undefined ? [] : [target];
       });
+
+      return targets.map((target) => ({
+        source: project,
+        target,
+        sourceFile: file,
+        type: DependencyType.static,
+      }));
+    });
   });
 
 function checkLockfile(root: string): number {
