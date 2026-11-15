@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -129,6 +131,25 @@ export function censusText(sha: string, extra: Readonly<Record<string, unknown>>
   };
 
   return `${JSON.stringify(census, null, 2)}\n`;
+}
+
+// Another sync of the site moves the census to `to` just before each census move this process makes.
+export function anotherSyncMovesTheCensusFirst(t: TestContext, garden: string, to: string): void {
+  const { spawnSync } = childProcess;
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const [, gitArgs] = args;
+
+    if (Array.isArray(gitArgs) && gitArgs.includes('update-ref') && gitArgs.includes(censusRef)) {
+      spawnSync('git', ['update-ref', censusRef, to], { cwd: garden });
+    }
+
+    return Reflect.apply(spawnSync, childProcess, args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
 }
 
 export function writeCensus(garden: string, sha = 'a'.repeat(40), rev = 'main'): void {

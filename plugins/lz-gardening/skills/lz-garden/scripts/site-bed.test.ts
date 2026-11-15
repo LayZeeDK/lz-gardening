@@ -19,6 +19,7 @@ import { commit, git, init, repo } from './test-repo.ts';
 import { logRef } from './store-log.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
+import type { Planted } from './test-site.ts';
 import { cli } from './test-weeds.ts';
 
 function claimAnyType(dir: string): void {
@@ -27,7 +28,7 @@ function claimAnyType(dir: string): void {
   assert.deepEqual([added.status, claimed.status], [0, 0], added.stderr + claimed.stderr);
 }
 
-function claimed(t: TestContext): { readonly dir: string; readonly garden: string } {
+function claimed(t: TestContext): Planted {
   const garden = planted(t);
   claimAnyType(garden.dir);
 

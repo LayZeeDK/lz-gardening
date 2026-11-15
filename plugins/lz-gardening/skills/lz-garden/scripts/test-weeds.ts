@@ -6,6 +6,7 @@ import { logFiles, writeToLogByHand } from './test-log.ts';
 import { capturingIo, commit, git, now, scriptRun } from './test-repo.ts';
 import type { ScriptRun } from './test-repo.ts';
 import { planted, writeCensus } from './test-site.ts';
+import type { Planted } from './test-site.ts';
 import { run } from './weeds.ts';
 import type { SyncSeams } from './weeds.ts';
 
@@ -58,7 +59,7 @@ export function tendedBed(
   check: Readonly<Record<string, string>>,
   where = Object.keys(check)[0] ?? '',
   before: Readonly<Record<string, string>> = {},
-): { readonly dir: string; readonly garden: string; readonly bed: string; readonly tip: string } {
+): Planted & { readonly bed: string; readonly tip: string } {
   const { dir, garden } = planted(t);
   commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}'), ...before });
   const bed = anyTypeBedFromMain(garden);
