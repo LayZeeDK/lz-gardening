@@ -7,8 +7,8 @@
 //     class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
 //     `(check: <where> not on the base)` when it is not on the census commit: <sha>, the full commit id of the
 //     census this tick took, else the commit of the site's census. Then the bed has not landed, or the check's file
-//     is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, or the bed's or
-//     the census's commit is in neither the site nor the checkout.
+//     is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, the bed's or
+//     the census's commit is in neither the site nor the checkout, or the bed shares no history with the base.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
@@ -39,10 +39,10 @@
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
-// An event file the log cannot read, whose text holds a line break or control character, or that these commands would
-// not write (references/site.md lists the rules), is skipped and named on stderr, with the characters that break or
-// reorder a line written as \u{<hex>}; an add or close that has to read the log again, because another writer moved
-// it, names it again.
+// An event file the log cannot read, or that these commands would not write (one with a line break or control
+// character in a field the scripts print among them; references/site.md lists the rules), is skipped and named on
+// stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read
+// the log again, because another writer moved it, names it again.
 // Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, a close meets another writer's
 // claim, or a claim or release is refused; 2 on a usage error or any other failure: no site, a damaged or newer log,
 // a log that kept moving, or a git error.
@@ -93,8 +93,7 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
 }
 
-const driveLetter = /[a-z]:(?!\d+$)/;
-const fromRootDriveOrHome = new RegExp(`^(?:[/\\\\~]|${driveLetter.source})`, 'i');
+const fromRootDriveOrHome = /^(?:[/\\~]|(?<driveLetter>[a-z]:(?!\d+$)))/i;
 const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;
 function notRepositoryRelative(path: string): boolean {
   return fromRootDriveOrHome.test(path) || throughParent.test(path);
@@ -551,11 +550,11 @@ function list(io: Io, flags: Flags, now: Date): number {
 
 interface Command {
   readonly name: string;
-  readonly flags: readonly string[];
+  readonly flags: readonly (keyof Flags)[];
   readonly run: (io: Io, flags: Flags, now: Date, seams: SyncSeams) => number;
 }
 
-const closeFlags = ['id', 'class', 'tended', 'one-off', 'keep', 'check'];
+const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off', 'keep', 'check'];
 
 const commands: readonly Command[] = [
   { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], run: add },
@@ -587,7 +586,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
   const stray = tokens
     .flatMap((token) => (token.kind === 'option' ? [token.name] : []))
-    .find((flag) => !command.flags.includes(flag));
+    .find((flag) => !command.flags.some((name) => name === flag));
 
   if (stray !== undefined) {
     io.err(`weeds ${command.name}: --${stray} is not an option of ${command.name}\n`);

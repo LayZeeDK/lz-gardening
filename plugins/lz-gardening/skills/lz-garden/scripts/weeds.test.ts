@@ -644,7 +644,7 @@ test('close refuses an id holding a control character, which its output would pr
   );
 });
 
-test('close refuses an empty or blank id before it syncs, as a usage error', () => {
+test("close's flag check refuses an empty or blank id as a usage error", () => {
   assert.deepEqual(
     ['', ' '].map((id) => parseCloseFlags('close', { id, keep: 'on purpose' })),
     Array(2).fill('needs --id and exactly one of --tended, --one-off or --keep'),
