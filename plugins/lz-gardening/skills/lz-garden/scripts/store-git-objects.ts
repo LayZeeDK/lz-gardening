@@ -1,0 +1,212 @@
+// What an object read asks git and what git answers: the requests and answers of `git cat-file`, a tree object's
+// entries, and the walk that lists a commit's files from them.
+import { objectIdPattern } from './log.ts';
+
+export interface ObjectHeader {
+  readonly oid: string;
+  readonly type: string;
+  readonly size: number;
+}
+
+export type ObjectInfo = { readonly kind: 'missing' } | ({ readonly kind: 'object' } & ObjectHeader);
+
+export type ObjectContents =
+  { readonly kind: 'missing' } | ({ readonly kind: 'object'; readonly bytes: Buffer } & ObjectHeader);
+
+export type Parse<T> =
+  | { readonly done: true; readonly answers: readonly T[]; readonly end: number }
+  | { readonly done: false; readonly needs: number; readonly answered: number };
+
+export const readStrategies = ['spawn', 'reader'] as const;
+
+export type ReadStrategy = (typeof readStrategies)[number];
+
+export const readStrategyVariable = 'LZ_GARDEN_GIT_READS';
+
+export function readStrategyOf(env: Readonly<NodeJS.ProcessEnv>, platform: NodeJS.Platform): ReadStrategy {
+  const named = env[readStrategyVariable];
+  const chosen = readStrategies.find((strategy) => strategy === named);
+
+  if (chosen !== undefined) {
+    return chosen;
+  }
+
+  if (named !== undefined) {
+    throw new Error(`${readStrategyVariable} is ${JSON.stringify(named)}; it takes ${readStrategies.join(' or ')}`);
+  }
+
+  return platform === 'win32' ? 'reader' : 'spawn';
+}
+
+export function encodeRequests(verb: 'info' | 'contents', names: readonly string[]): string {
+  const holdingNul = names.find((name) => name.includes('\0'));
+
+  if (holdingNul !== undefined) {
+    throw new Error(`git cannot read a name that holds NUL: ${JSON.stringify(holdingNul)}`);
+  }
+
+  return `${names.map((name) => `${verb} ${name}\0`).join('')}flush\0`;
+}
+
+// "<oid> <type> <size>" is an object; any other header, "<name> missing" for a name that may hold spaces, is missing.
+function infoOf(header: string): ObjectInfo {
+  const found = /^(\S+) (\S+) (\d+)$/.exec(header);
+
+  if (found === null) {
+    return { kind: 'missing' };
+  }
+
+  const [, oid = '', type = '', size = ''] = found;
+
+  return { kind: 'object', oid, type, size: Number(size) };
+}
+
+export function parseInfos(output: Buffer, names: readonly string[]): Parse<ObjectInfo> {
+  const answers: ObjectInfo[] = [];
+  let at = 0;
+
+  while (answers.length < names.length) {
+    const headerEnd = output.indexOf('\0', at);
+
+    if (headerEnd === -1) {
+      return { done: false, needs: output.length + 1, answered: answers.length };
+    }
+
+    answers.push(infoOf(output.subarray(at, headerEnd).toString()));
+    at = headerEnd + 1;
+  }
+
+  return { done: true, answers, end: at };
+}
+
+export function parseContents(
+  output: Buffer,
+  names: readonly string[],
+  terminator: '\0' | '\n' = '\0',
+): Parse<ObjectContents> {
+  const answers: ObjectContents[] = [];
+  let at = 0;
+
+  while (answers.length < names.length) {
+    const headerEnd = output.indexOf(terminator, at);
+
+    if (headerEnd === -1) {
+      return { done: false, needs: output.length + 1, answered: answers.length };
+    }
+
+    const info = infoOf(output.subarray(at, headerEnd).toString());
+    const start = headerEnd + 1;
+
+    if (info.kind === 'missing') {
+      answers.push(info);
+      at = start;
+    } else {
+      const end = start + info.size;
+
+      if (output.length <= end) {
+        return { done: false, needs: end + 1, answered: answers.length };
+      }
+
+      answers.push({ ...info, bytes: output.subarray(start, end) });
+      at = end + 1;
+    }
+  }
+
+  return { done: true, answers, end: at };
+}
+
+export interface StoredEntry {
+  readonly mode: string;
+  readonly name: string;
+  readonly oid: string;
+}
+
+export function parseTree(bytes: Buffer, oidBytes: number): readonly StoredEntry[] {
+  const entries: StoredEntry[] = [];
+  let at = 0;
+
+  while (at < bytes.length) {
+    const space = bytes.indexOf(' ', at);
+    const nul = space === -1 ? -1 : bytes.indexOf(0, space);
+
+    if (nul === -1) {
+      throw new Error(`a tree entry is malformed at byte ${String(at)}`);
+    }
+
+    const end = nul + 1 + oidBytes;
+    entries.push({
+      mode: bytes.subarray(at, space).toString(),
+      name: bytes.subarray(space + 1, nul).toString(),
+      oid: bytes.subarray(nul + 1, end).toString('hex'),
+    });
+    at = end;
+  }
+
+  return entries;
+}
+
+export interface TreeEntry {
+  readonly type: string;
+  readonly oid: string;
+  readonly path: string;
+}
+
+const treeMode = '40000';
+
+export function walkTree(
+  contents: (names: readonly string[]) => readonly ObjectContents[],
+  commit: string,
+): readonly TreeEntry[] {
+  const root = `${commit}^{tree}`;
+  const listings = new Map<string, readonly StoredEntry[]>();
+  let level: readonly string[] = [root];
+
+  while (level.length > 0) {
+    const answers = contents(level);
+    const next: string[] = [];
+
+    for (const [at, tree] of level.entries()) {
+      const answer = answers[at];
+
+      if (answer?.kind !== 'object' || answer.type !== 'tree') {
+        throw new Error(`git cat-file --batch-command: ${tree} is not a tree`);
+      }
+
+      const entries = parseTree(answer.bytes, answer.oid.length / 2);
+      listings.set(tree, entries);
+      next.push(...entries.filter(({ mode }) => mode === treeMode).map(({ oid }) => oid));
+    }
+
+    level = next;
+  }
+
+  const entriesUnder = (tree: string, folder: string): readonly TreeEntry[] =>
+    (listings.get(tree) ?? []).flatMap(({ mode, name, oid }) =>
+      mode === treeMode
+        ? entriesUnder(oid, `${folder}${name}/`)
+        : [{ type: mode === '160000' ? 'commit' : 'blob', oid, path: `${folder}${name}` }],
+    );
+
+  return entriesUnder(root, '');
+}
+
+export function outOfStep(
+  names: readonly string[],
+  answers: readonly ObjectInfo[],
+  end: number,
+  outputLength: number,
+): string | undefined {
+  if (end < outputLength) {
+    return 'the output goes on past the last answer';
+  }
+
+  for (const [at, answer] of answers.entries()) {
+    const name = names[at] ?? '';
+
+    if (answer.kind === 'object' && objectIdPattern.test(name) && answer.oid !== name) {
+      return `the answer to ${name} names ${answer.oid}`;
+    }
+  }
+
+  return undefined;
+}
