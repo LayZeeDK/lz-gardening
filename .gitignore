@@ -6,3 +6,4 @@ reports/mutation/
 reports/stryker-incremental/
 .nx/
 .env.local
+.claude/settings.local.json
