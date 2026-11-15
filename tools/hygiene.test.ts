@@ -60,8 +60,8 @@ function emails(text: string): string[] {
   return text.match(emailShape) ?? [];
 }
 
-const trailerName =
-  /^(?:Co-authored-by|Signed-off-by|Reviewed-by|Acked-by|Tested-by|Reported-by|Suggested-by|Helped-by|Cc):\s*(.*?)\s*<[^<>]+>\s*$/i;
+// Git's credit trailers name a person under a key ending in -by or -with (Co-authored-by, Paired-with), or Cc.
+const trailerName = /^(?:[a-z][\w-]*-(?:by|with)|Cc):\s*(.*?)\s*<[^<>]+>\s*$/i;
 
 // "Lars Nielsen" is a common Danish name, so only forms that keep a middle name mark a name as the maintainer's.
 const maintainerForms = [
@@ -71,7 +71,12 @@ const maintainerForms = [
   'Lars Gyrup Brink',
   'Lars Gyrup Nielsen',
   'Lars Brink Nielsen',
-].map((form) => form.replaceAll(' ', '').toLowerCase());
+].map(lettersOf);
+
+// Spacing, quotes and punctuation do not tell names apart.
+function lettersOf(name: string): string {
+  return name.replaceAll(/\P{L}/gu, '').toLowerCase();
+}
 
 // Insertions, deletions, substitutions and swaps of two neighbouring letters each count as one edit.
 function editDistance(from: string, to: string): number {
@@ -97,9 +102,9 @@ function editDistance(from: string, to: string): number {
 
 // A misspelling counts within one edit per eight letters of the form, and at least one.
 function namesMaintainer(name: string): boolean {
-  const squashed = name.replaceAll(/\s/g, '').toLowerCase();
+  const letters = lettersOf(name);
 
-  return maintainerForms.some((form) => editDistance(squashed, form) <= Math.max(1, Math.floor(form.length / 8)));
+  return maintainerForms.some((form) => editDistance(letters, form) <= Math.max(1, Math.floor(form.length / 8)));
 }
 
 // A trailer naming someone else (Co-authored-by and the like) holds their address, which is theirs to choose.
@@ -186,8 +191,18 @@ test("a commit authored under a shorter form of the maintainer's name must carry
   );
 });
 
+test("a co-author trailer quoting the maintainer's name must carry the public address", () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: "Lars Brink" <${contributorEmail}>`), [
+    contributorEmail,
+  ]);
+});
+
 test('a co-author named Lars Nielsen keeps their own address', () => {
   assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: Lars Nielsen <${contributorEmail}>`), []);
+});
+
+test("a contributor's credit trailer under any -by key is theirs to choose", () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-developed-by: Ada Contributor <${contributorEmail}>`), []);
 });
 
 test('a line shaped like a trailer whose key is no git trailer is read as message text', () => {
