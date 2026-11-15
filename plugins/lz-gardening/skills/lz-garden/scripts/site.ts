@@ -26,8 +26,8 @@
 //                                           install, and with install the command that installs the bed's
 //                                           dependencies
 // Exit 0 on success, 1 when bed cannot check the claim or this site does not hold it, or when sync --census has no
-// census of <sha> to record and the garden's census is of an earlier commit (nothing is synced or seeded then), 2 on
-// a usage error, a git error or a site or census it cannot use.
+// census of <sha> to record and the garden's census is not of <sha> or a later commit (nothing is synced or seeded
+// then), 2 on a usage error, no site, a git error or a site or census it cannot use.
 import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';

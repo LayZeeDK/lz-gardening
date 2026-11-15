@@ -90,7 +90,8 @@ command's sync gives the claim back without a word. `weeds.ts close-class` and `
 each syncs first and acts only when that sync is `synced` or `local` and this writer then holds a live claim of the
 class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
 another writer holds a claim of the weed's class; when its first sync is not `synced` or `local`, it closes and says
-`planned <state>` on stderr.
+`planned <state>` on stderr. `close` takes `--id` alone and `close-class` takes `--class` alone: a blank `--id`, or
+either command given the other's flag, exits 2 with a usage line.
 
 A claim's `until` is six hours after its writer's clock. A reader counts the claim live while `until` is ahead of its
 own clock by at most seven hours, which allows one hour of clock skew between machines. A claim from a writer whose
@@ -101,8 +102,9 @@ The census is decided by the ancestry of its base commit, read in the checkout. 
 site's unless the site's census is of a commit that descends from the shared one's; a shared census that is not a census
 is left out, named on stderr, and replaced by the next census pushed. `sync --census <sha>` then records the census
 `census.ts` took at `<sha>`, unless the site's census is of `<sha>` or a commit that descends from it: then another run
-already read past it, and the taken census is dropped. With no census of `<sha>` taken and the site's census of an
-earlier commit, it exits 1 and records, seeds and shares nothing. A record that another sync of the site beat keeps
+already read past it, and the taken census is dropped. With no census of `<sha>` taken, it exits 1 and records, seeds
+and shares nothing, unless the site's census is of `<sha>` or a commit that descends from it: a site with no census,
+with one that is not a census, or with one of an earlier or unrelated commit exits 1. A record that another sync of the site beat keeps
 the taken census pending, said on stderr, for the next sync to record. A push that loses the shared census to another
 clone fetches again and decides again.
 
@@ -127,8 +129,9 @@ repository, it uses the one site beside the main checkout:
   it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares nothing (a `local`
   or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once. It prints JSON with
   `shared` and `events` (how many of the site's events the push shared), plus `reason` (git's message) when there is one
-  and `conflicts` (the files whose shared content it kept) when there are any. It exits 0 in every share state, and 2
-  when `<sha>` is not a full commit id or `--seeded` comes without `--census`.
+  and `conflicts` (the files whose shared content it kept) when there are any. It exits 0 in every share state, 1 when
+  `--census` has no census to record (above), and 2 when the repository has no site yet (run `open` first), when
+  `<sha>` is not a full commit id, or when `--seeded` comes without `--census`.
 
 The share states:
 
@@ -157,7 +160,7 @@ unattended.
 `refs/garden/pending/<sha>` when it differs from the site's census in more than the time it was taken;
 `sync --census <sha>` records it. A change to `.garden/patterns.json` that leaves the census as it was is shared with
 the next census at a new commit, which carries the new patterns. A `refs/garden/census` that is not a census stops it
-with exit 2, naming the command that deletes it. `weeds.ts`, run from the repository's checkout, finds the site beside
+with exit 2, naming the command that deletes it. A run that exits 2 writes no pending census. `weeds.ts`, run from the repository's checkout, finds the site beside
 it and appends events to `refs/garden/log` with git plumbing only: a commit per command, moved onto the ref only if no
 other run moved it first, so two runs on one machine both land. An entry in the log it cannot read (an event file that
 is not JSON, an event the scripts would not write, an object the site lacks, a submodule entry) is skipped and named on
@@ -228,8 +231,8 @@ is not valid JSON (the message names the file).
   link, with the same bytes as the checkout's; and the bed is not a workspace, so its `package.json`, a plain file and
   not a link, declares no `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a
   linked `node_modules` to the repository's checkout, so the bed would test the other checkout's code. On a bed that
-  exists, the link stays only while a lockfile still has the same bytes as the checkout's; when the merged base
-  changed it, `bed` removes the link (never the checkout's folder) and reports `install`.
+  exists, the link stays only while the same three things still hold; when one no longer does (the merged base
+  changed the lockfile, say), `bed` removes the link (never the checkout's folder) and reports `install`.
 - `install`: run the command `bed` prints as `install`. It installs with the package manager of the bed's lockfile,
   pointed at the bed: `npm --prefix '<bed>' ci`, `pnpm -C '<bed>' install --frozen-lockfile` or
   `yarn --cwd '<bed>' install --frozen-lockfile`; with no lockfile, `npm --prefix '<bed>' install`. The bed path is in
