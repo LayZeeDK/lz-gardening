@@ -233,10 +233,29 @@ test('the same tended close read again, as a retried append reads it, is judged 
   const first = offBase(readAgain());
   const spawned = t.mock.method(childProcess, 'spawnSync');
   syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
 
   const again = offBase(readAgain());
-  spawned.mock.restore();
-  syncBuiltinESMExports();
 
   assert.deepEqual([first, again, spawned.mock.callCount()], ['not on the base', 'not on the base', 0]);
+});
+
+test('two tended closes of one bed with different checks are judged each by its own check', (t) => {
+  const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const [path = '', event] = [...logFiles(garden)].find(([, file]) => file['kind'] === 'tended') ?? [];
+  const closeWith = (check: string): TendedClose => {
+    const read = parseEvent(path, JSON.stringify({ ...event, check }));
+    assert.ok(typeof read !== 'string' && read.op === 'close' && read.kind === 'tended');
+
+    return read;
+  };
+  const offBase = offBaseIn(dir, garden, undefined);
+
+  assert.deepEqual(
+    [offBase(closeWith('checks/any-type.test.mjs')), offBase(closeWith('checks/not-in-the-bed.test.mjs'))],
+    ['not on the base', 'no label'],
+  );
 });
