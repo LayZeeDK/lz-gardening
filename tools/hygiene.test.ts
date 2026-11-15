@@ -60,15 +60,75 @@ function emails(text: string): string[] {
   return text.match(emailShape) ?? [];
 }
 
-const trailerName = /^[\w-]+:\s*(.*?)\s*<[^<>]+>\s*$/;
+const trailerName =
+  /^(?:Co-authored-by|Signed-off-by|Reviewed-by|Acked-by|Tested-by|Reported-by|Suggested-by|Helped-by|Cc):\s*(.*?)\s*<[^<>]+>\s*$/i;
+
+// "Lars Nielsen" is a common Danish name, so only forms that keep a middle name mark a name as the maintainer's.
+const maintainerForms = [
+  maintainer,
+  'Lars Gyrup',
+  'Lars Brink',
+  'Lars Gyrup Brink',
+  'Lars Gyrup Nielsen',
+  'Lars Brink Nielsen',
+].map((form) => form.replaceAll(' ', '').toLowerCase());
+
+// Insertions, deletions, substitutions and swaps of two neighbouring letters each count as one edit.
+function editDistance(from: string, to: string): number {
+  const rows = [Array.from({ length: to.length + 1 }, (_, column) => column)];
+
+  for (let row = 1; row <= from.length; row++) {
+    const above = rows[row - 1] ?? [];
+    const current = [row];
+
+    for (let column = 1; column <= to.length; column++) {
+      const substitution = (above[column - 1] ?? 0) + (from[row - 1] === to[column - 1] ? 0 : 1);
+      const swapped = row > 1 && column > 1 && from[row - 1] === to[column - 2] && from[row - 2] === to[column - 1];
+      const swap = swapped ? (rows[row - 2]?.[column - 2] ?? 0) + 1 : Infinity;
+
+      current.push(Math.min((above[column] ?? 0) + 1, (current[column - 1] ?? 0) + 1, substitution, swap));
+    }
+
+    rows.push(current);
+  }
+
+  return rows[from.length]?.[to.length] ?? 0;
+}
+
+// A misspelling counts within one edit per eight letters of the form, and at least one.
+function namesMaintainer(name: string): boolean {
+  const squashed = name.replaceAll(/\s/g, '').toLowerCase();
+
+  return maintainerForms.some((form) => editDistance(squashed, form) <= Math.max(1, Math.floor(form.length / 8)));
+}
 
 // A trailer naming someone else (Co-authored-by and the like) holds their address, which is theirs to choose.
 function messageLeaks(message: string): string[] {
   return message.split('\n').flatMap((line) => {
     const name = trailerName.exec(line)?.[1];
 
-    return name === undefined || name === maintainer ? emails(line).filter((email) => !isAllowedEmail(email)) : [];
+    return name === undefined || namesMaintainer(name) ? emails(line).filter((email) => !isAllowedEmail(email)) : [];
   });
+}
+
+interface Commit {
+  readonly sha: string;
+  readonly author: string;
+  readonly authorEmail: string;
+  readonly committer: string;
+  readonly committerEmail: string;
+  readonly body: string;
+}
+
+function commitLeaks({ sha, author, authorEmail, committer, committerEmail, body }: Commit): string[] {
+  const byAuthor = namesMaintainer(author);
+  const byCommitter = namesMaintainer(committer);
+
+  return [
+    ...(byAuthor && authorEmail !== publicEmail ? [`${sha} author: ${authorEmail}`] : []),
+    ...(byCommitter && committerEmail !== publicEmail ? [`${sha} committer: ${committerEmail}`] : []),
+    ...(byAuthor || byCommitter ? messageLeaks(body).map((email) => `${sha} message: ${email}`) : []),
+  ];
 }
 
 test('the email scan finds addresses and skips package versions', () => {
@@ -86,6 +146,52 @@ test('a co-author trailer naming the maintainer must carry the public address', 
   assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: ${maintainer} <${contributorEmail}>`), [
     contributorEmail,
   ]);
+});
+
+test('a co-author trailer naming the maintainer by a shorter form of the name must carry the public address', () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nco-authored-by: lars gyrup nielsen <${contributorEmail}>`), [
+    contributorEmail,
+  ]);
+});
+
+test('a co-author trailer naming the maintainer by first name and the second middle name must carry the public address', () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: Lars Brink <${contributorEmail}>`), [
+    contributorEmail,
+  ]);
+});
+
+test("a co-author trailer misspelling the maintainer's name by a letter or two must carry the public address", () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: Lars Gyrp Brink Nielson <${contributorEmail}>`), [
+    contributorEmail,
+  ]);
+});
+
+test("a co-author trailer swapping two letters of the maintainer's short name must carry the public address", () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: Lasr Brink <${contributorEmail}>`), [
+    contributorEmail,
+  ]);
+});
+
+test("a commit authored under a shorter form of the maintainer's name must carry the public address", () => {
+  assert.deepEqual(
+    commitLeaks({
+      sha: 'abc1234',
+      author: 'Lars Brink',
+      authorEmail: contributorEmail,
+      committer: 'Ada Contributor',
+      committerEmail: contributorEmail,
+      body: 'fix: a thing',
+    }),
+    [`abc1234 author: ${contributorEmail}`],
+  );
+});
+
+test('a co-author named Lars Nielsen keeps their own address', () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-authored-by: Lars Nielsen <${contributorEmail}>`), []);
+});
+
+test('a line shaped like a trailer whose key is no git trailer is read as message text', () => {
+  assert.deepEqual(messageLeaks(`fix: a thing\n\nContact: Ada Contributor <${contributorEmail}>`), [contributorEmail]);
 });
 
 test('an address in the message text is reported', () => {
@@ -112,13 +218,9 @@ test("the maintainer's commits carry only the public address", (t) => {
   const found = git(['log', '--format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e'])
     .split('\x1e')
     .map((record) => record.trim().split('\0'))
-    .flatMap(([sha = '', author = '', authorEmail = '', committer = '', committerEmail = '', body = '']) => [
-      ...(author === maintainer && authorEmail !== publicEmail ? [`${sha} author: ${authorEmail}`] : []),
-      ...(committer === maintainer && committerEmail !== publicEmail ? [`${sha} committer: ${committerEmail}`] : []),
-      ...(author === maintainer || committer === maintainer
-        ? messageLeaks(body).map((email) => `${sha} message: ${email}`)
-        : []),
-    ]);
+    .flatMap(([sha = '', author = '', authorEmail = '', committer = '', committerEmail = '', body = '']) =>
+      commitLeaks({ sha, author, authorEmail, committer, committerEmail, body }),
+    );
 
   assert.deepEqual(found, []);
 });
