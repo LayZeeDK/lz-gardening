@@ -1,11 +1,13 @@
 // Run: node --test census-duplicates.test.ts
 // The duplicate helpers a census finds, and the duplicates its command line reports as new.
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
 import { diffDuplicates } from './census.ts';
 import { census, censusOf, set, takeAndRecord, takeCensusInRun } from './test-census.ts';
 import { commit, now, repo, summaryOf } from './test-repo.ts';
-import { planted } from './test-site.ts';
+import { censusText, planted, writeCensusText } from './test-site.ts';
 
 test('a function defined in two files is reported as a duplicate with both paths', async (t) => {
   const dir = repo(t);
@@ -164,6 +166,62 @@ test('a duplicate that gains a file names the new file apart from the files it w
   assert.deepEqual(
     second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
     ['+ duplicate f: new src/c.ts; already src/a.ts, src/b.ts'],
+  );
+});
+
+test('a file that held another helper before is new for the helper it gains', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/a.ts': 'function f() {}\n', 'src/b.ts': 'function h() {}\n' });
+  await takeAndRecord(dir);
+  commit(dir, { 'src/b.ts': 'function h() {}\nfunction f() {}\n' });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(
+    second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
+    ['+ duplicate f: new src/b.ts; already src/a.ts'],
+  );
+});
+
+test('a recorded census whose commit is gone still names the files its duplicates were in', async (t) => {
+  const { dir, garden } = planted(t);
+  commit(dir, { 'src/a.ts': 'function f() {}\n', 'src/b.ts': 'function f() {}\n', 'src/c.ts': 'function f() {}\n' });
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { f: ['src/a.ts', 'src/b.ts'] } }));
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(
+    [
+      summaryOf(second.stdout).get('previousSha'),
+      second.stdout.split('\n').filter((line) => line.startsWith('+ duplicate ')),
+    ],
+    [null, ['+ duplicate f: new src/c.ts; already src/a.ts, src/b.ts']],
+  );
+});
+
+test('a census with no new duplicate searches no earlier commit for definitions', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/a.ts': 'function f() {}\n', 'src/b.ts': 'function f() {}\n' });
+  const first = await takeAndRecord(dir);
+  const previous = summaryOf(first.stdout).get('sha');
+  commit(dir, { 'src/c.ts': 'const c = 1;\n' });
+  const spawned = t.mock.method(childProcess, 'spawn');
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  const second = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(
+    spawned.mock.calls.filter(
+      ({ arguments: [, args] }) => Array.isArray(args) && args.includes('grep') && args.includes(previous),
+    ),
+    [],
   );
 });
 

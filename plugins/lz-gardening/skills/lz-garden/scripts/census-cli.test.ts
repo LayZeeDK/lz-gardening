@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { censusRef, parseCensus, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { census, censusCli, takeAndRecord, todoPatterns, writeSitePatterns } from './test-census.ts';
-import { commit, git, repo, summaryOf } from './test-repo.ts';
+import { run } from './census.ts';
+import { capturingIo, commit, git, repo, summaryOf } from './test-repo.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
 
 test('the CLI writes its census to the pending ref of the commit the rev names, not of the rev', async (t) => {
@@ -456,6 +457,19 @@ test('a pattern with more hits than the census keeps is named, as its new hits m
   assert.ok(result.stdout.split('\n').includes('hits capped at 1000: todo-marker'), result.stdout);
 });
 
+test('two patterns with more hits than the census keeps are named on one line', async (t) => {
+  const { dir } = planted(t);
+  commit(dir, { 'src/t.ts': '// TODO eslint-disable-next-line\n'.repeat(1001) });
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    result.stdout.split('\n').filter((line) => line.startsWith('hits capped')),
+    ['hits capped at 1000: eslint-disable, todo-marker'],
+  );
+});
+
 test('a pattern with exactly as many hits as the census keeps is not named as capped', async (t) => {
   const { dir } = planted(t);
   commit(dir, { 'src/t.ts': '// TODO x\n'.repeat(1000) });
@@ -463,7 +477,28 @@ test('a pattern with exactly as many hits as the census keeps is not named as ca
   const result = await census(dir, ['--rev', 'HEAD']);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.doesNotMatch(result.stdout, /^hits capped/m);
+  const lines = result.stdout.split('\n').slice(0, -2);
+  assert.deepEqual(
+    lines.filter((line) => line !== '' && !/^\S+ +(?:count|\d+) {2}/.test(line)),
+    [],
+  );
+});
+
+test('a census with git tracing on counts as usual, though the trace quotes a pattern that holds "error: "', async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(
+    garden,
+    `${JSON.stringify({ patterns: [{ id: 'typed-catch', regex: 'catch \\(error: unknown\\)' }] })}\n`,
+  );
+  commit(dir, { 'src/a.ts': 'try {\n} catch (error: unknown) {\n}\n' });
+  const captured = capturingIo(dir, { ...process.env, GIT_TRACE: '1' });
+
+  const status = await run(['--rev', 'HEAD'], captured.io);
+
+  assert.equal(status, 0, captured.stderr());
+  const sha = String(summaryOf(captured.stdout()).get('sha'));
+  const recorded = parseCensus(JSON.parse(git(garden, ['show', `${pendingCensusRef(sha)}:census.json`])));
+  assert.equal(recorded?.counts['typed-catch'], 1);
 });
 
 test('the table shows each count and its change in fixed columns, then the new hits, and the summary counts them', async (t) => {
