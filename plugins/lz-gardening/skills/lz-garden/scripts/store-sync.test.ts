@@ -695,6 +695,18 @@ test("a fetch for a user who set core.sshCommand in the checkout's own config ru
   assert.ok(fetchArgs(t, dir, process.env).includes('core.sshCommand=ssh -i ~/.ssh/garden'));
 });
 
+test("a fetch for a user who set core.sshCommand globally and in the checkout runs the checkout's", (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['config', 'core.sshCommand', 'ssh -i ~/.ssh/garden']);
+  const global = join(dir, '..', 'global.gitconfig');
+  writeFileSync(global, '[maintenance]\n\tauto = false\n[core]\n\tsshCommand = ssh -i ~/.ssh/personal\n');
+
+  assert.ok(
+    fetchArgs(t, dir, { ...process.env, GIT_CONFIG_GLOBAL: global }).includes('core.sshCommand=ssh -i ~/.ssh/garden'),
+  );
+});
+
 test('a fetch for a user who set GIT_SSH_COMMAND runs their ssh command as it is', (t) => {
   const { dir } = planted(t);
   bareRemote(dir);
@@ -708,6 +720,14 @@ test('a fetch for a user who set GIT_SSH runs their ssh program as it is', (t) =
   bareRemote(dir);
 
   assert.ok(!fetchArgs(t, dir, { ...process.env, GIT_SSH: 'plink' }).includes(sshInBatchMode));
+});
+
+test("a fetch for a user who set GIT_SSH and core.sshCommand in the checkout runs the checkout's, as git does", (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['config', 'core.sshCommand', 'ssh -i ~/.ssh/garden']);
+
+  assert.ok(fetchArgs(t, dir, { ...process.env, GIT_SSH: 'plink' }).includes('core.sshCommand=ssh -i ~/.ssh/garden'));
 });
 
 function syncProcess(

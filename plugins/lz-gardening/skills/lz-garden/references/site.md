@@ -152,8 +152,9 @@ The share states:
 
 Fetch and push never ask for a password or wait for input: a URL that needs credentials git cannot find is `offline`.
 For an SSH `origin`, ssh runs with `BatchMode=yes`, so a key that needs a passphrase no agent holds, or a host key not
-yet known, is `offline` too; a user who set their own ssh command (`GIT_SSH_COMMAND` or `GIT_SSH` in the environment,
-or `core.sshCommand` in the site's or the checkout's git config) keeps it as it is. A try that another push or sync
+yet known, is `offline` too; a user who set their own ssh command keeps it as it is, taken in git's order:
+`GIT_SSH_COMMAND`, then `core.sshCommand` as git in the checkout reads it (the site's own config only when the
+checkout's has none), then `GIT_SSH`. A try that another push or sync
 beat waits 1, 2, 4 and 8 seconds (give or take half) before the next try.
 
 Every git command `site.ts` runs, from the clone to each commit in the site, runs none of the user's git hooks and signs

@@ -250,11 +250,15 @@ export function networkGit(
   const tracingOff = Object.keys(env)
     .filter((name) => tracing.test(name))
     .map((name) => [name, undefined] as const);
-  // ssh asks for a passphrase or a new host key by itself; batch mode stops it.
+  // git takes GIT_SSH_COMMAND, then core.sshCommand, then GIT_SSH; ssh asks for a passphrase or a new host key by
+  // itself, which batch mode stops.
   const sshCommand =
-    configValue(path, 'core.sshCommand') ?? configValue(checkout, 'core.sshCommand') ?? 'ssh -o BatchMode=yes';
-  const ssh =
-    env['GIT_SSH_COMMAND'] !== undefined || env['GIT_SSH'] !== undefined ? [] : ['-c', `core.sshCommand=${sshCommand}`];
+    env['GIT_SSH_COMMAND'] === undefined
+      ? (configValue(checkout, 'core.sshCommand') ??
+        configValue(path, 'core.sshCommand') ??
+        (env['GIT_SSH'] === undefined ? 'ssh -o BatchMode=yes' : undefined))
+      : undefined;
+  const ssh = sshCommand === undefined ? [] : ['-c', `core.sshCommand=${sshCommand}`];
 
   return runGit(path, ['-c', 'credential.interactive=false', ...ssh, ...args], {
     env: { ...Object.fromEntries(tracingOff), LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' },
