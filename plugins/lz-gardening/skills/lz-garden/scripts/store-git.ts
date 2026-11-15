@@ -55,8 +55,6 @@ export function gitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
   return env;
 }
 
-// Every write, a push included, runs no hook, signs no commit or push, and waits for a ref lock another run of this
-// site may hold for a moment.
 const writeSettings = [
   '-c',
   // Stryker disable next-line StringLiteral: the scripts folder itself holds no file named after a git hook either
@@ -252,8 +250,7 @@ export function networkGit(
   const tracingOff = Object.keys(env)
     .filter((name) => tracing.test(name))
     .map((name) => [name, undefined] as const);
-  // ssh asks for a passphrase or a new host key by itself; batch mode stops it, unless the user chose their own ssh,
-  // in the environment or in the checkout's config, which the site, a clone of its own, does not read.
+  // ssh asks for a passphrase or a new host key by itself; batch mode stops it.
   const sshCommand =
     configValue(path, 'core.sshCommand') ?? configValue(checkout, 'core.sshCommand') ?? 'ssh -o BatchMode=yes';
   const ssh =

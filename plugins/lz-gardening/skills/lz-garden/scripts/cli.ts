@@ -46,7 +46,6 @@ export function processIo(): Io {
   };
 }
 
-/** Prints what stopped a command and returns its exit code. */
 export function commandFailed(name: string, io: Io, error: unknown): number {
   io.err(`${name}: ${error instanceof Error ? error.message : String(error)}\n`);
 

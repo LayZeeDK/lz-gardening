@@ -133,7 +133,6 @@ export function censusText(sha: string, extra: Readonly<Record<string, unknown>>
   return `${JSON.stringify(census, null, 2)}\n`;
 }
 
-// Another sync of the site moves the census to `to` just before each census move this process makes.
 export function anotherSyncMovesTheCensusFirst(t: TestContext, garden: string, to: string): void {
   const { spawnSync } = childProcess;
   const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {

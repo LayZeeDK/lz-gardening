@@ -218,7 +218,6 @@ test('a checkout cloned without every object never fetches for the label', (t) =
     const ran = cli(dir, args);
     assert.equal(ran.status, 0, `${args[0] ?? ''}: ${ran.stderr}`);
   });
-  // The checkout has no origin, so its site shares the log with the checkout itself, the partial clone's origin.
   git(garden, ['push', '-q', 'origin', logRef]);
   const opened = site(partial, ['open', '--base', 'main']);
   assert.equal(opened.status, 0, opened.stderr);

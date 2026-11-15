@@ -272,8 +272,6 @@ test("a push lost to another push ends behind with the lost ref and origin's sum
   assert.match(result.reason ?? '', /^refs\/garden\/log: \[remote rejected\] \(.+\)$/);
 });
 
-// Origin holds a stray file and an event file the second site's log holds with other content, and another push
-// moves origin's log once while the second site's push is under way.
 function conflictedSiteFacingARace(t: TestContext): {
   readonly second: Planted;
   readonly remote: string;

@@ -686,8 +686,6 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
     }, new Map<string, OpenWeed>());
 }
 
-// How far a writer's clock may run ahead of the reader's: another process, or another machine, takes a claim after the
-// reader read the time. Dropping such a claim as dated in the future would let two writers hold one class.
 const clockSkewAllowanceMs = 60 * 60 * 1000;
 
 function liveClaims(events: readonly GardenEvent[], now: Date): readonly ClaimEvent[] {
@@ -703,11 +701,6 @@ function liveClaims(events: readonly GardenEvent[], now: Date): readonly ClaimEv
     .toSorted(byClock);
 }
 
-/**
- * A claim is active until a release names it or its until passes the reader's clock; one whose until lies more than a
- * claim's lifetime and the clock skew allowance past that clock is never active. The earliest active claim of a class
- * owns it; a later claim by the same writer renews it.
- */
 function activeClaims(ordered: readonly GardenEvent[], now: Date): ReadonlyMap<string, ClaimEvent> {
   return liveClaims(ordered, now).reduce((claims, event) => {
     const owner = claims.get(event.class);

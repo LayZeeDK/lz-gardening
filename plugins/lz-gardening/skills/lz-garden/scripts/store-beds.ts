@@ -118,7 +118,6 @@ function bedStaysLocal(site: Site, tip: string, shared: string | undefined): str
   return added.some(machinePathTest(site)) ? 'stays local: it holds a path on this machine' : undefined;
 }
 
-// Anyone who can push the log can put any object at origin's bed ref.
 function divergedFrom(site: Site, weedClass: string, shared: string): string {
   return objectIds(site.path, [`${shared}^{commit}`])[0] === undefined
     ? `stays local: origin's ${sharedBedRef(weedClass)} is not a commit`
@@ -138,7 +137,6 @@ interface BedPlan {
 
 const marked: unique symbol = Symbol('marked');
 
-// Only markUnpushed holds the key, so pushBeds takes no plan whose beds were not marked.
 export interface MarkedBeds {
   readonly [marked]: BedPlan;
 }
@@ -190,7 +188,6 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
   return { pushing, diverged, landed };
 }
 
-// Each bed to push stays marked until a sync sees it land: in its push's report, or fetched from origin.
 export function markUnpushed(site: Site, plan: BedPlan): MarkedBeds {
   plan.landed.forEach(({ weedClass, tip }) => {
     unmark(site, weedClass, tip);
@@ -205,7 +202,6 @@ export function markUnpushed(site: Site, plan: BedPlan): MarkedBeds {
   return { [marked]: plan };
 }
 
-// Only while it marks this tip: a mark another sync moved meanwhile stays for that sync's bed.
 function unmark(site: Site, weedClass: string, tip: string): void {
   gitSucceeds(site.path, ['update-ref', '-d', unpushedBedRef(weedClass), tip]);
 }

@@ -70,7 +70,6 @@ interface Outcome {
   readonly skipped: readonly string[];
   readonly yielded: readonly LostClaim[];
   readonly divergedBeds: readonly string[];
-  // The commit of a pending census another sync of the site beat to the move, so a later sync records it.
   readonly censusStillPending?: string;
 }
 
@@ -86,7 +85,6 @@ interface WithCensusNotes extends Outcome {
   readonly localCensusUnreadable?: boolean;
 }
 
-// A reason comes with every result but local and synced: git's, the ref a push lost, or that the time ran out.
 export type SyncResult =
   | (WithoutCensusNotes & { readonly state: 'local'; readonly reason?: undefined })
   | (WithoutCensusNotes & { readonly state: 'behind'; readonly reason: string })
@@ -231,14 +229,12 @@ export function sleep(ms: number): void {
 const lostRace =
   /\[rejected\]|\[remote rejected\] \(.*(?:cannot lock ref|old value|failed to update|atomic transaction failed)/;
 
-// The ref a push lost to another writer, with origin's summary for it.
 export function lostRaceOf(porcelain: string): string | undefined {
   const lost = [...pushReport(porcelain)].find(([, { summary }]) => lostRace.test(summary));
 
   return lost === undefined ? undefined : `${lost[0]}: ${lost[1].summary}`;
 }
 
-// origin answered and left a ref as it was; a push that never reached it reports no ref.
 function declined(porcelain: string): boolean {
   return [...pushReport(porcelain).values()].some(({ flag }) => flag === '!');
 }
@@ -294,7 +290,6 @@ function syncWithOrigin(
     const { recorded, ...result } = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
     yielded = [...yielded, ...result.yielded];
     conflicts = [...conflicts, ...result.conflicts];
-    // A file origin holds that is not an event file stays there, so each try that merges skips it again.
     skipped = [...new Set([...skipped, ...result.skipped])];
 
     if (result.state !== 'behind' || attempt >= attempts) {
@@ -328,7 +323,6 @@ function giveBackLosingClaims(
     return { lost: [], released: 0 };
   }
 
-  // An event the site cannot read gives nothing back; weeds.ts names it when it reads the log.
   const events = catFileBatch(site.path, leaving, ({ localOid }) => localOid).flatMap(([{ path }, object]) => {
     if (object.kind !== 'blob') {
       return [];
@@ -404,8 +398,6 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     return { state: 'synced', ...merged, divergedBeds: pushBeds(site, markUnpushed(site, plan), attempt), recorded };
   }
 
-  // Marked before the log's push, so a log push that lands unseen (timed out, or the process stopped) leaves the bed
-  // for a later sync.
   const beds = markUnpushed(site, plan);
   const pushed = networkGit(
     site,

@@ -530,7 +530,6 @@ function main(argv: readonly string[], io: Io): number {
   }
 
   const located = siteOf(io.cwd);
-  // One time for the run, so its syncs, the seed check and the claim check agree.
   const now = new Date();
 
   switch (parsed.command) {

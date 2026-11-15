@@ -112,7 +112,6 @@ export interface Recorded {
   readonly sha: string | undefined;
 }
 
-// A pending census of the commit, or a held census of it or of a later commit.
 export function holdsCensusCovering(site: Located, pendingSha: string): boolean {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
 
@@ -230,7 +229,6 @@ export function finishPendingCensus(
   });
 
   if (deletes.length > 0) {
-    // Another sync of this site may delete them first, failing these deletes; what either leaves, a later sync deletes.
     gitSucceeds(site.path, ['update-ref', '--stdin'], {
       input: deletes.map(([name, oid]) => `delete ${name} ${oid}\n`).join(''),
     });
@@ -239,8 +237,6 @@ export function finishPendingCensus(
   return undefined;
 }
 
-// A census to push, the commit of one no branch fetched from origin holds, or one that is not a census: the last two
-// stay in the site.
 export type LocalCensus = 'ahead' | 'not a census' | { readonly offOrigin: string };
 
 export function localCensusOf(site: Located, ref: string): LocalCensus {

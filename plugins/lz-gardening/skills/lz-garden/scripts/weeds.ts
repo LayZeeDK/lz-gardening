@@ -93,7 +93,6 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
 }
 
-// `c:` starts a path on a Windows drive, while `a:12` is the file a at line 12.
 const driveLetter = /[a-z]:(?!\d+$)/;
 const fromRootDriveOrHome = new RegExp(`^(?:[/\\\\~]|${driveLetter.source})`, 'i');
 const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;

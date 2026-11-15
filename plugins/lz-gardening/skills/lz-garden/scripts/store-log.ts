@@ -36,7 +36,6 @@ function identityPart(checkout: string, key: string): string | undefined {
   return value;
 }
 
-// The time is the commit's own, in UTC: a date from the environment would put the machine's offset in a shared commit.
 function identity(checkout: string, whose: 'author' | 'committer', now: string): string {
   const name = identityPart(checkout, 'lzGardening.name');
   const email = identityPart(checkout, 'lzGardening.email');
@@ -146,7 +145,6 @@ export interface Site {
   readonly writer: string;
 }
 
-// A site found beside its checkout, before its writer is read.
 export type Located = Pick<Site, 'checkout' | 'path'>;
 
 export function requireSite(path: string): void {

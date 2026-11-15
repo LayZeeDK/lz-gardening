@@ -117,7 +117,6 @@ export function mergePatternSets(base: PatternSet, extra: PatternSet | null): Pa
   return { exclude: [...new Set([...base.exclude, ...extra.exclude])], patterns: [...byId.values()] };
 }
 
-/** A patterns file's text and where it was read from. */
 interface PatternsFile {
   readonly text: string;
   readonly source: string;
@@ -241,7 +240,6 @@ async function grepRevision(
   return parseGrep(grep.stdout, sha);
 }
 
-/** `named` gives the name a git error calls a pattern by, from its id. */
 export async function takeCensus(
   cwd: string,
   rev: string,
@@ -266,8 +264,6 @@ export async function takeCensus(
       ] as const,
   );
   const found = findDuplicates(cwd, env, sha, set.exclude);
-  // Every git grep ends before a failure is reported, so none is left running in a folder its caller removes, and the
-  // failure reported is the first in the set's order.
   await Promise.allSettled([...greps, found]);
   const results = await Promise.all(greps);
   const duplicates = await found;
@@ -518,7 +514,6 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     newDuplicates,
   };
 
-  // Written once the summary's git calls are through, so a census that exits 2 leaves nothing pending.
   if (changed) {
     inRun(io.env, () => {
       writePendingCensus(site, after.sha, serialize(after), extraFile?.text);

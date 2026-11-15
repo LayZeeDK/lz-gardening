@@ -16,7 +16,6 @@ interface Landing {
   readonly tip: string;
 }
 
-// A bed that left the check as the fork had it has nothing to miss.
 function bedChangeMissingFromBase({ cwd, withSite, where, fork, base, tip }: Landing): boolean {
   const diffOptions = ['-U0', '--no-color', '--no-ext-diff', '--no-textconv'];
   const checkPath = ['--', `:(top,literal)${where}`];
@@ -44,7 +43,6 @@ function bedChangeMissingFromBase({ cwd, withSite, where, fork, base, tip }: Lan
   return !onBase.has(bedChange) && !patchIdsIn(`${fork}..${tip}`).every((id) => onBase.has(id));
 }
 
-/** The base commit to judge against, and the git options that read the site's objects beside the checkout's. */
 interface BaseInSite {
   readonly base: string;
   readonly withSite: GitInput;
@@ -101,7 +99,6 @@ function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: Tende
 }
 
 export function offBaseIn(cwd: string, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {
-  // Keyed by what the label depends on: a retried append replays the log into new objects.
   const known = new Map<string, BaseLabel>();
   let baseInSite: { readonly value: BaseInSite | undefined } | undefined;
 

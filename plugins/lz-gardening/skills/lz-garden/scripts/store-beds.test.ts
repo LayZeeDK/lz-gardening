@@ -223,7 +223,6 @@ test('a bed that landed unseen is not pushed back once origin deletes it', (t) =
   const place = withBed(t);
   const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
   sync(openSite(place.dir), { attempts: 1 });
-  // What a bed push leaves when it lands after the sync stopped waiting for it.
   git(place.garden, ['update-ref', 'refs/garden-unpushed/beds/any-type', tip]);
   sync(openSite(place.dir), { attempts: 1 });
   git(place.remote, ['update-ref', '-d', 'refs/garden/beds/any-type']);
