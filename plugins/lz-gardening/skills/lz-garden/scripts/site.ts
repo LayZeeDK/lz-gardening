@@ -35,7 +35,7 @@ import { parseArgs } from 'node:util';
 import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
-import { configValue, git, gitReason, gitSucceeds, objectIds, optionalGit, runGit } from './store-git.ts';
+import { configValue, git, gitReason, gitSucceeds, objectIds, optionalGit, refTip, runGit } from './store-git.ts';
 import {
   append,
   logRef,
@@ -220,7 +220,7 @@ function checkedBase(top: string, site: string, requested: string | undefined): 
     throw new Error(`the base ${base} has characters a shell would expand; pass --base <branch>`);
   }
 
-  if (!gitSucceeds(top, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`], { readsOnly: true })) {
+  if (refTip(top, `${base}^{commit}`) === undefined) {
     throw new Error(`the base ${base} names no branch or commit in the repository; pass --base <branch>`);
   }
 

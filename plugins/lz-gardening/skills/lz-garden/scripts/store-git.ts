@@ -5,21 +5,42 @@ import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { objectIdPattern } from './log.ts';
+import { parseContents } from './store-git-objects.ts';
+import type { ObjectContents, ObjectReads, ReadAt, TreeEntry } from './store-git-objects.ts';
 import type { Located } from './store-log.ts';
 
 interface Run {
   readonly env: Readonly<NodeJS.ProcessEnv>;
   readonly gitEnv: Readonly<NodeJS.ProcessEnv> | undefined;
   readonly configs: ReadonlyMap<string, ReadonlyMap<string, string>>;
+  readonly reads: ObjectReads;
 }
 
-let current: Run = { env: process.env, gitEnv: undefined, configs: new Map() };
+// One git process per read, the commands the reads have always run.
+const spawnReads: ObjectReads = {
+  tip: ({ cwd, overrides }, ref) =>
+    optionalGit(cwd, ['rev-parse', '--verify', '--quiet', ref], { env: overrides, readsOnly: true }),
+  ids: ({ cwd, overrides }, names) =>
+    git(cwd, ['cat-file', '--batch-check=%(objectname)'], {
+      env: overrides,
+      input: names.map((name) => `${name}\n`).join(''),
+      readsOnly: true,
+    })
+      .split('\n')
+      .map((line) => (objectIdPattern.test(line) ? line : undefined)),
+  contents: (at, items, nameOf) => spawnContents(at, items, nameOf),
+  tree: ({ cwd, overrides }, commit) =>
+    treeEntries(git(cwd, ['ls-tree', '-r', '-z', commit], { env: overrides, readsOnly: true })),
+  close: () => undefined,
+};
+
+let current: Run = { env: process.env, gitEnv: undefined, configs: new Map(), reads: spawnReads };
 const settingsInEnvironment = ['GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
 const hookOffVariable = 'LZ_GARDEN_HOOK_OFF';
 
 export function inRun<T>(env: Readonly<NodeJS.ProcessEnv>, command: () => T): T {
   const outer = current;
-  current = { env, gitEnv: undefined, configs: new Map() };
+  current = { env, gitEnv: undefined, configs: new Map(), reads: spawnReads };
 
   try {
     return command();
@@ -307,7 +328,7 @@ export function mainCheckout(cwd: string): string {
 }
 
 export function refTip(cwd: string, ref: string): string | undefined {
-  return optionalGit(cwd, ['rev-parse', '--verify', '--quiet', ref], { readsOnly: true });
+  return current.reads.tip({ cwd, overrides: {} }, ref);
 }
 
 // Another sync of this site may have moved the ref first: to the same commit, which is as good as moving it here, or
@@ -342,21 +363,14 @@ export function refsUnder(cwd: string, prefixes: readonly string[]): ReadonlyMap
 export function objectIds(
   cwd: string,
   names: readonly string[],
-  options: Pick<GitInput, 'env'> = {},
+  { env = {} }: Pick<GitInput, 'env'> = {},
 ): readonly (string | undefined)[] {
-  return git(cwd, ['cat-file', '--batch-check=%(objectname)'], {
-    ...options,
-    input: names.map((name) => `${name}\n`).join(''),
-    readsOnly: true,
-  })
-    .split('\n')
-    .map((line) => (objectIdPattern.test(line) ? line : undefined));
+  return current.reads.ids({ cwd, overrides: env }, names);
 }
 
-interface TreeEntry {
-  readonly type: string;
-  readonly oid: string;
-  readonly path: string;
+// Every entry under the commit's tree that is not itself a tree, as `git ls-tree -r` lists them.
+export function treeAt(cwd: string, commit: string): readonly TreeEntry[] {
+  return current.reads.tree({ cwd, overrides: {} }, commit);
 }
 
 export function treeEntries(listed: string): readonly TreeEntry[] {
@@ -380,17 +394,36 @@ export type BatchObject =
   | { readonly kind: 'missing' }
   | { readonly kind: 'other'; readonly header: string };
 
-// Reads each item's object, named by nameOf. An object git does not have prints its header alone ("<name> missing");
-// any other prints its size and content. cat-file sizes are in bytes, so the output is read as bytes, a cursor at the
-// next header, and each blob decoded on its own.
+// Reads each item's object, named by nameOf.
 export function catFileBatch<T>(
   cwd: string,
   items: readonly T[],
   nameOf: (item: T) => string,
 ): readonly (readonly [T, BatchObject])[] {
+  return current.reads
+    .contents({ cwd, overrides: {} }, items, nameOf)
+    .map(([item, answer]) => [item, batchObjectOf(answer)]);
+}
+
+function batchObjectOf(answer: ObjectContents): BatchObject {
+  if (answer.kind === 'missing') {
+    return answer;
+  }
+
+  return answer.type === 'blob'
+    ? { kind: 'blob', text: answer.bytes.toString() }
+    : { kind: 'other', header: `${answer.oid} ${answer.type} ${String(answer.size)}` };
+}
+
+// cat-file sizes are in bytes, so the output is read as bytes and each object decoded on its own.
+function spawnContents<T>(
+  { cwd, overrides }: ReadAt,
+  items: readonly T[],
+  nameOf: (item: T) => string,
+): readonly (readonly [T, ObjectContents])[] {
   const batch = spawnSync('git', ['cat-file', '--batch'], {
     cwd,
-    env: gitEnv(cwd),
+    env: { ...gitEnv(cwd), ...overrides },
     input: items.map((item) => `${nameOf(item)}\n`).join(''),
     maxBuffer: Infinity,
   });
@@ -399,38 +432,13 @@ export function catFileBatch<T>(
     throw new Error(`git cat-file --batch: ${batch.error?.message ?? batch.stderr.toString().trim()}`);
   }
 
-  const output = batch.stdout;
+  const parsed = parseContents(batch.stdout, items, '\n');
 
-  return items.reduce<{ readonly at: number; readonly read: (readonly [T, BatchObject])[] }>(
-    ({ at, read }, item) => {
-      const headerEnd = output.indexOf('\n', at);
+  if (!parsed.done) {
+    throw new Error(`git cat-file --batch: the output ends before the object of ${nameOf(parsed.waiting)}`);
+  }
 
-      if (headerEnd === -1) {
-        throw new Error(`git cat-file --batch: the output ends before the object of ${nameOf(item)}`);
-      }
-
-      const header = output.subarray(at, headerEnd).toString();
-      // "<oid> <type> <size>"; a name that names no object, which may hold spaces, ends in "missing" instead.
-      const found = /^\S+ (\S+) (\d+)$/.exec(header);
-      const start = headerEnd + 1;
-
-      if (found === null) {
-        read.push([item, { kind: 'missing' }]);
-
-        return { at: start, read };
-      }
-
-      const [, type, size] = found;
-      const end = start + Number(size);
-      read.push([
-        item,
-        type === 'blob' ? { kind: 'blob', text: output.subarray(start, end).toString() } : { kind: 'other', header },
-      ]);
-
-      return { at: end + 1, read };
-    },
-    { at: 0, read: [] },
-  ).read;
+  return parsed.answers;
 }
 
 // merge-base says no with exit 1; any other failure, an unknown commit included, is an error, not a no.

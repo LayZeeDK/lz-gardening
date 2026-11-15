@@ -47,10 +47,14 @@ test('one answer per name, in the order asked', () => {
   });
 });
 
-test('output that ends inside a header needs one byte more, with no name answered', () => {
+test('output that ends inside a header needs one byte more, waiting on that answer', () => {
   const output = Buffer.from(`${oid} blob 2`);
 
-  assert.deepEqual(parseContents(output, ['HEAD:a.txt']), { done: false, needs: output.length + 1, answered: 0 });
+  assert.deepEqual(parseContents(output, ['HEAD:a.txt']), {
+    done: false,
+    needs: output.length + 1,
+    waiting: 'HEAD:a.txt',
+  });
 });
 
 test("output that ends inside an object's bytes needs the bytes and their closing NUL", () => {
@@ -59,7 +63,7 @@ test("output that ends inside an object's bytes needs the bytes and their closin
   assert.deepEqual(parseContents(Buffer.from(whole.slice(0, -4)), ['gone', 'HEAD:a.txt']), {
     done: false,
     needs: whole.length,
-    answered: 1,
+    waiting: 'HEAD:a.txt',
   });
 });
 
@@ -92,7 +96,7 @@ test('info answers are headers alone, an object or missing per name', () => {
 test('info output that ends inside a header needs one byte more', () => {
   const output = Buffer.from(`${oid} commit 136\0gone mis`);
 
-  assert.deepEqual(parseInfos(output, ['HEAD', 'gone']), { done: false, needs: output.length + 1, answered: 1 });
+  assert.deepEqual(parseInfos(output, ['HEAD', 'gone']), { done: false, needs: output.length + 1, waiting: 'gone' });
 });
 
 test('answers that end where the output ends are in step', () => {

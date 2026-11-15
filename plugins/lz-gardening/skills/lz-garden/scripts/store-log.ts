@@ -6,16 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { eventPath, maxClockOf, parseEvent, stamp } from './log.ts';
 import type { EventDraft, GardenEvent } from './log.ts';
-import {
-  catFileBatch,
-  configValue,
-  forgetConfig,
-  git,
-  mainCheckout,
-  refTip,
-  runGit,
-  treeEntries,
-} from './store-git.ts';
+import { catFileBatch, configValue, forgetConfig, git, mainCheckout, refTip, runGit, treeAt } from './store-git.ts';
 
 export const logRef = 'refs/garden/log';
 
@@ -170,7 +161,7 @@ function blobsAt(
   readonly texts: ReadonlyMap<string, string>;
   readonly skipped: readonly Skipped[];
 } {
-  const listed = treeEntries(git(site, ['ls-tree', '-r', '-z', commit], { readsOnly: true }));
+  const listed = treeAt(site, commit);
   const read = catFileBatch(
     site,
     listed.filter(({ type }) => type === 'blob'),

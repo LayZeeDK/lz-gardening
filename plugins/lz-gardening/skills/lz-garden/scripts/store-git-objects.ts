@@ -13,9 +13,29 @@ export type ObjectInfo = { readonly kind: 'missing' } | ({ readonly kind: 'objec
 export type ObjectContents =
   { readonly kind: 'missing' } | ({ readonly kind: 'object'; readonly bytes: Buffer } & ObjectHeader);
 
-export type Parse<T> =
-  | { readonly done: true; readonly answers: readonly T[]; readonly end: number }
-  | { readonly done: false; readonly needs: number; readonly answered: number };
+export type Parse<T, TAnswer> =
+  | { readonly done: true; readonly answers: readonly (readonly [T, TAnswer])[]; readonly end: number }
+  | { readonly done: false; readonly needs: number; readonly waiting: T };
+
+// Where a read runs: the folder, and the env the read sets on top of the run's.
+export interface ReadAt {
+  readonly cwd: string;
+  readonly overrides: Readonly<NodeJS.ProcessEnv>;
+}
+
+// How the object reads of one run reach git. No answer is kept: every call asks git, so a ref another process moved
+// reads as moved.
+export interface ObjectReads {
+  readonly tip: (at: ReadAt, ref: string) => string | undefined;
+  readonly ids: (at: ReadAt, names: readonly string[]) => readonly (string | undefined)[];
+  readonly contents: <T>(
+    at: ReadAt,
+    items: readonly T[],
+    nameOf: (item: T) => string,
+  ) => readonly (readonly [T, ObjectContents])[];
+  readonly tree: (at: ReadAt, commit: string) => readonly TreeEntry[];
+  readonly close: (cwd?: string) => void;
+}
 
 export const readStrategies = ['spawn', 'reader'] as const;
 
@@ -61,7 +81,7 @@ function infoOf(header: string): ObjectInfo {
   return { kind: 'object', oid, type, size: Number(size) };
 }
 
-export function parseInfos<T>(output: Buffer, items: readonly T[]): Parse<readonly [T, ObjectInfo]> {
+export function parseInfos<T>(output: Buffer, items: readonly T[]): Parse<T, ObjectInfo> {
   const answers: (readonly [T, ObjectInfo])[] = [];
   let at = 0;
 
@@ -69,7 +89,7 @@ export function parseInfos<T>(output: Buffer, items: readonly T[]): Parse<readon
     const headerEnd = output.indexOf('\0', at);
 
     if (headerEnd === -1) {
-      return { done: false, needs: output.length + 1, answered: answers.length };
+      return { done: false, needs: output.length + 1, waiting: item };
     }
 
     answers.push([item, infoOf(output.subarray(at, headerEnd).toString())]);
@@ -83,7 +103,7 @@ export function parseContents<T>(
   output: Buffer,
   items: readonly T[],
   terminator: '\0' | '\n' = '\0',
-): Parse<readonly [T, ObjectContents]> {
+): Parse<T, ObjectContents> {
   const answers: (readonly [T, ObjectContents])[] = [];
   let at = 0;
 
@@ -91,7 +111,7 @@ export function parseContents<T>(
     const headerEnd = output.indexOf(terminator, at);
 
     if (headerEnd === -1) {
-      return { done: false, needs: output.length + 1, answered: answers.length };
+      return { done: false, needs: output.length + 1, waiting: item };
     }
 
     const info = infoOf(output.subarray(at, headerEnd).toString());
@@ -104,7 +124,7 @@ export function parseContents<T>(
       const end = start + info.size;
 
       if (output.length <= end) {
-        return { done: false, needs: end + 1, answered: answers.length };
+        return { done: false, needs: end + 1, waiting: item };
       }
 
       answers.push([item, { ...info, bytes: output.subarray(start, end) }]);
