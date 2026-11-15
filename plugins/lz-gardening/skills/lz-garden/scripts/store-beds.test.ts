@@ -258,7 +258,7 @@ test('a bed whose push takes longer than the time allowed is named as timed out'
   const port = await serve(t, silentServer);
   git(place.dir, ['remote', 'set-url', '--push', 'origin', `git://127.0.0.1:${port}/repo.git`]);
 
-  const result = sync(openSite(place.dir), { attempts: 1, timeoutMs: 1000 });
+  const result = sync(openSite(place.dir), { attempts: 1, timeoutMs: 5000 });
 
   assert.deepEqual([result.state, result.divergedBeds], ['synced', ['any-type: timed out']]);
 });
