@@ -328,7 +328,7 @@ function giveBackLosingClaims(
     return { lost: [], released: 0 };
   }
 
-  // An event the site cannot read gives nothing back; the log's reader names it.
+  // An event the site cannot read gives nothing back; weeds.ts names it when it reads the log.
   const events = catFileBatch(site.path, leaving, ({ localOid }) => localOid).flatMap(([{ path }, object]) => {
     if (object.kind !== 'blob') {
       return [];

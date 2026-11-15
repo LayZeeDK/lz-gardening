@@ -48,7 +48,7 @@ import {
   writerKey,
 } from './store-log.ts';
 import type { Located, Site } from './store-log.ts';
-import { censusRef, hasCensusOf, readableCensus } from './store-census.ts';
+import { censusRef, holdsCensusCovering, readableCensus } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
@@ -540,7 +540,7 @@ function main(argv: readonly string[], io: Io): number {
     case 'sync': {
       requireSite(located.path);
 
-      if (parsed.census !== undefined && !hasCensusOf(located, parsed.census)) {
+      if (parsed.census !== undefined && !holdsCensusCovering(located, parsed.census)) {
         io.err(`site: no census of ${parsed.census} to record: run census.ts --rev ${parsed.census} first\n`);
 
         return 1;

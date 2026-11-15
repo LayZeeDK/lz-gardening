@@ -112,7 +112,8 @@ export interface Recorded {
   readonly sha: string | undefined;
 }
 
-export function hasCensusOf(site: Located, pendingSha: string): boolean {
+// A pending census of the commit, or a held census of it or of a later commit.
+export function holdsCensusCovering(site: Located, pendingSha: string): boolean {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
 
   return pending !== undefined || covers(site, censusAt(site, local), pendingSha);
