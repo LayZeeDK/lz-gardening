@@ -191,7 +191,7 @@ push sits in the `origin` URL.
 A green run does not mean the tick worked. The job fails only when the Claude Code run itself fails. A tick whose
 script stops, for example on a damaged queue or a repository with no identity, ends with a reply that says so, and
 the run still shows green. Read the reply in the log of the claude-code-action step: a tick that worked ends with
-`shared: synced`, on a line of its own or after a `garden: census` line, or is one `garden:` line when nothing new
+`shared: synced`, on a line of its own or at the end of the `garden: census` line, or is one `garden:` line when nothing new
 landed or another run already read past the base. A census that was recorded but not shared is lost with the job's
 site.
 

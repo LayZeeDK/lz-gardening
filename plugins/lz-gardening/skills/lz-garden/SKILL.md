@@ -78,8 +78,9 @@ shortened with `git rev-parse --short <sha>`. Done when it exits 0; then take th
 - `previousSha` is `null` on a seeded site: there is nothing this checkout can compare against (the census was
   removed, or another clone recorded it at a commit this checkout has not fetched). Run
   `node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>`, reply with the one line
-  `garden: census recorded on <base> at <short sha>; shared: <state>`, with `pending` for `recorded` when it said on
-  stderr that the census stays pending and `<state>` the sync's `shared`, and stop.
+  `garden: census recorded on <base> at <short sha>; shared: <state> (<reason>)`, with `pending` for `recorded` when
+  it said on stderr that the census stays pending, `<state>` the sync's `shared` and `(<reason>)` only when it gave
+  one, and stop.
 - `sha` equals `previousSha`: nothing landed. Reply with the one line
   `garden: nothing new on <base> since <short sha>`, and stop.
 

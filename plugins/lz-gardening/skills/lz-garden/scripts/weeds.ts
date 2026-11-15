@@ -39,8 +39,8 @@
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
-// An event file the log cannot read, or that these commands would not write (one with a line break or control
-// character in a field the scripts print among them; references/site.md lists the rules), is skipped and named on
+// An event file the log cannot read, or that these commands would not write (among them one with a line break or
+// control character in a field the scripts print; references/site.md lists the rules), is skipped and named on
 // stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read
 // the log again, because another writer moved it, names it again.
 // Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, a close meets another writer's
