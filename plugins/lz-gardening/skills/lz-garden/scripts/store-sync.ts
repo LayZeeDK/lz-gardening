@@ -10,6 +10,7 @@ import {
   git,
   gitReason,
   isAncestor,
+  moveRefIfStill,
   networkGit,
   networkTimeoutMs,
   objectIds,
@@ -23,7 +24,6 @@ import {
   logFormat,
   logRef,
   lostToAnotherWriter,
-  moveLogIfStill,
   noLogAt,
   readReplica,
   writeLogIfStill,
@@ -101,7 +101,9 @@ export interface SyncOptions {
   readonly census?: string | undefined;
 }
 
-const nothingShared = { pushedEvents: 0, conflicts: [], skipped: [], yielded: [], divergedBeds: [] } as const;
+const nothingMerged = { pushedEvents: 0, conflicts: [], skipped: [] } as const;
+
+const nothingShared = { ...nothingMerged, yielded: [], divergedBeds: [] } as const;
 
 interface Leaving {
   readonly path: string;
@@ -145,8 +147,6 @@ function refuseUnreadableSharedLog(site: string, { shared, sharedFormatFile, loc
   }
 }
 
-const nothingMerged = { pushedEvents: 0, conflicts: [], skipped: [] } as const;
-
 function mergeOnce(site: Located, tips: Tips): Merged | LostToAnotherWriter {
   refuseUnreadableSharedLog(site.path, tips);
   const { shared, local } = tips;
@@ -172,7 +172,7 @@ function mergeOnce(site: Located, tips: Tips): Merged | LostToAnotherWriter {
   const localAddsNothing = !changes.some(({ status }) => status === 'A');
 
   if (copied.length === fromShared.length && localAddsNothing) {
-    return moveLogIfStill(site.path, shared, local)
+    return moveRefIfStill(site.path, logRef, shared, local)
       ? { upToDate: true, pushedEvents: 0, conflicts, skipped, leaving: [] }
       : lostToAnotherWriter;
   }
@@ -392,13 +392,12 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     ...(localCensus === 'unreadable' ? { localCensusUnreadable: true } : {}),
   };
 
-  const plan = planBeds(site, leaving);
+  const beds = markUnpushed(site, planBeds(site, leaving));
 
   if (upToDate && !censusAhead) {
-    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, markUnpushed(site, plan), attempt), recorded };
+    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, beds, attempt), recorded };
   }
 
-  const beds = markUnpushed(site, plan);
   const pushed = networkGit(
     site,
     [

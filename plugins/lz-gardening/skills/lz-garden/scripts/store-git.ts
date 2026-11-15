@@ -310,6 +310,25 @@ export function refTip(cwd: string, ref: string): string | undefined {
   return optionalGit(cwd, ['rev-parse', '--verify', '--quiet', ref], { readsOnly: true });
 }
 
+// Another sync of this site may have moved the ref first: to the same commit, which is as good as moving it here, or
+// to another, which loses this move. With no from, the ref moves only while it does not exist.
+export function moveRefIfStill(cwd: string, ref: string, to: string, from: string | undefined): boolean {
+  const args = ['update-ref', ref, to, from ?? ''];
+  const moved = runGit(cwd, args);
+
+  if (moved.status === 0) {
+    return true;
+  }
+
+  const now = refTip(cwd, ref);
+
+  if (now === from) {
+    throw gitFailed(args, moved.stderr);
+  }
+
+  return now === to;
+}
+
 // The refs under the prefixes given, each name with the object it names. A ref name holds no space.
 export function refsUnder(cwd: string, prefixes: readonly string[]): ReadonlyMap<string, string> {
   return new Map(

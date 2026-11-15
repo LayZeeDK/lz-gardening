@@ -11,7 +11,6 @@ import {
   configValue,
   forgetConfig,
   git,
-  gitFailed,
   mainCheckout,
   refTip,
   runGit,
@@ -97,23 +96,6 @@ export function writeLogIfStill(
   }
 
   return false;
-}
-
-export function moveLogIfStill(site: string, to: string, from: string): boolean {
-  const args = ['update-ref', logRef, to, from];
-  const moved = runGit(site, args);
-
-  if (moved.status === 0) {
-    return true;
-  }
-
-  const now = refTip(site, logRef);
-
-  if (now === from) {
-    throw gitFailed(args, moved.stderr);
-  }
-
-  return now === to;
 }
 
 export const writerKey = 'lzGardening.writer';

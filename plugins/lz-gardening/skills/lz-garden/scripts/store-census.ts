@@ -5,14 +5,12 @@ import { isRecord, isStampedTime, objectIdPattern } from './log.ts';
 import {
   catFileBatch,
   git,
-  gitFailed,
   gitSucceeds,
   isKnownAncestor,
+  moveRefIfStill,
   objectIds,
   optionalGit,
   refsUnder,
-  refTip,
-  runGit,
 } from './store-git.ts';
 import { commitStream, lostToAnotherWriter } from './store-log.ts';
 import type { Located, LostToAnotherWriter, Site } from './store-log.ts';
@@ -134,7 +132,9 @@ function recordPendingCensus(site: Located, pendingSha: string): Recorded | Lost
     return { local, sha: held?.sha };
   }
 
-  return moveCensusIfStill(site.path, pending, local) ? { local: pending, sha: pendingSha } : lostToAnotherWriter;
+  return moveRefIfStill(site.path, censusRef, pending, local)
+    ? { local: pending, sha: pendingSha }
+    : lostToAnotherWriter;
 }
 
 function localCensusIsNewer(site: Located, local: string | undefined, theirs: Census): boolean {
@@ -188,26 +188,7 @@ function adoptSharedCensus(site: Located, { local, shared }: CensusTips): Settle
     return { local, ignored: false };
   }
 
-  return moveCensusIfStill(site.path, shared, local) ? { local: shared, ignored: false } : lostToAnotherWriter;
-}
-
-// Another sync of this site may have moved the census first: to the same commit, which is as good as moving it here,
-// or to another, which loses this move.
-function moveCensusIfStill(site: string, to: string, from: string | undefined): boolean {
-  const args = ['update-ref', censusRef, to, from ?? ''];
-  const moved = runGit(site, args);
-
-  if (moved.status === 0) {
-    return true;
-  }
-
-  const now = refTip(site, censusRef);
-
-  if (now === from) {
-    throw gitFailed(args, moved.stderr);
-  }
-
-  return now === to;
+  return moveRefIfStill(site.path, censusRef, shared, local) ? { local: shared, ignored: false } : lostToAnotherWriter;
 }
 
 export function finishPendingCensus(

@@ -26,12 +26,13 @@ import {
   gitEnv,
   inRun,
   isAncestor,
+  moveRefIfStill,
   namedHooksOff,
   runGit,
   runGitAsync,
   treeEntries,
 } from './store-git.ts';
-import { append, logRef, moveLogIfStill, openSite, plantWriter, readLog, startLog } from './store-log.ts';
+import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
 import { commit, git, now, repo, scriptProcess } from './test-repo.ts';
 import { configEnv, planted } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
@@ -829,7 +830,7 @@ test('a move of the log that another writer deleted first is lost to that writer
   const tip = git(garden, ['rev-parse', logRef]);
   git(garden, ['update-ref', '-d', logRef]);
 
-  assert.equal(moveLogIfStill(garden, tip, tip), false);
+  assert.equal(moveRefIfStill(garden, logRef, tip, tip), false);
 });
 
 test('a move of the log that another writer made to the same commit first counts as moved', (t) => {
@@ -838,7 +839,7 @@ test('a move of the log that another writer made to the same commit first counts
   const next = git(garden, ['commit-tree', `${tip}^{tree}`, '-p', tip, '-m', 'next']);
   git(garden, ['update-ref', logRef, next]);
 
-  assert.equal(moveLogIfStill(garden, next, tip), true);
+  assert.equal(moveRefIfStill(garden, logRef, next, tip), true);
 });
 
 test('a batch read whose output ends before an object is refused, not read as missing', (t) => {
