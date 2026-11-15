@@ -161,10 +161,6 @@ function pathspecs(paths: readonly string[], exclude: readonly string[]): string
 const hitTextCap = 200;
 
 function cut(text: string): string {
-  if (text.length <= hitTextCap) {
-    return text;
-  }
-
   const characters = Array.from(new Intl.Segmenter().segment(text), ({ segment }) => segment);
 
   return characters.length > hitTextCap ? `${characters.slice(0, hitTextCap).join('')}...` : text;
