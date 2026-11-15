@@ -5,7 +5,7 @@ import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { objectIdPattern } from './log.ts';
-import type { Site } from './store-log.ts';
+import type { Located } from './store-log.ts';
 
 interface Run {
   readonly env: Readonly<NodeJS.ProcessEnv>;
@@ -76,10 +76,11 @@ function configOf(cwd: string): ReadonlyMap<string, string> {
     return cached;
   }
 
-  const listed = spawnGit(cwd, ['config', '--list', '-z'], gitEnv(cwd));
+  const args = ['config', '--list', '-z'];
+  const listed = spawnGit(cwd, args, gitEnv(cwd));
 
   if (listed.status !== 0) {
-    throw new Error(`git config --list -z: ${listed.stderr.trim()}`);
+    throw gitFailed(args, listed.stderr);
   }
 
   const config = new Map(
@@ -243,7 +244,7 @@ const tracing = /^GIT_(?:TRACE|CURL_VERBOSE$)/;
 
 // Messages are in English, as the porcelain classification reads them.
 export function networkGit(
-  { path, checkout }: Pick<Site, 'path' | 'checkout'>,
+  { path, checkout }: Located,
   args: readonly string[],
   timeoutMs: number,
 ): SpawnSyncReturns<string> {
@@ -302,6 +303,10 @@ export function mainCheckout(cwd: string): string {
   const list = git(cwd, ['worktree', 'list', '--porcelain'], { readsOnly: true });
 
   return list.slice('worktree '.length, list.indexOf('\n'));
+}
+
+export function refTip(cwd: string, ref: string): string | undefined {
+  return optionalGit(cwd, ['rev-parse', '--verify', '--quiet', ref], { readsOnly: true });
 }
 
 // The refs under the prefixes given, each name with the object it names. A ref name holds no space.

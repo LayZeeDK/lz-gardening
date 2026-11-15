@@ -13,7 +13,7 @@ import {
   git,
   gitFailed,
   mainCheckout,
-  optionalGit,
+  refTip,
   runGit,
   treeEntries,
 } from './store-git.ts';
@@ -79,7 +79,7 @@ export type LostToAnotherWriter = typeof lostToAnotherWriter;
 // and a first commit lands only where there is no log. A merge parent adds history, not files: the tree is the tip's
 // plus the files given.
 export function writeLogIfStill(
-  site: Pick<Site, 'path' | 'checkout'>,
+  site: Located,
   tip: string | null,
   files: readonly CommitFile[],
   merge?: string,
@@ -93,9 +93,7 @@ export function writeLogIfStill(
     return true;
   }
 
-  const logNow = optionalGit(site.path, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true }) ?? null;
-
-  if (logNow === tip) {
+  if ((refTip(site.path, logRef) ?? null) === tip) {
     throw new Error(`git fast-import ${logRef}: ${imported.stderr.trim()}`);
   }
 
@@ -110,7 +108,7 @@ export function moveLogIfStill(site: string, to: string, from: string): boolean 
     return true;
   }
 
-  const now = optionalGit(site, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true });
+  const now = refTip(site, logRef);
 
   if (now === from) {
     throw gitFailed(args, moved.stderr);
@@ -121,7 +119,7 @@ export function moveLogIfStill(site: string, to: string, from: string): boolean 
 
 export const writerKey = 'lzGardening.writer';
 
-export function startLog(site: Pick<Site, 'path' | 'checkout'>): void {
+export function startLog(site: Located): void {
   writeLogIfStill(site, null, [{ path: 'garden.json', text: JSON.stringify({ format: logFormat }) }]);
 }
 
@@ -132,7 +130,7 @@ export function plantWriter(site: string): void {
   }
 }
 
-export function siteOf(cwd: string): Pick<Site, 'checkout' | 'path'> {
+export function siteOf(cwd: string): Located {
   const checkout = resolve(mainCheckout(cwd));
 
   if (basename(checkout).endsWith('.garden')) {
@@ -148,6 +146,9 @@ export interface Site {
   readonly writer: string;
 }
 
+// A site found beside its checkout, before its writer is read.
+export type Located = Pick<Site, 'checkout' | 'path'>;
+
 export function requireSite(path: string): void {
   if (!existsSync(join(path, '.git'))) {
     throw new Error(`no garden site at ${path}; run site.ts open first`);
@@ -161,7 +162,7 @@ export function openSite(cwd: string): Site {
   return withWriter({ checkout, path });
 }
 
-export function withWriter({ checkout, path }: Pick<Site, 'checkout' | 'path'>): Site {
+export function withWriter({ checkout, path }: Located): Site {
   const writer = configValue(path, writerKey);
 
   if (writer === undefined) {
@@ -215,6 +216,8 @@ function blobsAt(
   return { texts, skipped };
 }
 
+const gardenSchema = z.object({ format: z.int().positive() });
+
 export function formatOf(gardenJson: string | undefined): number {
   if (gardenJson === undefined) {
     throw new Error(`${logRef} has no garden.json`);
@@ -236,8 +239,6 @@ export function formatOf(gardenJson: string | undefined): number {
 
   return parsed.data.format;
 }
-
-const gardenSchema = z.object({ format: z.int().positive() });
 
 export function readReplica(site: string, tip: string): Replica {
   const { texts: blobs, skipped } = blobsAt(site, tip);
@@ -268,7 +269,7 @@ export function noLogAt(site: string): Error {
 }
 
 export function readLog(site: Pick<Site, 'path'>): Replica {
-  const tip = optionalGit(site.path, ['rev-parse', '--verify', '--quiet', logRef], { readsOnly: true });
+  const tip = refTip(site.path, logRef);
 
   if (tip === undefined) {
     throw noLogAt(site.path);
@@ -280,7 +281,7 @@ export function readLog(site: Pick<Site, 'path'>): Replica {
 // Stryker disable next-line LzJsNumericLiteral: how many tries a writer spends is policy; the bound is tested through append's tries
 const appendTries = 50;
 
-export function machinePathTest(site: Pick<Site, 'checkout' | 'path'>): (text: string) => boolean {
+export function machinePathTest(site: Located): (text: string) => boolean {
   const fold = (text: string): string => text.replaceAll(/[\\/]+/g, '/').toLowerCase();
   const paths = [homedir(), site.checkout, site.path]
     .map((path) => fold(path).replace(/\/+$/, ''))

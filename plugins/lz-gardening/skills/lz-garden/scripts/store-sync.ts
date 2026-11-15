@@ -28,7 +28,7 @@ import {
   readReplica,
   writeLogIfStill,
 } from './store-log.ts';
-import type { LostToAnotherWriter, Site } from './store-log.ts';
+import type { Located, LostToAnotherWriter, Site } from './store-log.ts';
 
 const shareKey = 'lzGardening.share';
 
@@ -147,25 +147,24 @@ function refuseUnreadableSharedLog(site: string, { shared, sharedFormatFile, loc
   }
 }
 
-function mergeOnce(
-  { path: site, checkout }: Pick<Site, 'path' | 'checkout'>,
-  tips: Tips,
-): Merged | LostToAnotherWriter {
-  refuseUnreadableSharedLog(site, tips);
+const nothingMerged = { pushedEvents: 0, conflicts: [], skipped: [] } as const;
+
+function mergeOnce(site: Located, tips: Tips): Merged | LostToAnotherWriter {
+  refuseUnreadableSharedLog(site.path, tips);
   const { shared, local } = tips;
 
   if (shared === local) {
-    return { upToDate: true, ...nothingShared, leaving: [] };
+    return { upToDate: true, ...nothingMerged, leaving: [] };
   }
 
-  const changes = diffTree(site, shared ?? emptyTreeLike(local), local);
+  const changes = diffTree(site.path, shared ?? emptyTreeLike(local), local);
   const leaving = changes
     .filter(({ status, path }) => status === 'A' && eventPathPattern.test(path))
     .map(({ path, localOid }) => ({ path, localOid }));
   const pushedEvents = leaving.length;
 
-  if (shared === undefined || isAncestor(site, shared, local)) {
-    return { upToDate: false, ...nothingShared, pushedEvents, leaving };
+  if (shared === undefined || isAncestor(site.path, shared, local)) {
+    return { upToDate: false, ...nothingMerged, pushedEvents, leaving };
   }
 
   const fromShared = changes.filter(({ status }) => status !== 'A');
@@ -175,13 +174,13 @@ function mergeOnce(
   const localAddsNothing = !changes.some(({ status }) => status === 'A');
 
   if (copied.length === fromShared.length && localAddsNothing) {
-    return moveLogIfStill(site, shared, local)
+    return moveLogIfStill(site.path, shared, local)
       ? { upToDate: true, pushedEvents: 0, conflicts, skipped, leaving: [] }
       : lostToAnotherWriter;
   }
 
   return writeLogIfStill(
-    { path: site, checkout },
+    site,
     local,
     copied.map(({ path, sharedOid }) => ({ path, oid: sharedOid })),
     shared,
@@ -194,7 +193,7 @@ function mergeOnce(
 const mergeTries = 50;
 
 export function mergeShared(
-  site: Pick<Site, 'path' | 'checkout'>,
+  site: Located,
   tries = mergeTries,
 ): Merged & { readonly census: CensusTips; readonly sharedTip: string | undefined } {
   for (let attempt = 1; ; attempt += 1) {

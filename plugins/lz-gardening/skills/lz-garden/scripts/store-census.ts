@@ -11,10 +11,11 @@ import {
   objectIds,
   optionalGit,
   refsUnder,
+  refTip,
   runGit,
 } from './store-git.ts';
 import { commitStream, lostToAnotherWriter } from './store-log.ts';
-import type { LostToAnotherWriter, Site } from './store-log.ts';
+import type { Located, LostToAnotherWriter, Site } from './store-log.ts';
 
 export const censusRef = 'refs/garden/census';
 
@@ -65,12 +66,7 @@ export interface StoredCensus {
   readonly patterns: string | undefined;
 }
 
-export function writePendingCensus(
-  site: Pick<Site, 'path' | 'checkout'>,
-  sha: string,
-  text: string,
-  patterns?: string,
-): void {
+export function writePendingCensus(site: Located, sha: string, text: string, patterns?: string): void {
   const files = [
     { path: 'census.json', text },
     ...(patterns === undefined ? [] : [{ path: 'patterns.json', text: patterns }]),
@@ -116,7 +112,7 @@ export interface Recorded {
   readonly sha: string | undefined;
 }
 
-export function hasCensusOf(site: Pick<Site, 'checkout' | 'path'>, pendingSha: string): boolean {
+export function hasCensusOf(site: Located, pendingSha: string): boolean {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
 
   return pending !== undefined || covers(site, censusAt(site, local), pendingSha);
@@ -130,10 +126,7 @@ function covers(site: Pick<Site, 'checkout'>, held: Census | undefined, pendingS
   return held !== undefined && isKnownAncestor(site.checkout, pendingSha, held.sha);
 }
 
-function recordPendingCensus(
-  site: Pick<Site, 'checkout' | 'path'>,
-  pendingSha: string,
-): Recorded | LostToAnotherWriter {
+function recordPendingCensus(site: Located, pendingSha: string): Recorded | LostToAnotherWriter {
   const [pending, local] = objectIds(site.path, [pendingCensusRef(pendingSha), censusRef]);
   const held = censusAt(site, local);
 
@@ -144,7 +137,7 @@ function recordPendingCensus(
   return moveCensusIfStill(site.path, pending, local) ? { local: pending, sha: pendingSha } : lostToAnotherWriter;
 }
 
-function localCensusIsNewer(site: Pick<Site, 'checkout' | 'path'>, local: string | undefined, theirs: Census): boolean {
+function localCensusIsNewer(site: Located, local: string | undefined, theirs: Census): boolean {
   const mine = censusAt(site, local);
 
   return mine !== undefined && mine.sha !== theirs.sha && isKnownAncestor(site.checkout, theirs.sha, mine.sha);
@@ -161,7 +154,7 @@ interface Settled {
 }
 
 export function settleCensus(
-  site: Pick<Site, 'checkout' | 'path'>,
+  site: Located,
   tips: CensusTips,
   pendingSha: string | undefined,
 ): (Settled & { readonly recorded: Recorded | undefined }) | LostToAnotherWriter {
@@ -180,10 +173,7 @@ export function settleCensus(
   return recorded === lostToAnotherWriter ? recorded : { ...adopted, local: recorded.local, recorded };
 }
 
-function adoptSharedCensus(
-  site: Pick<Site, 'checkout' | 'path'>,
-  { local, shared }: CensusTips,
-): Settled | LostToAnotherWriter {
+function adoptSharedCensus(site: Located, { local, shared }: CensusTips): Settled | LostToAnotherWriter {
   if (shared === undefined || shared === local) {
     return { local, ignored: false };
   }
@@ -211,7 +201,7 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
     return true;
   }
 
-  const now = optionalGit(site, ['rev-parse', '--verify', '--quiet', censusRef], { readsOnly: true });
+  const now = refTip(site, censusRef);
 
   if (now === from) {
     throw gitFailed(args, moved.stderr);
@@ -221,7 +211,7 @@ function moveCensusIfStill(site: string, to: string, from: string | undefined): 
 }
 
 export function finishPendingCensus(
-  site: Pick<Site, 'checkout' | 'path'>,
+  site: Located,
   pendingSha: string,
   triedRecord: Recorded | undefined,
 ): LostToAnotherWriter | undefined {
@@ -237,6 +227,7 @@ export function finishPendingCensus(
 
     return sha === pendingSha || (recorded.sha !== undefined && isKnownAncestor(site.checkout, sha, recorded.sha));
   });
+
   if (deletes.length > 0) {
     // Another sync of this site may delete them first, failing these deletes; what either leaves, a later sync deletes.
     gitSucceeds(site.path, ['update-ref', '--stdin'], {
@@ -251,7 +242,7 @@ export function finishPendingCensus(
 // stay in the site.
 export type LocalCensus = 'ahead' | 'not a census' | { readonly offOrigin: string };
 
-export function localCensusOf(site: Pick<Site, 'checkout' | 'path'>, ref: string): LocalCensus {
+export function localCensusOf(site: Located, ref: string): LocalCensus {
   const sha = readableCensus(site.path, ref)?.sha;
 
   if (sha === undefined) {

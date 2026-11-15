@@ -47,7 +47,7 @@ import {
   withWriter,
   writerKey,
 } from './store-log.ts';
-import type { Site } from './store-log.ts';
+import type { Located, Site } from './store-log.ts';
 import { censusRef, hasCensusOf, readableCensus } from './store-census.ts';
 import { fetchedBedRef } from './store-beds.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
@@ -553,8 +553,6 @@ function main(argv: readonly string[], io: Io): number {
     }
   }
 }
-
-type Located = Pick<Site, 'checkout' | 'path'>;
 
 function printSummary(io: Io, summary: OpenSummary | SyncSummary | BedSummary): number {
   io.out(`${JSON.stringify(summary)}\n`);
