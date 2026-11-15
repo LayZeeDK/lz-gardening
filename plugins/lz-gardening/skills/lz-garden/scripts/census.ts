@@ -159,8 +159,10 @@ function pathspecs(paths: readonly string[], exclude: readonly string[]): string
 // A hit's text is cut to this many characters, so a minified or scraped line does not swell the shared census.
 const hitTextCap = 200;
 
+const characterSegmenter = new Intl.Segmenter();
+
 function cut(text: string): string {
-  const characters = Array.from(new Intl.Segmenter().segment(text), ({ segment }) => segment);
+  const characters = Array.from(characterSegmenter.segment(text), ({ segment }) => segment);
 
   return characters.length > hitTextCap ? `${characters.slice(0, hitTextCap).join('')}...` : text;
 }
