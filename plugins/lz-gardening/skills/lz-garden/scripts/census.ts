@@ -246,7 +246,7 @@ export async function takeCensus(
   set: PatternSet,
   now: Date,
   env: Env,
-  named: (id: string) => string,
+  nameInErrors: (id: string) => string,
 ): Promise<Census> {
   const sha = await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env);
   const greps = set.patterns.map(
@@ -259,7 +259,7 @@ export async function takeCensus(
           sha,
           pattern.regex,
           pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
-          named(pattern.id),
+          nameInErrors(pattern.id),
         ),
       ] as const,
   );
@@ -483,9 +483,9 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   // Stryker disable next-line StringLiteral: the bundled patterns.json is valid, so its name appears in no message
   const set = mergePatternSets(parsePatternSet(bundledPatterns, 'patterns.json'), extra);
   const fromExtra = new Set(extra?.patterns.map(({ id }) => id));
-  const named = (id: string): string =>
+  const nameInErrors = (id: string): string =>
     extraFile !== undefined && fromExtra.has(id) ? `${id} from ${extraFile.source}` : id;
-  const after = await takeCensus(io.cwd, rev, set, new Date(), env, named);
+  const after = await takeCensus(io.cwd, rev, set, new Date(), env, nameInErrors);
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;

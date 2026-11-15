@@ -237,13 +237,13 @@ export function finishPendingCensus(
   return undefined;
 }
 
-export type LocalCensus = 'ahead' | 'not a census' | { readonly offOrigin: string };
+export type LocalCensus = 'to push' | 'unreadable' | { readonly keptLocal: string };
 
 export function localCensusOf(site: Located, ref: string): LocalCensus {
   const sha = readableCensus(site.path, ref)?.sha;
 
   if (sha === undefined) {
-    return 'not a census';
+    return 'unreadable';
   }
 
   const holders = optionalGit(
@@ -252,5 +252,5 @@ export function localCensusOf(site: Located, ref: string): LocalCensus {
     { readsOnly: true },
   );
 
-  return holders === undefined || holders === '' ? { offOrigin: sha } : 'ahead';
+  return holders === undefined || holders === '' ? { keptLocal: sha } : 'to push';
 }

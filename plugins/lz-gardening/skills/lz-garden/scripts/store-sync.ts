@@ -382,14 +382,14 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   const pushedEvents = mergedLog.pushedEvents + given.released;
   const newerCensus = settled.local === censusTips.shared ? undefined : settled.local;
   const localCensus = newerCensus === undefined ? undefined : localCensusOf(site, newerCensus);
-  const censusAhead = localCensus === 'ahead';
+  const censusAhead = localCensus === 'to push';
   const merged = {
     ...mergedLog,
     ...found,
     pushedEvents,
     ...(settled.ignored ? { sharedCensusIgnored: true } : {}),
-    ...(typeof localCensus === 'object' ? { censusKeptLocal: localCensus.offOrigin } : {}),
-    ...(localCensus === 'not a census' ? { localCensusUnreadable: true } : {}),
+    ...(typeof localCensus === 'object' ? { censusKeptLocal: localCensus.keptLocal } : {}),
+    ...(localCensus === 'unreadable' ? { localCensusUnreadable: true } : {}),
   };
 
   const plan = planBeds(site, leaving);

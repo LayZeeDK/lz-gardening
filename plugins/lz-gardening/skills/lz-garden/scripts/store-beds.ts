@@ -190,7 +190,7 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
 
 export function markUnpushed(site: Site, plan: BedPlan): MarkedBeds {
   plan.landed.forEach(({ weedClass, tip }) => {
-    unmark(site, weedClass, tip);
+    unmarkIfStillAt(site, weedClass, tip);
   });
 
   if (plan.pushing.length > 0) {
@@ -202,7 +202,7 @@ export function markUnpushed(site: Site, plan: BedPlan): MarkedBeds {
   return { [marked]: plan };
 }
 
-function unmark(site: Site, weedClass: string, tip: string): void {
+function unmarkIfStillAt(site: Site, weedClass: string, tip: string): void {
   gitSucceeds(site.path, ['update-ref', '-d', unpushedBedRef(weedClass), tip]);
 }
 
@@ -241,7 +241,7 @@ export function pushBeds(
   outcomes
     .filter(({ why }) => why === undefined)
     .forEach(({ weedClass, tip }) => {
-      unmark(site, weedClass, tip);
+      unmarkIfStillAt(site, weedClass, tip);
     });
 
   return [

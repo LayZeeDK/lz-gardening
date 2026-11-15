@@ -99,14 +99,14 @@ function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: Tende
 }
 
 export function offBaseIn(cwd: string, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {
-  const known = new Map<string, BaseLabel>();
+  const labelByBedAndCheck = new Map<string, BaseLabel>();
   let baseInSite: { readonly value: BaseInSite | undefined } | undefined;
 
   return (tended) => {
     baseInSite ??= { value: baseInSiteOf(site, census) };
     const key = `${tended.by}\0${tended.check}`;
-    const offBase = known.get(key) ?? checkOffBase(cwd, baseInSite.value, tended);
-    known.set(key, offBase);
+    const offBase = labelByBedAndCheck.get(key) ?? checkOffBase(cwd, baseInSite.value, tended);
+    labelByBedAndCheck.set(key, offBase);
 
     return offBase;
   };

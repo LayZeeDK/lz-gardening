@@ -55,12 +55,12 @@ export function commitStream(
   files: readonly CommitFile[],
   parents: readonly string[] = [],
 ): string {
-  const now = `@${String(Math.floor(Date.now() / 1000))} +0000`;
+  const nowInUtc = `@${String(Math.floor(Date.now() / 1000))} +0000`;
 
   return [
     `commit ${ref}\n`,
-    identity(checkout, 'author', now),
-    identity(checkout, 'committer', now),
+    identity(checkout, 'author', nowInUtc),
+    identity(checkout, 'committer', nowInUtc),
     data(message),
     ...parents.map((parent, index) => `${index === 0 ? 'from' : 'merge'} ${parent}\n`),
     ...files.map((file) =>
