@@ -63,13 +63,15 @@ deleted on `origin` after its close was shared stays deleted, whether or not the
 
 A census is shared only while a branch the checkout fetched from `origin` (`refs/remotes/origin/*`) holds its base
 commit. Otherwise it stays in the site, and `site.ts` says so on stderr; a later sync, once that commit is pushed and
-fetched, shares it.
+fetched, shares it. A site's `refs/garden/census` that is not a census is never shared: it stays in the site, and
+`site.ts` says so on stderr with the command that deletes it, after which the next tick records a new census.
 
 The garden log's and the census's commits are authored and committed as `lz-gardening <>`, with no one's name or
 address, unless the checkout's git config, in any scope, sets both `lzGardening.name` and `lzGardening.email`: then
 those are the author and committer. With only one of the two set, the commits keep `lz-gardening <>`. A value that
-holds a line break, `<` or `>` stops every write to the log and the census with an error naming the setting. Bed
-commits are code for review and carry the identity of whoever commits them.
+holds a line break, `<` or `>` stops every write to the log and the census with an error naming the setting. Those
+commits carry the time they are made, in UTC, whatever `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` say, so no shared
+commit names the machine's time zone. Bed commits are code for review and carry the identity of whoever commits them.
 
 The queue is as public as the repository: whoever can read `origin` can read every event. So paths in events are
 repository-relative, and `weeds.ts` refuses, with exit 2, an event whose text holds this machine's home folder, the
@@ -104,7 +106,8 @@ is left out, named on stderr, and replaced by the next census pushed. `sync --ce
 `census.ts` took at `<sha>`, unless the site's census is of `<sha>` or a commit that descends from it: then another run
 already read past it, and the taken census is dropped. With no census of `<sha>` taken, it exits 1 and records, seeds
 and shares nothing, unless the site's census is of `<sha>` or a commit that descends from it: a site with no census,
-with one that is not a census, or with one of an earlier or unrelated commit exits 1. A record that another sync of the site beat keeps
+with one that is not a census, or with one of an earlier or unrelated commit exits 1. A record that another sync of
+the site beat keeps
 the taken census pending, said on stderr, for the next sync to record. A push that loses the shared census to another
 clone fetches again and decides again.
 
@@ -142,15 +145,16 @@ The share states:
 - `read-only`: the fetch worked but `origin` declined to update a ref the push named, for a reason other than another
   push landing first; `reason` gives git's message, such as what a server hook said.
 - `behind`: every try lost the race to another push, or to another sync of the same site. The site's events stay in the
-  site and the next run pushes them. When the last try could not lock a ref the fetch writes, `reason` gives git's
-  message; a lock a killed run left in the site's `.git/refs/garden-shared/` reads that way on every run until it is
-  deleted.
+  site and the next run pushes them. `reason` says what the last try lost: `<ref>: <git's summary>` for a ref another
+  push moved first, `another sync of the site moved the census first`, or git's message when it could not lock a ref
+  the fetch writes; a lock a killed run left in the site's `.git/refs/garden-shared/` reads that way on every run until
+  it is deleted.
 
 Fetch and push never ask for a password or wait for input: a URL that needs credentials git cannot find is `offline`.
 For an SSH `origin`, ssh runs with `BatchMode=yes`, so a key that needs a passphrase no agent holds, or a host key not
-yet known, is `offline` too; a user who set their own ssh command (`core.sshCommand`, `GIT_SSH_COMMAND` or `GIT_SSH`)
-keeps it as it is. A try that another push or sync beat waits 1, 2, 4 and 8 seconds (give or take half) before the next
-try.
+yet known, is `offline` too; a user who set their own ssh command (`GIT_SSH_COMMAND` or `GIT_SSH` in the environment,
+or `core.sshCommand` in the site's or the checkout's git config) keeps it as it is. A try that another push or sync
+beat waits 1, 2, 4 and 8 seconds (give or take half) before the next try.
 
 Every git command `site.ts` runs, from the clone to each commit in the site, runs none of the user's git hooks and signs
 nothing: the site holds only the garden's own records, and a hook or a signing passphrase would stop a tick that runs
@@ -160,11 +164,11 @@ unattended.
 `refs/garden/pending/<sha>` when it differs from the site's census in more than the time it was taken;
 `sync --census <sha>` records it. A change to `.garden/patterns.json` that leaves the census as it was is shared with
 the next census at a new commit, which carries the new patterns. A `refs/garden/census` that is not a census stops it
-with exit 2, naming the command that deletes it. A run that exits 2 writes no pending census. `weeds.ts`, run from the repository's checkout, finds the site beside
-it and appends events to `refs/garden/log` with git plumbing only: a commit per command, moved onto the ref only if no
-other run moved it first, so two runs on one machine both land. An entry in the log it cannot read (an event file that
-is not JSON, an event the scripts would not write, an object the site lacks, a submodule entry) is skipped and named on
-stderr with the reason. Among the events the scripts would not write: one with no `uuid`, `clock` or `at`, or whose
+with exit 2, naming the command that deletes it. A run that exits 2 writes no pending census. `weeds.ts`, run from
+the repository's checkout, finds the site beside it and appends events to `refs/garden/log` with git plumbing only:
+a commit per command, moved onto the ref only if no other run moved it first, so two runs on one machine both land.
+An entry in the log it cannot read (an event file that is not JSON, an event the scripts would not write, an object
+the site lacks, a submodule entry) is skipped and named on stderr with the reason. Among the events the scripts would not write: one with no `uuid`, `clock` or `at`, or whose
 `uuid` is not its file name; one of an unknown `op`, of a class that is not a kebab-case class id, or with a line break
 or control character in a field the scripts print; an add whose id is not the weed id of its class, `where` and
 source, whose layer is not 1 to 6, whose `where` is blank or whose source names no kind; a close whose `ids` list is

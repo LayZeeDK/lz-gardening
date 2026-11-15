@@ -33,7 +33,7 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     bed that holds them, or that would bring `origin` a commit other than its own, stays in the site, as does a
     census of a commit no branch on `origin` holds. Each census carries the site's `.garden/patterns.json` as it
     is. The garden log's and the census's commits are authored as `lz-gardening <>`, or as `lzGardening.name` and
-    `lzGardening.email` when both are set.
+    `lzGardening.email` when both are set, and dated in UTC, so none names the machine's time zone.
   - Permissions: carries its own rules, for reading its own files and running its own scripts and read-only git
     commands. Anything else falls back to your own settings.
 - `lz-tend` skill (`/lz-gardening:lz-tend [<class>] [--base <branch>]`): takes one class of queued weeds, adds the

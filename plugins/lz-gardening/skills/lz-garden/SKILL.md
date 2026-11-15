@@ -148,8 +148,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/site.ts" sync --census <sha>
 later commit, and shares it and the queue's new events with the repository's `origin`. Its last line is JSON:
 `shared` (the share state), `events` (how many events it shared), and `reason` when the state has one. It exits 1,
 recording and sharing nothing, when no census of `<sha>` waits to be recorded and the site's census is not already of
-`<sha>` or a later commit: run step 2's `census.ts` again, then this command. When another sync of this site moved the census first, it says so on stderr, and the census stays
-pending for the next sync to record.
+`<sha>` or a later commit: run step 2's `census.ts` again, then this command. When another sync of this site moved
+the census first, it says so on stderr, and the census stays pending for the next sync to record.
 
 A class whose open weeds sit in two or more places (files) is ready to tend: several agents took the same shortcut.
 `groups --ready` prints the ready classes `lz-tend` takes on its own: not `stale-verification` or `repeated-lesson`,
