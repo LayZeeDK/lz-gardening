@@ -19,7 +19,7 @@ test('a blob answer in -Z framing parses to its header and bytes', () => {
 
   assert.deepEqual(parseContents(output, ['HEAD:a.txt']), {
     done: true,
-    answers: [{ kind: 'object', oid, type: 'blob', size: 5, bytes: Buffer.from('hello') }],
+    answers: [['HEAD:a.txt', { kind: 'object', oid, type: 'blob', size: 5, bytes: Buffer.from('hello') }]],
     end: output.length,
   });
 });
@@ -29,7 +29,7 @@ test('a name git has no object for, spaces included, parses as missing', () => {
 
   assert.deepEqual(parseContents(output, ['HEAD:a b.txt']), {
     done: true,
-    answers: [{ kind: 'missing' }],
+    answers: [['HEAD:a b.txt', { kind: 'missing' }]],
     end: output.length,
   });
 });
@@ -39,7 +39,10 @@ test('one answer per name, in the order asked', () => {
 
   assert.deepEqual(parseContents(output, ['HEAD:a.txt', 'gone']), {
     done: true,
-    answers: [{ kind: 'object', oid, type: 'blob', size: 2, bytes: Buffer.from('hi') }, { kind: 'missing' }],
+    answers: [
+      ['HEAD:a.txt', { kind: 'object', oid, type: 'blob', size: 2, bytes: Buffer.from('hi') }],
+      ['gone', { kind: 'missing' }],
+    ],
     end: output.length,
   });
 });
@@ -65,7 +68,10 @@ test('--batch framing ends headers and objects with a line break', () => {
 
   assert.deepEqual(parseContents(output, ['gone', 'HEAD:a.txt'], '\n'), {
     done: true,
-    answers: [{ kind: 'missing' }, { kind: 'object', oid, type: 'blob', size: 3, bytes: Buffer.from('a\0b') }],
+    answers: [
+      ['gone', { kind: 'missing' }],
+      ['HEAD:a.txt', { kind: 'object', oid, type: 'blob', size: 3, bytes: Buffer.from('a\0b') }],
+    ],
     end: output.length,
   });
 });
@@ -75,7 +81,10 @@ test('info answers are headers alone, an object or missing per name', () => {
 
   assert.deepEqual(parseInfos(output, ['HEAD', 'gone']), {
     done: true,
-    answers: [{ kind: 'object', oid, type: 'commit', size: 136 }, { kind: 'missing' }],
+    answers: [
+      ['HEAD', { kind: 'object', oid, type: 'commit', size: 136 }],
+      ['gone', { kind: 'missing' }],
+    ],
     end: output.length,
   });
 });
@@ -87,12 +96,12 @@ test('info output that ends inside a header needs one byte more', () => {
 });
 
 test('answers that end where the output ends are in step', () => {
-  assert.equal(outOfStep(['HEAD'], [{ kind: 'object', oid, type: 'commit', size: 136 }], 60, 60), undefined);
+  assert.equal(outOfStep([['HEAD', { kind: 'object', oid, type: 'commit', size: 136 }]], 60, 60), undefined);
 });
 
 test('output that goes on past the last answer is out of step', () => {
   assert.equal(
-    outOfStep(['HEAD'], [{ kind: 'object', oid, type: 'commit', size: 136 }], 60, 61),
+    outOfStep([['HEAD', { kind: 'object', oid, type: 'commit', size: 136 }]], 60, 61),
     'the output goes on past the last answer',
   );
 });
@@ -101,7 +110,7 @@ test('an answer that names another object than the object id asked for is out of
   const other = 'b'.repeat(40);
 
   assert.equal(
-    outOfStep([oid], [{ kind: 'object', oid: other, type: 'blob', size: 1 }], 60, 60),
+    outOfStep([[oid, { kind: 'object', oid: other, type: 'blob', size: 1 }]], 60, 60),
     `the answer to ${oid} names ${other}`,
   );
 });
@@ -165,15 +174,18 @@ function treeOf(entries: readonly (readonly [mode: string, name: string, oid: st
 
 function storedObjects(objects: Readonly<Record<string, readonly [type: string, bytes: Buffer, oid: string]>>) {
   const asked: (readonly string[])[] = [];
-  const contents = (names: readonly string[]): readonly ObjectContents[] => {
+  const contents = (names: readonly string[]): readonly (readonly [string, ObjectContents])[] => {
     asked.push(names);
 
     return names.map((name) => {
       const found = objects[name];
 
-      return found === undefined
-        ? { kind: 'missing' }
-        : { kind: 'object', oid: found[2], type: found[0], size: found[1].length, bytes: found[1] };
+      return [
+        name,
+        found === undefined
+          ? { kind: 'missing' }
+          : { kind: 'object', oid: found[2], type: found[0], size: found[1].length, bytes: found[1] },
+      ];
     });
   };
 

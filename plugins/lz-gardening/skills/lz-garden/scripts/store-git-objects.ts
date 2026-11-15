@@ -61,33 +61,33 @@ function infoOf(header: string): ObjectInfo {
   return { kind: 'object', oid, type, size: Number(size) };
 }
 
-export function parseInfos(output: Buffer, names: readonly string[]): Parse<ObjectInfo> {
-  const answers: ObjectInfo[] = [];
+export function parseInfos<T>(output: Buffer, items: readonly T[]): Parse<readonly [T, ObjectInfo]> {
+  const answers: (readonly [T, ObjectInfo])[] = [];
   let at = 0;
 
-  while (answers.length < names.length) {
+  for (const item of items) {
     const headerEnd = output.indexOf('\0', at);
 
     if (headerEnd === -1) {
       return { done: false, needs: output.length + 1, answered: answers.length };
     }
 
-    answers.push(infoOf(output.subarray(at, headerEnd).toString()));
+    answers.push([item, infoOf(output.subarray(at, headerEnd).toString())]);
     at = headerEnd + 1;
   }
 
   return { done: true, answers, end: at };
 }
 
-export function parseContents(
+export function parseContents<T>(
   output: Buffer,
-  names: readonly string[],
+  items: readonly T[],
   terminator: '\0' | '\n' = '\0',
-): Parse<ObjectContents> {
-  const answers: ObjectContents[] = [];
+): Parse<readonly [T, ObjectContents]> {
+  const answers: (readonly [T, ObjectContents])[] = [];
   let at = 0;
 
-  while (answers.length < names.length) {
+  for (const item of items) {
     const headerEnd = output.indexOf(terminator, at);
 
     if (headerEnd === -1) {
@@ -98,7 +98,7 @@ export function parseContents(
     const start = headerEnd + 1;
 
     if (info.kind === 'missing') {
-      answers.push(info);
+      answers.push([item, info]);
       at = start;
     } else {
       const end = start + info.size;
@@ -107,7 +107,7 @@ export function parseContents(
         return { done: false, needs: end + 1, answered: answers.length };
       }
 
-      answers.push({ ...info, bytes: output.subarray(start, end) });
+      answers.push([item, { ...info, bytes: output.subarray(start, end) }]);
       at = end + 1;
     }
   }
@@ -154,7 +154,7 @@ export interface TreeEntry {
 const treeMode = '40000';
 
 export function walkTree(
-  contents: (names: readonly string[]) => readonly ObjectContents[],
+  contents: (names: readonly string[]) => readonly (readonly [string, ObjectContents])[],
   commit: string,
 ): readonly TreeEntry[] {
   const root = `${commit}^{tree}`;
@@ -162,13 +162,10 @@ export function walkTree(
   let level: readonly string[] = [root];
 
   while (level.length > 0) {
-    const answers = contents(level);
     const next: string[] = [];
 
-    for (const [at, tree] of level.entries()) {
-      const answer = answers[at];
-
-      if (answer?.kind !== 'object' || answer.type !== 'tree') {
+    for (const [tree, answer] of contents(level)) {
+      if (answer.kind !== 'object' || answer.type !== 'tree') {
         throw new Error(`git cat-file --batch-command: ${tree} is not a tree`);
       }
 
@@ -191,8 +188,7 @@ export function walkTree(
 }
 
 export function outOfStep(
-  names: readonly string[],
-  answers: readonly ObjectInfo[],
+  answers: readonly (readonly [string, ObjectInfo])[],
   end: number,
   outputLength: number,
 ): string | undefined {
@@ -200,9 +196,7 @@ export function outOfStep(
     return 'the output goes on past the last answer';
   }
 
-  for (const [at, answer] of answers.entries()) {
-    const name = names[at] ?? '';
-
+  for (const [name, answer] of answers) {
     if (answer.kind === 'object' && objectIdPattern.test(name) && answer.oid !== name) {
       return `the answer to ${name} names ${answer.oid}`;
     }
