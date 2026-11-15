@@ -202,7 +202,11 @@ export type CloseRequest = { readonly target: { readonly id: string } | { readon
 export type CloseOutcome =
   | { readonly said: 'nothing open'; readonly drafts: readonly [] }
   | { readonly said: 'claimed by another'; readonly claim: ClaimEvent; readonly drafts: readonly [] }
-  | { readonly said: 'closed' | 'kept'; readonly closed: readonly string[]; readonly drafts: readonly EventDraft[] };
+  | {
+      readonly said: 'closed' | 'kept';
+      readonly closed: readonly string[];
+      readonly drafts: readonly [EventDraft<CloseEvent>, ...EventDraft<ReleaseEvent>[]];
+    };
 
 export function planClose(
   events: readonly GardenEvent[],
@@ -568,9 +572,7 @@ const seedSchema = z
   .object({ op: z.literal('seed'), sha: z.string({ error: 'malformed seed' }) })
   .refine(({ sha }) => objectIdPattern.test(sha), 'sha is not a full commit id');
 
-type Body<TEvent> = TEvent extends GardenEvent ? Omit<TEvent, keyof EventBase> : never;
-
-const bodySchemas = new Map<unknown, z.ZodType<Body<GardenEvent>>>([
+const bodySchemas = new Map<unknown, z.ZodType<EventDraft>>([
   ['add', addSchema],
   ['close', closeSchema],
   ['claim', claimSchema],
@@ -688,22 +690,23 @@ function openWeeds(ordered: readonly GardenEvent[], closes: readonly CloseEvent[
 // reader read the time. Dropping such a claim as dated in the future would let two writers hold one class.
 const clockSkewAllowanceMs = 60 * 60 * 1000;
 
-function liveClaims(events: readonly GardenEvent[], now: Date): ClaimEvent[] {
+function liveClaims(events: readonly GardenEvent[], now: Date): readonly ClaimEvent[] {
   const released = releasedClaims(events);
-  const ending = (claim: ClaimEvent): number => Date.parse(claim.until) - now.getTime();
 
   return events
     .filter((event) => event.op === 'claim')
-    .filter(
-      (claim) =>
-        !released.has(claim.uuid) && ending(claim) > 0 && ending(claim) <= claimLifetimeMs + clockSkewAllowanceMs,
-    )
+    .filter((claim) => {
+      const left = Date.parse(claim.until) - now.getTime();
+
+      return !released.has(claim.uuid) && left > 0 && left <= claimLifetimeMs + clockSkewAllowanceMs;
+    })
     .toSorted(byClock);
 }
 
 /**
- * A claim is active until a release names it or its until passes the reader's clock. The earliest active claim of a
- * class owns it; a later claim by the same writer renews it.
+ * A claim is active until a release names it or its until passes the reader's clock; one whose until lies more than a
+ * claim's lifetime and the clock skew allowance past that clock is never active. The earliest active claim of a class
+ * owns it; a later claim by the same writer renews it.
  */
 function activeClaims(ordered: readonly GardenEvent[], now: Date): ReadonlyMap<string, ClaimEvent> {
   return liveClaims(ordered, now).reduce((claims, event) => {
