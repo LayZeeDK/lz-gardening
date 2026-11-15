@@ -78,11 +78,11 @@ each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and fi
 suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
 `(check: <where> not on the base)` when its bed had not landed as of the garden's last census, or the check's file is
 gone from the base; a tend pass takes no census, so a bed that landed since still reads so. When the bed has not
-landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to
-the base, and change the check only if it misses the new weeds. The check reads `(check: <where>, base unknown)` when
-the site could not judge the base (no readable census, the bed's or the census's commit is missing, or the bed shares
-no history with the base): read the base
-yourself (`git show <base>:<where>`) to see whether the check landed before you decide which case it is.
+landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to the base,
+and change the check only if it misses the new weeds. The check reads `(check: <where>, base unknown)` when the site
+could not judge the base (no readable census, the bed's or the census's commit is missing, or the bed shares no
+history with the base): read the base yourself (`git show <base>:<where>`) to see whether the check landed before you
+decide which case it is.
 
 Then decide, and say which:
 
@@ -185,13 +185,12 @@ check's file from step 3, repository-relative (`eslint.config.mjs`, not a path o
 the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your last commit: the close shares
 the bed only when it names the bed's tip; with any other commit the bed stays in the site. It exits 1 and closes
 nothing when its first sync is not `synced` or `local` or the claim is no longer this site's: stop and report its
-line; the bed stays for the next pass. (The keep and one-off closes need no claim of this site's: when their first
-sync is not `synced` or `local` they still close, and say `planned <state>` on stderr.) It prints
-`closed <n>; <state>`: the
-close and the end of the claim land in the site's queue and, when the state is `synced`, on `origin`, followed by
-the bed. Any other state shares them on the next `site open`. A line on stderr names a bed `origin` did not take. A
-later weed of the class, anywhere, is then queued as `regrown` and names this bed and check. Done when `close-class`
-prints `closed <n>; <state>`.
+line; the bed stays for the next pass. (The per-weed `close --id` closes above need no claim of this site's: when
+their first sync is not `synced` or `local` they still close, and say `planned <state>` on stderr.) It prints
+`closed <n>; <state>`: the close and the end of the claim land in the site's queue and, when the state is `synced`,
+on `origin`, followed by the bed. Any other state shares them on the next `site open`. A line on stderr names a bed
+`origin` did not take. A later weed of the class, anywhere, is then queued as `regrown` and names this bed and check.
+Done when `close-class` prints `closed <n>; <state>`.
 
 ## 8. Report
 

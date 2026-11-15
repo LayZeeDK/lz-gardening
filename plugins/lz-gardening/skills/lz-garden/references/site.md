@@ -59,7 +59,7 @@ commits a bed may bring `origin` are its own, made in the site: a bed that would
 base on an unpushed branch, a tag, a detached commit or another remote's branch) stays in the site and is named too. So
 is a bed whose commits add a line, or hold a message, with this machine's home folder, the checkout's path or the
 site's path in it, spelled as the event check below reads them; merges and files git reads as binary count. A bed ref
-deleted on `origin` after its close was shared stays deleted, whether or not the sync that pushed it saw it land.
+deleted on `origin` after a sync saw it there (in its push report or a later fetch) stays deleted.
 
 A census is shared only while a branch the checkout fetched from `origin` (`refs/remotes/origin/*`) holds its base
 commit. Otherwise it stays in the site, and `site.ts` says so on stderr; a later sync, once that commit is pushed and
@@ -93,7 +93,8 @@ each syncs first and acts only when that sync is `synced` or `local` and this wr
 class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
 another writer holds a claim of the weed's class; when its first sync is not `synced` or `local`, it closes and says
 `planned <state>` on stderr. Each `weeds.ts` command takes only the flags its usage lists, and exits 2 on any
-other; `close` takes `--id` alone and `close-class` takes `--class` alone, and a blank `--id` exits 2 too.
+other; `close` names its weed with `--id`, never `--class`, and `close-class` the reverse, and a blank `--id` exits 2
+too.
 
 A claim's `until` is six hours after its writer's clock. A reader counts the claim live while `until` is ahead of its
 own clock by at most seven hours, which allows one hour of clock skew between machines. A claim from a writer whose
@@ -107,9 +108,8 @@ is left out, named on stderr, and replaced by the next census pushed. `sync --ce
 already read past it, and the taken census is dropped. With no census of `<sha>` taken, it exits 1 and records, seeds
 and shares nothing, unless the site's census is of `<sha>` or a commit that descends from it: a site with no census,
 with one that is not a census, or with one of an earlier or unrelated commit exits 1. A record that another sync of
-the site beat keeps
-the taken census pending, said on stderr, for the next sync to record. A push that loses the shared census to another
-clone fetches again and decides again.
+the site beat keeps the taken census pending, said on stderr, for the next sync to record. A push that loses the
+shared census to another clone fetches again and decides again.
 
 ## Open, sync
 
@@ -169,16 +169,16 @@ with exit 2, naming the command that deletes it. A run that exits 2 writes no pe
 the repository's checkout, finds the site beside it and appends events to `refs/garden/log` with git plumbing only:
 a commit per command, moved onto the ref only if no other run moved it first, so two runs on one machine both land.
 An entry in the log it cannot read (an event file that is not JSON, an event the scripts would not write, an object
-the site lacks, a submodule entry) is skipped and named on stderr with the reason. Among the events the scripts would not write: one with no `uuid`, `clock` or `at`, or whose
-`uuid` is not its file name; one of an unknown `op`, of a class that is not a kebab-case class id, or with a line break
-or control character in a field the scripts print; an add whose id is not the weed id of its class, `where` and
-source, whose layer is not 1 to 6, whose `where` is blank or whose source names no kind; a close whose `ids` list is
-empty or holds something other than a weed id, whose `by` or check is blank, or a tended close whose `by` names no
-`bed/<class>@<commit>` of its own class; a claim whose `until` is not a date or ends more than six hours after it was
-taken; a release whose `claim` is not a UUID; and a seed of anything but a full commit id. The first fault an event
-has is the reason named. A close ends only the weeds of its own class. A `garden.json` in a newer format stops it with
-exit 2 (update lz-gardening); one that is missing, is not JSON or names no format stops it with exit 2, naming the
-file.
+the site lacks, a submodule entry) is skipped and named on stderr with the reason. Among the events the scripts would
+not write: one with no `uuid`, `clock` or `at`, or whose `uuid` is not its file name; one of an unknown `op`, of a
+class that is not a kebab-case class id, or with a line break or control character in a field the scripts print; an
+add whose id is not the weed id of its class, `where` and source, whose layer is not 1 to 6, whose `where` is blank
+or whose source names no kind; a close whose `ids` list is empty or holds something other than a weed id, whose `by`
+or check is blank, or a tended close whose `by` names no `bed/<class>@<commit>` of its own class; a claim whose
+`until` is not a date or ends more than six hours after it was taken; a release whose `claim` is not a UUID; and a
+seed of anything but a full commit id. The first fault an event has is the reason named. A close ends only the weeds
+of its own class. A `garden.json` in a newer format stops it with exit 2 (update lz-gardening); one that is missing,
+is not JSON or names no format stops it with exit 2, naming the file.
 
 ## The base branch
 
