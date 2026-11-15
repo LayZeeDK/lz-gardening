@@ -878,6 +878,12 @@ test('an add event file whose source does not name its kind is skipped, as add r
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'source is not <kind>:<ref>');
 });
 
+test('an add event file whose source starts with anything but its kind is skipped', () => {
+  const event = storedAdd(uuid, 3, { source: 'Census:seed' });
+
+  assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'source is not <kind>:<ref>');
+});
+
 test('an add event file at layer 1 or 6, the first and last layers, parses', () => {
   const parse = (layer: number): GardenEvent | string =>
     parseEvent(eventPath(uuid), JSON.stringify(storedAdd(uuid, 3, { layer })));
@@ -1081,6 +1087,23 @@ test('a seed event file whose sha is not a full commit id is skipped', () => {
   const event = { op: 'seed', uuid, clock: 7, at, sha: '--x' } as const;
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'sha is not a full commit id');
+});
+
+test('a seed event file whose sha holds a commit id among other characters, or a short one, is skipped', () => {
+  const parse = (sha: string): GardenEvent | string =>
+    parseEvent(eventPath(uuid), JSON.stringify({ op: 'seed', uuid, clock: 7, at, sha }));
+
+  assert.deepEqual([`${'a'.repeat(40)}b`, `g${'a'.repeat(40)}`, 'a'].map(parse), [
+    'sha is not a full commit id',
+    'sha is not a full commit id',
+    'sha is not a full commit id',
+  ]);
+});
+
+test("a seed event file naming a SHA-256 repository's 64-digit commit id parses", () => {
+  const event = { op: 'seed', uuid, clock: 7, at, sha: 'b'.repeat(64) } as const;
+
+  assert.deepEqual(parseEvent(eventPath(uuid), JSON.stringify(event)), event);
 });
 
 test('a seed event file parses back to the event that was written', () => {
