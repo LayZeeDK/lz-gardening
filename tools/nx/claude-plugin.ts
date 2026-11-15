@@ -129,7 +129,8 @@ function mutateTarget(script: string): TargetConfiguration {
 function pluginTargets(root: string, scripts: readonly string[]): Record<string, TargetConfiguration> {
   return {
     test: {
-      command: 'node --test "skills/*/scripts/*.test.ts"',
+      // node --test reads its options only before the file pattern, so `nx test -- --test-timeout=<ms>` sets no limit.
+      command: 'node --test --test-timeout=600000 "skills/*/scripts/*.test.ts"',
       options: { cwd: '{projectRoot}' },
       cache: true,
       inputs: ['default', '^default', { runtime: 'node --version' }, { runtime: 'git --version' }],

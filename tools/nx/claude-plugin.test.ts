@@ -218,7 +218,7 @@ test("a plugin's lockfile packages are external nodes of the graph", async (t) =
   ]);
 });
 
-test("a plugin's test target runs its specs from its root, cached per Node.js and git version", async (t) => {
+test("a plugin's test target runs its specs from its root with a ten-minute limit a test, cached per Node.js and git version", async (t) => {
   const root = workspace(t, {
     'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
   });
@@ -226,7 +226,7 @@ test("a plugin's test target runs its specs from its root, cached per Node.js an
   assert.deepEqual(
     (await inferred(root, 'plugins/p/.claude-plugin/plugin.json'))?.projects?.['plugins/p']?.targets?.['test'],
     {
-      command: 'node --test "skills/*/scripts/*.test.ts"',
+      command: 'node --test --test-timeout=600000 "skills/*/scripts/*.test.ts"',
       options: { cwd: '{projectRoot}' },
       cache: true,
       inputs: ['default', '^default', { runtime: 'node --version' }, { runtime: 'git --version' }],
