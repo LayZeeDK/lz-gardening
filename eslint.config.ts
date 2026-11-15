@@ -39,6 +39,19 @@ export default tseslint.config(
     },
   },
   {
+    files: ['plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportDeclaration, ImportExpression, ExportAllDeclaration, ExportNamedDeclaration[source]',
+          message:
+            "log-guard.ts imports nothing: the workspace's Nx plugin loads it on every nx command, without the plugin's packages.",
+        },
+      ],
+    },
+  },
+  {
     files: ['plugins/*/package.json'],
     languageOptions: { parser: jsoncParser },
     plugins: { '@nx': nx },
