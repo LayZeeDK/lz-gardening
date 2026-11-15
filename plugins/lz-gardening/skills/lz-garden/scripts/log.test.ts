@@ -5,6 +5,7 @@ import {
   bedCommit,
   claimRefusal,
   eventPath,
+  eventPathPattern,
   groupWeeds,
   losingClaims,
   maxClockOf,
@@ -12,7 +13,9 @@ import {
   planAdd,
   planClaim,
   planClose,
+  planGiveBack,
   planRelease,
+  releasedClaims,
   releasesOfClaim,
   releasesOfLostClaims,
   replay,
@@ -554,6 +557,28 @@ test('the releases of a planned claim name each claim of its writer, class and u
   assert.deepEqual(releasesOfClaim(events, planned), [{ op: 'release', class: 'any-type', claim: 'c1' }]);
 });
 
+test("a give-back with none of the writer's claims leaving gives nothing back and never reads origin's events", () => {
+  const shared = (): readonly GardenEvent[] => {
+    throw new Error("origin's events were read");
+  };
+
+  assert.deepEqual(planGiveBack([claim('cb', 1, 'writer-b')], shared, 'writer-a', now), []);
+});
+
+test("a give-back returns the writer's leaving claim that loses to a claim origin holds", () => {
+  const owner = claim('cb', 5, 'writer-b');
+  const mine = claim('ca', 1, 'writer-a');
+
+  assert.deepEqual(
+    planGiveBack([mine], () => [owner], 'writer-a', now),
+    [{ claim: mine, owner }],
+  );
+});
+
+test('the released claims are the claims the releases name, and nothing more', () => {
+  assert.deepEqual(releasedClaims([claim('c1', 1, 'writer-a'), release('r1', 2, 'c1')]), new Set(['c1']));
+});
+
 test('a lost claim the events already release is not released again, so a second give-back writes nothing', () => {
   const owner = claim('cb', 1, 'writer-b');
   const lost = [{ claim: claim('ca', 2, 'writer-a'), owner }];
@@ -1081,6 +1106,15 @@ test('a release event file whose claim is not an event uuid is skipped', () => {
   const event = release(uuid, 6, 'c1');
 
   assert.equal(parseEvent(eventPath(uuid), JSON.stringify(event)), 'claim is not a UUID');
+});
+
+test("an event's path is its uuid's file in the folder of the uuid's first two digits, and nothing around it", () => {
+  const path = eventPath(uuid);
+
+  assert.deepEqual(
+    [path, `x/${path}`, `${path}.bak`].map((candidate) => eventPathPattern.test(candidate)),
+    [true, false, false],
+  );
 });
 
 test('a seed event file whose sha is not a full commit id is skipped', () => {
