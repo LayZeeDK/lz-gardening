@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import childProcess, { spawn, spawnSync } from 'node:child_process';
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { text } from 'node:stream/consumers';
@@ -8,6 +10,7 @@ import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Io } from './cli.ts';
 import { isRecord } from './log.ts';
+import { gitStartChannel } from './store-git-reader.ts';
 
 process.env['GIT_CONFIG_GLOBAL'] = fileURLToPath(new URL('test.gitconfig', import.meta.url));
 process.env['GIT_CONFIG_NOSYSTEM'] = '1';
@@ -26,6 +29,34 @@ export function git(cwd: string, args: readonly string[]): string {
   assert.equal(result.status, 0, result.stderr);
 
   return result.stdout.trim();
+}
+
+// The command of each process this test starts from now on, in order; a reader's git counts as one cat-file.
+export function startedCommands(t: TestContext): readonly (string | undefined)[] {
+  const commands: (string | undefined)[] = [];
+  const original = childProcess.spawnSync;
+  const reader = (): void => {
+    commands.push('cat-file');
+  };
+  t.mock.method(childProcess, 'spawnSync', (...args: unknown[]): unknown => {
+    const [, commandArgs] = args;
+    commands.push(
+      Array.isArray(commandArgs)
+        ? commandArgs.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
+        : undefined,
+    );
+
+    return Reflect.apply(original, childProcess, args);
+  });
+  syncBuiltinESMExports();
+  subscribe(gitStartChannel, reader);
+  t.after(() => {
+    unsubscribe(gitStartChannel, reader);
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  });
+
+  return commands;
 }
 
 export interface ScriptRun {

@@ -1,5 +1,8 @@
 // The reader strategy of a run: one `git cat-file --batch-command` per folder and env, kept for the run and driven
 // synchronously through a pump that moves bytes to and from the git processes.
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { channel } from 'node:diagnostics_channel';
+import { MessageChannel, receiveMessageOnPort, Worker } from 'node:worker_threads';
 import { encodeRequests, outOfStep, parseContents, parseInfos, walkTree } from './store-git-objects.ts';
 import type { ObjectContents, ObjectInfo, ObjectReads, Parse, ReadAt } from './store-git-objects.ts';
 
@@ -34,6 +37,116 @@ export interface ReaderOptions {
   readonly answerMs: number;
   readonly endMs: number;
 }
+
+// The pump runs in a worker thread started from this function's source text, so it names nothing outside its body:
+// no module to resolve or strip of types when the worker starts. It knows nothing of git.
+function pumpBody(): void {
+  const { spawn } = process.getBuiltinModule('node:child_process');
+  const threads = process.getBuiltinModule('node:worker_threads');
+  const { MessagePort } = threads;
+  const data: unknown = threads.workerData;
+
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    !('port' in data) ||
+    !(data.port instanceof MessagePort) ||
+    !('signal' in data) ||
+    !(data.signal instanceof Int32Array)
+  ) {
+    throw new Error('the pump needs a port and a signal');
+  }
+
+  const { port, signal } = data;
+  const children = new Map<number, ChildProcessWithoutNullStreams>();
+  const tell = (message: FromPump): void => {
+    port.postMessage(message);
+    Atomics.add(signal, 0, 1);
+    Atomics.notify(signal, 0);
+  };
+
+  port.on('message', (message: ToPump) => {
+    const { reader } = message;
+
+    switch (message.kind) {
+      case 'start': {
+        const child = spawn(message.command, message.args, { cwd: message.cwd, env: message.env });
+        children.set(reader, child);
+        child.on('error', (error) => {
+          tell({ kind: 'ended', reader, code: null, error: error.message });
+        });
+        child.stdout.on('data', (chunk: Uint8Array) => {
+          tell({ kind: 'out', reader, chunk });
+        });
+        child.stderr.on('data', (chunk: Uint8Array) => {
+          tell({ kind: 'err', reader, chunk });
+        });
+        child.on('close', (code) => {
+          tell({ kind: 'ended', reader, code });
+        });
+        tell({ kind: 'started', reader });
+        break;
+      }
+      case 'write': {
+        children.get(reader)?.stdin.write(message.bytes);
+        break;
+      }
+      case 'end': {
+        children.get(reader)?.stdin.end();
+        break;
+      }
+      case 'kill': {
+        children.get(reader)?.kill('SIGKILL');
+        break;
+      }
+    }
+  });
+}
+
+function isFromPump(value: unknown): value is FromPump {
+  return typeof value === 'object' && value !== null && 'kind' in value && 'reader' in value;
+}
+
+// The main thread waits on the shared signal, which the pump moves after each message, and reads the port with
+// receiveMessageOnPort: no event loop turn is needed, so the store's reads stay synchronous.
+export function workerPump(): Pump {
+  const signal = new Int32Array(new SharedArrayBuffer(4));
+  const { port1, port2 } = new MessageChannel();
+  const worker = new Worker(`(${pumpBody.toString()})()`, {
+    eval: true,
+    workerData: { port: port2, signal },
+    transferList: [port2],
+  });
+  worker.unref();
+
+  return {
+    post: (message) => {
+      port1.postMessage(message);
+    },
+    take: (deadline) => {
+      for (;;) {
+        const seen = Atomics.load(signal, 0);
+        const received: unknown = receiveMessageOnPort(port1)?.message;
+
+        if (isFromPump(received)) {
+          return received;
+        }
+
+        const left = deadline - Date.now();
+
+        if (left <= 0 || Atomics.wait(signal, 0, seen, left) === 'timed-out') {
+          return undefined;
+        }
+      }
+    },
+    stop: () => {
+      port1.close();
+      void worker.terminate();
+    },
+  };
+}
+
+export const gitStartChannel = 'lz-gardening.git-start';
 
 export const batchCommandArgs = ['cat-file', '--batch-command', '--buffer', '-Z'] as const;
 
@@ -74,6 +187,7 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
     }
 
     started += 1;
+    channel(gitStartChannel).publish({ args: batchCommandArgs });
     from.post({ kind: 'start', reader: started, command: 'git', args: batchCommandArgs, cwd: at.cwd, env: envOf(at) });
     const start = takeFrom(from, started);
 
@@ -124,7 +238,11 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
 
       if (message.kind === 'ended') {
         forget(reader);
-        throw new Error(`git cat-file --batch-command: ${stderr.toString().trim()}`);
+        throw new Error(
+          message.error === undefined
+            ? `git cat-file --batch-command: ${stderr.toString().trim()}`
+            : `git could not start: ${message.error}`,
+        );
       }
 
       if (message.kind === 'err') {

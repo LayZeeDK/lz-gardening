@@ -7,11 +7,12 @@ import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { eventPath } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
+import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
 import { logRef, openSite } from './store-log.ts';
 import { censusRef, writePendingCensus } from './store-census.ts';
 import { lostRaceOf, mergeShared, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
-import { commit, git, repo, scriptProcess } from './test-repo.ts';
+import { commit, git, repo, scriptProcess, startedCommands } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
 import {
   anotherSyncMovesTheCensusFirst,
@@ -624,33 +625,22 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   );
 });
 
-test('a sync whose origin already holds the local log fetches, lists the beds and stops, with no merge and no push', (t) => {
-  const { dir } = planted(t);
-  bareRemote(dir);
-  sync(openSite(dir), { attempts: 1 });
-  const spawned = t.mock.method(childProcess, 'spawnSync');
-  syncBuiltinESMExports();
-  t.after(() => {
-    spawned.mock.restore();
-    syncBuiltinESMExports();
+for (const strategy of readStrategies) {
+  test(`a sync whose origin already holds the local log fetches, lists the beds and stops, with no merge and no push, reading through ${strategy}`, (t) => {
+    const { dir } = planted(t);
+    bareRemote(dir);
+    sync(openSite(dir), { attempts: 1 });
+    const started = startedCommands(t);
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
+
+    const result = inRun({ ...env, [readStrategyVariable]: strategy }, () => sync(openSite(dir), { attempts: 1 }));
+
+    assert.deepEqual(
+      [result.state, started],
+      ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'config', 'fetch', 'cat-file', 'for-each-ref']],
+    );
   });
-
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
-
-  const result = inRun(env, () => sync(openSite(dir), { attempts: 1 }));
-
-  assert.deepEqual(
-    [
-      result.state,
-      spawned.mock.calls.map(({ arguments: [, args] }) =>
-        Array.isArray(args)
-          ? args.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
-          : undefined,
-      ),
-    ],
-    ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'config', 'fetch', 'cat-file', 'for-each-ref']],
-  );
-});
+}
 
 function fetchArgs(t: TestContext, dir: string, env: NodeJS.ProcessEnv): readonly string[] {
   const spawned = t.mock.method(childProcess, 'spawnSync');

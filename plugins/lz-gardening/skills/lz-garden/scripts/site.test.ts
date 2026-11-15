@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
-import childProcess from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { renameRetrying, resolveBase } from './site.ts';
+import { readStrategyVariable } from './store-git-objects.ts';
 import { logRef } from './store-log.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import type { BaseFacts } from './site.ts';
-import { commit, git, repo } from './test-repo.ts';
+import { commit, git, repo, startedCommands } from './test-repo.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import {
   bareRemote,
@@ -650,24 +649,9 @@ test('open in a repository with master and a branch features/main uses master, n
   assert.equal(result.summary.get('base'), 'master');
 });
 
-test('open on a planted site reads the base without reading the repository config first', (t) => {
-  const { dir } = planted(t);
-  const spawned = t.mock.method(childProcess, 'spawnSync');
-  syncBuiltinESMExports();
-  t.after(() => {
-    spawned.mock.restore();
-    syncBuiltinESMExports();
-  });
-
-  const result = site(dir, ['open', '--base', 'main']);
-
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(
-    spawned.mock.calls.map(({ arguments: [, args] }) =>
-      Array.isArray(args)
-        ? args.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
-        : undefined,
-    ),
+for (const [strategy, commands] of [
+  [
+    'spawn',
     [
       'rev-parse',
       'rev-parse',
@@ -681,8 +665,19 @@ test('open on a planted site reads the base without reading the repository confi
       'ls-tree',
       'cat-file',
     ],
-  );
-});
+  ],
+  ['reader', ['rev-parse', 'rev-parse', 'remote', 'for-each-ref', 'cat-file', 'cat-file', 'config', 'remote']],
+] as const) {
+  test(`open on a planted site reads the base without reading the repository config first, reading through ${strategy}`, (t) => {
+    const { dir } = planted(t);
+    const started = startedCommands(t);
+
+    const result = site(dir, ['open', '--base', 'main'], { ...process.env, [readStrategyVariable]: strategy });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(started, commands);
+  });
+}
 
 test('open in a clone takes --base HEAD as the commit checked out, not origin/HEAD', (t) => {
   const source = repo(t);

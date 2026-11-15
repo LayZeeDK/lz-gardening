@@ -1,6 +1,8 @@
 import childProcess from 'node:child_process';
+import { subscribe } from 'node:diagnostics_channel';
 import { appendFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
+import { gitStartChannel } from './store-git-reader.ts';
 
 const startsFile = process.env['LZ_GARDEN_GIT_STARTS'];
 
@@ -21,4 +23,9 @@ if (startsFile !== undefined) {
     }),
   });
   syncBuiltinESMExports();
+  // A reader's git starts in a worker thread, where this module does not run; the reader tells the start here.
+  subscribe(gitStartChannel, (message) => {
+    const args = typeof message === 'object' && message !== null && 'args' in message ? message.args : [];
+    appendFileSync(startsFile, `git ${Array.isArray(args) ? args.join(' ') : ''}\n`);
+  });
 }

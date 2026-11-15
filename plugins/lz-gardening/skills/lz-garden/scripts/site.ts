@@ -35,7 +35,17 @@ import { parseArgs } from 'node:util';
 import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
-import { configValue, git, gitReason, gitSucceeds, objectIds, optionalGit, refTip, runGit } from './store-git.ts';
+import {
+  closeReaders,
+  configValue,
+  git,
+  gitReason,
+  gitSucceeds,
+  objectIds,
+  optionalGit,
+  refTip,
+  runGit,
+} from './store-git.ts';
 import {
   append,
   logRef,
@@ -157,6 +167,7 @@ function plant(top: string, site: string): void {
   // A maintenance run the commit starts in the background would hold files in the folder the rename moves next.
   git(planting, ['-c', 'maintenance.auto=false', 'commit', '-q', '-m', 'garden: plant']);
   startLog({ path: planting, checkout: top });
+  closeReaders(planting);
   renameRetrying(planting, site);
 }
 

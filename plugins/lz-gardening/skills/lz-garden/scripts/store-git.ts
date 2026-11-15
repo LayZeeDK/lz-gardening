@@ -5,7 +5,8 @@ import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { objectIdPattern } from './log.ts';
-import { parseContents } from './store-git-objects.ts';
+import { parseContents, readStrategyOf } from './store-git-objects.ts';
+import { readerReads, workerPump } from './store-git-reader.ts';
 import type { ObjectContents, ObjectReads, ReadAt, TreeEntry } from './store-git-objects.ts';
 import type { Located } from './store-log.ts';
 
@@ -38,15 +39,32 @@ let current: Run = { env: process.env, gitEnv: undefined, configs: new Map(), re
 const settingsInEnvironment = ['GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
 const hookOffVariable = 'LZ_GARDEN_HOOK_OFF';
 
+// A run on Windows, where a git start costs 40-100 ms against 2 ms on Linux, reads objects through one long-lived git
+// per folder; LZ_GARDEN_GIT_READS=spawn|reader picks either anywhere. A run holds no git once it returns or throws.
 export function inRun<T>(env: Readonly<NodeJS.ProcessEnv>, command: () => T): T {
   const outer = current;
-  current = { env, gitEnv: undefined, configs: new Map(), reads: spawnReads };
+  const reads =
+    readStrategyOf(env, process.platform) === 'reader'
+      ? readerReads({
+          startPump: workerPump,
+          envOf: ({ cwd, overrides }) => ({ ...gitEnv(cwd), ...overrides }),
+          answerMs: networkTimeoutMs,
+          endMs: 5000,
+        })
+      : spawnReads;
+  current = { env, gitEnv: undefined, configs: new Map(), reads };
 
   try {
     return command();
   } finally {
     current = outer;
+    reads.close();
   }
+}
+
+// Ends the run's gits in the folder, which a rename or delete of the folder needs on Windows; a later read starts anew.
+export function closeReaders(cwd: string): void {
+  current.reads.close(cwd);
 }
 
 export function mayPointAtARepository(variable: string): boolean {

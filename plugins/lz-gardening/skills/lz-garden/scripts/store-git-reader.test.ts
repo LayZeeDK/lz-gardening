@@ -1,7 +1,8 @@
 // Run: node --test store-git-reader.test.ts
 import assert from 'node:assert/strict';
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { test } from 'node:test';
-import { readerReads } from './store-git-reader.ts';
+import { gitStartChannel, readerReads, workerPump } from './store-git-reader.ts';
 import type { FromPump, Pump, ToPump } from './store-git-reader.ts';
 
 const oid = 'a'.repeat(40);
@@ -370,4 +371,99 @@ test('a git that cannot start fails the read with the reason, and nothing is wri
     posted.map(({ kind }) => kind),
     ['start'],
   );
+});
+
+test('a git that could not start, told only after it was said to start, fails the read with the reason', () => {
+  const { pump } = scriptedPump((message) =>
+    message.kind === 'write'
+      ? [{ kind: 'ended', reader: message.reader, code: null, error: 'spawn git ENOENT' }]
+      : oneCommitGit(message),
+  );
+
+  assert.throws(() => readerOf(pump).ids(at, ['HEAD']), { message: 'git could not start: spawn git ENOENT' });
+});
+
+test('each git a reader starts is told on the git start channel, for counts of the git a command starts', () => {
+  const { pump } = scriptedPump(oneCommitGit);
+  const told: unknown[] = [];
+  const listen = (message: unknown): void => {
+    told.push(message);
+  };
+  subscribe(gitStartChannel, listen);
+  const reads = readerOf(pump);
+  reads.ids(at, ['HEAD']);
+  reads.ids(at, ['HEAD']);
+  unsubscribe(gitStartChannel, listen);
+
+  assert.deepEqual(told, [{ args: ['cat-file', '--batch-command', '--buffer', '-Z'] }]);
+});
+
+// Every message the pump sends for one reader, until its end or the deadline.
+function messagesOf(pump: Pump, deadlineMs: number): readonly FromPump[] {
+  const deadline = Date.now() + deadlineMs;
+  const messages: FromPump[] = [];
+
+  for (let message = pump.take(deadline); message !== undefined; message = pump.take(deadline)) {
+    messages.push(message);
+
+    if (message.kind === 'ended') {
+      break;
+    }
+  }
+
+  return messages;
+}
+
+test('the worker pump starts a process, says so, passes its input and output, and says when it ends', () => {
+  const pump = workerPump();
+  pump.post({
+    kind: 'start',
+    reader: 7,
+    command: process.execPath,
+    args: ['-e', 'process.stdin.pipe(process.stdout)'],
+    cwd: process.cwd(),
+    env: process.env,
+  });
+  pump.post({ kind: 'write', reader: 7, bytes: 'hi' });
+  pump.post({ kind: 'end', reader: 7 });
+  const messages = messagesOf(pump, 10_000);
+  pump.stop();
+
+  assert.deepEqual(
+    messages.map((message) => (message.kind === 'out' ? `out ${Buffer.from(message.chunk).toString()}` : message)),
+    [{ kind: 'started', reader: 7 }, 'out hi', { kind: 'ended', reader: 7, code: 0 }],
+  );
+});
+
+test('the worker pump kills a process on kill, and says nothing more by a deadline that passes', () => {
+  const pump = workerPump();
+  pump.post({
+    kind: 'start',
+    reader: 1,
+    command: process.execPath,
+    args: ['-e', 'setInterval(() => undefined, 1000)'],
+    cwd: process.cwd(),
+    env: process.env,
+  });
+  const quiet = [pump.take(Date.now() + 10_000), pump.take(Date.now() + 50)];
+  pump.post({ kind: 'kill', reader: 1 });
+  const messages = messagesOf(pump, 10_000);
+  pump.stop();
+
+  assert.deepEqual(
+    [quiet, messages],
+    [[{ kind: 'started', reader: 1 }, undefined], [{ kind: 'ended', reader: 1, code: null }]],
+  );
+});
+
+test('the worker pump says why a command could not start', () => {
+  const pump = workerPump();
+  pump.post({ kind: 'start', reader: 1, command: 'no-such-command-x', args: [], cwd: process.cwd(), env: process.env });
+  const messages = messagesOf(pump, 10_000);
+  pump.stop();
+
+  assert.deepEqual(messages, [
+    { kind: 'started', reader: 1 },
+    { kind: 'ended', reader: 1, code: null, error: 'spawn no-such-command-x ENOENT' },
+  ]);
 });
