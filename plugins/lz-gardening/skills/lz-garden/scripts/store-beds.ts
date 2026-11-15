@@ -145,16 +145,15 @@ export interface MarkedBeds {
 
 export function planBeds(site: Site, leaving: readonly { readonly path: string }[]): BedPlan {
   const tips = refsUnder(site.path, [bedBranches, fetchedBeds, unpushedBeds]);
-  const tipOf = (prefix: string, weedClass: string): string | undefined => tips.get(`${prefix}${weedClass}`);
   const candidates = [...tips].flatMap(([name, oid]) => {
     const weedClass = name.slice(bedBranches.length);
 
-    return name.startsWith(bedBranches) && tipOf(fetchedBeds, weedClass) !== oid ? [{ weedClass, tip: oid }] : [];
+    return name.startsWith(bedBranches) && tips.get(fetchedBedRef(weedClass)) !== oid ? [{ weedClass, tip: oid }] : [];
   });
   const landed = [...tips].flatMap(([name, oid]) => {
     const weedClass = name.slice(unpushedBeds.length);
 
-    return name.startsWith(unpushedBeds) && tipOf(fetchedBeds, weedClass) === oid ? [{ weedClass, tip: oid }] : [];
+    return name.startsWith(unpushedBeds) && tips.get(fetchedBedRef(weedClass)) === oid ? [{ weedClass, tip: oid }] : [];
   });
 
   if (candidates.length === 0) {
@@ -165,14 +164,14 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
   const leavingPaths = new Set(leaving.map(({ path }) => path));
   const judged = candidates.flatMap((bed) => {
     const close = latestTendedClose(events, bed.weedClass);
-    const shared = tipOf(fetchedBeds, bed.weedClass);
+    const shared = tips.get(fetchedBedRef(bed.weedClass));
 
     if (close === undefined || !bed.tip.startsWith(bedCommit(close))) {
       return [];
     }
 
     if (shared === undefined) {
-      return leavingPaths.has(eventPath(close.uuid)) || tipOf(unpushedBeds, bed.weedClass) === bed.tip
+      return leavingPaths.has(eventPath(close.uuid)) || tips.get(unpushedBedRef(bed.weedClass)) === bed.tip
         ? [{ ...bed, why: bedStaysLocal(site, bed.tip, shared) }]
         : [];
     }
