@@ -3,6 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { text } from 'node:stream/consumers';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Io } from './cli.ts';
@@ -42,22 +43,20 @@ export function scriptRun(
   return spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env });
 }
 
-export function scriptProcess(
+export async function scriptProcess(
   script: string,
   cwd: string,
   args: readonly string[],
 ): Promise<{ readonly status: number | null; readonly stdout: string }> {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    const child = spawn(process.execPath, [script, ...args], { cwd, stdio: ['ignore', 'pipe', 'inherit'] });
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      stdout += chunk;
-    });
-    child.on('error', reject).on('close', (status) => {
-      resolve({ status, stdout });
-    });
-  });
+  const child = spawn(process.execPath, [script, ...args], { cwd, stdio: ['ignore', 'pipe', 'inherit'] });
+  const [stdout, status] = await Promise.all([
+    text(child.stdout),
+    new Promise<number | null>((resolve, reject) => {
+      child.on('error', reject).on('close', resolve);
+    }),
+  ]);
+
+  return { status, stdout };
 }
 
 export interface CapturingIo {

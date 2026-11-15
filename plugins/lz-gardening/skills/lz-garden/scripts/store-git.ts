@@ -3,6 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
+import { text } from 'node:stream/consumers';
 import { objectIdPattern } from './log.ts';
 import type { Site } from './store-log.ts';
 
@@ -169,24 +170,24 @@ interface GitRun {
 
 // The async form of a read, for reads that run side by side. A run's state does not reach work that outlives inRun,
 // so the caller takes gitEnv inside the run and passes it in.
-export function runGitAsync(cwd: string, args: readonly string[], env: Readonly<NodeJS.ProcessEnv>): Promise<GitRun> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn('git', args, { cwd, env });
-    const out: Buffer[] = [];
-    const err: Buffer[] = [];
-    child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
-    child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
-    child.on('error', reject);
-    // Stryker disable next-line LzNodeEventName: exit differs from close only when it fires before stdout is fully read, which no test can force
-    child.on('close', (code) => {
-      resolvePromise({
-        // Stryker disable next-line LzJsNumericLiteral: a code is null only when a signal ends git, which no input to the census causes
-        code: code ?? 2,
-        stdout: Buffer.concat(out).toString('utf8'),
-        stderr: Buffer.concat(err).toString('utf8'),
-      });
-    });
-  });
+export async function runGitAsync(
+  cwd: string,
+  args: readonly string[],
+  env: Readonly<NodeJS.ProcessEnv>,
+): Promise<GitRun> {
+  const child = spawn('git', args, { cwd, env });
+  const [stdout, stderr, code] = await Promise.all([
+    text(child.stdout),
+    text(child.stderr),
+    new Promise<number | null>((resolvePromise, reject) => {
+      child.on('error', reject);
+      // Stryker disable next-line LzNodeEventName: both streams are read to their end beside it, so exit and close give the same result
+      child.on('close', resolvePromise);
+    }),
+  ]);
+
+  // Stryker disable next-line LzJsNumericLiteral: a code is null only when a signal ends git, which no input to the census causes
+  return { code: code ?? 2, stdout, stderr };
 }
 
 export async function gitAsync(

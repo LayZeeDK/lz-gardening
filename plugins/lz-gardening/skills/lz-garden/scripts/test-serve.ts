@@ -19,8 +19,8 @@ export function serve(t: TestContext, script: string): Promise<string> {
   return new Promise((resolve, reject) => {
     server.on('error', reject);
     server.stdout.setEncoding('utf8');
-    server.stdout.once('data', (chunk: string) => {
-      resolve(chunk.trim());
+    server.stdout.once('data', (chunk: unknown) => {
+      resolve(String(chunk).trim());
     });
     server.once('exit', (code) => {
       reject(new Error(`the server exited with ${String(code)} before it listened`));

@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { buffer } from 'node:stream/consumers';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { isMainModule } from './cli.ts';
@@ -19,8 +20,8 @@ export function httpRemote(t: TestContext, root: string, credentials: string): P
   });
 
   return new Promise((listening, failed) => {
-    server.stdout.once('data', (port: Buffer) => {
-      listening(port.toString().trim());
+    server.stdout.once('data', (port: unknown) => {
+      listening(String(port).trim());
     });
     server.once('exit', (code) => {
       failed(new Error(`the HTTP remote exited with ${String(code)} before it listened`));
@@ -64,12 +65,7 @@ function backend(root: string, request: IncomingMessage, response: ServerRespons
     },
   });
   request.pipe(child.stdin);
-  const chunks: Buffer[] = [];
-  child.stdout.on('data', (chunk: Buffer) => {
-    chunks.push(chunk);
-  });
-  child.on('close', () => {
-    const output = Buffer.concat(chunks);
+  void buffer(child.stdout).then((output) => {
     const end = output.indexOf('\r\n\r\n');
     const fields = output
       .subarray(0, end)
