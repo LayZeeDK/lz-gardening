@@ -1,6 +1,6 @@
 ---
 name: lz-garden
-description: Watch a repository for weeds (copied shortcuts, creeping suppressions, duplicate helpers, hollow tests, lessons written down twice) and queue them with evidence, changing no code. Use for a garden tick, "watch this repo for weeds", "check the garden", or `/loop /lz-gardening:lz-garden`. The first tick seeds the queue from the repository's history.
+description: Watch a repository for weeds (copied shortcuts, creeping suppressions, duplicate functions, hollow tests, lessons written down twice) and queue them with evidence, changing no code. Use for a garden tick, "watch this repo for weeds", "check the garden", or `/loop /lz-gardening:lz-garden`. The first tick seeds the queue from the repository's history.
 argument-hint: '[--base <branch>]'
 context: fork
 agent: lz-gardening:lz-gardener
@@ -108,9 +108,9 @@ Queue each weed with `weeds.ts`. The script dedupes, so queueing the same weed t
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>] --census <sha>
 ```
 
-- `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-helper`.
+- `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-function`.
   Queue one weed per file after `new` on its `+ duplicate` line, and one per file after `already` that
-  `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-helper` does not show. First read the
+  `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-function` does not show. First read the
   definition you would keep and each file's own, with `git show <sha>:<path>`, every one of those files. A comment or
   a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
   makes that copy no weed. Each of those files ends either queued or on the reply's `left out:` line with its reason.

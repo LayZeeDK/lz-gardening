@@ -370,18 +370,18 @@ test('the seed list names at most 30 duplicate names, the most widely defined fi
   const { dir } = planted(t);
   const files = Object.fromEntries(
     Array.from({ length: 31 }, (_, index) => index).flatMap((index) => [
-      [`src/a${String(index)}.ts`, `function helper${String(index)}() {}\n`] as const,
-      [`src/b${String(index)}.ts`, `function helper${String(index)}() {}\n`] as const,
+      [`src/a${String(index)}.ts`, `function shared${String(index)}() {}\n`] as const,
+      [`src/b${String(index)}.ts`, `function shared${String(index)}() {}\n`] as const,
     ]),
   );
-  commit(dir, { ...files, 'src/c.ts': 'function helper30() {}\n' });
+  commit(dir, { ...files, 'src/c.ts': 'function shared30() {}\n' });
 
   const result = await census(dir, ['--rev', 'HEAD', '--seed']);
 
   assert.equal(result.status, 0, result.stderr);
   const listed = result.stdout.split('\n').filter((line) => line.startsWith('= duplicate '));
   assert.equal(listed.length, 30);
-  assert.equal(listed[0], '= duplicate helper30: src/a30.ts, src/b30.ts, src/c.ts');
+  assert.equal(listed[0], '= duplicate shared30: src/a30.ts, src/b30.ts, src/c.ts');
   assert.match(result.stdout, /^1 more duplicate names not listed$/m);
 });
 

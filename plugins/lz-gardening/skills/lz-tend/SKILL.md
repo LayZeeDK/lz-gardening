@@ -70,7 +70,7 @@ weeds of one class.
 
 Read every open weed at the base (`git show <base>:<path>`) and the commit that planted it (`--source`).
 Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? For
-copies (a helper defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that
+copies (a function defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that
 pins the copies alike can say a copy must stay (a file loaded or copied alone, which cannot import the shared one).
 Such a copy is kept, not removed, and the check pins the copies instead. A class
 whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
@@ -105,7 +105,7 @@ is `synced` or `local` and this site still holds the claim; report its line as i
 Take the strongest layer that can hold the class, from the layer list in
 `${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/weeds.md`. `${CLAUDE_SKILL_DIR}/references/checks.md` lists, per
 stack, the checks that hold common classes; read the rows for the repository's stack. Prefer, in order: change the
-code so the weed cannot be written (one helper, one paved road, delete the bad examples); a type or compiler flag; a
+code so the weed cannot be written (one shared function, one paved road, delete the bad examples); a type or compiler flag; a
 lint rule whose message names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
 Layers 4 to 6 (instructions, skills, style guide) only when nothing stronger can hold it; say why.
 

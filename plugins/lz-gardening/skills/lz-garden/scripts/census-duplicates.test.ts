@@ -1,5 +1,5 @@
 // Run: node --test census-duplicates.test.ts
-// The duplicate helpers a census finds, and the duplicates its command line reports as new.
+// The duplicate functions a census finds, and the duplicates its command line reports as new.
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
@@ -169,7 +169,7 @@ test('a duplicate that gains a file names the new file apart from the files it w
   );
 });
 
-test('a file that held another helper before is new for the helper it gains', async (t) => {
+test('a file that held another function before is new for the function it gains', async (t) => {
   const { dir } = planted(t);
   commit(dir, { 'src/a.ts': 'function f() {}\n', 'src/b.ts': 'function h() {}\n' });
   await takeAndRecord(dir);
@@ -239,7 +239,7 @@ test('a duplicate whose every file is new names no earlier file', async (t) => {
   );
 });
 
-test('the CLI names a helper that became duplicated since the last census, not one that already was', async (t) => {
+test('the CLI names a function that became duplicated since the last census, not one that already was', async (t) => {
   const { dir } = planted(t);
   commit(dir, {
     'src/a.ts': 'export function isRecord() {}\n',

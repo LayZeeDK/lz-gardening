@@ -1,6 +1,6 @@
 # lz-gardening
 
-Garden a codebase that agents write. A gardener watches what lands, queues the weeds it sees (a helper written for
+Garden a codebase that agents write. A gardener watches what lands, queues the weeds it sees (a function written for
 the third time, lint suppressions creeping, tests that cannot fail, a workaround copied from the last workaround),
 and later turns each recurring weed into a rule, so it cannot grow back.
 

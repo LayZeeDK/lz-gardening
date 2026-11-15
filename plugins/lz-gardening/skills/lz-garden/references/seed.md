@@ -19,7 +19,7 @@ With `--seed`, the census output prints the seed list above its JSON line:
   in the most files first. Test files (`*.spec.*`, `*.test.*`) and files under dot-directories (`.claude/`,
   `.github/` and other tool folders, often deliberate mirrors of each other) are left out of duplicate names, though
   their pattern hits count. Read the definitions, the copy you would keep among them; when they do the same job,
-  queue one `duplicate-helper` weed per file, `--source census:seed`, the note naming the copy to keep. A comment or
+  queue one `duplicate-function` weed per file, `--source census:seed`, the note naming the copy to keep. A comment or
   a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
   makes that copy no weed. Names that only share a word (two different `parse` functions) are not weeds. A last line
   `<n> more duplicate names not listed` counts the rest. Later ticks report only what is new, so the seed list is the
@@ -37,7 +37,7 @@ not every plan.
 
 - A lesson, correction or finding that appears twice or more: `repeated-lesson`, `--where` the code it is about,
   `--source lesson:<path>:<line>` of each record (one weed per record).
-- A milestone, phase or commit that cleaned up a repeated mistake: find the mistake's class (`duplicate-helper`,
+- A milestone, phase or commit that cleaned up a repeated mistake: find the mistake's class (`duplicate-function`,
   `any-type`, ...), then check the code at the base for the mistake today. Present again: the hand fix did not hold.
   Queue each instance under the mistake's class, `--source commit:<sha>` of the clean-up, and skip the places the
   seed list already queued under that class. `repeated-lesson` is for records only, and `weeds.ts` refuses it

@@ -53,7 +53,7 @@ export interface PatternDelta {
 // Hits are capped per pattern; counts stay exact, and a delta over a capped list can miss new hits.
 const hitCap = 1000;
 
-// The files duplicate helpers are looked for in, and those a pattern without paths searches.
+// The files duplicate functions are looked for in, and those a pattern without paths searches.
 const sourceGlobs = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'].map((extension) => `**/*.${extension}`);
 
 function patternSetSchema(source: string): z.ZodType<PatternSet> {

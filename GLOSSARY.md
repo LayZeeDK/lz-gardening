@@ -10,7 +10,7 @@ A pattern in the codebase that agents will copy and that makes the codebase wors
 _Avoid_: smell, finding, issue, slop
 
 **Weed class**:
-The named kind a weed belongs to, such as a duplicate helper or a hollow test; weeds are grouped, counted and
+The named kind a weed belongs to, such as a duplicate function or a hollow test; weeds are grouped, counted and
 tended by class. Each class has a kebab-case class id, and is found either by a census pattern or only by reading
 what landed.
 _Avoid_: category, kind, type
@@ -18,8 +18,9 @@ _Avoid_: category, kind, type
 **Planting commit**:
 The commit that introduced a weed; a weed found by reading what landed names it as its source.
 
-**Duplicate helper**:
-A function name defined in two or more files of the codebase.
+**Duplicate function**:
+A function name defined in two or more files of the codebase. A function declaration and a `const` bound to an arrow
+function or a function expression count alike.
 _Avoid_: copy, clone
 
 **Close**:
@@ -61,7 +62,7 @@ The tick that queues the weeds already present in a codebase, from the census, t
 of only what is new. Every tick runs it until one has been recorded.
 
 **Census**:
-A count of every census pattern's hits, and of duplicate helpers, at one commit of the base branch. Each tick
+A count of every census pattern's hits, and of duplicate functions, at one commit of the base branch. Each tick
 compares its census with the garden's census, the one recorded in the site's ref `refs/garden/census` and shared
 through the repository's `origin` like the garden log.
 _Avoid_: scan, inventory
