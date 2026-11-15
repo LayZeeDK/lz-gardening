@@ -218,7 +218,7 @@ test("a plugin's lockfile packages are external nodes of the graph", async (t) =
   ]);
 });
 
-test("a plugin's test target runs its specs from its root with a ten-minute limit a test, cached per Node.js and git version", async (t) => {
+test("a plugin's test target runs its specs from its root with a ten-minute limit per test, cached per Node.js and git version", async (t) => {
   const root = workspace(t, {
     'plugins/p/.claude-plugin/plugin.json': '{ "name": "p" }',
   });
