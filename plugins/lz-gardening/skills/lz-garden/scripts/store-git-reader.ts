@@ -40,6 +40,7 @@ export interface ReaderOptions {
 
 // The pump runs in a worker thread started from this function's source text, so it names nothing outside its body:
 // no module to resolve or strip of types when the worker starts. It knows nothing of git.
+// Stryker disable all: a mutant placed here calls Stryker's own functions, which the worker's copy of the text lacks
 function pumpBody(): void {
   const { spawn } = process.getBuiltinModule('node:child_process');
   const threads = process.getBuiltinModule('node:worker_threads');
@@ -102,6 +103,7 @@ function pumpBody(): void {
     }
   });
 }
+// Stryker restore all
 
 function isFromPump(value: unknown): value is FromPump {
   return typeof value === 'object' && value !== null && 'kind' in value && 'reader' in value;
