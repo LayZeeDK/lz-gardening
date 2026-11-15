@@ -335,6 +335,21 @@ test('a mistyped flag is a usage error, not ignored', (t) => {
   assert.match(result.stderr, /--clas/);
 });
 
+test("another command's flag is a usage error, not ignored", (t) => {
+  const dir = checkout(t);
+
+  const results = [cli(dir, ['list', '--ready']), cli(dir, ['list', '--min', '3']), cli(dir, ['claim', '--id', 'x'])];
+
+  assert.deepEqual(
+    results.map(({ status, stdout, stderr }) => [status, stdout, stderr]),
+    [
+      [2, '', 'weeds list: --ready is not an option of list\n'],
+      [2, '', 'weeds list: --min is not an option of list\n'],
+      [2, '', 'weeds claim: --id is not an option of claim\n'],
+    ],
+  );
+});
+
 test('groups refuses a --min that is not a positive whole number, rather than hiding every class', (t) => {
   const dir = checkout(t);
 

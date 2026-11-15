@@ -90,8 +90,8 @@ command's sync gives the claim back without a word. `weeds.ts close-class` and `
 each syncs first and acts only when that sync is `synced` or `local` and this writer then holds a live claim of the
 class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
 another writer holds a claim of the weed's class; when its first sync is not `synced` or `local`, it closes and says
-`planned <state>` on stderr. `close` takes `--id` alone and `close-class` takes `--class` alone: a blank `--id`, or
-either command given the other's flag, exits 2 with a usage line.
+`planned <state>` on stderr. Each `weeds.ts` command takes only the flags its usage lists, and exits 2 on any
+other; `close` takes `--id` alone and `close-class` takes `--class` alone, and a blank `--id` exits 2 too.
 
 A claim's `until` is six hours after its writer's clock. A reader counts the claim live while `until` is ahead of its
 own clock by at most seven hours, which allows one hour of clock skew between machines. A claim from a writer whose

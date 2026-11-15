@@ -321,6 +321,7 @@ function parseFlags(argv: readonly string[]) {
     args: [...argv],
     allowPositionals: true,
     strict: true,
+    tokens: true,
     options: {
       class: { type: 'string' },
       where: { type: 'string', default: '' },
@@ -548,36 +549,53 @@ function list(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
+interface Command {
+  readonly name: string;
+  readonly flags: readonly string[];
+  readonly run: (io: Io, flags: Flags, now: Date, seams: SyncSeams) => number;
+}
+
+const closeFlags = ['id', 'class', 'tended', 'one-off', 'keep', 'check'];
+
+const commands: readonly Command[] = [
+  { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], run: add },
+  {
+    name: 'close',
+    flags: closeFlags,
+    run: (io, flags, now, seams) => close(io, 'close', flags, now, seams),
+  },
+  {
+    name: 'close-class',
+    flags: closeFlags,
+    run: (io, flags, now, seams) => close(io, 'close-class', flags, now, seams),
+  },
+  { name: 'claim', flags: ['class'], run: claimCommand },
+  { name: 'release', flags: ['class'], run: release },
+  { name: 'groups', flags: ['min', 'ready'], run: groups },
+  { name: 'list', flags: ['class'], run: list },
+];
+
 function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): number {
-  const { positionals, values } = parseFlags(argv);
-  const command = positionals.length === 1 ? positionals[0] : undefined;
+  const { positionals, values, tokens } = parseFlags(argv);
+  const command = positionals.length === 1 ? commands.find(({ name }) => name === positionals[0]) : undefined;
 
-  switch (command) {
-    case 'add': {
-      return add(io, values, now);
-    }
-    case 'close':
-    case 'close-class': {
-      return close(io, command, values, now, seams);
-    }
-    case 'claim': {
-      return claimCommand(io, values, now, seams);
-    }
-    case 'release': {
-      return release(io, values, now, seams);
-    }
-    case 'groups': {
-      return groups(io, values, now);
-    }
-    case 'list': {
-      return list(io, values, now);
-    }
-    default: {
-      io.err('usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n');
+  if (command === undefined) {
+    io.err('usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n');
 
-      return 2;
-    }
+    return 2;
   }
+
+  const stray = tokens
+    .flatMap((token) => (token.kind === 'option' ? [token.name] : []))
+    .find((flag) => !command.flags.includes(flag));
+
+  if (stray !== undefined) {
+    io.err(`weeds ${command.name}: --${stray} is not an option of ${command.name}\n`);
+
+    return 2;
+  }
+
+  return command.run(io, values, now, seams);
 }
 
 export function run(argv: readonly string[], io: Io, now = new Date(), seams: SyncSeams = {}): number {
