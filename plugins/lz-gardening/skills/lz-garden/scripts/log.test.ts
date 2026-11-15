@@ -108,6 +108,15 @@ function statuses(garden: Garden, ids: readonly string[]): Record<string, string
   );
 }
 
+test("a closed weed's status comes from the close of its own class, with weeds of other classes added before it", () => {
+  const garden = replay(
+    [add('a1', 1, 'w1', { class: 'todo-marker' }), add('a2', 2, 'w2'), close('c1', 3, ['w2'], 'one-off')],
+    now,
+  );
+
+  assert.deepEqual(statuses(garden, ['w2']), { w2: 'closed:one-off' });
+});
+
 test('ids depend on class, place and source', () => {
   assert.notEqual(weedId('a', 'f:1', 'commit:1'), weedId('a', 'f:1', 'commit:2'));
   assert.equal(weedId('a', 'f:1', 'commit:1'), weedId('a', 'f:1', 'commit:1'));
@@ -311,6 +320,12 @@ test('a claim whose until is more than seven hours past the reader clock is not 
   const skewed = { ...claim('c1', 1, 'writer-b'), at: '2026-11-11T13:00:00.001Z', until: '2026-11-11T19:00:00.001Z' };
 
   assert.equal(replay([skewed], now).claims.get('any-type'), undefined);
+});
+
+test('a claim with a millisecond left on the reader clock is still live', () => {
+  const ending = { ...claim('c1', 1, 'writer-b'), until: '2026-11-11T12:00:00.001Z' };
+
+  assert.equal(replay([ending], now).claims.get('any-type'), ending);
 });
 
 test('a claim whose until is six hours past the reader clock is live, as a claim taken now is', () => {
