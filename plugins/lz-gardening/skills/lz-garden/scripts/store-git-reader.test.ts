@@ -307,6 +307,20 @@ test('closing one folder ends only its readers; the others keep reading, and it 
   assert.deepEqual(postedLines(posted).slice(4), ['end 1', 'write 2', 'start 3', 'write 3']);
 });
 
+test("a git that ends while another folder's close waits is forgotten, so its next read starts a new one", () => {
+  const { posted, pump } = scriptedPump((message) =>
+    message.kind === 'end' ? [{ kind: 'ended', reader: 2, code: 0 }, ...oneCommitGit(message)] : oneCommitGit(message),
+  );
+  const checkout = { cwd: 'D:/checkout', overrides: {} };
+  const reads = readerOf(pump);
+  reads.ids(at, ['HEAD']);
+  reads.ids(checkout, ['HEAD']);
+  reads.close('D:/site');
+  reads.ids(checkout, ['HEAD']);
+
+  assert.deepEqual(postedLines(posted).slice(4), ['end 1', 'start 3', 'write 3']);
+});
+
 test('a git that ends while another reads is forgotten, so its next read starts a new one', () => {
   let writes = 0;
   const { posted, pump } = scriptedPump((message) => {

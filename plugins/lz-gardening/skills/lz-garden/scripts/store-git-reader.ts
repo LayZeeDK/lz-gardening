@@ -320,6 +320,7 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
 
           if (message.kind === 'ended') {
             open.delete(message.reader);
+            forget(message.reader);
           }
         }
       };
