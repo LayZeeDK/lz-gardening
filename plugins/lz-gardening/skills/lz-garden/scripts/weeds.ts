@@ -266,7 +266,6 @@ function claimRefusalOut(planned: Exclude<ClaimPlan, { readonly said: 'claimed' 
   }
 }
 
-// Stryker disable next-line LzJsNumericLiteral: how many classes a claim without --class tries is policy
 const claimRounds = 3;
 
 function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: SyncSeams): number {
