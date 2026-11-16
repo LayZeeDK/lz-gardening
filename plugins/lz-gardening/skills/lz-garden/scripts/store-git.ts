@@ -212,8 +212,29 @@ function spawnGit(
     throw new Error(`git could not start: ${result.error.message}`);
   }
 
+  // Stryker disable all: Windows only, so no Linux test tells these mutants apart; on Windows the timed-out push tests of store-sync and store-beds fail without them, and a mutant that ends processes after every git changes only how long a run takes
+  if (timedOut(result) && process.platform === 'win32') {
+    endProcessesLeftBy(result.pid);
+  }
+
   return result;
 }
+
+// A timeout ends only the process spawnSync started. On Windows that is often Git's cmd\git.exe launcher, whose git
+// then runs on in the folder until its connection ends; Windows keeps the ended launcher's id as that git's parent.
+function endProcessesLeftBy(pid: number): void {
+  spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${String(pid)}' | ForEach-Object { taskkill.exe /PID $_.ProcessId /T /F }`,
+    ],
+    { stdio: 'ignore' },
+  );
+}
+// Stryker restore all
 
 interface GitRun {
   readonly code: number;
