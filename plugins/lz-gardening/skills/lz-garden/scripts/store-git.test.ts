@@ -12,6 +12,7 @@ import {
   closeReaders,
   configValue,
   gitReason,
+  gitSucceeds,
   inRun,
   isAncestor,
   isKnownAncestor,
@@ -27,7 +28,7 @@ import {
 } from './store-git.ts';
 import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
 import type { ReadStrategy } from './store-git-objects.ts';
-import { commit, git, init, repo, startedCommands } from './test-repo.ts';
+import { commit, git, init, repo, startedCommands, startedGits } from './test-repo.ts';
 
 function readThrough<T>(strategy: ReadStrategy, read: () => T): T {
   return inRun({ ...process.env, [readStrategyVariable]: strategy }, read);
@@ -246,6 +247,17 @@ test("each read strategy reads in the environment a read sets on top of the run'
 
 test('a variable may point git at a repository when its name starts with GIT_ and not with GIT_CONFIG_', () => {
   assert.deepEqual(['GIT_DIR', 'GIT_CONFIG_COUNT', 'PATH'].map(mayPointAtARepository), [true, false, false]);
+});
+
+test('a git that writes runs with auto maintenance off, so no pack-refs it starts rewrites the refs of a run', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'a.txt': 'a\n' });
+  const started = startedGits(t);
+
+  inRun(process.env, () => gitSucceeds(dir, ['commit', '-q', '--allow-empty', '-m', 'b']));
+
+  const commits = started().filter(({ args }) => args.includes('commit'));
+  assert.match(commits.map(({ args }) => args.join(' ')).join('\n'), /^-c .*-c maintenance\.auto=false .*commit -q/);
 });
 
 test('a run whose environment sets GIT_EDITOR and GIT_OPTIONAL_LOCKS, as Claude Code does, starts no git to list the variables that point git at a repository', (t) => {

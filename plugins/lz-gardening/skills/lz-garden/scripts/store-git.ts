@@ -114,6 +114,10 @@ const writeSettings = [
   'push.gpgSign=false',
   '-c',
   'core.filesRefLockTimeout=3000',
+  // The auto maintenance a fetch, merge or commit may start packs refs, which a reader's git can miss for the rest of
+  // the run on Windows (ADR 0007).
+  '-c',
+  'maintenance.auto=false',
 ];
 
 function configOf(cwd: string): ReadonlyMap<string, string> {
