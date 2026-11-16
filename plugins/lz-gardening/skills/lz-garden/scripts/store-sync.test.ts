@@ -5,14 +5,14 @@ import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
-import { eventPath } from './log.ts';
+import { eventPath, isRecord } from './log.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
 import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
 import { logRef, openSite } from './store-log.ts';
 import { censusRef, writePendingCensus } from './store-census.ts';
-import { lostRaceOf, mergeShared, sync } from './store-sync.ts';
+import { isShared, lostRaceOf, mergeShared, sleep, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
-import { commit, git, repo, scriptProcess, startedCommands } from './test-repo.ts';
+import { commit, git, repo, scriptProcess, startedCommands, startedGits } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
 import {
   anotherSyncMovesTheCensusFirst,
@@ -73,6 +73,14 @@ test('a new site whose origin holds a shared log takes that log as its own', (t)
   );
 });
 
+test('a site that takes the shared log as its own counts no event as pushed', (t) => {
+  const { first, second } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+
+  assert.equal(sync(openSite(second.dir), { attempts: 1 }).pushedEvents, 0);
+});
+
 test('the first sync to an origin with no shared log counts every event it pushed', (t) => {
   const { dir } = planted(t);
   bareRemote(dir);
@@ -80,6 +88,15 @@ test('the first sync to an origin with no shared log counts every event it pushe
   addWeed(dir, 'src/b.ts:1');
 
   assert.equal(sync(openSite(dir), { attempts: 1 }).pushedEvents, 2);
+});
+
+test('a sync whose origin already holds the local log counts no event as pushed', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  addWeed(dir, 'src/a.ts:1');
+  sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(sync(openSite(dir), { attempts: 1 }).pushedEvents, 0);
 });
 
 test('a garden in a repository of SHA-256 objects counts the events its first sync pushed', (t) => {
@@ -111,6 +128,30 @@ test('a site whose log already holds the shared log pushes its own log as it is,
   assert.deepEqual(
     [result.state, git(garden, ['rev-parse', logRef]), git(remote, ['rev-parse', logRef])],
     ['synced', tip, tip],
+  );
+});
+
+test('a sync that merges a shared log holding a weed the site lacks counts only its own weed as pushed, and lists no conflict', (t) => {
+  const { first, second } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  addWeed(second.dir, 'src/b.ts:1');
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.pushedEvents, result.conflicts], ['synced', 1, []]);
+});
+
+test("a site takes a shared log whose garden.json holds this version's format in other bytes", (t) => {
+  const { first, second, remote } = sharedPair(t);
+  writeToLogByHand(first.garden, 'garden.json', '{ "format": 1 }');
+  git(first.garden, ['push', '-q', remote, `${logRef}:${logRef}`]);
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.skipped, git(second.garden, ['rev-parse', logRef])],
+    ['synced', [], git(remote, ['rev-parse', logRef])],
   );
 });
 
@@ -152,6 +193,15 @@ test('an origin that cannot be reached leaves the site offline, with what git sa
   assert.equal(git(garden, ['rev-parse', logRef]), tip);
 });
 
+test('a sync that left the site offline has not shared what the site holds', (t) => {
+  const { dir } = planted(t);
+  git(dir, ['remote', 'add', 'origin', join(dirname(dir), 'missing.git')]);
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, isShared(result)], ['offline', false]);
+});
+
 test('a site whose garden log is gone is refused by a sync, naming the site and the fix', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
@@ -171,6 +221,16 @@ test('an origin whose hook declines the push leaves the site read-only, with wha
   const result = sync(openSite(dir), { attempts: 1 });
 
   assert.deepEqual([result.state, result.reason], ['read-only', 'remote: refs/garden is closed here']);
+});
+
+test('a sync whose push the origin declines names no bed as left out', (t) => {
+  const { dir } = planted(t);
+  remoteHook(bareRemote(dir), 'pre-receive', 'exit 1');
+  addWeed(dir, 'src/a.ts:1');
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.divergedBeds], ['read-only', []]);
 });
 
 test('a site set to sign every push still shares its log, unsigned', (t) => {
@@ -475,6 +535,15 @@ test('a sync waits under one and a half seconds before its second try and under 
   );
 });
 
+test('a sleep holds the thread for the time given', () => {
+  const started = performance.now();
+
+  sleep(100);
+
+  const held = performance.now() - started;
+  assert.ok(held >= 90, `held for ${String(held)} ms`);
+});
+
 test('a fetch that finds the shared log locked by another sync of the site waits, tries again, and lands', (t) => {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
@@ -539,6 +608,30 @@ test('a push URL nobody listens on leaves the site offline with what git said, n
   );
 });
 
+test('a push that fails though the origin took every ref leaves the site offline with what git said, not read-only', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  addWeed(dir, 'src/a.ts:1');
+  const { spawnSync } = childProcess;
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const [, gitArgs] = args;
+    const result: unknown = Reflect.apply(spawnSync, childProcess, args);
+
+    return Array.isArray(gitArgs) && gitArgs.includes('push') && isRecord(result)
+      ? { ...result, status: 1, stderr: 'fatal: the remote end hung up unexpectedly\n' }
+      : result;
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.reason], ['offline', 'fatal: the remote end hung up unexpectedly']);
+});
+
 test('an origin that asks for credentials leaves the site offline with what git said, without waiting for input', async (t) => {
   const { dir } = planted(t);
   const port = await serve(
@@ -585,7 +678,12 @@ test('a shared log whose commit holds no garden.json stops the sync with an erro
   assert.throws(() => sync(openSite(second.dir), { attempts: 1 }), { message: notAGardenLog });
 });
 
-test('every push a sync starts names only the garden log, the census or a bed, and never a bed with the log', (t) => {
+// Two sites with a weed each to share; the second also holds a tended close with its bed and a pending census.
+function withALogACensusAndABedToShare(t: TestContext): {
+  readonly first: Planted;
+  readonly second: Planted;
+  readonly base: string;
+} {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   addWeed(second.dir, 'src/b.ts:1');
@@ -605,6 +703,39 @@ test('every push a sync starts names only the garden log, the census or a bed, a
   git(second.dir, ['config', 'lzGardening.share', 'true']);
   const base = git(second.dir, ['rev-parse', 'HEAD']);
   writePendingCensus({ path: second.garden, checkout: second.dir }, base, censusText(base));
+
+  return { first, second, base };
+}
+
+test('a sync turns the hooks and signing off for the gits that write, and for none of those that only read', (t) => {
+  const { first, second, base } = withALogACensusAndABedToShare(t);
+  writeToLogByHand(first.garden, 'garden.json', '{ "format": 1 }');
+  sync(openSite(first.dir), { attempts: 1 });
+  const started = startedGits(t);
+
+  sync(openSite(second.dir), { attempts: 1, census: base });
+
+  const turnsHooksOff = (args: readonly string[]): boolean => args.some((arg) => arg.startsWith('core.hooksPath='));
+  const commands = (which: (args: readonly string[]) => boolean): readonly (string | undefined)[] =>
+    [
+      ...new Set(
+        started()
+          .map(({ args }) => args)
+          .filter(which)
+          .map((args) => args.find((arg) => /^[a-z][a-z-]*$/.test(arg))),
+      ),
+    ].sort();
+  assert.deepEqual(
+    [commands(turnsHooksOff), commands((args) => !turnsHooksOff(args))],
+    [
+      ['fast-import', 'fetch', 'push', 'update-ref'],
+      ['cat-file', 'config', 'diff-tree', 'for-each-ref', 'log', 'ls-tree', 'merge-base', 'remote', 'rev-parse'],
+    ],
+  );
+});
+
+test('every push a sync starts names only the garden log, the census or a bed, and never a bed with the log', (t) => {
+  const { first, second, base } = withALogACensusAndABedToShare(t);
   const spawned = t.mock.method(childProcess, 'spawnSync');
   syncBuiltinESMExports();
   t.after(() => {
@@ -641,6 +772,39 @@ for (const strategy of readStrategies) {
     );
   });
 }
+
+test('a sync that pushes a weed and gives back no claim fetches, compares the logs, reads the weed, lists the beds and pushes, and never reads the whole log', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  sync(openSite(dir), { attempts: 1 });
+  addWeed(dir, 'src/a.ts:1');
+  const started = startedCommands(t);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
+
+  const result = inRun({ ...env, [readStrategyVariable]: 'spawn' }, () => sync(openSite(dir), { attempts: 1 }));
+
+  assert.deepEqual(
+    [result.state, started],
+    [
+      'synced',
+      [
+        'rev-parse',
+        'config',
+        'remote',
+        'config',
+        'remote',
+        'config',
+        'fetch',
+        'cat-file',
+        'diff-tree',
+        'merge-base',
+        'cat-file',
+        'for-each-ref',
+        'push',
+      ],
+    ],
+  );
+});
 
 function fetchArgs(t: TestContext, dir: string, env: NodeJS.ProcessEnv): readonly string[] {
   const spawned = t.mock.method(childProcess, 'spawnSync');

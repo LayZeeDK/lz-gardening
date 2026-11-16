@@ -140,6 +140,19 @@ test('a claim appended and never pushed is given back by the next open once anot
   );
 });
 
+test('a sync that gives back a claim counts the claim and its release as pushed', (t) => {
+  const { first, second } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  sync(openSite(second.dir), { attempts: 1 });
+  crashedClaim(second.dir, new Date());
+  assert.equal(cli(first.dir, ['claim', '--class', 'any-type']).status, 0);
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.yielded.length, result.pushedEvents], ['synced', 1, 2]);
+});
+
 test('a claim appended and never pushed of a class nobody else claimed is pushed by the next open', (t) => {
   const { first, remote } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');

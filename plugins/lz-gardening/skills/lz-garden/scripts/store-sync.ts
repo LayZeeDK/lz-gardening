@@ -56,7 +56,11 @@ function diffTree(site: string, shared: string, local: string): readonly Change[
 
   return Array.from({ length: Math.floor(fields.length / 2) }, (_, index) => {
     // Stryker disable next-line StringLiteral: diff-tree prints five fields and a path for every change, so no default applies
-    const [meta = '', path = ''] = fields.slice(index * 2, index * 2 + 2);
+    const [meta = '', path = ''] = fields.slice(
+      index * 2,
+      // Stryker disable next-line LzJsNumericLiteral: equivalent, an end past the pair reads the same, as only the first two fields are taken
+      index * 2 + 2,
+    );
     // Stryker disable next-line StringLiteral: as above
     const [, , sharedOid = '', localOid = '', status = ''] = meta.split(' ');
 
