@@ -261,6 +261,23 @@ test("a contents read pairs each item with its object's bytes", () => {
   );
 });
 
+test('answers cut across chunks inside a header, inside the bytes and before the closing NUL pair as if whole', () => {
+  const chunks = [`${oid} bl`, `ob 5\0hel`, 'lo', `\0${oid} blob 2\0hi`, '\0'];
+  const { pump } = scriptedPump((message) =>
+    message.kind === 'write'
+      ? chunks.map((text) => ({ kind: 'out', reader: message.reader, chunk: Buffer.from(text) }) as const)
+      : oneCommitGit(message),
+  );
+
+  assert.deepEqual(
+    readerOf(pump).contents(at, ['HEAD:a.txt', 'HEAD:b.txt'], (name) => name),
+    [
+      ['HEAD:a.txt', { kind: 'object', oid, type: 'blob', size: 5, bytes: Buffer.from('hello') }],
+      ['HEAD:b.txt', { kind: 'object', oid, type: 'blob', size: 2, bytes: Buffer.from('hi') }],
+    ],
+  );
+});
+
 test("a commit's files are walked through contents reads of its trees", () => {
   const blob = 'b'.repeat(40);
   const root = Buffer.concat([Buffer.from('100644 a.txt\0'), Buffer.from(blob, 'hex')]);
