@@ -19,6 +19,14 @@ queue's `refs/garden/log` with the claim, the release and the close, and the clo
 `refs/garden/beds/<class>`. Each step ends on a done condition; when one is not met, report the command and its
 output and stop.
 
+Two rules hold for the whole pass:
+
+- **Read with the Read tool, search with the Grep tool, list files with the Glob tool**, in the checkout and in the
+  bed alike. `rg`, `grep`, `find`, `ls`, `cat`, `head` and `tail` through Bash are outside the pass: many users'
+  rules refuse them, and a refused command ends the pass.
+- **A refused command ends the pass.** Report the command and its refusal, and stop. The refusal is the user's answer
+  to the command in every form, the forms below included, so the pass reaches the same result no other way.
+
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/weeds.ts"`, run from the repository's checkout: it finds the
@@ -48,9 +56,6 @@ the session's working directories (the session's environment lists any added one
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
-- Stop at a refused command: report it and end the tend pass, as when a step's done condition is not met. The
-  refusal is the user's answer to the command in every form, the forms above included, so the pass ends there.
-- Read, search and list files with the Read, Grep and Glob tools, not `cat`, `grep` or `ls`.
 - Write each command out in full, with no shell variables, `$(...)` or loops: the user's rules cannot match those,
   so they ask every time.
 
@@ -68,14 +73,16 @@ weeds of one class.
 
 ## 2. Find the root cause
 
-Read every open weed at the base (`git show <base>:<path>`) and the commit that planted it (`--source`).
-Answer in two sentences: what were the agents trying to do, and why was the shortcut the nearest example? For
-copies (a function defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that
-pins the copies alike can say a copy must stay (a file loaded or copied alone, which cannot import the shared one).
-Such a copy is kept, not removed, and the check pins the copies instead. A class
-whose weeds were `regrown` had a check that did not hold: start from the bed and check that `weeds list` shows on
-each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule too narrow, a
-suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
+Read every open weed as it is on the base: run `git show <base>:<path>` for each weed's file, one call per file, and
+when the tool result says the output was saved to a file, Read that file to its end. A Read or Grep of the checkout
+does not replace this call: the checkout can be on another branch than `<base>`. Read the commit that planted each
+weed too (`git show <commit>` for a `commit:` source). Then answer in two sentences: what were the agents trying to
+do, and why was the shortcut the nearest example? For copies (a function defined twice, a block repeated), first
+read why each copy exists: a comment, a doc or a test that pins the copies alike can say a copy must stay (a file
+loaded or copied alone, which cannot import the shared one). Such a copy is kept, not removed, and the check pins the
+copies instead. A class whose weeds were `regrown` had a check that did not hold: start from the bed and check that
+`weeds list` shows on each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule
+too narrow, a suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
 `(check: <where> not on the base)` when its bed had not landed as of the garden's last census, or the check's file is
 gone from the base; a tend pass takes no census, so a bed that landed since still reads so. When the bed has not
 landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to the base,
@@ -102,15 +109,18 @@ is `synced` or `local` and this site still holds the claim; report its line as i
 
 ## 3. Choose the layer
 
-Take the strongest layer that can hold the class, from the layer list in
-`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/weeds.md`. `${CLAUDE_SKILL_DIR}/references/checks.md` lists, per
-stack, the checks that hold common classes; read the rows for the repository's stack. Prefer, in order: change the
-code so the weed cannot be written (one shared function, one paved road, delete the bad examples); a type or compiler flag; a
-lint rule whose message names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
+First Read two files with the Read tool, even for a class you think you know: the layer list ("Layers") in
+`${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/weeds.md`, and `${CLAUDE_SKILL_DIR}/references/checks.md`, which
+lists, per stack, the checks that hold common classes. Find the rows for this class and the repository's stack.
+
+Take the strongest layer that can hold the class. Prefer, in order: change the code so the weed cannot be written
+(one shared function, one paved road, delete the bad examples); a type or compiler flag; a lint rule whose message
+names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
 Layers 4 to 6 (instructions, skills, style guide) only when nothing stronger can hold it; say why.
 
-Done when you can name the check, its layer by the number `weeds.md` gives it (a type, lint rule or test is
-layer 2; a change to the code itself is layer 1), where it lives, and the message it prints.
+Done when you have read both files and can name the check, its layer by the number `weeds.md` gives it (a type,
+lint rule or test is layer 2; a change to the code itself is layer 1), the `checks.md` row it follows (or that no
+row fits, and why), where it lives, and the message it prints.
 
 ## 4. Make the bed
 
@@ -137,7 +147,12 @@ instructions, and run in the bed:
   the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
   file (a root `node --test` suite that loads a module alone, say). A project's test script often leaves these out.
 
-Keep each command and its summary lines. Step 6 runs the same commands. Done when each has run before any edit.
+Keep each command and its summary lines: the lines that count passes and failures, and the name of each failing
+check or test. A failing command is a starting result too: its failures are the ones step 6 may see again. When the
+tool result says a command's output was saved to a file, Read the end of that file for its summary lines. When you
+cannot read a command's summary lines (the output was cut), it is no starting result: replace it with narrower
+commands whose summary lines you can read (one project's tests, one test folder) and keep those. Step 6 runs the
+same commands. Done when each has run before any edit and you hold its summary lines.
 
 ## 5. Rule first, proved on a real weed
 
@@ -155,10 +170,12 @@ file, or a count the check enforces as a maximum) and never raise one. Every exc
 rule and a reason.
 
 Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
-file the change touched that step 4 did not run. Done when each has run again and passes, apart from the same
-failures as in the starting results. Quote their summary lines. A command that fails after the change and has no
-starting result may be a failure your change caused: stop before step 7 and report it with its output, so a human
-judges it. The class stays open and the bed stays as it is.
+file the change touched that step 4 did not run. A command that failed at the start runs again too, however long
+its output: its rerun shows whether the same checks or tests fail and no others. Read its summary lines as step 4
+says. Done when each has run again and passes, or fails with exactly the failures it had at the start, by name.
+Quote their summary lines. A command that fails after the change and has no starting result, or fails with a
+failure it did not have at the start, may be a failure your change caused: stop before step 7 and report it with its
+output, so a human judges it. The class stays open and the bed stays as it is.
 
 ## 7. Commit and close
 
@@ -195,7 +212,8 @@ Done when `close-class` prints `closed <n>; <state>`.
 ## 8. Report
 
 - The class, its root cause, and the decision.
-- The check: layer number (step 3), file, message, and the quoted output that proved it rejects a real weed.
+- The check: layer number and `checks.md` row (step 3), file, message, and the quoted output that proved it rejects
+  a real weed.
 - The weeds closed apart from the class (step 7), each with its id, kind and reason.
 - Instances fixed, instances baselined, code deleted, and the bed's net line count
   (`git -C "<bed>" diff --shortstat <start>`); a tend pass usually leaves the codebase shorter.
