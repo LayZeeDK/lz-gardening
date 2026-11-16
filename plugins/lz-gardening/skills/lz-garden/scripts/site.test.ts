@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { renameRetrying, resolveBase } from './site.ts';
@@ -513,6 +513,20 @@ test('--class belongs to bed alone, and --message to no command', (t) => {
   assert.equal(git(garden, ['branch', '--list', 'bed/*']), '');
 });
 
+test('--census and --seeded belong to sync alone', (t) => {
+  const { dir } = planted(t);
+  const sha = 'a'.repeat(40);
+
+  const statuses = [
+    site(dir, ['open', '--base', 'main', '--census', sha]),
+    site(dir, ['open', '--base', 'main', '--seeded']),
+    site(dir, ['bed', '--class', 'any-type', '--base', 'main', '--census', sha]),
+    site(dir, ['bed', '--class', 'any-type', '--base', 'main', '--seeded']),
+  ].map(({ status }) => status);
+
+  assert.deepEqual(statuses, [2, 2, 2, 2]);
+});
+
 test('bed without --class or without --base is a usage error, not an open', (t) => {
   const { dir, garden } = planted(t);
 
@@ -816,6 +830,20 @@ test('open refuses a folder where the site goes that is not a site, before cloni
   assert.equal(readFileSync(join(garden, 'notes.txt'), 'utf8'), 'mine\n');
 });
 
+test('open without a base looks for no census in a folder where the site goes that is not a site', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+  mkdirSync(join(dirname(dir), 'repo.garden'));
+
+  const result = site(dir, ['open']);
+
+  assert.deepEqual(
+    [result.status, /^site: .+repo\.garden is not a garden site; move it away/.test(result.stderr)],
+    [2, true],
+    result.stderr,
+  );
+});
+
 test('open plants over the leftover of a plant that stopped part way', (t) => {
   const dir = repo(t);
   commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
@@ -828,6 +856,19 @@ test('open plants over the leftover of a plant that stopped part way', (t) => {
   assert.equal(result.summary.get('created'), true);
   assert.equal(existsSync(leftover), false);
   assert.equal(git(join(dirname(dir), 'repo.garden'), ['log', '--format=%s']), 'garden: plant');
+});
+
+test('open plants a site that keeps the garden log its clone copied from the checkout, reading through reader', (t) => {
+  const { dir, garden } = planted(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+  git(dir, ['fetch', '-q', garden, `${logRef}:${logRef}`]);
+  rmSync(garden, { recursive: true, force: true });
+  const env = configEnv([['remote.origin.fetch', '+refs/garden/*:refs/garden/*']]);
+
+  const result = site(dir, ['open', '--base', 'main'], { ...env, [readStrategyVariable]: 'reader' });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(git(garden, ['rev-parse', logRef]), git(dir, ['rev-parse', logRef]));
 });
 
 test('a census that is not a census does not stop open, which takes the base it would take with none', (t) => {

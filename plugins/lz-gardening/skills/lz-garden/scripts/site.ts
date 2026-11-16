@@ -167,6 +167,7 @@ function plant(top: string, site: string): void {
   // A maintenance run the commit starts in the background would hold files in the folder the rename moves next.
   git(planting, ['-c', 'maintenance.auto=false', 'commit', '-q', '-m', 'garden: plant']);
   startLog({ path: planting, checkout: top });
+  // Stryker disable next-line CallExpression: equivalent off Windows, which alone keeps a folder a git runs in from moving; a site test fails without it there
   closeReaders(planting);
   renameRetrying(planting, site);
 }
