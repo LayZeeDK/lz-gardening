@@ -73,6 +73,7 @@ function commitDiffs(cwd: string, range: string): readonly CommitDiff[] {
       '--no-color',
       '--no-ext-diff',
       '--no-textconv',
+      '--no-show-signature',
       '--format=%x1e%h%x00%s%x00%B%x00',
       range,
     ],
