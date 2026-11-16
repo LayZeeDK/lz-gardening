@@ -199,7 +199,7 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
     }
 
     if (start.kind === 'ended') {
-      throw new Error(`git could not start: ${start.error ?? ''}`);
+      throw new Error(`git could not start: ${start.error ?? `it ended with code ${String(start.code)}`}`);
     }
 
     readers.set(key, { reader: started, cwd: at.cwd });

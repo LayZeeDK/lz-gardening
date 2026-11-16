@@ -373,6 +373,14 @@ test('a git that cannot start fails the read with the reason, and nothing is wri
   );
 });
 
+test('a git that ends before it is said to start, with no error, fails the read with its exit code', () => {
+  const { pump } = scriptedPump((message) =>
+    message.kind === 'start' ? [{ kind: 'ended', reader: message.reader, code: 128 }] : [],
+  );
+
+  assert.throws(() => readerOf(pump).ids(at, ['HEAD']), { message: 'git could not start: it ended with code 128' });
+});
+
 test('a git that could not start, told only after it was said to start, fails the read with the reason', () => {
   const { pump } = scriptedPump((message) =>
     message.kind === 'write'
