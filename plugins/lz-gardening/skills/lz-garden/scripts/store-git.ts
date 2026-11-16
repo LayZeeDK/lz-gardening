@@ -277,7 +277,7 @@ export function gitSucceeds(cwd: string, args: readonly string[], options: GitIn
 
 /** The first line of git's message, as a reason to print. */
 export function gitReason(stderr: string): string {
-  return stderr.trim().replace(/\n.*$/s, '').trim();
+  return stderr.trim().replace(/\n.*/s, '').trim();
 }
 
 // Stryker disable next-line LzJsNumericLiteral: how long a fetch or push may take is policy; the limit is tested through timeoutMs
