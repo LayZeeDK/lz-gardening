@@ -420,8 +420,6 @@ function plantDeps(top: string, bed: string): Deps {
     }
 
     rmSync(join(bed, 'node_modules'));
-
-    return 'install';
   }
 
   if (existsSync(join(bed, '.pnp.cjs'))) {

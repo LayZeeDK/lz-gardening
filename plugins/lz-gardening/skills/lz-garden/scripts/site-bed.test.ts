@@ -557,7 +557,7 @@ test('bed unlinks a linked bed whose base came to declare workspaces, and asks f
   assert.equal(existsSync(join(dir, 'node_modules')), true);
 });
 
-test('bed unlinks a linked bed whose base dropped its package.json, and asks for an install', (t) => {
+test('bed unlinks a linked bed whose base dropped its package.json, and says it needs no install', (t) => {
   const dir = installed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.summary.get('deps'), 'linked');
@@ -569,7 +569,7 @@ test('bed unlinks a linked bed whose base dropped its package.json, and asks for
 
   assert.deepEqual(
     [again.status, again.summary.get('deps'), lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false })],
-    [0, 'install', undefined],
+    [0, 'none', undefined],
     again.stderr,
   );
   assert.equal(existsSync(join(dir, 'node_modules')), true);
