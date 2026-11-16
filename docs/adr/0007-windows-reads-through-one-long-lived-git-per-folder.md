@@ -29,7 +29,11 @@ thread waits on a shared counter with `Atomics.wait` and reads the worker's mess
   (`closeReaders`, as the site's plant does before it moves the planted folder). Ending a reader costs about 4 ms on
   Windows (measured, median of 6 rounds).
 - A reader sees what the run writes while it lives: refs moved and objects written after its start are read fresh
-  (measured on git 2.54 and 2.56).
+  (measured on git 2.54 and 2.56). One exception: a `packed-refs` file rewritten to the same size can stay stale in
+  a reader for the rest of the run (measured on git 2.54 for Windows: 33 of 39 reads stale after a same-size
+  `git pack-refs` within a second, still stale 3 s later). Only `pack-refs` rewrites it to the same size, so in a run
+  only `git gc` or maintenance can cause it, such as the auto maintenance a `git fetch` or `git merge` may start in a
+  user's repository. The tests turn auto maintenance off.
 - The reader's git starts in the worker thread, where the test module that counts git starts does not run, so the
   reader publishes each start on the `lz-gardening.git-start` diagnostics channel and the tests count it there.
 - The worker runs from the source text of one function, so that function may name nothing outside its body.
