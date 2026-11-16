@@ -21,6 +21,7 @@ function bedChangeMissingFromBase({ cwd, withSite, where, fork, base, tip }: Lan
   const checkPath = ['--', `:(top,literal)${where}`];
   // patch-id prints `<patch id> <commit>` for each commit's diff it reads, and nothing for no diff.
   const patchIdsOf = (diffs: string): readonly string[] =>
+    // Stryker disable next-line Regex: a line holds two words, so only its first has a space after it, with ^ or without; and with (?! ) every patch id loses its last character alike, which changes no comparison of one with another
     git(cwd, ['patch-id'], { ...withSite, input: diffs }).match(/^\S+(?= )/gm) ?? [];
   const [bedChange] = patchIdsOf(git(cwd, ['diff-tree', '-p', ...diffOptions, fork, tip, ...checkPath], withSite));
 

@@ -465,6 +465,7 @@ function claimCommand(io: Io, flags: Flags, now: Date, seams: SyncSeams): number
 }
 
 function release(io: Io, flags: Flags, now: Date, seams: SyncSeams): number {
+  // Stryker disable next-line StringLiteral: a release without --class fails validation, and so does the mutant's text
   const weedClass = flags.class ?? '';
 
   if (!classPattern.test(weedClass)) {
