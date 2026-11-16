@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { writeToLogByHand } from './test-log.ts';
-import { commit, git, init, repo } from './test-repo.ts';
+import { commit, git, init, repo, startedCommands } from './test-repo.ts';
 import { logRef } from './store-log.ts';
 import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
@@ -65,6 +65,19 @@ test('bed makes a worktree on bed/<class> from the base as the repository has it
   assert.equal(result.summary.get('created'), true);
   assert.equal(git(expected, ['branch', '--show-current']), 'bed/any-type');
   assert.equal(git(expected, ['rev-parse', 'HEAD']), main);
+});
+
+test('bed with no shared bed makes the new bed at the base and starts no merge', (t) => {
+  const { dir } = claimed(t);
+  const started = startedCommands(t);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    started.filter((command) => command === 'worktree' || command === 'merge'),
+    ['worktree'],
+  );
 });
 
 test('bed on an existing bed takes what the base gained since, keeps its work, and starts from the base', (t) => {
@@ -383,7 +396,7 @@ test('bed whose shared bed conflicts with the local bed exits 2, names the bed, 
   const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
 
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /beds[\\/]any-type/);
+  assert.match(result.stderr, /^site: origin's bed\/any-type does not merge into .*beds[\\/]any-type cleanly/);
   assert.deepEqual(
     [git(bed, ['rev-parse', 'HEAD']), git(bed, ['status', '--porcelain', '--untracked-files=no'])],
     [work, ''],
@@ -532,6 +545,24 @@ test('bed unlinks a linked bed whose base came to declare workspaces, and asks f
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.equal(first.summary.get('deps'), 'linked');
   commit(dir, { 'package.json': '{ "name": "x", "workspaces": ["packages/*"] }\n' });
+  const bed = join(dirname(dir), 'repo.garden', 'beds', 'any-type');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.deepEqual(
+    [again.status, again.summary.get('deps'), lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false })],
+    [0, 'install', undefined],
+    again.stderr,
+  );
+  assert.equal(existsSync(join(dir, 'node_modules')), true);
+});
+
+test('bed unlinks a linked bed whose base dropped its package.json, and asks for an install', (t) => {
+  const dir = installed(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'linked');
+  rmSync(join(dir, 'package.json'));
+  commit(dir, {});
   const bed = join(dirname(dir), 'repo.garden', 'beds', 'any-type');
 
   const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
