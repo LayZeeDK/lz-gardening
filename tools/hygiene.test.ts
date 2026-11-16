@@ -205,7 +205,7 @@ test("a contributor's credit trailer under any -by key is theirs to choose", () 
   assert.deepEqual(messageLeaks(`fix: a thing\n\nCo-developed-by: Ada Contributor <${contributorEmail}>`), []);
 });
 
-test('a line shaped like a trailer whose key is no git trailer is read as message text', () => {
+test('a trailer whose key credits no one is read as message text', () => {
   assert.deepEqual(messageLeaks(`fix: a thing\n\nContact: Ada Contributor <${contributorEmail}>`), [contributorEmail]);
 });
 
