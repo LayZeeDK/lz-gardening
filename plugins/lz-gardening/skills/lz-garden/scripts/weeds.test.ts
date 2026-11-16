@@ -103,6 +103,10 @@ test('validation refuses a repeated-lesson whose source is not a record, naming 
   );
 });
 
+test('validation takes a repeated-lesson whose source is a lesson record', () => {
+  assert.equal(validateAdd(input({ class: 'repeated-lesson', source: 'lesson:docs/lessons.md:12' })), null);
+});
+
 test('validation refuses a place, source or note holding a control character, which list would print raw', () => {
   assert.deepEqual(
     [
@@ -178,6 +182,13 @@ test('validation refuses a --where in a home folder or above the repository, and
       '.github/x.yml',
     ].map((where) => validateAdd(input({ where }))),
     [...Array.from({ length: 5 }, () => '--where must be a repository-relative path'), null, null],
+  );
+});
+
+test('validation refuses a --where that ends at a parent folder, with nothing after the two dots', () => {
+  assert.deepEqual(
+    ['..', 'src/..', 'src\\..'].map((where) => validateAdd(input({ where }))),
+    Array.from({ length: 3 }, () => '--where must be a repository-relative path'),
   );
 });
 
@@ -433,6 +444,18 @@ test('groups --min leaves out classes with fewer open weeds', (t) => {
   assert.deepEqual(
     rows.map((row) => row.split(' ')[0]),
     ['any-type'],
+  );
+});
+
+test('groups takes a --min of more than one digit, and leaves out a class in fewer places', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+
+  const result = cli(dir, ['groups', '--min', '10']);
+
+  assert.deepEqual(
+    [result.status, result.stdout, result.stderr],
+    [0, `${'class'.padEnd(36)} open places regrown layer first-seen tending\n`, ''],
   );
 });
 
