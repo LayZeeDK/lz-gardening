@@ -236,13 +236,14 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
     for (;;) {
       const message = takeFrom(from, reader);
 
+      const said = stderr.toString().trim();
+
       if (message === undefined) {
-        return fail(`no answer in ${String(answerMs)} ms`);
+        return fail(`no answer in ${String(answerMs)} ms${said === '' ? '' : `; git said: ${said}`}`);
       }
 
       if (message.kind === 'ended') {
         forget(reader);
-        const said = stderr.toString().trim();
         throw new Error(
           message.error === undefined
             ? `git cat-file --batch-command: ${said === '' ? `it ended with code ${String(message.code)}` : said}`

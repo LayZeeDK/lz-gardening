@@ -202,6 +202,18 @@ test("a git that ends during a read fails it with git's own message", () => {
   );
 });
 
+test('a git that stops answering fails the read with what it wrote to stderr', () => {
+  const { pump } = scriptedPump((message) =>
+    message.kind === 'write'
+      ? [{ kind: 'err', reader: message.reader, chunk: Buffer.from('error: unable to read packed refs\n') }]
+      : oneCommitGit(message),
+  );
+
+  assert.throws(() => readerOf(pump).ids(at, ['HEAD']), {
+    message: 'git cat-file --batch-command: no answer in 1000 ms; git said: error: unable to read packed refs',
+  });
+});
+
 test('a git that ends during a read with nothing on stderr fails it with its exit code', () => {
   const { pump } = scriptedPump((message) =>
     message.kind === 'write' ? [{ kind: 'ended', reader: message.reader, code: 137 }] : oneCommitGit(message),
