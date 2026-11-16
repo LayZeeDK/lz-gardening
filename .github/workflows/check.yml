@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   check:
-    timeout-minutes: 15
+    # The tests start thousands of git processes, which cost 40-100 ms each on Windows: the suite took 13 minutes there
+    # on 12 cores (2026-11-16), and a runner has 4.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
