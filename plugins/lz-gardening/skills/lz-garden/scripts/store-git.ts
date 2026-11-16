@@ -407,11 +407,11 @@ export function treeEntries(listed: string): readonly TreeEntry[] {
     });
 }
 
-// A blob with its text, an object git does not have, or an object of another type with the header git printed for it.
+// A blob with its text, an object git does not have, or an object of another type.
 export type BatchObject =
   | { readonly kind: 'blob'; readonly text: string }
   | { readonly kind: 'missing' }
-  | { readonly kind: 'other'; readonly header: string };
+  | { readonly kind: 'other'; readonly type: string };
 
 // Reads each item's object, named by nameOf.
 export function catFileBatch<T>(
@@ -431,7 +431,7 @@ function batchObjectOf(answer: ObjectContents): BatchObject {
 
   return answer.type === 'blob'
     ? { kind: 'blob', text: answer.bytes.toString() }
-    : { kind: 'other', header: `${answer.oid} ${answer.type} ${String(answer.size)}` };
+    : { kind: 'other', type: answer.type };
 }
 
 // cat-file sizes are in bytes, so the output is read as bytes and each object decoded on its own.

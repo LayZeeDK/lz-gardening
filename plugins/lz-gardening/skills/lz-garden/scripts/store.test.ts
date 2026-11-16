@@ -872,14 +872,12 @@ test('a batch read of a missing object whose name holds a space reads it as miss
   );
 });
 
-test('an event file whose object is not a file is refused with the header git read for it', (t) => {
+test('an event file whose object is not a file is refused, naming the type git read for it', (t) => {
   const { dir, garden } = planted(t);
   const tree = git(garden, ['rev-parse', `${logRef}^{tree}`]);
   writeEntriesToLogByHand(garden, [`100644 ${tree}\tevents/50/tree.json`]);
 
   assert.throws(() => readLog(openSite(dir)), {
-    message: new RegExp(
-      `^git cat-file --batch: read "${tree} tree \\d+" for events/50/tree\\.json, not ${tree} blob <size>$`,
-    ),
+    message: `the log's events/50/tree.json names ${tree}, a tree, not a file`,
   });
 });

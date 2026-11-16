@@ -172,9 +172,7 @@ function blobsAt(
   );
   const missing = read.flatMap(([{ oid, path }, object]) => {
     if (object.kind === 'other') {
-      throw new Error(
-        `git cat-file --batch: read ${JSON.stringify(object.header)} for ${path}, not ${oid} blob <size>`,
-      );
+      throw new Error(`the log's ${path} names ${oid}, a ${object.type}, not a file`);
     }
 
     return object.kind === 'missing' ? [{ path, why: 'missing from the site' }] : [];
