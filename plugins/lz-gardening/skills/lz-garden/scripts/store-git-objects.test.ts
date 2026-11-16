@@ -295,7 +295,7 @@ test('a tree git does not have stops the walk', () => {
   const { contents } = storedObjects({});
 
   assert.throws(() => walkTree(contents, 'main'), {
-    message: 'git cat-file --batch-command: main^{tree} is not a tree',
+    message: 'the tree walk read main^{tree}, which is not a tree',
   });
 });
 
@@ -307,7 +307,7 @@ test('an object of another type where a tree should be stops the walk', () => {
   });
 
   assert.throws(() => walkTree(contents, 'main'), {
-    message: `git cat-file --batch-command: ${blob} is not a tree`,
+    message: `the tree walk read ${blob}, which is not a tree`,
   });
 });
 

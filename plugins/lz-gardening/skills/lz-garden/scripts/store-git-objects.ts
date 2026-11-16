@@ -190,7 +190,7 @@ export function walkTree(
 
     for (const [tree, answer] of contents(level)) {
       if (answer.kind !== 'object' || answer.type !== 'tree') {
-        throw new Error(`git cat-file --batch-command: ${tree} is not a tree`);
+        throw new Error(`the tree walk read ${tree}, which is not a tree`);
       }
 
       const entries = parseTree(answer.bytes, answer.oid.length / 2);
