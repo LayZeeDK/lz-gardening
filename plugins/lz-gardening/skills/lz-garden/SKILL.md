@@ -147,7 +147,8 @@ show. Take them one at a time:
    says the file cannot import the shared definition (it is loaded, injected or copied alone) or that a test pins the
    copies alike. Only such words make a documented copy; a file that merely has no imports, or looks
    self-contained, is not one.
-3. A documented copy goes on the reply's `left out:` line, its reason the words you found, quoted. Every other file
+3. A documented copy goes on the reply's `left out:` line, its reason the words you found, copied as they stand
+   (`...` where you cut some out), and the file they are in when it is not the copy itself. Every other file
    is queued, one weed per file, with a note naming the definition to keep: the file that holds that definition is
    queued too, and so is a file whose `<name>` does a different job (a naming weed). A tend pass decides what
    happens to each. No file of a `+ duplicate` line ends neither queued nor on `left out:`.
@@ -198,10 +199,10 @@ shared: <state> (<reason>)
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
-- `left out`: one `<path> (documented copy: "<quoted words>")` entry per documented copy of step 4, comma-separated,
-  such as `extension/a.js (documented copy: "runs in the page alone, so it cannot import")`. Each entry names one
-  path and its own words: never two paths under one reason, and no entry for a group of files. `left out: none` when
-  there is none.
+- `left out`: one `<path> (documented copy: [<other file>: ]"<quoted words>")` entry per documented copy of step 4,
+  comma-separated, such as `extension/a.js (documented copy: "runs in the page alone, so it cannot import")` or
+  `extension/b.js (documented copy: test/b.spec.ts: "loads b.js alone")`. Each entry names one path and its own
+  words: never two paths under one reason, and no entry for a group of files. `left out: none` when there is none.
 - `ready to tend`: one entry per row of `groups --ready`, its `open` and `places` columns, and the first row's class
   after `lz-tend`; `ready to tend: none` when it printed no row below its header.
 - `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.
