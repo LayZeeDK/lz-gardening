@@ -202,6 +202,16 @@ test("a git that ends during a read fails it with git's own message", () => {
   );
 });
 
+test('a git that ends during a read with nothing on stderr fails it with its exit code', () => {
+  const { pump } = scriptedPump((message) =>
+    message.kind === 'write' ? [{ kind: 'ended', reader: message.reader, code: 137 }] : oneCommitGit(message),
+  );
+
+  assert.throws(() => readerOf(pump).ids(at, ['HEAD']), {
+    message: 'git cat-file --batch-command: it ended with code 137',
+  });
+});
+
 test("a ref's tip is the id git answers for it, and a ref git does not have has none", () => {
   const { posted, pump } = scriptedPump((message) =>
     message.kind === 'write'

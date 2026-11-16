@@ -242,9 +242,10 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
 
       if (message.kind === 'ended') {
         forget(reader);
+        const said = stderr.toString().trim();
         throw new Error(
           message.error === undefined
-            ? `git cat-file --batch-command: ${stderr.toString().trim()}`
+            ? `git cat-file --batch-command: ${said === '' ? `it ended with code ${String(message.code)}` : said}`
             : `git could not start: ${message.error}`,
         );
       }
