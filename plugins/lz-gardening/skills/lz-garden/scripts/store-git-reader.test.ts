@@ -1,9 +1,11 @@
 // Run: node --test store-git-reader.test.ts
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { test } from 'node:test';
-import { gitStartChannel, readerReads, workerPump } from './store-git-reader.ts';
+import { readerReads, workerPump } from './store-git-reader.ts';
 import type { FromPump, Pump, ToPump } from './store-git-reader.ts';
+import { repo } from './test-repo.ts';
 
 const oid = 'a'.repeat(40);
 const at = { cwd: 'D:/site', overrides: {} };
@@ -324,8 +326,54 @@ test('a git that ends while another reads is forgotten, so its next read starts 
   reads.ids(checkout, ['HEAD']);
   reads.ids(at, ['HEAD']);
   reads.ids(checkout, ['HEAD']);
+  reads.ids(at, ['HEAD']);
 
-  assert.deepEqual(postedLines(posted).slice(4), ['write 1', 'start 3', 'write 3']);
+  assert.deepEqual(postedLines(posted).slice(4), ['write 1', 'start 3', 'write 3', 'write 1']);
+});
+
+test('output another git sends while one reads forgets neither git', () => {
+  let writes = 0;
+  const { posted, pump } = scriptedPump((message) => {
+    if (message.kind === 'write') {
+      writes += 1;
+
+      if (writes === 3) {
+        return [{ kind: 'err', reader: 2, chunk: Buffer.from('warning\n') }, ...oneCommitGit(message)];
+      }
+    }
+
+    return oneCommitGit(message);
+  });
+  const checkout = { cwd: 'D:/checkout', overrides: {} };
+  const reads = readerOf(pump);
+  reads.ids(at, ['HEAD']);
+  reads.ids(checkout, ['HEAD']);
+  reads.ids(at, ['HEAD']);
+  reads.ids(checkout, ['HEAD']);
+
+  assert.deepEqual(postedLines(posted).slice(4), ['write 1', 'write 2']);
+});
+
+test('the same env overrides in another order ask the same git', () => {
+  const { posted, pump } = scriptedPump(oneCommitGit);
+  const reads = readerOf(pump);
+  reads.ids({ cwd: 'D:/site', overrides: { GIT_A: '1', GIT_B: '2' } }, ['HEAD']);
+  reads.ids({ cwd: 'D:/site', overrides: { GIT_B: '2', GIT_A: '1' } }, ['HEAD']);
+
+  assert.deepEqual(postedLines(posted), ['start 1', 'write 1', 'write 1']);
+});
+
+test("close waits past a git's last output for its end", () => {
+  const { pump, untaken } = scriptedPump((message) =>
+    message.kind === 'end'
+      ? [{ kind: 'err', reader: message.reader, chunk: Buffer.from('bye\n') }, ...oneCommitGit(message)]
+      : oneCommitGit(message),
+  );
+  const reads = readerOf(pump);
+  reads.ids(at, ['HEAD']);
+  reads.close();
+
+  assert.equal(untaken(), 0);
 });
 
 test('a git whose start is not reported in time is killed, and the read throws', () => {
@@ -391,17 +439,17 @@ test('a git that could not start, told only after it was said to start, fails th
   assert.throws(() => readerOf(pump).ids(at, ['HEAD']), { message: 'git could not start: spawn git ENOENT' });
 });
 
-test('each git a reader starts is told on the git start channel, for counts of the git a command starts', () => {
+test('each git a reader starts is told on the lz-gardening.git-start channel, for counts of the git a command starts', () => {
   const { pump } = scriptedPump(oneCommitGit);
   const told: unknown[] = [];
   const listen = (message: unknown): void => {
     told.push(message);
   };
-  subscribe(gitStartChannel, listen);
+  subscribe('lz-gardening.git-start', listen);
   const reads = readerOf(pump);
   reads.ids(at, ['HEAD']);
   reads.ids(at, ['HEAD']);
-  unsubscribe(gitStartChannel, listen);
+  unsubscribe('lz-gardening.git-start', listen);
 
   assert.deepEqual(told, [{ args: ['cat-file', '--batch-command', '--buffer', '-Z'] }]);
 });
@@ -474,4 +522,24 @@ test('the worker pump says why a command could not start', () => {
     { kind: 'started', reader: 1 },
     { kind: 'ended', reader: 1, code: null, error: 'spawn no-such-command-x ENOENT' },
   ]);
+});
+
+test('a process that stops its worker pump exits', () => {
+  const module = new URL('store-git-reader.ts', import.meta.url).href;
+  const run = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', `import { workerPump } from '${module}'; workerPump().stop();`],
+    { encoding: 'utf8', timeout: 20_000 },
+  );
+
+  assert.deepEqual([run.status, run.signal, run.stderr], [0, null, '']);
+});
+
+test("close returns once its gits have ended, not at the end's deadline", (t) => {
+  const reads = readerReads({ startPump: workerPump, envOf: () => process.env, answerMs: 10_000, endMs: 10_000 });
+  reads.ids({ cwd: repo(t), overrides: {} }, ['HEAD']);
+  const start = Date.now();
+  reads.close();
+
+  assert.ok(Date.now() - start < 5000, `close took ${String(Date.now() - start)} ms`);
 });

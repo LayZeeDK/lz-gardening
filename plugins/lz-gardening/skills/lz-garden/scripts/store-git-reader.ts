@@ -119,7 +119,6 @@ export function workerPump(): Pump {
     workerData: { port: port2, signal },
     transferList: [port2],
   });
-  worker.unref();
 
   return {
     post: (message) => {
@@ -134,15 +133,13 @@ export function workerPump(): Pump {
           return received;
         }
 
-        const left = deadline - Date.now();
-
-        if (left <= 0 || Atomics.wait(signal, 0, seen, left) === 'timed-out') {
+        // A deadline already passed waits no time.
+        if (Atomics.wait(signal, 0, seen, deadline - Date.now()) === 'timed-out') {
           return undefined;
         }
       }
     },
     stop: () => {
-      port1.close();
       void worker.terminate();
     },
   };
