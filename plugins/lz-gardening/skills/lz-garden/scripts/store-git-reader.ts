@@ -206,12 +206,13 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
 
   const round = <T, TAnswer extends ObjectInfo>(
     at: ReadAt,
+    items: readonly T[],
     bytes: string,
-    parse: (output: Buffer) => Parse<T, TAnswer>,
+    parse: (output: Buffer, items: readonly T[]) => Parse<T, TAnswer>,
     nameOf: (item: T) => string,
   ): readonly (readonly [T, TAnswer])[] => {
     // Done on no output only when nothing was asked: git then has nothing to answer, and no reader is started.
-    const unasked = parse(Buffer.alloc(0));
+    const unasked = parse(Buffer.alloc(0), items);
 
     if (unasked.done) {
       return unasked.answers;
@@ -225,6 +226,8 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
       throw new Error(`git cat-file --batch-command: ${reason}`);
     };
     from.post({ kind: 'write', reader, bytes });
+    // Each answer is parsed once: only the bytes after the last whole answer are kept for the next chunk.
+    const answers: (readonly [T, TAnswer])[] = [];
     let output = Buffer.alloc(0);
     let stderr = Buffer.alloc(0);
 
@@ -252,11 +255,12 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
         output = Buffer.concat([output, message.chunk]);
       }
 
-      const parsed = parse(output);
+      const parsed = parse(output, items.slice(answers.length));
+      answers.push(...parsed.answers);
 
       if (parsed.done) {
         const stray = outOfStep(
-          parsed.answers.map(([item, answer]) => [nameOf(item), answer]),
+          answers.map(([item, answer]) => [nameOf(item), answer]),
           parsed.end,
           output.length,
         );
@@ -265,25 +269,24 @@ export function readerReads({ startPump, envOf, answerMs, endMs }: ReaderOptions
           return fail(stray);
         }
 
-        return parsed.answers;
+        return answers;
       }
+
+      output = output.subarray(parsed.end);
     }
   };
 
   const ids = (at: ReadAt, names: readonly string[]): readonly (string | undefined)[] =>
-    round(
-      at,
-      encodeRequests('info', names),
-      (output) => parseInfos(output, names),
-      (name) => name,
-    ).map(([, answer]) => (answer.kind === 'object' ? answer.oid : undefined));
+    round(at, names, encodeRequests('info', names), parseInfos, (name) => name).map(([, answer]) =>
+      answer.kind === 'object' ? answer.oid : undefined,
+    );
 
   const contents = <T>(
     at: ReadAt,
     items: readonly T[],
     nameOf: (item: T) => string,
   ): readonly (readonly [T, ObjectContents])[] =>
-    round(at, encodeRequests('contents', items.map(nameOf)), (output) => parseContents(output, items), nameOf);
+    round(at, items, encodeRequests('contents', items.map(nameOf)), parseContents, nameOf);
 
   return {
     tip: (at, ref) => ids(at, [ref])[0],

@@ -47,33 +47,27 @@ test('one answer per name, in the order asked', () => {
   });
 });
 
-test('output that ends inside a header needs one byte more, waiting on that answer', () => {
-  const output = Buffer.from(`${oid} blob 2`);
-
-  assert.deepEqual(parseContents(output, ['HEAD:a.txt']), {
-    done: false,
-    needs: output.length + 1,
-    waiting: 'HEAD:a.txt',
-  });
+test('output that ends inside a header has no answer yet', () => {
+  assert.deepEqual(parseContents(Buffer.from(`${oid} blob 2`), ['HEAD:a.txt']), { done: false, answers: [], end: 0 });
 });
 
-test("output that ends inside an object's bytes needs the bytes and their closing NUL", () => {
+test('a parse that stops inside an answer gives the answers before it and the byte where they end', () => {
   const whole = `gone missing\0${oid} blob 5\0hello\0`;
 
   assert.deepEqual(parseContents(Buffer.from(whole.slice(0, -4)), ['gone', 'HEAD:a.txt']), {
     done: false,
-    needs: whole.length,
-    waiting: 'HEAD:a.txt',
+    answers: [['gone', { kind: 'missing' }]],
+    end: 'gone missing\0'.length,
   });
 });
 
-test("output that ends with an object's bytes but not their closing NUL needs that NUL", () => {
+test("output that ends with an object's bytes but not their closing NUL has no answer yet", () => {
   const whole = `${oid} blob 5\0hello\0`;
 
   assert.deepEqual(parseContents(Buffer.from(whole.slice(0, -1)), ['HEAD:a.txt']), {
     done: false,
-    needs: whole.length,
-    waiting: 'HEAD:a.txt',
+    answers: [],
+    end: 0,
   });
 });
 
@@ -123,10 +117,14 @@ test('a header of more than three fields parses as missing', () => {
   });
 });
 
-test('info output that ends inside a header needs one byte more', () => {
+test('info output that ends inside a header gives the answers before it and the byte where they end', () => {
   const output = Buffer.from(`${oid} commit 136\0gone mis`);
 
-  assert.deepEqual(parseInfos(output, ['HEAD', 'gone']), { done: false, needs: output.length + 1, waiting: 'gone' });
+  assert.deepEqual(parseInfos(output, ['HEAD', 'gone']), {
+    done: false,
+    answers: [['HEAD', { kind: 'object', oid, type: 'commit', size: 136 }]],
+    end: `${oid} commit 136\0`.length,
+  });
 });
 
 test('answers that end where the output ends are in step', () => {

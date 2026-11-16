@@ -13,9 +13,12 @@ export type ObjectInfo = { readonly kind: 'missing' } | ({ readonly kind: 'objec
 export type ObjectContents =
   { readonly kind: 'missing' } | ({ readonly kind: 'object'; readonly bytes: Buffer } & ObjectHeader);
 
-export type Parse<T, TAnswer> =
-  | { readonly done: true; readonly answers: readonly (readonly [T, TAnswer])[]; readonly end: number }
-  | { readonly done: false; readonly needs: number; readonly waiting: T };
+// The answers whole in the output, and the byte after the last of them; done when every item has its answer.
+export interface Parse<T, TAnswer> {
+  readonly done: boolean;
+  readonly answers: readonly (readonly [T, TAnswer])[];
+  readonly end: number;
+}
 
 // Where a read runs: the folder, and the env the read sets on top of the run's.
 export interface ReadAt {
@@ -90,7 +93,7 @@ export function parseInfos<T>(output: Buffer, items: readonly T[]): Parse<T, Obj
     const headerEnd = output.indexOf('\0', at);
 
     if (headerEnd === -1) {
-      return { done: false, needs: output.length + 1, waiting: item };
+      return { done: false, answers, end: at };
     }
 
     answers.push([item, infoOf(output.subarray(at, headerEnd).toString())]);
@@ -112,7 +115,7 @@ export function parseContents<T>(
     const headerEnd = output.indexOf(terminator, at);
 
     if (headerEnd === -1) {
-      return { done: false, needs: output.length + 1, waiting: item };
+      return { done: false, answers, end: at };
     }
 
     const info = infoOf(output.subarray(at, headerEnd).toString());
@@ -125,7 +128,7 @@ export function parseContents<T>(
       const end = start + info.size;
 
       if (output.length <= end) {
-        return { done: false, needs: end + 1, waiting: item };
+        return { done: false, answers, end: at };
       }
 
       answers.push([item, { ...info, bytes: output.subarray(start, end) }]);

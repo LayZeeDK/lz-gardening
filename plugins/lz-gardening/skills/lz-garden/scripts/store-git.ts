@@ -453,7 +453,11 @@ function spawnContents<T>(
   const parsed = parseContents(batch.stdout, items, '\n');
 
   if (!parsed.done) {
-    throw new Error(`git cat-file --batch: the output ends before the object of ${nameOf(parsed.waiting)}`);
+    const waiting = items
+      .slice(parsed.answers.length, parsed.answers.length + 1)
+      .map(nameOf)
+      .join('');
+    throw new Error(`git cat-file --batch: the output ends before the object of ${waiting}`);
   }
 
   return parsed.answers;
