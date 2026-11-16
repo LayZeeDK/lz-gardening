@@ -141,13 +141,16 @@ show. Take them one at a time:
 
 1. Run `git show <sha>:<path>` for that file, one call per file, and read its header comment and the definition of
    `<name>`. When the tool result says the output was saved to a file, Read that file to its end. A Grep or Read of
-   the checkout does not replace this call: the checkout can be on another branch than `<sha>`.
+   the checkout does not replace this call, since the checkout can be on another branch than `<sha>`, and neither
+   does a diff page of step 3, which shows only what a commit changed.
 2. Look for words that say why this copy must exist: a comment in the file, or a document the repository keeps, that
    says the file cannot import the shared definition (it is loaded, injected or copied alone) or that a test pins the
    copies alike. Only such words make a documented copy; a file that merely has no imports, or looks
    self-contained, is not one.
 3. A documented copy goes on the reply's `left out:` line, its reason the words you found, quoted. Every other file
-   is queued, one weed per file, with a note naming the definition to keep; a tend pass decides what happens to it.
+   is queued, one weed per file, with a note naming the definition to keep: the file that holds that definition is
+   queued too, and so is a file whose `<name>` does a different job (a naming weed). A tend pass decides what
+   happens to each. No file of a `+ duplicate` line ends neither queued nor on `left out:`.
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
