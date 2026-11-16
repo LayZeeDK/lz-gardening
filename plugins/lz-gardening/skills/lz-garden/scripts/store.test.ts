@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import type { TestContext } from 'node:test';
 import { deflateSync } from 'node:zlib';
 import { eventPath, isRecord, weedId } from './log.ts';
 import type { EventDraft } from './log.ts';
@@ -32,11 +33,11 @@ import {
   runGitAsync,
   treeEntries,
 } from './store-git.ts';
-import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
+import { append, logRef, machinePathTest, openSite, plantWriter, readLog, startLog } from './store-log.ts';
 import { commit, git, now, repo, scriptProcess, startedCommands } from './test-repo.ts';
 import { configEnv, planted } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
-import { cli, cliProcess, script } from './test-weeds.ts';
+import { cli, cliProcess, homeAt, script } from './test-weeds.ts';
 
 async function exitOf(cwd: string, args: readonly string[]): Promise<number | null> {
   return (await scriptProcess(script, cwd, args)).status;
@@ -182,6 +183,83 @@ test('an append of an event its own reader would skip is refused with the reason
     message: 'an event to append would be skipped by every reader: layer is not a whole number from 1 to 6',
   });
   assert.equal(git(garden, ['rev-parse', logRef]), tip);
+});
+
+test("an append of an event whose note holds the checkout's path is refused, naming the note, and writes nothing", (t) => {
+  const { dir, garden } = planted(t);
+  const site = openSite(dir);
+  const tip = git(garden, ['rev-parse', logRef]);
+
+  assert.throws(() => append(site, () => ({ drafts: [addDraft(1, `copied from ${site.checkout}`)] }), now), {
+    message:
+      'the note holds a path on this machine; the queue is shared with the repository, so write paths repository-relative',
+  });
+  assert.equal(git(garden, ['rev-parse', logRef]), tip);
+});
+
+// The machine path test of a checkout, with the home folder on drive Q: so no answer depends on the real one.
+function machinePathTestOf(t: TestContext, checkout = 'Q:\\work\\repo'): (text: string) => boolean {
+  homeAt(t, 'Q:\\Users\\gardener');
+
+  return machinePathTest({ checkout, path: `${checkout}.garden` });
+}
+
+test("a text that names a folder inside the checkout's holds a path on this machine", (t) => {
+  const holdsMachinePath = machinePathTestOf(t);
+
+  assert.equal(holdsMachinePath('generated into Q:\\work\\repo\\src'), true);
+});
+
+test("a text that names a folder whose name only starts as the checkout's holds no path on this machine", (t) => {
+  const holdsMachinePath = machinePathTestOf(t);
+
+  assert.equal(holdsMachinePath('see Q:\\work\\repository'), false);
+});
+
+test("a text that writes the checkout's drive as Git Bash, WSL or Cygwin does holds a path on this machine", (t) => {
+  const holdsMachinePath = machinePathTestOf(t);
+
+  assert.deepEqual(
+    ['/q/work/repo', '/mnt/q/work/repo', '/cygdrive/q/work/repo'].map((path) => holdsMachinePath(`built in ${path}`)),
+    [true, true, true],
+  );
+});
+
+test("a repository path that spells the checkout's folders after its drive letter holds no path on this machine", (t) => {
+  const holdsMachinePath = machinePathTestOf(t);
+
+  assert.equal(holdsMachinePath('mirrors q/work/repo/a.ts'), false);
+});
+
+test("a text that writes the checkout's path with its backslashes escaped, as JSON does, holds a path on this machine", (t) => {
+  const holdsMachinePath = machinePathTestOf(t);
+
+  assert.equal(holdsMachinePath('{ "root": "Q:\\\\work\\\\repo\\\\src" }'), true);
+});
+
+test('a text that names a checkout given with a slash at its end, without that slash, holds a path on this machine', (t) => {
+  const holdsMachinePath = machinePathTestOf(t, 'Q:\\work\\repo\\');
+
+  assert.equal(holdsMachinePath('copied from Q:\\work\\repo'), true);
+});
+
+test("a home folder at a drive's root and a checkout at the file system's root make no text hold a path on this machine", (t) => {
+  homeAt(t, 'Q:\\');
+  const holdsMachinePath = machinePathTest({ checkout: '/', path: '/.garden' });
+
+  assert.equal(holdsMachinePath('the Q: drive, or /'), false);
+});
+
+test('a checkout under a folder whose name ends in a letter and a colon is not read as a drive, so that letter as a folder holds no path on this machine', (t) => {
+  const holdsMachinePath = machinePathTestOf(t, '/srv/abc:/repo');
+
+  assert.equal(holdsMachinePath('copied from /srv/ab/c/repo/src'), false);
+});
+
+test('a path that does not stand alone where a text first holds it is looked for again from the next character', (t) => {
+  const holdsMachinePath = machinePathTestOf(t, '~');
+
+  assert.equal(holdsMachinePath('a~~'), true);
 });
 
 test('a recursive tree listing as every git version prints it reads as each entry type, object and path', () => {
@@ -616,6 +694,18 @@ test('lzGardening.name without lzGardening.email leaves the commit to lz-gardeni
     dir,
     ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'],
     configEnv([['lzGardening.name', 'Probe']]),
+  );
+
+  assert.equal(identityOfLog(garden), 'lz-gardening <>|lz-gardening <>');
+});
+
+test('lzGardening.email without lzGardening.name leaves the commit to lz-gardening with no address', (t) => {
+  const { dir, garden } = planted(t);
+
+  cli(
+    dir,
+    ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x'],
+    configEnv([['lzGardening.email', 'probe@example.com']]),
   );
 
   assert.equal(identityOfLog(garden), 'lz-gardening <>|lz-gardening <>');
