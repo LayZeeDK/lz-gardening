@@ -11,6 +11,13 @@ import { fileURLToPath } from 'node:url';
 import type { Io } from './cli.ts';
 import { isRecord } from './log.ts';
 import { gitStartChannel } from './store-git-reader.ts';
+import { mayPointAtARepository } from './store-git.ts';
+
+// A git variable inherited from the shell, such as the GIT_EDITOR an agent sets, would add the scripts'
+// --local-env-vars read to every run, so the tests see what a plain terminal sees.
+for (const name of Object.keys(process.env).filter(mayPointAtARepository)) {
+  Reflect.deleteProperty(process.env, name);
+}
 
 process.env['GIT_CONFIG_GLOBAL'] = fileURLToPath(new URL('test.gitconfig', import.meta.url));
 process.env['GIT_CONFIG_NOSYSTEM'] = '1';

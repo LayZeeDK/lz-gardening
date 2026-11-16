@@ -654,7 +654,6 @@ for (const [strategy, commands] of [
     'spawn',
     [
       'rev-parse',
-      'rev-parse',
       'remote',
       'for-each-ref',
       'rev-parse',
@@ -666,7 +665,7 @@ for (const [strategy, commands] of [
       'cat-file',
     ],
   ],
-  ['reader', ['rev-parse', 'rev-parse', 'remote', 'for-each-ref', 'cat-file', 'cat-file', 'config', 'remote']],
+  ['reader', ['rev-parse', 'remote', 'for-each-ref', 'cat-file', 'cat-file', 'config', 'remote']],
 ] as const) {
   test(`open on a planted site reads the base without reading the repository config first, reading through ${strategy}`, (t) => {
     const { dir } = planted(t);
