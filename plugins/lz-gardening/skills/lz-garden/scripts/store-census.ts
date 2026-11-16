@@ -86,18 +86,13 @@ export function readCensusAt(site: string, ref: string): ReadCensus {
     return { kind: 'none' };
   }
 
-  let json: unknown;
-
   try {
-    json = JSON.parse(text);
-    // Stryker disable next-line BlockStatement: equivalent, with no return here json stays undefined, which reads as not a census below
+    const census = parseCensus(JSON.parse(text));
+
+    return census === null ? { kind: 'not a census' } : { kind: 'census', census, text, patterns };
   } catch {
     return { kind: 'not a census' };
   }
-
-  const census = parseCensus(json);
-
-  return census === null ? { kind: 'not a census' } : { kind: 'census', census, text, patterns };
 }
 
 export function readableCensus(site: string, ref: string): Census | undefined {
