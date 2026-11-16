@@ -150,7 +150,8 @@ instructions, and run in the bed:
 Keep each command and its summary lines: the lines that count passes and failures, and the name of each failing
 check or test. A failing command is a starting result too: its failures are the ones step 6 may see again. When the
 tool result says a command's output was saved to a file, Read the end of that file for its summary lines. When you
-cannot read a command's summary lines (the output was cut), it is no starting result: replace it with narrower
+cannot read a command's summary lines (the output was cut, or the command timed out), it is no starting result:
+replace it with narrower
 commands whose summary lines you can read (one project's tests, one test folder) and keep those. Step 6 runs the
 same commands. Done when each has run before any edit and you hold its summary lines.
 
@@ -170,11 +171,13 @@ file, or a count the check enforces as a maximum) and never raise one. Every exc
 rule and a reason.
 
 Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
-file the change touched that step 4 did not run. A command that failed at the start runs again too, however long
-its output: its rerun shows whether the same checks or tests fail and no others. Read its summary lines as step 4
-says; when a rerun's summary lines are cut from the result, count it as a failure the change may have caused (below).
-Done when each has run again and passes, or fails with exactly the failures it had at the start, by name.
-Quote their summary lines. A command that fails after the change and has no starting result, or fails with a
+file the change touched that step 4 did not run. Skip none: not because you expect the same result, not because the
+change touches none of the files it covers, and not because it failed or ran long at the start. A command that failed
+at the start runs again too, however long its output: its rerun shows whether the same checks or tests fail and no
+others. Read its summary lines as step 4 says; when a rerun's summary lines are cut from the result, count it as a
+failure the change may have caused (below). Done when each has run again and passes, or fails with exactly the
+failures it had at the start, by name. Quote their summary lines in one table, each command with its result before
+and after the change; a row with no result after the change means this step is not done, so run that command. A command that fails after the change and has no starting result, or fails with a
 failure it did not have at the start, may be a failure your change caused: stop before step 7 and report it with its
 output, so a human judges it. The class stays open and the bed stays as it is.
 
