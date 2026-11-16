@@ -128,7 +128,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   `repeated-lesson` takes a `lesson:` source only, and `weeds.ts` refuses any other: a clean-up in the code that did
   not hold is queued under the class of the mistake it cleaned up.
 - `--note`: the root cause in one sentence (what the agent was trying to do and which shortcut it took), not the
-  symptom. Plain words only: no backticks, `$` or double quotes inside the note, which the shell would run or end.
+  symptom. Plain words only: no backtick, `$` or double quote inside the note, which the shell would run or end, and
+  Claude Code refuses such a command, which ends the tick. A weed about one of those characters names it in words
+  (a backtick used as an apostrophe), never types it. Read the note once more for them before you send the add.
 - `--layer`: the strongest layer that could stop it growing back, from the catalogue's layer list, when the evidence
   shows it.
 - `--census`: the census's `sha` from step 2, in full.
