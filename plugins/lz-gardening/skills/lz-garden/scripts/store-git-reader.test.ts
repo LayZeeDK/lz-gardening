@@ -475,17 +475,19 @@ test('a git that could not start, told only after it was said to start, fails th
   assert.throws(() => readerOf(pump).ids(at, ['HEAD']), { message: 'git could not start: spawn git ENOENT' });
 });
 
-test('each git a reader starts is told on the lz-gardening.git-start channel, for counts of the git a command starts', () => {
+test('each git a reader starts is told on the lz-gardening.git-start channel, for counts of the git a command starts', (t) => {
   const { pump } = scriptedPump(oneCommitGit);
   const told: unknown[] = [];
   const listen = (message: unknown): void => {
     told.push(message);
   };
   subscribe('lz-gardening.git-start', listen);
+  t.after(() => {
+    unsubscribe('lz-gardening.git-start', listen);
+  });
   const reads = readerOf(pump);
   reads.ids(at, ['HEAD']);
   reads.ids(at, ['HEAD']);
-  unsubscribe('lz-gardening.git-start', listen);
 
   assert.deepEqual(told, [{ args: ['cat-file', '--batch-command', '--buffer', '-Z'] }]);
 });

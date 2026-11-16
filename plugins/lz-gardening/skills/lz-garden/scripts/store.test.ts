@@ -33,7 +33,7 @@ import {
   treeEntries,
 } from './store-git.ts';
 import { append, logRef, openSite, plantWriter, readLog, startLog } from './store-log.ts';
-import { commit, git, now, repo, scriptProcess } from './test-repo.ts';
+import { commit, git, now, repo, scriptProcess, startedCommands } from './test-repo.ts';
 import { configEnv, planted } from './test-site.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { cli, cliProcess, script } from './test-weeds.ts';
@@ -741,23 +741,11 @@ test("an append with no date in the env is dated now in UTC, not in the machine'
 test("an append starts git only to read the log, the checkout's settings for who signs it, and to write it", (t) => {
   const { dir } = planted(t);
   const site = openSite(dir);
-  const spawned = t.mock.method(childProcess, 'spawnSync');
-  syncBuiltinESMExports();
-  t.after(() => {
-    spawned.mock.restore();
-    syncBuiltinESMExports();
-  });
+  const started = startedCommands(t);
 
   append(site, () => ({ drafts: [addDraft(1)] }), now);
 
-  assert.deepEqual(
-    spawned.mock.calls.map(({ arguments: [, args] }) =>
-      Array.isArray(args)
-        ? args.filter((arg: unknown) => typeof arg === 'string').find((arg) => /^[a-z][a-z-]*$/.test(arg))
-        : undefined,
-    ),
-    ['rev-parse', 'ls-tree', 'cat-file', 'config', 'fast-import'],
-  );
+  assert.deepEqual(started, ['rev-parse', 'ls-tree', 'cat-file', 'config', 'fast-import']);
 });
 
 test('a start of the log that another writer beat keeps the log that writer started', (t) => {
