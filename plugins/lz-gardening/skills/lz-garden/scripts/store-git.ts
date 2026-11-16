@@ -460,11 +460,12 @@ function spawnContents<T>(
   const parsed = parseContents(batch.stdout, items, '\n');
 
   if (!parsed.done) {
+    // Stryker disable StringLiteral: the slice holds one name at most, so nothing goes between two
     const waiting = items
       .slice(parsed.answers.length, parsed.answers.length + 1)
       .map(nameOf)
-      // Stryker disable next-line StringLiteral: the slice holds one name at most, so nothing goes between two
       .join('');
+    // Stryker restore StringLiteral
     throw new Error(`git cat-file --batch: the output ends before the object of ${waiting}`);
   }
 
