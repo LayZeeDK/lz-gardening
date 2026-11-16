@@ -84,7 +84,8 @@ function cleanedGitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
     ? spawnGit(cwd, ['rev-parse', '--local-env-vars'], current.env)
         .stdout.split('\n')
         .filter((name) => !settingsInEnvironment.includes(name))
-    : [];
+    : // Stryker disable next-line ArrayDeclaration: no environment holds a variable named as the mutant's text, so it drops none either
+      [];
 
   return {
     ...Object.fromEntries(Object.entries(current.env).filter(([name]) => !localVariables.includes(name))),
@@ -462,6 +463,7 @@ function spawnContents<T>(
     const waiting = items
       .slice(parsed.answers.length, parsed.answers.length + 1)
       .map(nameOf)
+      // Stryker disable next-line StringLiteral: the slice holds one name at most, so nothing goes between two
       .join('');
     throw new Error(`git cat-file --batch: the output ends before the object of ${waiting}`);
   }
