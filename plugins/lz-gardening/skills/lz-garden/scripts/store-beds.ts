@@ -46,12 +46,14 @@ function readBedLog(log: string): { readonly commits: readonly string[]; readonl
   log.split('\n').forEach((line) => {
     if (inMessage) {
       const end = line.indexOf('\0');
+      // Stryker disable next-line ConditionalExpression,MethodExpression: equivalent, the line is read only for a path on this machine, which matches the same with the closing NUL left on the line
       added.push(end === -1 ? line : line.slice(0, end));
       inMessage = end === -1;
 
       return;
     }
 
+    // Stryker disable next-line ConditionalExpression: equivalent, a line inside a hunk starts with its marks, so only a line outside one starts with a NUL
     if (left === 0 && line.startsWith('\0')) {
       commits.push(line.slice(1));
       inMessage = true;
@@ -142,6 +144,7 @@ export interface MarkedBeds {
 }
 
 export function planBeds(site: Site, leaving: readonly { readonly path: string }[]): BedPlan {
+  // Stryker disable next-line ArrayDeclaration: equivalent, with no prefix git lists every ref, and only the refs under these three are read from the list
   const tips = refsUnder(site.path, [bedBranches, fetchedBeds, unpushedBeds]);
   const candidates = [...tips].flatMap(([name, oid]) => {
     const weedClass = name.slice(bedBranches.length);

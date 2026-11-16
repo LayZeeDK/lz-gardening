@@ -8,7 +8,7 @@ import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { logRef, openSite } from './store-log.ts';
 import { sync } from './store-sync.ts';
-import { commit, git } from './test-repo.ts';
+import { commit, git, startedCommands, startedGits } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
 import { bareRemote, planted, remoteHook, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
 import type { Planted } from './test-site.ts';
@@ -30,24 +30,42 @@ function withBed(t: TestContext): Tended {
   return { dir, garden, bed: anyTypeBedFromMain(garden), remote };
 }
 
-function tend(place: Tended, files: Readonly<Record<string, string>>, where = 'src/a.ts:1'): string {
+function tend(
+  place: Tended,
+  files: Readonly<Record<string, string>>,
+  where = 'src/a.ts:1',
+  weedClass = 'any-type',
+): string {
   const tip = commit(place.bed, files);
-  const added = cli(place.dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:x']);
+  const added = cli(place.dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:x']);
   assert.equal(added.status, 0, added.stderr);
-  const claimed = cli(place.dir, ['claim', '--class', 'any-type']);
+  const claimed = cli(place.dir, ['claim', '--class', weedClass]);
   assert.equal(claimed.status, 0, claimed.stderr);
   const closed = cli(place.dir, [
     'close-class',
     '--class',
-    'any-type',
+    weedClass,
     '--tended',
-    `bed/any-type@${tip.slice(0, 7)}`,
+    `bed/${weedClass}@${tip.slice(0, 7)}`,
     '--check',
-    'checks/any-type.mjs',
+    `checks/${weedClass}.mjs`,
   ]);
   assert.equal(closed.status, 0, closed.stderr);
 
   return tip;
+}
+
+// A tended close and its bed that no sync has shared yet.
+function tendedWhileLocal(
+  t: TestContext,
+  files: Readonly<Record<string, string>> = { 'checks/any-type.mjs': 'export {};\n' },
+): Tended & { readonly tip: string } {
+  const place = withBed(t);
+  git(place.dir, ['config', 'lzGardening.share', 'false']);
+  const tip = tend(place, files);
+  git(place.dir, ['config', 'lzGardening.share', 'true']);
+
+  return { ...place, tip };
 }
 
 test("a sync that shares a tended close puts its bed commit on the origin's refs/garden/beds/<class>", (t) => {
@@ -423,16 +441,185 @@ test("a bed whose merge adds, in its resolution only, a line holding the site's 
   );
 });
 
+function notesNamingTheSite(place: Tended, notes = 'notes\n'): void {
+  writeFileSync(join(place.bed, 'notes.txt'), notes);
+  git(place.bed, ['add', 'notes.txt']);
+  git(place.bed, ['commit', '-q', '-m', 'notes', '-m', `built in ${realpathSync.native(place.garden)}`]);
+}
+
 test("a bed whose commit message holds the site's path stays local", (t) => {
   assert.deepEqual(
     keptLocalForAPath(t, (place) => {
-      writeFileSync(join(place.bed, 'notes.txt'), 'notes\n');
-      git(place.bed, ['add', 'notes.txt']);
-      git(place.bed, ['commit', '-q', '-m', 'notes', '-m', `built in ${realpathSync.native(place.garden)}`]);
+      notesNamingTheSite(place);
       tend(place, { 'checks/any-type.mjs': 'export {};\n' });
     }),
     keptForAPath,
   );
+});
+
+function endTipMessageWithNoLineBreak(bed: string, lastLine: string): void {
+  const text = git(bed, ['cat-file', 'commit', 'HEAD']);
+  const ended = spawnSync('git', ['hash-object', '-t', 'commit', '-w', '--stdin'], {
+    cwd: bed,
+    encoding: 'utf8',
+    input: `${text.slice(0, text.indexOf('\n\n'))}\n\nnotes\n\n${lastLine}`,
+  });
+  git(bed, ['update-ref', 'refs/heads/bed/any-type', ended.stdout.trim()]);
+}
+
+test("a bed whose commit message ends, with no line break, in a line that is the site's path stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      commit(place.bed, { 'checks/notes.txt': 'notes\n' });
+      endTipMessageWithNoLineBreak(place.bed, realpathSync.native(place.garden));
+      tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed whose commit message holds the site's path stays local under a later commit that ends by adding an empty file", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      notesNamingTheSite(place);
+      tend(place, { 'checks/any-type.mjs': 'export {};\n', 'empty.txt': '' });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed whose commit message holds the site's path stays local under a later commit that ends by removing a line that reads as a hunk header", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      notesNamingTheSite(place, 'keep\n@@ -1 +1,3 @@\n');
+      tend(place, { 'checks/any-type.mjs': 'export {};\n', 'notes.txt': 'keep\n' });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that adds a line holding the site's path past a file's ninth line, in a hunk of ten lines or more, stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      const lines = Array.from({ length: 30 }, (_, index) => `line ${String(index + 1)}`);
+      commit(place.bed, { 'checks/notes.txt': `${lines.join('\n')}\n` });
+      const edited = lines.with(14, `built in ${realpathSync.native(place.garden)}`).with(20, 'edited');
+      tend(place, { 'checks/notes.txt': `${edited.join('\n')}\n` });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that adds a line starting with the site's path stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      tend(place, { 'checks/notes.txt': `${realpathSync.native(place.garden)}\n` });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that edits a file beside a line holding the site's path, a line origin's main holds already, is pushed", (t) => {
+  const { dir, garden } = planted(t);
+  const held = `built in ${realpathSync.native(garden)}\n`;
+  commit(dir, { 'checks/notes.txt': `${held}old\n` });
+  const remote = bareRemote(dir);
+  const place = { dir, garden, bed: anyTypeBedFromMain(garden), remote };
+  git(dir, ['config', 'lzGardening.share', 'false']);
+  const tip = tend(place, { 'checks/notes.txt': `${held}new\n` });
+  git(dir, ['config', 'lzGardening.share', 'true']);
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.deepEqual([result.divergedBeds, bedRef(remote)], [[], tip]);
+});
+
+test('a bed with no line holding the home folder is pushed when the home folder is the relative path here', (t) => {
+  const place = tendedWhileLocal(t);
+  homeAt(t, 'here');
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.divergedBeds, bedRef(place.remote)], [[], place.tip]);
+});
+
+test('a bed that adds the line here is pushed when the home folder is the relative path +here, as the + before an added line is no part of it', (t) => {
+  const place = tendedWhileLocal(t, { 'checks/notes.txt': 'here\n' });
+  homeAt(t, '+here');
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.divergedBeds, bedRef(place.remote)], [[], place.tip]);
+});
+
+test("a sync looks in the checkout for the bed's own commits and for no other name", (t) => {
+  const place = tendedWhileLocal(t);
+  const site = openSite(place.dir);
+  const started = startedGits(t);
+
+  sync(site, { attempts: 1 });
+
+  assert.deepEqual(
+    started()
+      .filter(({ args, cwd }) => cwd === site.checkout && args.includes('cat-file'))
+      .map(({ input }) => input),
+    [`${place.tip}\n`],
+  );
+});
+
+test("a sync reads a bed's commits, and looks for them in the checkout, without fetching what a partial clone lacks", (t) => {
+  const place = tendedWhileLocal(t);
+  const site = openSite(place.dir);
+  const started = startedGits(t);
+
+  sync(site, { attempts: 1 });
+
+  assert.deepEqual(
+    started()
+      .filter(({ args, cwd }) => cwd === site.checkout && (args.includes('log') || args.includes('cat-file')))
+      .map(({ args, env }) => [args.includes('log') ? 'log' : 'cat-file', env?.['GIT_NO_LAZY_FETCH']]),
+    [
+      ['log', '1'],
+      ['cat-file', '1'],
+    ],
+  );
+});
+
+test('a bed the origin already holds is not pushed again', (t) => {
+  const place = withBed(t);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  const started = startedCommands(t);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, started.includes('push'), bedRef(place.remote)], ['synced', false, tip]);
+});
+
+test('a bed whose push failed is pushed by a later sync, though a sync between them found its branch past the close', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  commit(place.bed, { 'src/later.ts': 'export const later = 1;\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.bed, ['reset', '-q', '--hard', place.tip]);
+
+  sync(openSite(place.dir), { attempts: 1 });
+
+  assert.equal(bedRef(place.remote), place.tip);
+});
+
+test('a sync that shares the tended closes of two classes puts both beds on the origin', (t) => {
+  const place = withBed(t);
+  git(place.dir, ['config', 'lzGardening.share', 'false']);
+  const anyType = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  const otherBed = join(place.garden, 'beds', 'other');
+  git(place.garden, ['worktree', 'add', '-q', '-b', 'bed/other', otherBed, 'FETCH_HEAD']);
+  const other = tend({ ...place, bed: otherBed }, { 'checks/other.mjs': 'export {};\n' }, 'src/b.ts:1', 'other');
+  git(place.dir, ['config', 'lzGardening.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.divergedBeds, bedRef(place.remote), bedRef(place.remote, 'other')], [[], anyType, other]);
 });
 
 function tendedInFirstClone(

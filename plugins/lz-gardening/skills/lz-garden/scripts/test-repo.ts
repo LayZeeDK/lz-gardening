@@ -66,6 +66,31 @@ export function startedCommands(t: TestContext): readonly (string | undefined)[]
   return commands;
 }
 
+export interface StartedGit {
+  readonly args: readonly string[];
+  readonly cwd: string | undefined;
+  readonly env: Readonly<NodeJS.ProcessEnv> | undefined;
+  readonly input: string | undefined;
+}
+
+// Each process this test starts through spawnSync from now on, in order: its arguments and what it ran with.
+export function startedGits(t: TestContext): () => readonly StartedGit[] {
+  const spawned = t.mock.method(childProcess, 'spawnSync');
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  return () =>
+    spawned.mock.calls.map(({ arguments: [, args, options] }) => ({
+      args: Array.isArray(args) ? args.filter((arg) => typeof arg === 'string') : [],
+      cwd: typeof options?.cwd === 'string' ? options.cwd : undefined,
+      env: options?.env,
+      input: typeof options?.input === 'string' ? options.input : undefined,
+    }));
+}
+
 export interface ScriptRun {
   readonly status: number | null;
   readonly stdout: string;
