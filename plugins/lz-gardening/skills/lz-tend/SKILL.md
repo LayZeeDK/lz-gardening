@@ -172,7 +172,8 @@ rule and a reason.
 Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
 file the change touched that step 4 did not run. A command that failed at the start runs again too, however long
 its output: its rerun shows whether the same checks or tests fail and no others. Read its summary lines as step 4
-says. Done when each has run again and passes, or fails with exactly the failures it had at the start, by name.
+says; when a rerun's summary lines are cut from the result, count it as a failure the change may have caused (below).
+Done when each has run again and passes, or fails with exactly the failures it had at the start, by name.
 Quote their summary lines. A command that fails after the change and has no starting result, or fails with a
 failure it did not have at the start, may be a failure your change caused: stop before step 7 and report it with its
 output, so a human judges it. The class stays open and the bed stays as it is.
