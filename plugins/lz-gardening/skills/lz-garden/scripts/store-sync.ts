@@ -7,6 +7,7 @@ import { censusRef, finishPendingCensus, leaseOnFetchedCensus, localCensusOf, se
 import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
+  configValue,
   git,
   gitReason,
   isAncestor,
@@ -14,7 +15,6 @@ import {
   networkGit,
   networkTimeoutMs,
   objectIds,
-  optionalGit,
   pushReport,
   timedOut,
 } from './store-git.ts';
@@ -268,6 +268,34 @@ export function sync(site: Site, options: SyncOptions, now = new Date()): SyncRe
   return lost ? { ...result, censusStillPending: options.census } : result;
 }
 
+const origin = 'origin\t';
+
+// git remote -v prints a remote's first fetch URL and each push URL as git remote get-url does, rewritten by
+// url.<base>.insteadOf and pushInsteadOf; the fetch line ends in " [<filter>]" when the remote has a partial clone
+// filter.
+function originUrls(checkout: string): { readonly fetchUrl: string; readonly pushUrl: string } | undefined {
+  const lines = git(checkout, ['remote', '-v'], { readsOnly: true })
+    .split('\n')
+    .filter((line) => line.startsWith(origin))
+    .map((line) => line.slice(origin.length));
+  const filter = lines.length === 0 ? undefined : configValue(checkout, 'remote.origin.partialclonefilter');
+  const urlEndingIn = (end: string): string | undefined =>
+    lines.find((line) => line.endsWith(end))?.slice(0, -end.length);
+  const fetchUrl = urlEndingIn(` (fetch)${filter === undefined ? '' : ` [${filter}]`}`);
+  const pushUrl = urlEndingIn(' (push)');
+
+  return fetchUrl === undefined || pushUrl === undefined ? undefined : { fetchUrl, pushUrl };
+}
+
+// Unset, the garden is shared; a value goes to git, which reads each spelling it takes (the run's config list holds
+// an empty value and a key with no value alike, which git reads as false and true).
+function shared(checkout: string): boolean {
+  return (
+    configValue(checkout, shareKey) === undefined ||
+    git(checkout, ['config', '--type=bool', shareKey], { readsOnly: true }) === 'true'
+  );
+}
+
 // What a try that settled the census recorded of the pending one.
 type Tried = SyncResult & { readonly recorded?: Recorded | undefined };
 
@@ -276,16 +304,13 @@ function syncWithOrigin(
   { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha }: SyncOptions,
   now: Date,
 ): { readonly result: SyncResult; readonly recorded: Recorded | undefined } {
-  const fetchUrl = optionalGit(site.checkout, ['remote', 'get-url', 'origin'], { readsOnly: true });
+  const urls = originUrls(site.checkout);
 
-  if (
-    fetchUrl === undefined ||
-    git(site.checkout, ['config', '--type=bool', '--default=true', shareKey], { readsOnly: true }) === 'false'
-  ) {
+  if (urls === undefined || !shared(site.checkout)) {
     return { result: { state: 'local', ...nothingShared }, recorded: undefined };
   }
 
-  const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
+  const { fetchUrl, pushUrl } = urls;
   let yielded: readonly LostClaim[] = [];
   let conflicts: readonly string[] = [];
   let skipped: readonly string[] = [];

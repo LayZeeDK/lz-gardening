@@ -35,7 +35,8 @@ repository lands work.
 The site shares two refs, the garden log and the census: `site.ts open` and `site.ts sync` fetch the repository's
 `origin` `refs/garden/log` and `refs/garden/census` into the site's `refs/garden-shared/`, merge the log with the site's
 own log, settle the census (below), and push both back to `origin` in one atomic push. They read the URLs from the
-checkout on every run (`git remote get-url origin` to fetch, `--push` to push), so the checkout itself fetches nothing
+checkout on every run (`git remote -v`: `origin`'s fetch and push URLs, as `git remote get-url origin` and its
+`--push` give them), so the checkout itself fetches nothing
 and gains no refs, and they push no ref outside `refs/garden/`. `git config lzGardening.share false` in the checkout
 keeps the garden local. Events are never edited or deleted, so the merge is the union of both logs' event files: the
 commit takes the site's log and adds the shared log's files. A file both logs hold with different content keeps the
