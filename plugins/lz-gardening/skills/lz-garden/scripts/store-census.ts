@@ -90,6 +90,7 @@ export function readCensusAt(site: string, ref: string): ReadCensus {
 
   try {
     json = JSON.parse(text);
+    // Stryker disable next-line BlockStatement: equivalent, with no return here json stays undefined, which reads as not a census below
   } catch {
     return { kind: 'not a census' };
   }

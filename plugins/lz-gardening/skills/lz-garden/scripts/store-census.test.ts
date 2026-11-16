@@ -3,11 +3,12 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import type { TestContext } from 'node:test';
 import { openSite } from './store-log.ts';
 import { censusRef, parseCensus, pendingCensusRef, readCensusAt, writePendingCensus } from './store-census.ts';
 import type { StoredCensus } from './store-census.ts';
 import { sync } from './store-sync.ts';
-import { commit, git } from './test-repo.ts';
+import { commit, git, startedCommands, startedGits } from './test-repo.ts';
 import {
   anotherSyncMovesTheCensusFirst,
   bareRemote,
@@ -34,6 +35,15 @@ test('a pending census reads back byte for byte', (t) => {
   writePendingCensus({ path: garden, checkout: dir }, sha, text);
 
   assert.equal(storedAt(garden, pendingCensusRef(sha)).text, text);
+});
+
+test('a pending census is a commit named garden: census', (t) => {
+  const { dir, garden } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+
+  writePendingCensus({ path: garden, checkout: dir }, sha, censusText(sha));
+
+  assert.equal(git(garden, ['log', '-1', '--format=%s', pendingCensusRef(sha)]), 'garden: census');
 });
 
 test('a pending census written while another run holds its ref lock waits for the lock and lands', async (t) => {
@@ -136,6 +146,18 @@ test('a sync of a garden with no origin records the pending census as its census
   assert.equal(censusRefs(garden), `${censusRef} ${pending}`);
 });
 
+test('a sync --census of a commit the site holds no census of, pending or covering it, is refused, naming the census to take', (t) => {
+  const { dir } = planted(t);
+  const sha = git(dir, ['rev-parse', 'HEAD']);
+
+  const synced = site(dir, ['sync', '--census', sha]);
+
+  assert.deepEqual(
+    [synced.status, synced.stderr],
+    [1, `site: no census of ${sha} to record: run census.ts --rev ${sha} first\n`],
+  );
+});
+
 function record(place: Planted, sha: string): string {
   writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
   const pending = git(place.garden, ['rev-parse', pendingCensusRef(sha)]);
@@ -187,6 +209,25 @@ test('a sync --census keeps a pending census of a commit the checkout lacks', (t
   assert.equal(censusRefs(place.garden), `${censusRef} ${recorded}\n${pendingCensusRef(missing)} ${pending}`);
 });
 
+test('a sync --census of a commit the checkout lacks records the census and drops the pending one', (t) => {
+  const place = planted(t);
+
+  const recorded = record(place, 'f'.repeat(40));
+
+  assert.equal(censusRefs(place.garden), `${censusRef} ${recorded}`);
+});
+
+test('a sync --census that finds no pending census to drop starts no git to delete one', (t) => {
+  const place = planted(t);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  record(place, sha);
+  const started = startedCommands(t);
+
+  sync(openSite(place.dir), { attempts: 1, census: sha });
+
+  assert.deepEqual([started.includes('for-each-ref'), started.includes('update-ref')], [true, false]);
+});
+
 test('a sync whose log the origin already holds still pushes the census it records', (t) => {
   const place = planted(t);
   const remote = bareRemote(place.dir);
@@ -195,6 +236,23 @@ test('a sync whose log the origin already holds still pushes the census it recor
   const recorded = record(place, git(place.dir, ['rev-parse', 'HEAD']));
 
   assert.equal(git(remote, ['for-each-ref', '--format=%(objectname)', censusRef]), recorded);
+});
+
+test('a sync asks a git that only reads for the first branch fetched from origin that holds its census commit', (t) => {
+  const place = planted(t);
+  bareRemote(place.dir);
+  const sha = git(place.dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: place.garden, checkout: place.dir }, sha, censusText(sha));
+  const started = startedGits(t);
+
+  sync(openSite(place.dir), { attempts: 1, census: sha });
+
+  assert.deepEqual(
+    started()
+      .map(({ args }) => args)
+      .filter((args) => args.includes('refs/remotes/origin/')),
+    [['for-each-ref', '--count=1', '--format=%(refname)', `--contains=${sha}`, 'refs/remotes/origin/']],
+  );
 });
 
 // A base commit pushed to origin, as a census is shared only of a commit a branch fetched from origin holds.
@@ -237,6 +295,13 @@ test('a site with no census takes the shared census as its own', (t) => {
   assert.equal(censusRefs(second.garden), `${censusRef} ${shared}`);
 });
 
+test('a sync that takes the shared census as its own does not say it left it out', (t) => {
+  const { first, second } = sharedPair(t);
+  record(first, git(first.dir, ['rev-parse', 'HEAD']));
+
+  assert.equal(sync(openSite(second.dir), { attempts: 1 }).sharedCensusIgnored, undefined);
+});
+
 test('a site takes a shared census of a newer base commit in place of its own, and leaves it on the origin', (t) => {
   const { first, second, remote } = sharedPair(t);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
@@ -248,7 +313,11 @@ test('a site takes a shared census of a newer base commit in place of its own, a
   assert.deepEqual([censusRefs(second.garden), remoteCensus(remote)], [`${censusRef} ${newer}`, newer]);
 });
 
-test('a census of a newer base commit recorded while the garden was local is kept over the shared one, and pushed', (t) => {
+function newerCensusRecordedWhileLocal(t: TestContext): {
+  readonly place: Planted;
+  readonly remote: string;
+  readonly newer: string;
+} {
   const place = planted(t);
   const remote = bareRemote(place.dir);
   record(place, git(place.dir, ['rev-parse', 'HEAD']));
@@ -256,9 +325,21 @@ test('a census of a newer base commit recorded while the garden was local is kep
   const newer = record(place, onOrigin(place, commit(place.dir, { 'src/b.ts': 'export const b = 2;\n' })));
   git(place.dir, ['config', 'lzGardening.share', 'true']);
 
+  return { place, remote, newer };
+}
+
+test('a census of a newer base commit recorded while the garden was local is kept over the shared one, and pushed', (t) => {
+  const { place, remote, newer } = newerCensusRecordedWhileLocal(t);
+
   sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual([censusRefs(place.garden), remoteCensus(remote)], [`${censusRef} ${newer}`, newer]);
+});
+
+test('a sync that keeps its census of a newer base commit over the shared one does not say it left the shared one out', (t) => {
+  const { place } = newerCensusRecordedWhileLocal(t);
+
+  assert.equal(sync(openSite(place.dir), { attempts: 1 }).sharedCensusIgnored, undefined);
 });
 
 function pushNotACensus(place: Planted, remote: string): string {
@@ -311,6 +392,18 @@ test('two clones that take censuses of the same base commit both end with the fi
   record(second, base);
 
   assert.deepEqual(eachHolds([first, second], remote), Array(3).fill(`${censusRef} ${shared}`));
+});
+
+test('a clone that recorded a census while local takes the shared census of the same base commit in its place', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  const base = git(first.dir, ['rev-parse', 'HEAD']);
+  git(second.dir, ['config', 'lzGardening.share', 'false']);
+  writePendingCensus({ path: second.garden, checkout: second.dir }, base, censusText(base, { rev: 'HEAD' }));
+  sync(openSite(second.dir), { attempts: 1, census: base });
+  git(second.dir, ['config', 'lzGardening.share', 'true']);
+  const shared = record(first, base);
+
+  assert.deepEqual(eachHolds([second], remote), Array(2).fill(`${censusRef} ${shared}`));
 });
 
 test('a clone that takes a census of an ancestor of the shared census base keeps the shared census', (t) => {
@@ -525,6 +618,15 @@ test('a sync of a site whose census is not a census says on stderr that it stays
   );
 });
 
+test('a sync of a site whose census, not a census, is the one the origin holds does not say it left the shared one out', (t) => {
+  const place = planted(t);
+  const remote = bareRemote(place.dir);
+  writeUnreadableCensus(place);
+  git(place.garden, ['push', '-q', remote, `${censusRef}:${censusRef}`]);
+
+  assert.equal(sync(openSite(place.dir), { attempts: 1 }).sharedCensusIgnored, undefined);
+});
+
 test('a census of a commit only a tag and another remote hold stays local', (t) => {
   const place = planted(t);
   const remote = bareRemote(place.dir);
@@ -543,6 +645,17 @@ test('a census of a commit only a tag and another remote hold stays local', (t) 
     [synced.status, synced.stderr, remoteCensus(remote), git(upstream, ['rev-parse', 'main'])],
     [0, `site: the census of ${sha} stays local: no branch fetched from origin holds that commit\n`, '', sha],
   );
+});
+
+test('a census of a commit the checkout lacks stays local', (t) => {
+  const place = planted(t);
+  const remote = bareRemote(place.dir);
+  const missing = 'f'.repeat(40);
+  writePendingCensus({ path: place.garden, checkout: place.dir }, missing, censusText(missing));
+
+  const result = sync(openSite(place.dir), { attempts: 1, census: missing });
+
+  assert.deepEqual([result.censusKeptLocal, remoteCensus(remote)], [missing, '']);
 });
 
 test('a census commit is authored as lz-gardening with no address, and an origin that checks every object takes it', (t) => {
