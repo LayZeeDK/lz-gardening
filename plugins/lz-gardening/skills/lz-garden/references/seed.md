@@ -54,7 +54,8 @@ git log --no-merges --format='%h %s' -n 300 <base>
 ```
 
 Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up runs. Read the diffs of the commits
-they point at, and of the newest 20 commits, as in a tick's step 3. Done when each of those commits is read and its
+they point at, and of the newest 20 commits, with `git show <commit>`; when the tool result says the output was saved
+to a file, Read that file to its end. Done when each of those commits is read and its
 weeds are queued.
 
 ## 4. Record and report

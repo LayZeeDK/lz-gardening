@@ -10,6 +10,7 @@ allowed-tools:
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/site.ts" *)
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/census.ts" *)
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" *)
+  - Bash(node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" *)
   - Bash(git ls-tree *)
   - Bash(git rev-parse *)
 ---
@@ -33,9 +34,9 @@ the repository with the git commands below and the Read, Grep and Glob tools. Cl
 `git show` without asking only in read-only forms like the ones below; add no other options to them. Read a file as
 it is on the base with `git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often
 another branch than `<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through
-the three scripts, which keep the queue and the census in the garden site beside the repository. Anything else
-(another command, `cd`, a file write, a redirect) falls back to the user's permission settings; a tick cannot stop
-to ask, so what those settings do not allow is refused.
+`site.ts`, `census.ts` and `weeds.ts`, which keep the queue and the census in the garden site beside the repository.
+Anything else (another command, `cd`, a file write, a redirect) falls back to the user's permission settings; a tick
+cannot stop to ask, so what those settings do not allow is refused.
 
 ## 1. Open the site
 
@@ -86,19 +87,26 @@ shortened with `git rev-parse --short <sha>`. Done when it exits 0; then take th
 
 ## 3. Read what landed
 
+Read the catalogue, `${CLAUDE_SKILL_DIR}/references/weeds.md`, first. Then read the diffs, page by page:
+
 ```bash
-git log --no-merges --format='%h %an %s' <previousSha>..<sha>
+node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <previousSha>..<sha>
+node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <previousSha>..<sha> --page 2
 ```
 
-The output lists the newest commit first. Read the diff (`git show <commit>`) of each commit it lists, the first 30
-at most; the report counts the rest as skipped. When the tool result says the output was saved to a file, Read that
-file to its end, in parts when it is long: the commit counts as read only then. Look for the weeds catalogued in
-`${CLAUDE_SKILL_DIR}/references/weeds.md`: the census finds the textual ones, and reading finds the rest (a hollow
-test, a copied workaround, a second way to do what the codebase already does, a lesson the records hold twice).
-Read the catalogue before the first diff. A weed is something an agent will copy; a one-off with no sign of
-spreading is not one.
+The script picks what a tick reads: the diffs of the newest 30 commits, smallest first, up to 400,000 characters in
+all. Page 1 opens with one line per commit, `read` or `skip`, with its diff's size and its subject; the diffs of the
+`read` commits follow. Each page ends with a JSON line: `page`, `pages`, `commits`, `read`, `skipped`. Run it with
+`--page 2`, `--page 3` and on, one call per page, until `page` equals `pages`, and read each page for weeds before
+you run the next. The census finds the textual weeds; only this reading finds the rest (a hollow test, a copied
+workaround, a second way to do what the codebase already does, a lesson the records hold twice), so the census's
+findings do not stand in for the pages. A weed is something an agent will copy; a one-off with no sign of spreading
+is not one.
 
-Done when every commit in the range is read or counted as skipped.
+A page fits in one tool result. If the tool result says a page was saved to a file, Read that file to its end
+before the next page.
+
+Done when you have run and read the last page (`page` equals `pages`).
 
 ## 4. Queue
 
@@ -108,12 +116,8 @@ Queue each weed with `weeds.ts`. The script dedupes, so queueing the same weed t
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:line]> --source <kind:ref> --note "<root cause>" [--layer <1-6>] --census <sha>
 ```
 
-- `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-function`.
-  Queue one weed per file after `new` on its `+ duplicate` line, and one per file after `already` that
-  `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-function` does not show. First read the
-  definition you would keep and each file's own, with `git show <sha>:<path>`, every one of those files. A comment or
-  a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
-  makes that copy no weed. Each of those files ends either queued or on the reply's `left out:` line with its reason.
+- `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-function`
+  (see "New duplicates" below).
 - `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
   `~` or one through `..` is refused with exit 2.
 - `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record (the path
@@ -129,13 +133,28 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   shows it.
 - `--census`: the census's `sha` from step 2, in full.
 
+**New duplicates.** Each `+ duplicate <name>` line of step 2 names files to judge: every file after `new`, and every
+file after `already` that `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-function` does not
+show. Take them one at a time:
+
+1. Run `git show <sha>:<path>` for that file, one call per file, and read its header comment and the definition of
+   `<name>`. When the tool result says the output was saved to a file, Read that file to its end. A Grep or Read of
+   the checkout does not replace this call: the checkout can be on another branch than `<sha>`.
+2. Look for words that say why this copy must exist: a comment in the file, or a document the repository keeps, that
+   says the file cannot import the shared definition (it is loaded, injected or copied alone) or that a test pins the
+   copies alike. Only such words make a documented copy; a file that merely has no imports, or looks
+   self-contained, is not one.
+3. A documented copy goes on the reply's `left out:` line, its reason the words you found, quoted. Every other file
+   is queued, one weed per file, with a note naming the definition to keep; a tend pass decides what happens to it.
+
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
 `(check: <where> not on the base)`, the bed's change to that check is not on the base at this tick's census: the bed
 has not landed, or the check's file is gone from the base. Report it that way, not as a check that failed. When it
 reads `(check: <where>, base unknown)`, the site could not judge the base: the census is missing or unreadable, the
 bed's or the census's commit is not in the site or the checkout, or the bed shares no history with the base. Report
-the check's landing as unknown. Done when every weed from steps 2 and 3 printed one of those words.
+the check's landing as unknown. Done when every weed from steps 2 and 3 printed one of those words, and every file
+of a new duplicate had its own `git show <sha>:<path>` and is either queued or a documented copy.
 
 ## 5. Group, record, report
 
@@ -169,14 +188,15 @@ shared: <state> (<reason>)
 ```
 
 - `<commits>`: the census's `commits`, as printed.
-- `<read>`: the commits whose whole diff you read with `git show <commit>`, a diff saved to a file only once you
-  read that file to its end. A `--stat` or a path-limited `git show` is not a read. `<skipped>` is `<commits>` minus
-  `<read>`.
+- `<read>` and `<skipped>`: the `read` and `skipped` of the last page's JSON line from step 3, once you have read
+  every page. When you stopped before the last page, `<read>` is 0 and `<skipped>` is `<commits>`.
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this tick that printed `added` or `regrown`; `<total>`
   is the sum of the `<n>`, and `queued 0` has no parentheses. `regrown:` names each class an add printed `regrown` for,
   with the check its line named, or reads `regrown: none`.
-- `left out`: each file of a new duplicate (step 4) you did not queue, with its reason in a few words, such as
-  `extension/a.js (documented copy: no imports)`; `left out: none` when there is none.
+- `left out`: one `<path> (documented copy: "<quoted words>")` entry per documented copy of step 4, comma-separated,
+  such as `extension/a.js (documented copy: "runs in the page alone, so it cannot import")`. Each entry names one
+  path and its own words: never two paths under one reason, and no entry for a group of files. `left out: none` when
+  there is none.
 - `ready to tend`: one entry per row of `groups --ready`, its `open` and `places` columns, and the first row's class
   after `lz-tend`; `ready to tend: none` when it printed no row below its header.
 - `shared`: `sync`'s `shared`, with `(<reason>)` only when `sync` printed a `reason`.
