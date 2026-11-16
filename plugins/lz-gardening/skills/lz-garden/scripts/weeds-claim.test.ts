@@ -1,9 +1,13 @@
 // Run: node --test weeds-claim.test.ts
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
+import type { TestContext } from 'node:test';
 import { test } from 'node:test';
-import { replay } from './log.ts';
+import { eventPath, replay } from './log.ts';
 import { logRef, openSite, readLog } from './store-log.ts';
 import { sleep, sync } from './store-sync.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
@@ -192,6 +196,87 @@ test('claim --class of a class another writer holds prints taken with the holder
   assert.deepEqual(
     [claimed.status, claimed.stdout, claimsIn(garden)],
     [1, 'taken any-type by Bea until 2026-11-07T15:00:00.000Z\n', [['any-type', '2026-11-07T15:00:00.000Z']]],
+  );
+});
+
+// Another writer's claim of each of the classes reaches origin after this site claims the class and before the site's
+// next fetch, so the sync that shares the site's claim finds the class lost.
+function anotherWriterClaimsFirst(t: TestContext, garden: string, remote: string, classes: readonly string[]): void {
+  const { spawnSync } = childProcess;
+  const stillToClaim = new Set(classes);
+  const spawned = t.mock.method(childProcess, 'spawnSync', (...args: readonly unknown[]): unknown => {
+    const [, gitArgs] = args;
+
+    if (Array.isArray(gitArgs) && gitArgs.includes('fetch')) {
+      claimsIn(garden).forEach(([weedClass]) => {
+        if (typeof weedClass === 'string' && stillToClaim.delete(weedClass)) {
+          const uuid = randomUUID();
+          const held = { op: 'claim', uuid, clock: 1, at: now.toISOString(), class: weedClass, writer: 'w' };
+          const claim = { ...held, holder: 'Bea', until: '2026-11-07T15:00:00.000Z' };
+          writeToLogByHand(remote, eventPath(uuid), JSON.stringify(claim));
+        }
+      });
+    }
+
+    return Reflect.apply(spawnSync, childProcess, args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+}
+
+function addReadyClass(dir: string, weedClass: string): void {
+  addWeed(dir, 'src/a.ts:1', weedClass);
+  addWeed(dir, 'src/b.ts:1', weedClass);
+}
+
+test('claim with no class claims the next ready class when another writer takes the first one first', (t) => {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+  addReadyClass(dir, 'any-type');
+  addReadyClass(dir, 'todo-marker');
+  anotherWriterClaimsFirst(t, garden, remote, ['any-type']);
+
+  const claimed = cli(dir, ['claim'], process.env, now);
+
+  assert.deepEqual(
+    [claimed.status, claimed.stdout, replay(readLog({ path: remote }).events, now).claims.get('any-type')?.holder],
+    [0, 'claimed todo-marker until 2026-11-07T18:00:00.000Z\n', 'Bea'],
+  );
+});
+
+test('claim with no class gives up after three classes other writers took first, and says who took the third', (t) => {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+  const classes = ['any-type', 'double-cast', 'todo-marker'];
+  classes.forEach((weedClass) => {
+    addReadyClass(dir, weedClass);
+  });
+  anotherWriterClaimsFirst(t, garden, remote, classes);
+
+  const claimed = cli(dir, ['claim'], process.env, now);
+
+  assert.deepEqual([claimed.status, claimed.stdout], [1, 'taken todo-marker by Bea until 2026-11-07T15:00:00.000Z\n']);
+});
+
+test('claim --class of a class another writer takes first says taken, exits 1 and plans once, naming a skipped event file once', (t) => {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+  addWeed(dir, 'src/a.ts:1');
+  writeToLogByHand(garden, 'events/ab/abc.json', '{}');
+  anotherWriterClaimsFirst(t, garden, remote, ['any-type']);
+
+  const claimed = cli(dir, ['claim', '--class', 'any-type'], process.env, now);
+
+  assert.deepEqual(
+    [claimed.status, claimed.stdout, claimed.stderr],
+    [
+      1,
+      'taken any-type by Bea until 2026-11-07T15:00:00.000Z\n',
+      'weeds: skipped events/ab/abc.json: missing uuid, clock or at\n',
+    ],
   );
 });
 
