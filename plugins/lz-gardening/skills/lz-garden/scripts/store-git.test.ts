@@ -248,6 +248,17 @@ test('a variable may point git at a repository when its name starts with GIT_ an
   assert.deepEqual(['GIT_DIR', 'GIT_CONFIG_COUNT', 'PATH'].map(mayPointAtARepository), [true, false, false]);
 });
 
+test('a run whose environment sets GIT_EDITOR and GIT_OPTIONAL_LOCKS, as Claude Code does, starts no git to list the variables that point git at a repository', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'a.txt': 'a\n' });
+  const env = { ...process.env, GIT_EDITOR: 'true', GIT_OPTIONAL_LOCKS: '0', [readStrategyVariable]: 'spawn' };
+  const started = startedCommands(t);
+
+  inRun(env, () => refTip(dir, 'HEAD'));
+
+  assert.deepEqual(started, ['rev-parse']);
+});
+
 test('settings in GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT reach git in a run that drops the GIT_DIR beside them', (t) => {
   const dir = repo(t);
   const env = {

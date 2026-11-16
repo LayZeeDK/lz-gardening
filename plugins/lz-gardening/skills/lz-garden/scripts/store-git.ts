@@ -73,13 +73,16 @@ export function closeReaders(cwd: string): void {
   current.reads.close(cwd);
 }
 
+// Variables that tell git how to deal with a person, never where a repository is; Claude Code sets both for every command.
+const personVariables = ['GIT_EDITOR', 'GIT_OPTIONAL_LOCKS'];
+
 export function mayPointAtARepository(variable: string): boolean {
-  return variable.startsWith('GIT_') && !variable.startsWith('GIT_CONFIG_');
+  return variable.startsWith('GIT_') && !variable.startsWith('GIT_CONFIG_') && !personVariables.includes(variable);
 }
 
 function cleanedGitEnv(cwd: string): Readonly<NodeJS.ProcessEnv> {
   // Every variable git lists with --local-env-vars starts with GIT_; the only ones that start with GIT_CONFIG_ are the
-  // settings kept below, so an environment with no other GIT_ variable has nothing to drop.
+  // settings kept below, so an environment whose other GIT_ variables all deal with a person has nothing to drop.
   const localVariables = Object.keys(current.env).some(mayPointAtARepository)
     ? spawnGit(cwd, ['rev-parse', '--local-env-vars'], current.env)
         .stdout.split('\n')

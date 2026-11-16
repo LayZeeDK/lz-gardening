@@ -13,8 +13,8 @@ import { isRecord } from './log.ts';
 import { gitStartChannel } from './store-git-reader.ts';
 import { mayPointAtARepository } from './store-git.ts';
 
-// A git variable inherited from the shell, such as the GIT_EDITOR an agent sets, would add the scripts'
-// --local-env-vars read to every run, so the tests see what a plain terminal sees.
+// A git variable inherited from the shell that may point git at a repository, such as a hook's GIT_DIR, would add the
+// scripts' --local-env-vars read to every run, so the tests see what a plain terminal sees.
 for (const name of Object.keys(process.env).filter(mayPointAtARepository)) {
   Reflect.deleteProperty(process.env, name);
 }
