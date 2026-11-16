@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { claimLifetimeMs, replay } from './log.ts';
 import { openSite, readLog } from './store-log.ts';
+import { logFiles, writeToLogByHand } from './test-log.ts';
 import { commit, git, now } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
 import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
@@ -38,6 +39,21 @@ test('close-class by a site that holds no claim of the class exits 1, says so an
   assert.deepEqual(
     [closed.status, closed.stderr, replay(readLog({ path: garden }).events, now).open.length],
     [1, 'weeds close-class: this site holds no claim of any-type; run weeds claim --class any-type\n', 1],
+  );
+});
+
+test('close --id of a weed whose class another writer holds a claim of exits 1, names the holder and closes nothing', (t) => {
+  const { dir, garden } = planted(t);
+  const id = addWeed(dir, 'src/a.ts:1');
+  const uuid = '0f3c2a6e-1b2d-4c5e-8f90-a1b2c3d4e5f6';
+  const held = { op: 'claim', uuid, clock: 9, at: now.toISOString(), class: 'any-type', writer: 'w', holder: 'Bea' };
+  writeToLogByHand(garden, `events/0f/${uuid}.json`, JSON.stringify({ ...held, until: '2026-11-07T15:00:00.000Z' }));
+
+  const closed = cli(dir, ['close', '--id', id, '--one-off', 'generated code'], process.env, now);
+
+  assert.deepEqual(
+    [closed.status, closed.stdout, closed.stderr, logFiles(garden).size],
+    [1, '', 'weeds close: any-type is claimed by Bea until 2026-11-07T15:00:00.000Z\n', 2],
   );
 });
 
