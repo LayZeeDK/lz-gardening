@@ -462,6 +462,41 @@ test('close kills a git that does not end when its input ends, and waits for tha
   assert.deepEqual([postedLines(posted).slice(2), untaken()], [['end 1', 'kill 1', 'stop 0'], 0]);
 });
 
+test('a folder closed whose git never says it ended reads again with a new git', () => {
+  const { posted, pump } = scriptedPump((message) =>
+    message.kind === 'end' || message.kind === 'kill' ? [] : oneCommitGit(message),
+  );
+  const reads = readerOf(pump);
+  reads.ids(at, ['HEAD']);
+  reads.close('D:/site');
+  reads.ids(at, ['HEAD']);
+
+  assert.deepEqual(postedLines(posted).slice(2), ['end 1', 'kill 1', 'start 2', 'write 2']);
+});
+
+test("close waits for a git's end until the end's time has passed since it asked", () => {
+  const { pump } = scriptedPump(oneCommitGit);
+  const deadlines: number[] = [];
+  const reads = readerOf({
+    ...pump,
+    take: (deadline) => {
+      deadlines.push(deadline);
+
+      return pump.take(deadline);
+    },
+  });
+  reads.ids(at, ['HEAD']);
+  const taken = deadlines.length;
+  const asked = Date.now();
+  reads.close();
+  const closed = Date.now();
+
+  assert.deepEqual(
+    deadlines.slice(taken).map((deadline) => asked + 1000 <= deadline && deadline <= closed + 1000),
+    [true],
+  );
+});
+
 test('a git that cannot start fails the read with the reason, and nothing is written to it', () => {
   const { posted, pump } = scriptedPump((message) =>
     message.kind === 'start' ? [{ kind: 'ended', reader: message.reader, code: null, error: 'spawn git ENOENT' }] : [],
