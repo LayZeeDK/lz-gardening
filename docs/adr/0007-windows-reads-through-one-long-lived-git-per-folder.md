@@ -4,7 +4,8 @@ Starting a git process costs 40-100 ms on Windows and about 2 ms on Linux, and a
 35 of them. On Windows a run therefore reads refs, objects and trees through one `git cat-file --batch-command` per
 folder and environment, kept until the run ends; on Linux every read still starts its own git, which costs less there
 than a long-lived one (19.3 ms for a reader's start, one read and its end, against 1.8 ms for one spawned read,
-measured in an arm64 container). `LZ_GARDEN_GIT_READS=spawn` or `reader` picks either strategy on any platform.
+measured in an arm64 container). The internal `_LZ_GARDENING_INTERNAL_GIT_READS=spawn` or `reader`, which the tests set, picks either strategy on any
+platform.
 
 The store's API stays synchronous: a worker thread starts the git processes and moves their bytes, and the main
 thread waits on a shared counter with `Atomics.wait` and reads the worker's messages with `receiveMessageOnPort`.

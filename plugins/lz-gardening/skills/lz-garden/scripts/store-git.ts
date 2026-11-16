@@ -38,7 +38,7 @@ const spawnReads: ObjectReads = {
 
 let current: Run = { env: process.env, gitEnv: undefined, configs: new Map(), reads: spawnReads };
 const settingsInEnvironment = ['GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
-const hookOffVariable = 'LZ_GARDEN_HOOK_OFF';
+const hookOffVariable = '_LZ_GARDENING_INTERNAL_HOOK_OFF';
 // How long a reader's git may go quiet in the middle of an answer, and how long it gets to end at the end of a run.
 // Stryker disable next-line LzJsNumericLiteral: a limit one millisecond off reads the same
 const readerAnswerMs = 60_000;
@@ -46,7 +46,8 @@ const readerAnswerMs = 60_000;
 const readerEndMs = 5000;
 
 // A run on Windows, where a git start costs 40-100 ms against 2 ms on Linux, reads objects through one long-lived git
-// per folder; LZ_GARDEN_GIT_READS=spawn|reader picks either anywhere. A run holds no git once it returns or throws.
+// per folder; _LZ_GARDENING_INTERNAL_GIT_READS=spawn|reader picks either anywhere. A run holds no git once it returns
+// or throws.
 export function inRun<T>(env: Readonly<NodeJS.ProcessEnv>, command: () => T): T {
   const outer = current;
   const reads =

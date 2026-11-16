@@ -326,25 +326,28 @@ test('every other platform spawns a git per read when nothing says otherwise', (
   assert.equal(readStrategyOf({}, 'linux'), 'spawn');
 });
 
-test('LZ_GARDEN_GIT_READS picks the strategy on any platform', () => {
+test('_LZ_GARDENING_INTERNAL_GIT_READS picks the strategy on any platform', () => {
   assert.deepEqual(
     [
-      readStrategyOf({ LZ_GARDEN_GIT_READS: 'spawn' }, 'win32'),
-      readStrategyOf({ LZ_GARDEN_GIT_READS: 'reader' }, 'linux'),
+      readStrategyOf({ _LZ_GARDENING_INTERNAL_GIT_READS: 'spawn' }, 'win32'),
+      readStrategyOf({ _LZ_GARDENING_INTERNAL_GIT_READS: 'reader' }, 'linux'),
     ],
     ['spawn', 'reader'],
   );
 });
 
-test('an empty LZ_GARDEN_GIT_READS, as a shell sets for VAR= cmd, says nothing', () => {
+test('an empty _LZ_GARDENING_INTERNAL_GIT_READS, as a shell sets for VAR= cmd, says nothing', () => {
   assert.deepEqual(
-    [readStrategyOf({ LZ_GARDEN_GIT_READS: '' }, 'win32'), readStrategyOf({ LZ_GARDEN_GIT_READS: '' }, 'linux')],
+    [
+      readStrategyOf({ _LZ_GARDENING_INTERNAL_GIT_READS: '' }, 'win32'),
+      readStrategyOf({ _LZ_GARDENING_INTERNAL_GIT_READS: '' }, 'linux'),
+    ],
     ['reader', 'spawn'],
   );
 });
 
-test('any other value of LZ_GARDEN_GIT_READS is refused, naming both strategies', () => {
-  assert.throws(() => readStrategyOf({ LZ_GARDEN_GIT_READS: 'batch' }, 'linux'), {
-    message: 'LZ_GARDEN_GIT_READS is "batch"; it takes spawn or reader',
+test('any other value of _LZ_GARDENING_INTERNAL_GIT_READS is refused, naming both strategies', () => {
+  assert.throws(() => readStrategyOf({ _LZ_GARDENING_INTERNAL_GIT_READS: 'batch' }, 'linux'), {
+    message: '_LZ_GARDENING_INTERNAL_GIT_READS is "batch"; it takes spawn or reader',
   });
 });

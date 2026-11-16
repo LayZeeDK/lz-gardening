@@ -4,7 +4,7 @@ import { appendFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { gitStartChannel } from './store-git-reader.ts';
 
-const startsFile = process.env['LZ_GARDEN_GIT_STARTS'];
+const startsFile = process.env['_LZ_GARDENING_INTERNAL_GIT_STARTS'];
 
 if (startsFile !== undefined) {
   Object.defineProperty(childProcess, 'spawnSync', {

@@ -55,6 +55,6 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   garden scripts.
 - Git reads: on Windows, where starting a git process is slow, each script command reads git objects through one
   long-lived `git cat-file --batch-command` per folder and ends it before the command exits. Other platforms start
-  a git process per read. `LZ_GARDEN_GIT_READS=spawn` or `reader` picks either way on any platform. The scripts'
+  a git process per read. The scripts'
   own fetches, merges and commits start no auto maintenance (`maintenance.auto=false`), as its packing of refs can go
   unseen by a long-lived reader.

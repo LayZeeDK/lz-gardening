@@ -30,7 +30,10 @@ function gitStarts(
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
   const reads = strategy === undefined ? {} : { [readStrategyVariable]: strategy };
 
-  assert.equal(run({ ...env, ...reads, NODE_OPTIONS: nodeOptions.join(' '), LZ_GARDEN_GIT_STARTS: starts }), 0);
+  assert.equal(
+    run({ ...env, ...reads, NODE_OPTIONS: nodeOptions.join(' '), _LZ_GARDENING_INTERNAL_GIT_STARTS: starts }),
+    0,
+  );
 
   return existsSync(starts) ? readFileSync(starts, 'utf8').split('\n').slice(0, -1) : [];
 }

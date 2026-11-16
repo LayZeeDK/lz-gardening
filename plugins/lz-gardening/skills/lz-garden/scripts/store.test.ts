@@ -487,7 +487,7 @@ test('the hooks turned off are those the config names, by their whole name, and 
   git(dir, ['config', 'alias.hook.x.command', 'log']);
   git(dir, ['config', 'hook.other.commandeer', 'x']);
 
-  assert.deepEqual(namedHooksOff(dir), ['--config-env=hook.team.lint.enabled=LZ_GARDEN_HOOK_OFF']);
+  assert.deepEqual(namedHooksOff(dir), ['--config-env=hook.team.lint.enabled=_LZ_GARDENING_INTERNAL_HOOK_OFF']);
 });
 
 test('an add that writes the log runs none of the user hooks, set in a hooks folder or by name', (t) => {
@@ -518,7 +518,7 @@ test('a hook set up by name with no value after its command key is turned off to
   const dir = repo(t);
   appendFileSync(join(dir, '.git', 'config'), '[hook "bare"]\n\tcommand\n');
 
-  assert.deepEqual(namedHooksOff(dir), ['--config-env=hook.bare.enabled=LZ_GARDEN_HOOK_OFF']);
+  assert.deepEqual(namedHooksOff(dir), ['--config-env=hook.bare.enabled=_LZ_GARDENING_INTERNAL_HOOK_OFF']);
 });
 
 test('a site whose config git cannot read is refused with the error git gives, not as a site without a writer', (t) => {

@@ -247,6 +247,18 @@ test('the plugin ships the same license as the repository', () => {
   );
 });
 
+const variableName = /(?<!\w)_?LZ_[A-Z0-9_]+/g;
+
+test("the plugin's environment variables start with LZ_GARDENING_ when public and _LZ_GARDENING_INTERNAL_ when internal", () => {
+  const misnamed = textFiles('plugins/lz-gardening/').flatMap(({ path, text }) =>
+    (text.match(variableName) ?? [])
+      .filter((name) => !/^(?:LZ_GARDENING_|_LZ_GARDENING_INTERNAL_)/.test(name))
+      .map((name) => `${path}: ${name}`),
+  );
+
+  assert.deepEqual(misnamed, []);
+});
+
 test('no file under a node_modules folder is committed, the plugin folder included', () => {
   assert.deepEqual(gitPaths(['--', ':(glob)**/node_modules/**']), []);
 });

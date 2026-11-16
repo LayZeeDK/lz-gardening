@@ -44,7 +44,7 @@ export const readStrategies = ['spawn', 'reader'] as const;
 
 export type ReadStrategy = (typeof readStrategies)[number];
 
-export const readStrategyVariable = 'LZ_GARDEN_GIT_READS';
+export const readStrategyVariable = '_LZ_GARDENING_INTERNAL_GIT_READS';
 
 export function readStrategyOf(env: Readonly<NodeJS.ProcessEnv>, platform: NodeJS.Platform): ReadStrategy {
   const named = env[readStrategyVariable];
