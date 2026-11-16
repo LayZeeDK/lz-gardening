@@ -79,8 +79,9 @@ function commitDiffs(cwd: string, range: string): readonly CommitDiff[] {
     { readsOnly: true },
   );
 
+  // A patch may hold the separator byte itself; a record starts only where a commit id and a NUL follow it.
   return log
-    .split('\x1e')
+    .split(/\x1e(?=[0-9a-f]+\0)/)
     .slice(1)
     .map((record) => {
       const [sha = '', subject = '', body = '', patch = ''] = record.split('\0');

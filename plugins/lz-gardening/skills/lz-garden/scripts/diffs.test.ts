@@ -57,6 +57,19 @@ test("the CLI prints a range's first page: a read line per commit, its diff, and
   assert.deepEqual(Object.fromEntries(summaryOf(stdout())), { page: 1, pages: 1, commits: 1, read: 1, skipped: 0 });
 });
 
+test('a diff that holds the byte that separates commits in the log stays one commit, whole', (t) => {
+  const dir = repo(t);
+  const from = commit(dir, { 'a.txt': 'a\n' });
+  const to = commit(dir, { 'b.txt': 'field\x1eseparated\n' });
+  const { io, stdout } = capturingIo(dir, process.env);
+
+  const status = run([`${from}..${to}`], io);
+
+  assert.equal(status, 0);
+  assert.match(stdout(), /^\+field\x1eseparated$/m);
+  assert.deepEqual(Object.fromEntries(summaryOf(stdout())), { page: 1, pages: 1, commits: 1, read: 1, skipped: 0 });
+});
+
 test('--page <n> prints the nth page, each page short enough to come back inline', (t) => {
   const dir = repo(t);
   const from = commit(dir, { 'a.ts': 'export const a = 1;\n' });
