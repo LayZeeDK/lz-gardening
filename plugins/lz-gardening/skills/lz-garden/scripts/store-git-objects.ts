@@ -76,6 +76,7 @@ function infoOf(header: string): ObjectInfo {
     return { kind: 'missing' };
   }
 
+  // Stryker disable next-line StringLiteral: the pattern's three groups match whenever it does, so no default applies
   const [, oid = '', type = '', size = ''] = found;
 
   return { kind: 'object', oid, type, size: Number(size) };

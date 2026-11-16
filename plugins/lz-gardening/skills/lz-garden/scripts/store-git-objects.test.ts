@@ -93,6 +93,26 @@ test('info answers are headers alone, an object or missing per name', () => {
   });
 });
 
+test('a missing name whose last word is a number parses as missing, not as an object', () => {
+  const output = Buffer.from('HEAD:a b 12 missing\0');
+
+  assert.deepEqual(parseInfos(output, ['HEAD:a b 12']), {
+    done: true,
+    answers: [['HEAD:a b 12', { kind: 'missing' }]],
+    end: output.length,
+  });
+});
+
+test('a header of more than three fields parses as missing', () => {
+  const output = Buffer.from(`HEAD ${oid} commit 136\0`);
+
+  assert.deepEqual(parseInfos(output, ['HEAD']), {
+    done: true,
+    answers: [['HEAD', { kind: 'missing' }]],
+    end: output.length,
+  });
+});
+
 test('info output that ends inside a header needs one byte more', () => {
   const output = Buffer.from(`${oid} commit 136\0gone mis`);
 
