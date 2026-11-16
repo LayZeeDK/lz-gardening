@@ -32,7 +32,16 @@ export function writeToLogByHand(garden: string, path: string, text: string): vo
 
 export function writeEntriesToLogByHand(garden: string, entries: readonly string[]): void {
   const scratch = mkdtempSync(join(tmpdir(), 'by-hand-'));
-  const env = { ...process.env, GIT_INDEX_FILE: join(scratch, 'index') };
+  // A repository with no identity of its own, such as a bare remote, would take the machine's, which git refuses for a
+  // user with no name and host, as root in a container is.
+  const env = {
+    ...process.env,
+    GIT_INDEX_FILE: join(scratch, 'index'),
+    GIT_AUTHOR_NAME: 'test',
+    GIT_AUTHOR_EMAIL: 'test@example.com',
+    GIT_COMMITTER_NAME: 'test',
+    GIT_COMMITTER_EMAIL: 'test@example.com',
+  };
   const run = (args: readonly string[], input?: string): string => {
     const result = spawnSync('git', args, { cwd: garden, env, input, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
