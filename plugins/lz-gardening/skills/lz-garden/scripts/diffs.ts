@@ -26,7 +26,7 @@ export function pagesOf(text: string, size: number): readonly string[] {
   const pages: string[] = [];
   let page = '';
 
-  const lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+  const lines = text.split(/(?<=\n)/);
   const pieces = lines.flatMap((line) => line.match(new RegExp(`[^]{1,${String(size)}}`, 'g')) ?? []);
 
   for (const piece of pieces) {
@@ -85,6 +85,7 @@ function commitDiffs(cwd: string, range: string): readonly CommitDiff[] {
     .split(/\x1e(?=[0-9a-f]+\0)/)
     .slice(1)
     .map((record) => {
+      // Stryker disable next-line StringLiteral: every record holds the three NULs its format writes, so no default applies
       const [sha = '', subject = '', body = '', patch = ''] = record.split('\0');
 
       return { sha, subject, text: `commit ${sha}\n${body.trim()}\n\n${patch.trim()}\n` };
@@ -98,6 +99,7 @@ function main(argv: readonly string[], io: Io): number {
     allowPositionals: true,
     options: { page: { type: 'string', default: '1' } },
   });
+  // Stryker disable next-line StringLiteral: with no range given, the default and the mutant's text both fail the check below
   const [range = ''] = positionals;
 
   if (!/^[0-9a-f]{4,64}\.\.[0-9a-f]{4,64}$/.test(range)) {
