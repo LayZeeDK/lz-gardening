@@ -76,6 +76,8 @@ function pumpBody(): void {
         child.on('error', (error) => {
           tell({ kind: 'ended', reader, code: null, error: error.message });
         });
+        // A write the process ended before reading fails; its close says it ended.
+        child.stdin.on('error', () => undefined);
         child.stdout.on('data', (chunk: Uint8Array) => {
           tell({ kind: 'out', reader, chunk });
         });

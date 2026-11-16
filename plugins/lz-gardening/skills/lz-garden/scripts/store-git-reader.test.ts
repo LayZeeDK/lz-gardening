@@ -524,6 +524,40 @@ test('the worker pump says why a command could not start', () => {
   ]);
 });
 
+test('the worker pump says a process ended that ends while a write to it is pending, and keeps working', () => {
+  const pump = workerPump();
+  const start = (reader: number, script: string): void => {
+    pump.post({
+      kind: 'start',
+      reader,
+      command: process.execPath,
+      args: ['-e', script],
+      cwd: process.cwd(),
+      env: process.env,
+    });
+  };
+  start(1, 'setTimeout(() => undefined, 300)');
+  pump.post({ kind: 'write', reader: 1, bytes: 'x'.repeat(1 << 20) });
+  const first = messagesOf(pump, 10_000);
+  start(2, 'process.stdout.write("ok")');
+  const second = messagesOf(pump, 10_000);
+  pump.stop();
+
+  assert.deepEqual(
+    [
+      first,
+      second.map((message) => (message.kind === 'out' ? `out ${Buffer.from(message.chunk).toString()}` : message)),
+    ],
+    [
+      [
+        { kind: 'started', reader: 1 },
+        { kind: 'ended', reader: 1, code: 0 },
+      ],
+      [{ kind: 'started', reader: 2 }, 'out ok', { kind: 'ended', reader: 2, code: 0 }],
+    ],
+  );
+});
+
 test('a process that stops its worker pump exits', () => {
   const module = new URL('store-git-reader.ts', import.meta.url).href;
   const run = spawnSync(
