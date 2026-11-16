@@ -54,7 +54,7 @@ export function readStrategyOf(env: Readonly<NodeJS.ProcessEnv>, platform: NodeJ
     return chosen;
   }
 
-  if (named !== undefined) {
+  if (named !== undefined && named !== '') {
     throw new Error(`${readStrategyVariable} is ${JSON.stringify(named)}; it takes ${readStrategies.join(' or ')}`);
   }
 
