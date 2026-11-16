@@ -23,6 +23,11 @@ A function name defined in two or more files of the codebase. A function declara
 function or a function expression count alike.
 _Avoid_: copy, clone
 
+**Documented copy**:
+A file's own definition of a duplicate function, kept on purpose: words in that file or one beside it say why the
+file cannot use the shared one (it runs alone, it cannot import). A tick leaves it out of the queue and quotes the
+words.
+
 **Close**:
 Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
 check was written), or kept.

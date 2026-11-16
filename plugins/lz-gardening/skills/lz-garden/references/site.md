@@ -237,8 +237,9 @@ is not valid JSON (the message names the file).
   not a link, declares no `workspaces` and it has no `pnpm-workspace.yaml`. A workspace package resolves through a
   linked `node_modules` to the repository's checkout, so the bed would test the other checkout's code. On a bed that
   exists, the link stays only while the same three things still hold; when one no longer does (the merged base
-  changed the lockfile, say), `bed` removes the link (never the checkout's folder) and reports `install`, or `none`
-  when the base dropped its `package.json`.
+  changed the lockfile, say), `bed` removes the link (never the checkout's folder) and reports the bed as if it had
+  never been linked: `install`, `installed` for a Yarn Plug'n'Play bed, or `none` when the base dropped its
+  `package.json`.
 - `install`: run the command `bed` prints as `install`. It installs with the package manager of the bed's lockfile,
   pointed at the bed: `npm --prefix '<bed>' ci`, `pnpm -C '<bed>' install --frozen-lockfile` or
   `yarn --cwd '<bed>' install --frozen-lockfile`; with no lockfile, `npm --prefix '<bed>' install`. The bed path is in
