@@ -28,6 +28,7 @@ const spawnReads: ObjectReads = {
       readsOnly: true,
     })
       .split('\n')
+      .slice(0, names.length)
       .map((line) => (objectIdPattern.test(line) ? line : undefined)),
   contents: (at, items, nameOf) => spawnContents(at, items, nameOf),
   tree: ({ cwd, overrides }, commit) =>

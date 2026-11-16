@@ -34,6 +34,15 @@ function sha256Repo(t: TestContext): string {
   return dir;
 }
 
+test('each read strategy answers an id read of no names with no ids', (t) => {
+  const dir = repo(t);
+
+  assert.deepEqual(
+    readStrategies.map((strategy) => readThrough(strategy, () => objectIds(dir, []))),
+    [[], []],
+  );
+});
+
 test('each read strategy lists the tree of a commit as ls-tree does', (t) => {
   const dir = repo(t);
   const sha = mixedTree(dir);
