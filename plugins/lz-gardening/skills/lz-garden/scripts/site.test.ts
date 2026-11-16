@@ -239,7 +239,11 @@ test('open on a site whose config git cannot read exits 2 with the error git giv
 
   const result = site(dir, ['open', '--base', 'main']);
 
-  assert.deepEqual([result.status, /fatal: bad config line \d+ in file /.test(result.stderr)], [2, true]);
+  assert.deepEqual(
+    [result.status, /fatal: bad config line \d+ in file /.test(result.stderr)],
+    [2, true],
+    result.stderr,
+  );
 });
 
 test('open refuses a repository with no user.email and plants no site', (t) => {
