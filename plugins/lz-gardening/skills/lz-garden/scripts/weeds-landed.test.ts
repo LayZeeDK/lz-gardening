@@ -243,6 +243,31 @@ test('the same tended close read again, as a retried append reads it, is judged 
   assert.deepEqual([first, again, spawned.mock.callCount()], ['not on the base', 'not on the base', 0]);
 });
 
+test('judging a check starts every git as a read, with none of the settings a write takes', (t) => {
+  const { dir, garden } = tendedBed(t, {
+    'eslint.config.mjs': "export default [{ rules: { 'no-explicit-any': 'error' } }];\n",
+  });
+  const [path = '', event] = [...logFiles(garden)].find(([, file]) => file['kind'] === 'tended') ?? [];
+  const tended = parseEvent(path, JSON.stringify(event));
+  assert.ok(typeof tended !== 'string' && tended.op === 'close' && tended.kind === 'tended');
+  const spawned = t.mock.method(childProcess, 'spawnSync');
+  syncBuiltinESMExports();
+  t.after(() => {
+    spawned.mock.restore();
+    syncBuiltinESMExports();
+  });
+
+  const label = offBaseIn(dir, garden, undefined)(tended);
+
+  const started = spawned.mock.calls.map(({ arguments: [, args] }) =>
+    Array.isArray(args) ? args.filter((arg) => typeof arg === 'string') : [],
+  );
+  assert.deepEqual(
+    [label, started.length > 0, started.filter((args) => args.includes('-c'))],
+    ['not on the base', true, []],
+  );
+});
+
 test('two tended closes of one bed with different checks are judged each by its own check', (t) => {
   const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   const [path = '', event] = [...logFiles(garden)].find(([, file]) => file['kind'] === 'tended') ?? [];

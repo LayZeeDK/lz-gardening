@@ -167,6 +167,24 @@ test('a check the bed changed and then changed back is on the base', (t) => {
   );
 });
 
+test('a check the bed changed and then changed back is on the base, though the base has changed it since', (t) => {
+  const { dir, garden, bed } = tendedBed(t, {
+    'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"),
+  });
+  const tip = commit(bed, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}') });
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+  cli(dir, ['claim', '--class', 'any-type']);
+  cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', 'eslint.config.mjs']);
+  writeCensus(garden, commit(dir, { 'eslint.config.mjs': eslintConfig("['lib/**']", '{}') }));
+
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/c.ts:1', '--source', 'commit:ddd4444']);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/c.ts:1', 'commit:ddd4444')} after bed/any-type@${tip} (check: eslint.config.mjs)\n`,
+  );
+});
+
 test('a check the base changed in another way than the bed did is not on the base', (t) => {
   // These two changes have patch ids that start with the same character.
   const { dir, garden, tip } = tendedBed(t, {
