@@ -67,6 +67,16 @@ test("output that ends inside an object's bytes needs the bytes and their closin
   });
 });
 
+test("output that ends with an object's bytes but not their closing NUL needs that NUL", () => {
+  const whole = `${oid} blob 5\0hello\0`;
+
+  assert.deepEqual(parseContents(Buffer.from(whole.slice(0, -1)), ['HEAD:a.txt']), {
+    done: false,
+    needs: whole.length,
+    waiting: 'HEAD:a.txt',
+  });
+});
+
 test('--batch framing ends headers and objects with a line break', () => {
   const output = Buffer.from(`gone missing\n${oid} blob 3\na\0b\n`);
 
@@ -182,6 +192,12 @@ test('a SHA-256 tree holds 32-byte object ids, and an empty tree holds no entry'
 
 test('a tree whose entry has no space or no NUL is refused, not walked', () => {
   assert.throws(() => parseTree(Buffer.from('100644a.txt'), 20), { message: 'a tree entry is malformed at byte 0' });
+});
+
+test('a tree entry with no space is refused even when its last byte is NUL', () => {
+  const bytes = Buffer.concat([Buffer.from('100644a.txt\0'), Buffer.alloc(20)]);
+
+  assert.throws(() => parseTree(bytes, 20), { message: 'a tree entry is malformed at byte 0' });
 });
 
 test('a tree entry whose name runs to the end without a NUL is refused', () => {
