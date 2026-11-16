@@ -253,7 +253,7 @@ const appendTries = 50;
 export function machinePathTest(site: Located): (text: string) => boolean {
   const fold = (text: string): string => text.replaceAll(/[\\/]+/g, '/').toLowerCase();
   const paths = [homedir(), site.checkout, site.path]
-    .map((path) => fold(path).replace(/\/+$/, ''))
+    .map((path) => fold(path).replace(/\/$/, ''))
     .filter((path) => !/^(?:[a-z]:)?$/.test(path))
     // Git Bash writes d:/x as /d/x, WSL as /mnt/d/x and Cygwin as /cygdrive/d/x.
     .flatMap((path) => [
