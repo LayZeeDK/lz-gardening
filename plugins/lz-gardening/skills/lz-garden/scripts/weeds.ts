@@ -90,7 +90,7 @@ import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import { onSeedLine, seedLinesIn } from './census.ts';
+import { onSeedLine, seedLinesIn, seedPath } from './census.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions, SyncResult } from './store-sync.ts';
@@ -412,7 +412,7 @@ function censusProblem(census: string | undefined): string | null {
 function offSeedList(site: Site, census: string | undefined, input: AddInput): string | null {
   return seedLinesIn(site.path, census).some((seed) => onSeedLine(seed, input.class, input.where))
     ? null
-    : `no line of the seed list is ${input.class} in ${input.where.replace(/:\d+$/, '')}; census:seed is for those lines alone`;
+    : `no line of the seed list is ${input.class} in ${seedPath(input.where)}; census:seed is for those lines alone`;
 }
 
 function decline(io: Io, flags: Flags, now: Date): number {

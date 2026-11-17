@@ -13,6 +13,7 @@ import {
   planAdd,
   planClaim,
   planClose,
+  planDecline,
   planGiveBack,
   planRelease,
   releasedClaims,
@@ -366,6 +367,28 @@ test('an add of a weed the log has never seen is added, and records that its wri
     id,
     drafts: [{ op: 'add', id, ...input(), sawCloses: [], sawTend: null }],
   });
+});
+
+test('a decline of a weed the log has never seen adds it and keeps it with the reason in one plan', () => {
+  const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
+
+  assert.deepEqual(planDecline([], input(), now), {
+    id,
+    drafts: [
+      { op: 'add', id, ...input(), sawCloses: [], sawTend: null },
+      { op: 'close', ids: [id], class: 'any-type', kind: 'kept', by: 'cast', check: null },
+    ],
+  });
+});
+
+test('a decline of an open weed keeps it without a second add, and of a kept weed writes nothing', () => {
+  const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
+  const kept = [add('a1', 1, id), close('a2', 2, [id], 'kept')];
+
+  assert.deepEqual(
+    [planDecline([add('a1', 1, id)], input(), now).drafts, planDecline(kept, input(), now)],
+    [[{ op: 'close', ids: [id], class: 'any-type', kind: 'kept', by: 'cast', check: null }], { id, drafts: [] }],
+  );
 });
 
 test('an add of a weed the log shows open is seen and writes nothing', () => {

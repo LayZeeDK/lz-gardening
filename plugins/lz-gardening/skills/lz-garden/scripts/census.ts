@@ -435,9 +435,14 @@ export function seedLinesIn(site: string, sha: string | undefined): readonly See
   return census === undefined ? [] : seedLines(census);
 }
 
+/** The path of a weed's `--where`, its `:<line>` dropped: the form a seed line names files in. */
+export function seedPath(where: string): string {
+  return where.replace(/:\d+$/, '');
+}
+
 /** Whether a weed of `weedClass` at `where` (a path, with or without `:<line>`) is one the seed line asks about. */
 export function onSeedLine(seed: SeedLine, weedClass: string, where: string): boolean {
-  return seed.class === weedClass && seed.paths.includes(where.replace(/:\d+$/, ''));
+  return seed.class === weedClass && seed.paths.includes(seedPath(where));
 }
 
 function seedList(census: Census): string[] {
