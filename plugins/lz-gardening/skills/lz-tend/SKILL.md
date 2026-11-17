@@ -50,10 +50,11 @@ the session's working directories (the session's environment lists any added one
   `npm --prefix "<bed>" run <script> [-- <args>]` (`pnpm -C "<bed>" run <script>`, `yarn --cwd "<bed>" <script>`),
   which run in the bed. A tool with no script runs from the bed's root, where it finds the bed's config and ignore
   files (Prettier's ignore files, ESLint's config and Nx's workspace are all found from the directory a tool starts
-  in): `cd "<bed>" && npx --no <tool> <args>`, with paths relative to the bed, such as
-  `cd "<bed>" && npx --no prettier --check .` or `cd "<bed>" && npx --no nx run-many -t lint --output-style=static`.
-  `--no` makes it fail when the tool is not installed, where plain `npx` downloads a package of that name from the
-  registry and runs it. Never `npx` `node`: run a test file through the project's test script, or
+  in): `cd "<bed>" && npx --no -- <tool> <args>`, with paths relative to the bed, such as
+  `cd "<bed>" && npx --no -- prettier --check .` or
+  `cd "<bed>" && npx --no -- nx run-many -t lint --output-style=static`. `--no` makes it fail when the tool is not
+  installed, where plain `npx` downloads a package of that name from the registry and runs it; `--` keeps npm from
+  reading the tool's options (`--check`) as its own, which npm 12 refuses. Never `npx` `node`: run a test file through the project's test script, or
   `cd "<bed>" && node --test <file>`. Put options before file and path arguments: many tools read what follows the
   files as more files. In an Nx workspace, add `--output-style=static` to every `nx run` and `nx run-many`, so each
   task's output is in the tool result. `site` and `weeds` find the site from the checkout.
@@ -165,7 +166,7 @@ instructions, and run in the bed:
   such as `check:<part>`. When your change will touch a root config (the lint config, a base `tsconfig`, the
   Prettier config), that config reaches every project, so run these for all of them, as CI does;
 - the tests of the projects your change will touch: each package's own test script, or in an Nx workspace
-  `cd "<bed>" && npx --no nx run-many -t test -p <project>,<project> --output-style=static` (Nx finds its workspace
+  `cd "<bed>" && npx --no -- nx run-many -t test -p <project>,<project> --output-style=static` (Nx finds its workspace
   from the directory it runs in, so it needs the `cd`). Run the whole suite only when the repository's done check requires it (CI,
   `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes, report it as not run.
 - the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
@@ -186,7 +187,7 @@ any edit and you hold its summary lines.
 Add the check, with its own test when it is a custom rule, and change nothing else yet: no edit to the code it
 checks, and no commit. Run it in the bed while the code is as the base has it: it must report at least one queued
 weed by the path `weeds list` shows. Run the check alone, on the weeds' files or the projects that hold them
-(`cd "<bed>" && npx --no eslint <path> <path>`, one Nx project's lint), not the repository's whole lint: step 6
+(`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint), not the repository's whole lint: step 6
 runs that once the fixes are done. A file you wrote to trip it is no weed. A check that reports none does not hold
 this class; change it until it does. Keep this first output: it lists the weeds the check holds (step 7). Then run
 `git -C "<bed>" status --short`: it must show only the check's own files.
@@ -215,7 +216,10 @@ failure the change may have caused (below). Done when each has run again and pas
 failures it had at the start, by name. Quote their summary lines in one table, each command with its result before
 and after the change; a row with no result after the change means this step is not done, so run that command. A command that fails after the change and has no starting result, or fails with a
 failure it did not have at the start, may be a failure your change caused: stop before step 7 and report it with its
-output, so a human judges it. The class stays open and the bed stays as it is.
+output, so a human judges it. The class stays open and the bed stays as it is. A rerun that fails on a slip of
+your own, such as a format or lint error in a file you changed, you fix; then run that command again, and every
+other command only when the fix touched code or config it covers (a format fix touches no test). Do not start the
+whole set over.
 
 ## 7. Commit and close
 
