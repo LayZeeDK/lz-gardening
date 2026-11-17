@@ -341,6 +341,9 @@ test('decline without --where keeps one weed for duplicate lines that share a pa
 
   const declined = cli(dir, ['decline', '--class', 'duplicate-function', '--reason', 'generated pairs']);
   const again = cli(dir, ['decline', '--class', 'duplicate-function', '--reason', 'generated pairs']);
+  const added = [...logFiles(garden).values()]
+    .flatMap((event) => (event['op'] === 'add' ? [event['where']] : []))
+    .sort();
   const later = ['src/x.ts', 'src/z.ts'].map(
     (where) =>
       cli(dir, ['add', '--class', 'duplicate-function', '--where', where, '--source', 'census:seed']).stdout.split(
@@ -349,10 +352,11 @@ test('decline without --where keeps one weed for duplicate lines that share a pa
   );
 
   assert.deepEqual(
-    [declined.stdout, again.stdout, later],
+    [declined.stdout, again.stdout, added, later],
     [
       'declined 2 seed lines of duplicate-function\n',
       'declined 0 seed lines of duplicate-function\n',
+      ['src/w.ts', 'src/x.ts'],
       ['kept', 'added'],
     ],
   );

@@ -1,7 +1,10 @@
 // The seed list as data: its lines, the census they come from, and which weeds a line asks about.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { onSeedLine, seedLines, seedLinesIn, seedPath } from './census.ts';
+import { onSeedLine, seedLines, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
+import { planAdd, stamp } from './log.ts';
+import type { AddInput } from './log.ts';
+import { now } from './test-repo.ts';
 import type { Census } from './store-census.ts';
 import { writePendingCensus } from './store-census.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
@@ -31,6 +34,37 @@ test('a seed line of a pattern names its class and its one file, and a duplicate
     { line: '= [any-type] src/b.ts 1', class: 'any-type', paths: ['src/b.ts'] },
     { line: '= duplicate parse: src/a.ts, src/c.ts', class: 'duplicate-function', paths: ['src/a.ts', 'src/c.ts'] },
   ]);
+});
+
+test('a seed line is left until an add of its class at one of its paths covers it; a close covers nothing', () => {
+  const seeds = seedLines(
+    census({
+      hits: { 'any-type': ['src/a.ts:1: x', 'src/b.ts:2: y'] },
+      duplicates: { parse: ['src/c.ts', 'src/d.ts'] },
+    }),
+  );
+  const add = (weedClass: string, where: string): AddInput => ({
+    class: weedClass,
+    where,
+    source: 'census:seed',
+    note: '',
+    layer: null,
+  });
+  const events = stamp(
+    [
+      ...planAdd([], add('any-type', 'src/a.ts:9'), now).drafts,
+      ...planAdd([], add('hollow-assertion', 'src/b.ts'), now).drafts,
+      ...planAdd([], add('duplicate-function', 'src/d.ts'), now).drafts,
+      { op: 'close', ids: ['0123456789'], class: 'any-type', kind: 'kept', by: 'src/b.ts', check: null },
+    ],
+    0,
+    now,
+  );
+
+  assert.deepEqual(
+    seedLinesLeft(seeds, events).map((seed) => seed.line),
+    ['= [any-type] src/b.ts 1'],
+  );
 });
 
 test("a weed's path drops only a line number at its end", () => {
