@@ -841,6 +841,7 @@ test('sync --census --seeded on a garden already seeded asks for nothing and log
 
 test('sync --census --seeded logs the seed once each path of each line is queued or declined', (t) => {
   const { dir, garden } = planted(t);
+  commit(dir, { 'src/b.ts': '// Loaded alone by the worker.\nexport function parse() {}\n' });
   const { sha } = pendCensus(dir, garden, {
     hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] },
     duplicates: { parse: ['src/b.ts', 'src/c.ts'] },
@@ -852,7 +853,7 @@ test('sync --census --seeded logs the seed once each path of each line is queued
     '--where',
     'src/b.ts',
     '--reason',
-    'src/b.ts:1 loaded alone',
+    'Loaded alone by the worker.',
     '--census',
     sha,
   ]);

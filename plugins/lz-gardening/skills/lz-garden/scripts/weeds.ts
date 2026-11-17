@@ -12,13 +12,17 @@
 //     --source census:seed is for a line of the seed list alone: the class and path (line dropped) must be on a line
 //     of the seed list of the census taken of <sha> and not yet recorded, else of the site's census; otherwise exit
 //     2 with `no line of the seed list is <class> in <path>; census:seed is for those lines alone`.
-//   node weeds.ts decline --class <kebab> [--where <path>] --reason <text> [--census <sha>]
+//   node weeds.ts decline --class <kebab> [--where <path>] --reason <text> [--in <path>] [--census <sha>]
 //     Leaves a seed line out of the queue: adds its weed with --source census:seed (so on a line of the seed list,
 //     as for add) and keeps it (as close --keep <reason> would) in one append, so no later add queues it. Prints
-//     `kept <id>`. Without --where it does this for every seed line of the class that no add covers yet, one weed
-//     at each line's first path unless a weed it keeps already sits on the line, and prints `declined <n> seed
-//     line(s) of <class>`; a class with no line on the seed list exits 2 with `no line of the seed list is <class>;
-//     census:seed is for those lines alone`.
+//     `kept <id>`. Without --where it does this for every pattern line of the class that no add covers yet, one
+//     weed at the line's path, and prints `declined <n> seed line(s) of <class>`; a class with no line on the seed
+//     list exits 2 with `no line of the seed list is <class>; census:seed is for those lines alone`, and
+//     duplicate-function exits 2 with `decline duplicate-function one file at a time, --where <path>, on the words
+//     that keep that copy`. A seed line counts as covered once each of its paths has an add of its class. A
+//     duplicate-function decline's reason must be words that <path>, or the record --in names, holds at the census's
+//     commit (comment markers and line breaks aside), else exit 2 with `--reason must quote the words that keep this
+//     copy, as <path> holds them at the census's commit`; --in on any other decline exits 2.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives>
@@ -94,9 +98,9 @@ import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
-import { configValue } from './store-git.ts';
+import { configValue, optionalGit } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import { onSeedLine, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
+import { censusIn, onSeedLine, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions, SyncResult } from './store-sync.ts';
@@ -354,6 +358,7 @@ function parseFlags(argv: readonly string[]) {
       note: { type: 'string', default: '' },
       layer: { type: 'string' },
       census: { type: 'string' },
+      in: { type: 'string' },
       id: { type: 'string' },
       tended: { type: 'string' },
       'one-off': { type: 'string' },
@@ -433,6 +438,36 @@ function offSeedList(site: Site, census: string | undefined, input: AddInput): s
     : `no line of the seed list is ${input.class} in ${seedPath(input.where)}; census:seed is for those lines alone`;
 }
 
+// Text with each line's comment marker dropped and its whitespace run together, so a comment quoted on one line
+// matches however it wraps.
+function asProse(text: string): string {
+  return text
+    .replace(/^[ \t]*(?:\/\/+|\/\*+|\*+\/?|#+)/gm, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// A duplicate copy stays only on words the repository wrote down, so the reason must be those words.
+function unquotedReason(
+  checkout: string,
+  site: Site,
+  census: string | undefined,
+  input: AddInput,
+  record: string | undefined,
+): string | null {
+  if (input.class !== 'duplicate-function') {
+    return null;
+  }
+
+  const path = record ?? seedPath(input.where);
+  const sha = censusIn(site.path, census)?.sha;
+  const text = sha === undefined ? undefined : optionalGit(checkout, ['show', `${sha}:${path}`]);
+
+  return text !== undefined && asProse(text).includes(asProse(input.note))
+    ? null
+    : `--reason must quote the words that keep this copy, as ${path} holds them at the census's commit`;
+}
+
 function decline(io: Io, flags: Flags, now: Date): number {
   const input: AddInput = {
     // Stryker disable next-line StringLiteral: a decline without --class fails validation, and so does the mutant's text
@@ -443,8 +478,14 @@ function decline(io: Io, flags: Flags, now: Date): number {
     note: flags.reason,
     layer: null,
   };
+  const strayIn =
+    flags.in !== undefined && (input.class !== 'duplicate-function' || flags.where === undefined)
+      ? '--in goes with --class duplicate-function --where <path> only'
+      : null;
   const problem =
-    censusProblem(flags.census) ?? (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
+    strayIn ??
+    censusProblem(flags.census) ??
+    (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
 
   if (problem !== null) {
     io.err(`weeds decline: ${problem}\n`);
@@ -466,10 +507,10 @@ function decline(io: Io, flags: Flags, now: Date): number {
     return declineClass(io, site, flags.census, input, now);
   }
 
-  const offList = offSeedList(site, flags.census, input);
+  const refusal = offSeedList(site, flags.census, input) ?? unquotedReason(io.cwd, site, flags.census, input, flags.in);
 
-  if (offList !== null) {
-    io.err(`weeds decline: ${offList}\n`);
+  if (refusal !== null) {
+    io.err(`weeds decline: ${refusal}\n`);
 
     return 2;
   }
@@ -502,17 +543,11 @@ function declineClass(io: Io, site: Site, census: string | undefined, input: Add
     (replica) => {
       const events = eventsReportingSkipped(io, replica);
       const left = seedLinesLeft(seeds, events);
-      // A duplicate line can share a path with one before it, which the weed kept at that path already covers.
-      const wheres = left.reduce<readonly string[]>((chosen, seed) => {
-        const [first] = seed.paths;
-
-        return first === undefined || chosen.some((where) => onSeedLine(seed, input.class, where))
-          ? chosen
-          : [...chosen, first];
-      }, []);
 
       return {
-        drafts: wheres.flatMap((where) => planDecline(events, { ...input, where }, now).drafts),
+        drafts: left
+          .flatMap((seed) => seed.paths)
+          .flatMap((where) => planDecline(events, { ...input, where }, now).drafts),
         status: `declined ${String(left.length)} seed line${left.length === 1 ? '' : 's'} of ${input.class}`,
       };
     },
@@ -704,7 +739,7 @@ const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off'
 
 const commands: readonly Command[] = [
   { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], run: add },
-  { name: 'decline', flags: ['class', 'where', 'reason', 'census'], run: decline },
+  { name: 'decline', flags: ['class', 'where', 'reason', 'in', 'census'], run: decline },
   {
     name: 'close',
     flags: closeFlags,

@@ -64,8 +64,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base>
 When `seeded` is false, add `--seed` at the end: the output then holds the seed list.
 
 The census patterns are the plugin's, `${CLAUDE_SKILL_DIR}/scripts/patterns.json`, extended or overridden by id by
-the site's `<site>/.garden/patterns.json` when that file exists. To see what a pattern matches, open these files with
-the Read tool, never through `node` or another command.
+the site's `<site>/.garden/patterns.json` when that file exists. To see what a pattern matches, Read the plugin's file;
+the census prints each pattern the site adds or overrides as `site pattern <id>: <regex>[ in <path>, ...]`, so never
+open the site's file, which lies outside the working directory, and never read either file through `node` or another
+command.
 
 The census compares the base with the garden's census, which every clone shares, and sets the new census aside until
 step 5 records it. The last line of output is a JSON summary: `sha`, `previousSha`, `behind`, `commits` (the

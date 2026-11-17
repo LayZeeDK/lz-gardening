@@ -8,7 +8,7 @@ import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { maxClockOf, planAdd, replay, stamp, weedId } from './log.ts';
 import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './log.ts';
-import { commit, now, repo } from './test-repo.ts';
+import { commit, git, now, repo } from './test-repo.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { cli, homeAt, script } from './test-weeds.ts';
@@ -340,6 +340,129 @@ test('decline without --where refuses duplicate-function: each documented copy i
     [
       2,
       'weeds decline: decline duplicate-function one file at a time, --where <path>, on the words that keep that copy\n',
+      0,
+    ],
+  );
+});
+
+test('a duplicate-function decline whose reason the file does not hold at the census commit is refused', (t) => {
+  const { dir, garden } = planted(t);
+  commit(dir, {
+    'src/x.ts': 'export function foo() {}\n',
+    'src/y.ts': '// Generated from src/x.ts; edit that file.\nexport function foo() {}\n',
+  });
+  writeCensusText(
+    garden,
+    censusText(git(dir, ['rev-parse', 'HEAD']), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }),
+  );
+
+  const declined = cli(dir, [
+    'decline',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/y.ts',
+    '--reason',
+    'a local closure, nothing another file can import',
+  ]);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr, logFiles(garden).size],
+    [
+      2,
+      "weeds decline: --reason must quote the words that keep this copy, as src/y.ts holds them at the census's commit\n",
+      0,
+    ],
+  );
+});
+
+test('a duplicate-function decline may quote a comment that wraps across lines, on one line', (t) => {
+  const { dir, garden } = planted(t);
+  commit(dir, {
+    'src/x.ts': 'export function foo() {}\n',
+    'src/y.ts': '/**\n * Generated from src/x.ts;\n * edit that file.\n */\nexport function foo() {}\n',
+    'src/z.ts': '// Kept apart: the browser bundle\n//   cannot import src/x.ts.\nexport function foo() {}\n',
+  });
+  writeCensusText(
+    garden,
+    censusText(git(dir, ['rev-parse', 'HEAD']), { duplicates: { foo: ['src/x.ts', 'src/y.ts', 'src/z.ts'] } }),
+  );
+
+  const declined = [
+    ['src/y.ts', 'Generated from src/x.ts; edit that file.'],
+    ['src/z.ts', 'the browser bundle cannot import src/x.ts'],
+  ].map(([where = '', reason = '']) =>
+    cli(dir, ['decline', '--class', 'duplicate-function', '--where', where, '--reason', reason]),
+  );
+
+  assert.deepEqual(
+    declined.map(({ status, stderr }) => [status, stderr]),
+    [
+      [0, ''],
+      [0, ''],
+    ],
+  );
+});
+
+test('a duplicate-function decline may quote a record instead, named with --in, as it stood at the census commit', (t) => {
+  const { dir, garden } = planted(t);
+  commit(dir, {
+    'src/x.ts': 'export function foo() {}\n',
+    'src/y.ts': 'export function foo() {}\n',
+    'docs/adr/0001-copies.md': '# Copies\n\nThe worker keeps its own foo, so it\nloads no shared module.\n',
+  });
+  writeCensusText(
+    garden,
+    censusText(git(dir, ['rev-parse', 'HEAD']), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }),
+  );
+  const decline = (...extra: string[]) =>
+    cli(dir, [
+      'decline',
+      '--class',
+      'duplicate-function',
+      '--where',
+      'src/y.ts',
+      '--reason',
+      'The worker keeps its own foo, so it loads no shared module.',
+      ...extra,
+    ]);
+
+  const results = [decline('--in', 'docs/adr/missing.md'), decline('--in', 'docs/adr/0001-copies.md')];
+
+  assert.deepEqual(
+    results.map(({ status, stderr }) => [status, stderr]),
+    [
+      [
+        2,
+        "weeds decline: --reason must quote the words that keep this copy, as docs/adr/missing.md holds them at the census's commit\n",
+      ],
+      [0, ''],
+    ],
+  );
+});
+
+test('--in goes with a duplicate-function decline of one file only', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(
+    garden,
+    censusText('a'.repeat(40), {
+      hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] },
+      duplicates: { foo: ['src/x.ts', 'src/y.ts'] },
+    }),
+  );
+
+  const results = [
+    ['--class', 'any-type', '--where', 'src/a.ts'],
+    ['--class', 'any-type'],
+  ].map((args) => cli(dir, ['decline', ...args, '--reason', 'r', '--in', 'docs/adr/0001.md']));
+
+  assert.deepEqual(
+    [results.map(({ status, stderr }) => [status, stderr]), logFiles(garden).size],
+    [
+      [
+        [2, 'weeds decline: --in goes with --class duplicate-function --where <path> only\n'],
+        [2, 'weeds decline: --in goes with --class duplicate-function --where <path> only\n'],
+      ],
       0,
     ],
   );

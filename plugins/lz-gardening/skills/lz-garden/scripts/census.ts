@@ -3,7 +3,8 @@
 // It reads the revision with `git grep`, so it never checks anything out and works in a clone with no working tree.
 // Usage, from the repository's checkout once site.ts open has planted the garden site:
 //   node census.ts --rev <rev> [--seed]
-//     Prints a table of counts with the change since the site's census (refs/garden/census), then the new hits, then
+//     Prints `site pattern <id>: <regex>[ in <path>, ...]` per pattern the site adds or overrides, then a table of
+//     counts with the change since the site's census (refs/garden/census), then the new hits, then
 //     `+ duplicate <name>: new <path>, ...[; already <path>, ...]` per name newly defined in another file, then, with
 //     --seed, the seed list (`= ` lines) and `census: <id> <count>, ...` (or `census: none`), then one JSON summary
 //     line: sha, previousSha (null when there is no census or this checkout lacks its commit), behind (the census's
@@ -430,9 +431,15 @@ export function seedLines(census: Census): SeedLine[] {
 }
 
 /** The seed list of the census taken of `sha` and not yet recorded, else of the garden's census; none without one. */
+/** The census taken of `sha` and not yet recorded, else the site's census. */
+export function censusIn(site: string, sha: string | undefined): Census | undefined {
+  return (
+    (sha === undefined ? undefined : readableCensus(site, pendingCensusRef(sha))) ?? readableCensus(site, censusRef)
+  );
+}
+
 export function seedLinesIn(site: string, sha: string | undefined): readonly SeedLine[] {
-  const census =
-    (sha === undefined ? undefined : readableCensus(site, pendingCensusRef(sha))) ?? readableCensus(site, censusRef);
+  const census = censusIn(site, sha);
 
   return census === undefined ? [] : seedLines(census);
 }
@@ -500,6 +507,10 @@ function readSite(cwd: string): {
   return { site, recorded, extraFile: extraPatterns(site.path, recorded) };
 }
 
+function sitePatternLine({ id, regex, paths }: Pattern): string {
+  return `site pattern ${id}: ${regex}${paths.length === 0 ? '' : ` in ${paths.join(', ')}`}`;
+}
+
 async function main(argv: readonly string[], io: Io): Promise<number> {
   const { values } = parseArgs({
     args: [...argv],
@@ -563,6 +574,7 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     .filter(([, count]) => count > hitCap)
     .map(([id]) => id);
   const lines = [
+    ...(extra?.patterns.map(sitePatternLine) ?? []),
     ...formatDelta(deltas),
     ...(capped.length === 0 ? [] : [`hits capped at ${String(hitCap)}: ${capped.join(', ')}`]),
     ...duplicateLines(before, after, newDuplicates, earlier),

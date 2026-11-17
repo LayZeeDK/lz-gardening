@@ -204,6 +204,35 @@ test("the census counts the extra patterns in the site's .garden/patterns.json",
   assert.match(result.stdout, /^todo +1 {2}new$/m);
 });
 
+test('the census prints each pattern the site adds or overrides, with its regex, so no one opens the site file', async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    result.stdout.split('\n').filter((line) => line.startsWith('site pattern ')),
+    ['site pattern todo: TODO'],
+  );
+});
+
+test('a site pattern that searches its own paths names them after its regex', async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(
+    garden,
+    JSON.stringify({ patterns: [{ id: 'todo', regex: 'TODO', paths: ['**/*.md', 'docs/**'] }] }),
+  );
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    result.stdout.split('\n').filter((line) => line.startsWith('site pattern ')),
+    ['site pattern todo: TODO in **/*.md, docs/**'],
+  );
+});
+
 test("a site's .garden/patterns.json that is not JSON is refused, naming the file", async (t) => {
   const { dir, garden } = planted(t);
   writeSitePatterns(garden, '{ "patterns": [\n');
