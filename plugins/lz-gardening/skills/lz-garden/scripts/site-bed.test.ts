@@ -524,6 +524,23 @@ test('bed on an existing linked bed reports it linked', (t) => {
   assert.equal(again.summary.get('deps'), 'linked');
 });
 
+test('bed keeps the link of an existing linked bed while it still could link it', (t) => {
+  const dir = installed(t);
+  const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.equal(first.summary.get('deps'), 'linked');
+  const own = join(dirname(dir), 'own-node_modules');
+  mkdirSync(own);
+  const linked = join(bedOf(first.summary), 'node_modules');
+  rmSync(linked);
+  symlinkSync(own, linked, 'junction');
+
+  const again = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(again.summary.get('deps'), 'linked');
+  assert.equal(realpathSync.native(linked), realpathSync.native(own));
+});
+
 test('bed unlinks a linked bed whose lockfile the base changed, asks for an install, and keeps the checkout install', (t) => {
   const dir = installed(t);
   const first = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
