@@ -30,7 +30,9 @@ line is neither queued nor declined, and names the lines left.
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Read a few
   hits; queue one weed, `--class <pattern>`, `--where <path>`, `--source census:seed`, the note naming what the hits
   have in common, or decline it with `--class <pattern> --where <path>`. The census keeps at most 1000 hits per
-  pattern, in path order, so for a pattern with more the files are ranked from those 1000.
+  pattern, in path order, so for a pattern with more the files are ranked from those 1000. A file off the list whose
+  hits share a queued line's root cause is queued too, with `--source commit:<short sha>` of the commit that planted
+  it (found as `SKILL.md` says under `--source`), since `census:seed` is for the listed files alone.
 - `= duplicate <name>: <path>, <path>, ...`: a name defined at module scope (a definition at the start of its line)
   in more than one file, at most 30 names, those defined in the most files first. Test files (`*.spec.*`,
   `*.test.*`), `.d.ts` declarations and files under dot-directories (`.claude/`, `.github/` and other tool folders,
@@ -52,7 +54,9 @@ Done when every `=` line has its weeds queued or is declined.
 
 Read the repository's records listed under "Records" in `weeds.md`, as they are on the base. List the whole tree
 once, `git ls-tree -r --name-only <base>`, and read every ADR, changelog, lesson file and ledger of findings it
-names, wherever it sits, with `git show <base>:<path>`; skim plans and summaries, not every plan. Search a record too
+names, wherever it sits, with `git show <base>:<path>`, one call per record sent together in one message (`git show`
+of several files runs them together, and a `lesson:` source needs each record's own line numbers); skim plans and
+summaries, not every plan. Search a record too
 large to read whole with Grep and no `head_limit`, then `git show` the lines you queue from.
 
 - A lesson, correction or finding that appears twice or more: `repeated-lesson`, `--where` the code it is about,
@@ -80,7 +84,7 @@ Done when the tree has been listed and every ADR, changelog, lesson file and led
 ## 3. History
 
 ```bash
-git log --no-merges --format='%h %p %s' -n 300 <base>
+git log --no-merges --format=%h%x20%p%x20%s -n 300 <base>
 ```
 
 Each line is a commit's short id, its parent's short id (none for the first commit) and its subject.
@@ -135,6 +139,7 @@ shared: <state> (<reason>)
   counts the commits step 3 left unread, or 0. `<pointed>` counts the commits step 3 found pointed at, and `<read>`
   those it read.
 - `held by hand`: the classes step 2 found held by hand, as it defines, or `held by hand: none`.
-- `not done`: each part of steps 1 to 3 that ran short of what it asks (a file not shown, a record not read, a step
-  run out of order), named by step, or `not done: none`.
+- `not done`: each part of steps 1 to 3 that you skipped or cut short (a file not shown, a record not read, a weed
+  you could not queue, a step run out of order), named by step, or `not done: none`. A step that ran in full and
+  found nothing is done.
 - `ready to tend` and `shared`: as in the tick's report form (step 5 of `SKILL.md`).
