@@ -207,7 +207,9 @@ function spawnGit(
 ): SpawnSyncReturns<string> {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8', env, input, maxBuffer: Infinity, timeout });
 
-  if (result.error !== undefined && !timedOut(result)) {
+  // A git that ended before reading all its input (a bad config, say) leaves an EPIPE or EOF error beside its own
+  // status and message, which say what happened.
+  if (result.error !== undefined && result.status === null && !timedOut(result)) {
     // The arguments stay out: a fetch or push carries the origin URL, and a token in it.
     throw new Error(`git could not start: ${result.error.message}`);
   }
@@ -483,7 +485,9 @@ function spawnContents<T>(
   });
 
   if (batch.status !== 0) {
-    throw new Error(`git cat-file --batch: ${batch.error?.message ?? batch.stderr.toString().trim()}`);
+    throw new Error(
+      `git cat-file --batch: ${batch.status === null ? (batch.error?.message ?? '') : batch.stderr.toString().trim()}`,
+    );
   }
 
   const parsed = parseContents(batch.stdout, items, '\n');

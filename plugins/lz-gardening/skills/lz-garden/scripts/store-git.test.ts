@@ -1,7 +1,7 @@
 // Run: node --test store-git.test.ts
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
-import { mkdirSync, renameSync } from 'node:fs';
+import { appendFileSync, mkdirSync, renameSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -24,6 +24,7 @@ import {
   pushReport,
   refsUnder,
   refTip,
+  runGit,
   treeAt,
 } from './store-git.ts';
 import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
@@ -54,6 +55,26 @@ function sha256Repo(t: TestContext): string {
 
   return dir;
 }
+
+test('a git that ends on a bad config before it reads its input fails with its own error, not as one that could not start', (t) => {
+  const dir = repo(t);
+  appendFileSync(join(dir, '.git', 'config'), '[core\n');
+
+  const result = runGit(dir, ['cat-file', '--batch-check'], { input: 'HEAD\n'.repeat(4_000_000), readsOnly: true });
+
+  assert.deepEqual([result.status, /fatal: bad config line \d+ in file /.test(result.stderr)], [128, true]);
+});
+
+test('a batch read by the spawn strategy from a git that ends on a bad config fails with the error git gives', (t) => {
+  const dir = repo(t);
+  appendFileSync(join(dir, '.git', 'config'), '[core\n');
+  const names = Array.from({ length: 400_000 }, () => 'HEAD');
+
+  assert.throws(
+    () => inRun({ ...process.env, [readStrategyVariable]: 'spawn' }, () => catFileBatch(dir, names, (name) => name)),
+    { message: /^git cat-file --batch: fatal: bad config line \d+ in file / },
+  );
+});
 
 test('each read strategy answers an id read of no names with no ids', (t) => {
   const dir = repo(t);
