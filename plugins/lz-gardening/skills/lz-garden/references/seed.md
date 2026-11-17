@@ -73,17 +73,24 @@ git log --no-merges --format='%h %s' -n 300 <base>
 ```
 
 Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up runs. Then read the diffs of the newest
-20 commits a page at a time, as the tick's step 3 reads its range:
+20 commits a page at a time, as the tick's step 3 reads its range, with a budget of 72,000 characters (three pages):
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit>..<sha>
+node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit>..<sha> --chars 72000
 ```
 
 `<commit>` is the 21st line's commit in the log above, and `<sha>` the census's commit; with 21 lines or fewer, take
-the last line's commit and read it with `git show <commit>` as well. Read every page, and a commit page 1 marks
-`skip` with `git show <commit>`. Then read the commits the log points at that the pages did not show, with
-`git show <commit>`; when the tool result says the output was saved to a file, Read that file to its end. Done when
-each of those commits is read and its weeds are queued.
+the last line's commit, which the range leaves out. Read every page, one call per page, with the same `--chars`.
+The commits page 1 marks `skip` stay unread: count them for the report, and read none of them with `git show`.
+
+Then read up to five commits the log points at that the pages did not show, one page each:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit>~1..<commit> --chars 24000
+```
+
+A commit that marks `skip` there is too large for the seed pass: count it as unread too. Done when the pages are read
+and the weeds they show are queued.
 
 ## 4. Record and report
 
@@ -97,7 +104,7 @@ six lines and ends after the last one; the reason for each weed is in its `--not
 ```text
 garden: seeded <base> at <short sha>
 <the census line>
-queued <total> (<class> x<n>, ...); declined <declined>; <unlisted> duplicate names not listed
+queued <total> (<class> x<n>, ...); declined <declined>; <unlisted> duplicate names not listed; <unread> commits unread
 no check behind: <class>, ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)
@@ -107,7 +114,7 @@ shared: <state> (<reason>)
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this seed pass that printed `added`; `<total>` is the
   sum of the `<n>`, and `queued 0` has no parentheses. `<declined>` counts the seed lines declined. `<unlisted>` is
   the `<n>` of the census's
-  `<n> more duplicate names not listed` line, or 0.
+  `<n> more duplicate names not listed` line, or 0. `<unread>` counts the commits step 3 left unread, or 0.
 - `no check behind`: the classes step 2 found to have no check behind them, as it defines, or
   `no check behind: none`.
 - `ready to tend` and `shared`: as in the tick's report form (step 5 of `SKILL.md`).

@@ -1,11 +1,11 @@
 // The diffs a tick reads, a page at a time:
-//   node diffs.ts <commit>..<commit> [--page <n>]
+//   node diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]
 // Takes the newest 30 commits of the range, merges left out, and reads their diffs smallest first up to 400,000
-// characters in all; the rest are skipped. Page 1 opens with one line per commit, `read` or `skip`, its short id, its
+// characters in all, or the `--chars` given; the rest are skipped. Page 1 opens with one line per commit, `read` or `skip`, its short id, its
 // diff's length in characters and its subject, then `skip <n> commits past the newest 30` when there are more. The
 // diffs of the read commits follow, newest first, cut into pages of at most 24,000 characters, so a page comes back
 // whole in a tool result. Each page starts `diffs <range>: page <n> of <pages>` and ends with a JSON line: `page`,
-// `pages`, `commits` (all of the range), `read` and `skipped`. Exit 2 with the usage or `no page <n>` on bad input.
+// `pages`, `commits` (all of the range), `read` and `skipped`. Exit 2 with the usage, `no page <n>` or the refused `--chars` on bad input.
 import { parseArgs } from 'node:util';
 import { isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
@@ -97,20 +97,26 @@ function main(argv: readonly string[], io: Io): number {
     args: [...argv],
     strict: true,
     allowPositionals: true,
-    options: { page: { type: 'string', default: '1' } },
+    options: { page: { type: 'string', default: '1' }, chars: { type: 'string', default: String(budget) } },
   });
   // Stryker disable next-line StringLiteral: with no range given, the default and the mutant's text both fail the check below
   const [range = ''] = positionals;
 
   if (!/^[0-9a-f]{4,64}\.\.[0-9a-f]{4,64}$/.test(range)) {
-    io.err('usage: diffs.ts <commit>..<commit> [--page <n>]\n');
+    io.err('usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n');
+
+    return 2;
+  }
+
+  if (!/^[1-9]\d*$/.test(values.chars)) {
+    io.err(`diffs: --chars takes a whole number of characters above 0, not '${values.chars}'\n`);
 
     return 2;
   }
 
   const commits = commitDiffs(io.cwd, range);
   const total = Number(git(io.cwd, ['rev-list', '--no-merges', '--count', range], { readsOnly: true }));
-  const plan = planReading(commits, budget);
+  const plan = planReading(commits, Number(values.chars));
   const planLines = commits.map(
     (commit) =>
       `${plan.read.includes(commit) ? 'read' : 'skip'} ${commit.sha} ${String(commit.text.length)} ${commit.subject}`,

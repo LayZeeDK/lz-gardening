@@ -20,7 +20,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     diffs of the newest 30 commits, chosen smallest first up to 400,000 characters), and queues each weed with its
     evidence. A weed of a class a tend pass closed is queued as `regrown`, naming the bed and the check that should
     have held it.
-  - Seed: the first tick seeds the queue from the census, the repository's records and its history. A seed pass
+  - Seed: the first tick seeds the queue from the census, the repository's records and its history (up to 72,000
+    characters of the newest 20 commits' diffs, and the report counts the commits left unread). A seed pass
     marks the queue seeded, so no other clone seeds again, and is recorded only once each line of the seed list is
     queued or declined (`weeds.ts decline`, which keeps the line's weed out of the queue for good). `weeds.ts add`
     and `decline` take `--source census:seed` only for a weed on a line of the seed list.
