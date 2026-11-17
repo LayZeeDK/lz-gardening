@@ -29,6 +29,8 @@ import type { Site } from './store-log.ts';
 import { censusRef, readCensusAt, writePendingCensus } from './store-census.ts';
 import type { Census, StoredCensus } from './store-census.ts';
 
+// An env in this file is the store's git environment for the run (gitEnv), which drops what would point git at another
+// repository.
 type Env = Readonly<NodeJS.ProcessEnv>;
 
 export interface Pattern {
@@ -146,12 +148,6 @@ function branchName(rev: string): string {
   return rev.replace(/^origin\//, '');
 }
 
-// env, in every git call below, is the store's git environment for the run (gitEnv), which drops what would point git
-// at another repository.
-async function hasCommit(cwd: string, env: Env, sha: string): Promise<boolean> {
-  return (await runGitAsync(cwd, ['cat-file', '-e', `${sha}^{commit}`], env)).code === 0;
-}
-
 function pathspecs(paths: readonly string[], exclude: readonly string[]): string[] {
   return [...paths.map((glob) => `:(top,glob)${glob}`), ...exclude.map((glob) => `:(top,exclude,glob)${glob}`)];
 }
@@ -205,41 +201,53 @@ function hitKey(hit: string): string {
   return parts === null ? hit : `${parts.path}\u0000${parts.text}`;
 }
 
-async function grepRevision(
-  cwd: string,
-  env: Env,
-  sha: string,
-  regex: string,
-  specs: readonly string[],
-  what: string,
-): Promise<readonly string[]> {
-  const grep = await runGitAsync(
-    cwd,
-    [
-      '-c',
-      'core.quotePath=false',
-      'grep',
-      '--no-color',
-      '--full-name',
-      '-n',
-      '-I',
-      '-E',
-      '-e',
-      regex,
-      sha,
-      '--',
-      ...specs,
-    ],
-    env,
-  );
+/** One commit of the checkout, read without checking it out. */
+interface Revision {
+  readonly sha: string;
+  /** The hits of an extended regex in the files that match specs; what names the search in an error. */
+  readonly grep: (regex: string, specs: readonly string[], what: string) => Promise<readonly string[]>;
+}
 
-  // git grep exits 1 when nothing matches, and also when it could not read a file, which it reports only on stderr.
-  // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
-  if (grep.code > 1 || /^error: /m.test(grep.stderr)) {
-    throw new Error(`git grep for ${what}: ${grep.stderr.trim()}`);
-  }
+function revisionAt(cwd: string, env: Env, sha: string): Revision {
+  return {
+    sha,
+    grep: async (regex, specs, what) => {
+      const grep = await runGitAsync(
+        cwd,
+        [
+          '-c',
+          'core.quotePath=false',
+          'grep',
+          '--no-color',
+          '--full-name',
+          '-n',
+          '-I',
+          '-E',
+          '-e',
+          regex,
+          sha,
+          '--',
+          ...specs,
+        ],
+        env,
+      );
 
-  return parseGrep(grep.stdout, sha);
+      // git grep exits 1 when nothing matches, and also when it could not read a file, which it reports only on stderr.
+      // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
+      if (grep.code > 1 || /^error: /m.test(grep.stderr)) {
+        throw new Error(`git grep for ${what}: ${grep.stderr.trim()}`);
+      }
+
+      return parseGrep(grep.stdout, sha);
+    },
+  };
+}
+
+/** The commit as a Revision, or null when the checkout lacks it. */
+async function presentRevision(cwd: string, env: Env, sha: string): Promise<Revision | null> {
+  const has = (await runGitAsync(cwd, ['cat-file', '-e', `${sha}^{commit}`], env)).code === 0;
+
+  return has ? revisionAt(cwd, env, sha) : null;
 }
 
 export async function takeCensus(
@@ -251,21 +259,19 @@ export async function takeCensus(
   nameInErrors: (id: string) => string,
 ): Promise<Census> {
   const sha = await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env);
+  const revision = revisionAt(cwd, env, sha);
   const greps = set.patterns.map(
     async (pattern) =>
       [
         pattern.id,
-        await grepRevision(
-          cwd,
-          env,
-          sha,
+        await revision.grep(
           pattern.regex,
           pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
           nameInErrors(pattern.id),
         ),
       ] as const,
   );
-  const found = findDuplicates(cwd, env, sha, set.exclude);
+  const found = findDuplicates(revision, set.exclude);
   await Promise.allSettled([...greps, found]);
   const results = await Promise.all(greps);
   const duplicates = await found;
@@ -295,14 +301,9 @@ interface Definition {
   readonly path: string;
 }
 
-async function definitionsAt(
-  cwd: string,
-  env: Env,
-  sha: string,
-  exclude: readonly string[],
-): Promise<readonly Definition[]> {
+async function definitionsAt(revision: Revision, exclude: readonly string[]): Promise<readonly Definition[]> {
   const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', dotDirectories]);
-  const hits = await grepRevision(cwd, env, sha, definitionPrefilter, specs, 'definitions');
+  const hits = await revision.grep(definitionPrefilter, specs, 'definitions');
 
   return hits.flatMap((hit) => {
     const parts = splitHit(hit);
@@ -315,12 +316,10 @@ async function definitionsAt(
 }
 
 async function findDuplicates(
-  cwd: string,
-  env: Env,
-  sha: string,
+  revision: Revision,
   exclude: readonly string[],
 ): Promise<Readonly<Record<string, readonly string[]>>> {
-  const byName = Map.groupBy(await definitionsAt(cwd, env, sha, exclude), (item) => item.name);
+  const byName = Map.groupBy(await definitionsAt(revision, exclude), (item) => item.name);
 
   return Object.fromEntries(
     [...byName.entries()]
@@ -491,26 +490,24 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
-  const previousSha = before !== null && (await hasCommit(io.cwd, env, before.sha)) ? before.sha : null;
+  // The previous census's commit, when this checkout has it.
+  const previous = before === null ? null : await presentRevision(io.cwd, env, before.sha);
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
   const newDuplicates = diffDuplicates(before, after);
   // A name that was defined in one file only had no entry in the previous census, so that file is found at its commit.
-  const earlier =
-    previousSha === null || newDuplicates.length === 0
-      ? []
-      : await definitionsAt(io.cwd, env, previousSha, set.exclude);
+  const earlier = previous === null || newDuplicates.length === 0 ? [] : await definitionsAt(previous, set.exclude);
   const summary = {
     sha: after.sha,
-    previousSha,
+    previousSha: previous?.sha ?? null,
     behind:
-      previousSha !== null &&
-      previousSha !== after.sha &&
-      (await runGitAsync(io.cwd, ['merge-base', '--is-ancestor', after.sha, previousSha], env)).code === 0,
+      previous !== null &&
+      previous.sha !== after.sha &&
+      (await runGitAsync(io.cwd, ['merge-base', '--is-ancestor', after.sha, previous.sha], env)).code === 0,
     commits:
-      previousSha === null
+      previous === null
         ? null
-        : Number(await gitAsync(io.cwd, ['rev-list', '--no-merges', '--count', `${previousSha}..${after.sha}`], env)),
+        : Number(await gitAsync(io.cwd, ['rev-list', '--no-merges', '--count', `${previous.sha}..${after.sha}`], env)),
     grew,
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
