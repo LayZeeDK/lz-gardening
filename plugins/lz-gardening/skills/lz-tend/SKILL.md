@@ -272,11 +272,12 @@ A weed with none of these fates means the class is not tended yet: widen the che
 When the class holds several groups of copies, each with its own shared home, tend each group in the same bed, so
 each weed ends held or baselined; a group that differs from the rest is not a one-off for that reason. Name each weed
 closed one by one, and each weed baselined, in the report. Then close the class:
-`weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
-check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine), and
+`weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with one
+`--check` per check file from step 3 (a lint rule and a test that holds what the rule cannot are two),
+repository-relative (`eslint.config.mjs`, not a path on this machine), and
 `--baselined <id>,<id>` naming the baselined weeds when there are any. It refuses an id that is no open weed of the
-class, and a close that would baseline every open weed (the check then holds none of them): fix the list and run it
-again. `<short sha>` is
+class, a close that would baseline every open weed (the check then holds none of them), and a `--check` file the
+named commit does not hold: fix the list and run it again. `<short sha>` is
 the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your last commit: the close shares
 the bed only when it names the bed's tip; with any other commit the bed stays in the site. It exits 1 and closes
 nothing when its first sync is not `synced` or `local` or the claim is no longer this site's: stop and report its

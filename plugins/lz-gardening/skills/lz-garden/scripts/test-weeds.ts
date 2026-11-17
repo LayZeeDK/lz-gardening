@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { weedId } from './log.ts';
+import { openSite } from './store-log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { capturingIo, commit, git, now, scriptRun } from './test-repo.ts';
 import type { ScriptRun } from './test-repo.ts';
@@ -46,20 +47,28 @@ export function eslintConfig(files: string, rules: string): string {
 }
 
 // The any-type bed made by hand: a worktree of the site on bed/any-type at the checkout's main.
-export function anyTypeBedFromMain(garden: string): string {
-  const bed = join(garden, 'beds', 'any-type');
+export function anyTypeBedFromMain(garden: string, weedClass = 'any-type'): string {
+  const bed = join(garden, 'beds', weedClass);
   git(garden, ['fetch', '-q', 'origin', 'main']);
-  git(garden, ['worktree', 'add', '-q', '-b', 'bed/any-type', bed, 'FETCH_HEAD']);
+  git(garden, ['worktree', 'add', '-q', '-b', `bed/${weedClass}`, bed, 'FETCH_HEAD']);
 
   return bed;
+}
+
+// A bed of the class that commits `check` on the checkout's main, named as --tended takes it.
+export function tendedBy(dir: string, weedClass: string, check: Readonly<Record<string, string>>): string {
+  const tip = commit(anyTypeBedFromMain(openSite(dir).path, weedClass), check);
+
+  return `bed/${weedClass}@${tip.slice(0, 7)}`;
 }
 
 export function tendedBed(
   t: TestContext,
   check: Readonly<Record<string, string>>,
-  where = Object.keys(check)[0] ?? '',
+  where: string | readonly string[] = Object.keys(check)[0] ?? '',
   before: Readonly<Record<string, string>> = {},
 ): Planted & { readonly bed: string; readonly tip: string } {
+  const checkFlags = [where].flat().flatMap((path) => ['--check', path]);
   const { dir, garden } = planted(t);
   commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}'), ...before });
   const bed = anyTypeBedFromMain(garden);
@@ -69,7 +78,7 @@ export function tendedBed(
   assert.equal(added.status, 0, added.stderr);
   writeCensus(garden, base);
   assert.equal(cli(dir, ['claim', '--class', 'any-type']).status, 0);
-  const closed = cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, '--check', where]);
+  const closed = cli(dir, ['close-class', '--class', 'any-type', '--tended', `bed/any-type@${tip}`, ...checkFlags]);
   assert.equal(closed.status, 0, closed.stderr);
 
   return { dir, garden, bed, tip };

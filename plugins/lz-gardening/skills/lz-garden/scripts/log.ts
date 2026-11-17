@@ -14,6 +14,9 @@ export const sourcePattern = /^[a-z][a-z-]*:\S/;
 
 export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,64})$/;
 
+/** Separates the check files of one tended close in its `check` field. */
+export const checkSeparator = ', ';
+
 const controlsAndLineBreaks = String.raw`\p{Cc}\p{Zl}\p{Zp}`;
 const bidiControls = String.raw`\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}`;
 export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiControls}]`, 'u');
@@ -77,7 +80,7 @@ export type CloseEvent =
 
 export type TendedClose = Extract<CloseEvent, { kind: 'tended' }>;
 
-export function bedCommit(tended: TendedClose): string {
+export function bedCommit(tended: Pick<TendedClose, 'by'>): string {
   return tended.by.slice(tended.by.indexOf('@') + 1);
 }
 
@@ -261,7 +264,7 @@ export function planClose(
   const first = closing[0];
 
   if (first === undefined) {
-    return 'class' in target && (target.baselined?.length ?? 0) > 0
+    return 'class' in target && target.baselined?.[0] !== undefined
       ? { said: 'all baselined', class: target.class, drafts: [] }
       : { said: 'nothing open', drafts: [] };
   }

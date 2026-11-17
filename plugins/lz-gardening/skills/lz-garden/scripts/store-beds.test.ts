@@ -48,7 +48,7 @@ function tend(
     '--tended',
     `bed/${weedClass}@${tip.slice(0, 7)}`,
     '--check',
-    `checks/${weedClass}.mjs`,
+    Object.keys(files)[0] ?? '',
   ]);
   assert.equal(closed.status, 0, closed.stderr);
 

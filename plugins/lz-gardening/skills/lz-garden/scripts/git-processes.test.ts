@@ -198,7 +198,7 @@ startCounts('close-class --tended with an origin and no shared bed', { spawn: 31
     '--tended',
     `bed/any-type@${tip.slice(0, 7)}`,
     '--check',
-    'x.mjs',
+    'checks/any-type.mjs',
   ];
 
   return gitStarts(t, (env) => cliProcess(dir, close, env).status, strategy);

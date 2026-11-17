@@ -6,7 +6,7 @@ import { openSite, readLog } from './store-log.ts';
 import { sync } from './store-sync.ts';
 import { now } from './test-repo.ts';
 import { configEnv, sharedPair } from './test-site.ts';
-import { cli } from './test-weeds.ts';
+import { cli, tendedBy } from './test-weeds.ts';
 
 const weed = { class: 'any-type', where: 'src/a.ts:1', source: 'census:x' } as const;
 const id = weedId(weed.class, weed.where, weed.source);
@@ -21,6 +21,12 @@ function run(dir: string, args: readonly string[]): void {
 function cliWithShareOff(dir: string, args: readonly string[]): void {
   const result = cli(dir, args, configEnv([['lzGardening.share', 'false']]));
   assert.equal(result.status, 0, result.stderr);
+}
+
+function tend(dir: string): void {
+  const by = tendedBy(dir, weed.class, { 'src/check.ts': 'export {};\n' });
+  run(dir, ['claim', '--class', weed.class]);
+  run(dir, ['close-class', '--class', weed.class, '--tended', by, '--check', 'src/check.ts']);
 }
 
 function add(dir: string, found: typeof weed | typeof later): void {
@@ -87,8 +93,7 @@ const scenarios: readonly {
     name: 'an add beside a tend pass of its class that its writer never saw is added, not regrown',
     act: ({ a, b }) => {
       add(a, weed);
-      run(a, ['claim', '--class', weed.class]);
-      run(a, ['close-class', '--class', weed.class, '--tended', 'bed/any-type@abc1234', '--check', 'src/check.ts']);
+      tend(a);
       add(b, later);
     },
     weedOf: laterId,
@@ -98,8 +103,7 @@ const scenarios: readonly {
     name: 'an add after a tend pass of its class that its writer saw is regrown',
     act: ({ a, b, share }) => {
       add(a, weed);
-      run(a, ['claim', '--class', weed.class]);
-      run(a, ['close-class', '--class', weed.class, '--tended', 'bed/any-type@abc1234', '--check', 'src/check.ts']);
+      tend(a);
       share();
       add(b, later);
     },

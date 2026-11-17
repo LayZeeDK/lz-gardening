@@ -11,7 +11,7 @@ import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './
 import { commit, git, now, repo } from './test-repo.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { cli, homeAt, script } from './test-weeds.ts';
+import { cli, homeAt, script, tendedBy } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 
@@ -239,7 +239,7 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
       '--class',
       'hollow-assertion',
       '--tended',
-      'bed/hollow-assertion@abc1234',
+      tendedBy(dir, 'hollow-assertion', { 'scripts/hollow-assertion.test.mjs': 'export {};\n' }),
       '--check',
       'scripts/hollow-assertion.test.mjs',
     ]).stdout,
@@ -287,6 +287,32 @@ test('add takes --where more than once and adds one weed per path, a line each, 
       `added ${weedId('duplicate-function', 'src/x.ts', 'census:seed')}\n` +
         `added ${weedId('duplicate-function', 'src/y.ts', 'census:seed')}\n`,
       2,
+    ],
+  );
+});
+
+test('add with several --where refuses them all when a later one is off the seed list, and queues none', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/x.ts',
+    '--where',
+    'src/z.ts',
+    '--source',
+    'census:seed',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds add: no line of the seed list is duplicate-function in src/z.ts; census:seed is for those lines alone\n',
+      0,
     ],
   );
 });
@@ -460,6 +486,58 @@ test('a duplicate-function decline may quote a comment that wraps across lines, 
   );
 });
 
+function declinedOnWords(t: TestContext, files: Readonly<Record<string, string>>, reasons: readonly string[]) {
+  const { dir, garden } = planted(t);
+  const paths = Object.keys(files);
+  commit(dir, { 'src/x.ts': 'export function foo() {}\n', ...files });
+  writeCensusText(garden, censusText(git(dir, ['rev-parse', 'HEAD']), { duplicates: { foo: ['src/x.ts', ...paths] } }));
+
+  return paths.map((where, index) =>
+    cli(dir, ['decline', '--class', 'duplicate-function', '--where', where, '--reason', reasons[index] ?? '']),
+  );
+}
+
+test('a duplicate-function decline matches a quote across lines that open with ///, /**, ** or ##, and trims the reason', (t) => {
+  const declined = declinedOnWords(
+    t,
+    {
+      'src/a.ts': '/// Kept apart: the worker\n/// loads no shared module.\nexport function foo() {}\n',
+      'src/b.ts': '// Generated from src/x.ts;\n/** edit that file. */\nexport function foo() {}\n',
+      'src/c.ts': '/* Generated from src/x.ts;\n ** edit that file.\n */\nexport function foo() {}\n',
+      'src/d.ts': '## Kept apart: the worker\n## loads no shared module.\nexport function foo() {}\n',
+      'src/e.ts': 'export function foo() {} // Kept apart: the worker loads no shared module.',
+    },
+    [
+      'the worker loads no shared module.',
+      'Generated from src/x.ts; edit that file.',
+      'Generated from src/x.ts; edit that file.',
+      'the worker loads no shared module.',
+      ' the worker loads no shared module. ',
+    ],
+  );
+
+  assert.deepEqual(
+    declined.map(({ status, stderr }) => [status, stderr]),
+    Array.from({ length: 5 }, () => [0, '']),
+  );
+});
+
+test('a duplicate-function decline is refused on a quote that drops the // inside a line or runs two words together', (t) => {
+  const declined = declinedOnWords(
+    t,
+    {
+      'src/a.ts': '// Kept apart: see https://example.com/why for why.\nexport function foo() {}\n',
+      'src/b.ts': '// Kept apart: the worker loads no shared module.\nexport function foo() {}\n',
+    },
+    ['see https:example.com/why for why.', 'the workerloads no shared module.'],
+  );
+
+  assert.deepEqual(
+    declined.map(({ status }) => status),
+    [2, 2],
+  );
+});
+
 test('a duplicate-function decline may quote a record instead, named with --in, as it stood at the census commit', (t) => {
   const { dir, garden } = planted(t);
   commit(dir, {
@@ -510,15 +588,16 @@ test('--in goes with a duplicate-function decline of one file only', (t) => {
   const results = [
     ['--class', 'any-type', '--where', 'src/a.ts'],
     ['--class', 'any-type'],
+    ['--class', 'duplicate-function'],
   ].map((args) => cli(dir, ['decline', ...args, '--reason', 'r', '--in', 'docs/adr/0001.md']));
 
   assert.deepEqual(
     [results.map(({ status, stderr }) => [status, stderr]), logFiles(garden).size],
     [
-      [
-        [2, 'weeds decline: --in goes with --class duplicate-function --where <path> only\n'],
-        [2, 'weeds decline: --in goes with --class duplicate-function --where <path> only\n'],
-      ],
+      Array.from({ length: 3 }, () => [
+        2,
+        'weeds decline: --in goes with --class duplicate-function --where <path> only\n',
+      ]),
       0,
     ],
   );
@@ -567,13 +646,14 @@ test('decline needs a reason and a seed line to keep, and records nothing withou
 test('through the CLI a tend close records its bed and check, and a weed of the class elsewhere names both', (t) => {
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
 
   const closed = closeUnderClaim(dir, [
     'close-class',
     '--class',
     'any-type',
     '--tended',
-    'bed/any-type@bbb2222',
+    by,
     '--check',
     'eslint.config.mjs',
   ]);
@@ -584,17 +664,11 @@ test('through the CLI a tend close records its bed and check, and a weed of the 
   assert.equal(closed.stdout, 'closed 1; local\n');
   assert.match(
     back.stdout,
-    /^regrown [0-9a-f]{10} after bed\/any-type@bbb2222 \(check: eslint\.config\.mjs, base unknown\)\n$/,
+    new RegExp(`^regrown [0-9a-f]{10} after ${by} \\(check: eslint\\.config\\.mjs, base unknown\\)\\n$`),
   );
   assert.deepEqual(
     ['ids', 'class', 'by', 'kind', 'check'].map((field) => close?.[field]),
-    [
-      [weedId('any-type', 'src/a.ts:1', 'commit:aaa1111')],
-      'any-type',
-      'bed/any-type@bbb2222',
-      'tended',
-      'eslint.config.mjs',
-    ],
+    [[weedId('any-type', 'src/a.ts:1', 'commit:aaa1111')], 'any-type', by, 'tended', 'eslint.config.mjs'],
   );
 });
 
@@ -627,15 +701,8 @@ test('through the CLI a one-off close and a keep each record their reason and ki
 test('list shows a regrown weed with the bed and check it came back after', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
-  closeUnderClaim(dir, [
-    'close-class',
-    '--class',
-    'any-type',
-    '--tended',
-    'bed/any-type@bbb2222',
-    '--check',
-    'eslint.config.mjs',
-  ]);
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
+  closeUnderClaim(dir, ['close-class', '--class', 'any-type', '--tended', by, '--check', 'eslint.config.mjs']);
   const id = idOf(
     cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:4', '--source', 'commit:ccc3333', '--note', 'cast'])
       .stdout,
@@ -643,7 +710,7 @@ test('list shows a regrown weed with the bed and check it came back after', (t) 
 
   assert.equal(
     cli(dir, ['list', '--class', 'any-type']).stdout,
-    `${id} any-type src/b.ts:4 [commit:ccc3333] [regrown after bed/any-type@bbb2222 (check: eslint.config.mjs, base unknown)] cast\n`,
+    `${id} any-type src/b.ts:4 [commit:ccc3333] [regrown after ${by} (check: eslint.config.mjs, base unknown)] cast\n`,
   );
 });
 
@@ -992,7 +1059,7 @@ test('close refuses --class beside --id rather than drop it', () => {
 });
 
 test('--baselined goes with a tended close-class only, and holds weed ids separated by commas', () => {
-  const tended = { class: 'any-type', tended: 'bed/any-type@abc1234', check: 'eslint.config.mjs' };
+  const tended = { class: 'any-type', tended: 'bed/any-type@abc1234', check: ['eslint.config.mjs'] };
 
   assert.deepEqual(
     [
@@ -1007,6 +1074,17 @@ test('--baselined goes with a tended close-class only, and holds weed ids separa
       '--baselined goes with close-class --tended only',
       ...Array.from({ length: 5 }, () => '--baselined must be weed ids separated by commas'),
     ],
+  );
+});
+
+test('a tended close-class refuses a --check path holding ", ", which joins several checks in the close', () => {
+  assert.equal(
+    parseCloseFlags('close-class', {
+      class: 'any-type',
+      tended: 'bed/any-type@abc1234',
+      check: ['checks/a, b.mjs'],
+    }),
+    '--check must not hold ", ", which separates the checks of one close',
   );
 });
 
@@ -1059,13 +1137,14 @@ test('a tended close-class leaves the weeds named in --baselined open and closes
     return weedId('any-type', where, 'census:any-type');
   });
   const [, b = '', c = ''] = weeds;
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
 
   const closed = closeUnderClaim(dir, [
     'close-class',
     '--class',
     'any-type',
     '--tended',
-    'bed/any-type@abc1234',
+    by,
     '--check',
     'eslint.config.mjs',
     '--baselined',
@@ -1084,6 +1163,7 @@ test('a tended close-class refuses a --baselined id that is no open weed of the 
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
   cli(dir, ['add', '--class', 'hollow-assertion', '--where', 'src/b.ts:1', '--source', 'census:x']);
   const other = weedId('hollow-assertion', 'src/b.ts:1', 'census:x');
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
 
   const results = ['0123456789', other].map((id) =>
     closeUnderClaim(dir, [
@@ -1091,7 +1171,7 @@ test('a tended close-class refuses a --baselined id that is no open weed of the 
       '--class',
       'any-type',
       '--tended',
-      'bed/any-type@abc1234',
+      by,
       '--check',
       'eslint.config.mjs',
       '--baselined',
@@ -1114,13 +1194,14 @@ test('a tended close-class refuses a --baselined id that is no open weed of the 
 test('a tended close-class that baselines every open weed is refused: its check holds none of them', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
 
   const result = closeUnderClaim(dir, [
     'close-class',
     '--class',
     'any-type',
     '--tended',
-    'bed/any-type@abc1234',
+    by,
     '--check',
     'eslint.config.mjs',
     '--baselined',

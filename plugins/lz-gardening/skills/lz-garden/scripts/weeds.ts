@@ -29,10 +29,12 @@
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives>
 //     [--baselined <id>,<id>] (a tend pass added a check; close-class only), --one-off <reason> (no check written),
 //     --keep <reason> (the weed is deliberate). Values are one line of text without control characters.
+//     --check goes once per check file; each must be a file the tended commit holds in the site and must not hold
+//     `, `, which joins them in the close's check field (exit 2 with `--check <path> is no file at <bed>`).
 //     --baselined names the weeds whose copies stay in the check's baseline: the close leaves them open. It exits 1
 //     with `<id> is no open weed of <class>`, or `every open weed of <class> is baselined; the check holds none of
-//     them`, and closes nothing. Both sync with origin before they plan and after they append, then print `<closed|kept> <n>; <share state>`; the last sync's reason and a bed origin
-//     did not take are named on stderr. close-class acts only when that first sync leaves the share state synced or
+//     them`, and closes nothing. Both sync with origin before they plan and after they append, then print `<closed|kept> <n>; <share state>`; the last sync's reason and notes (a bed origin
+//     did not take, a census it left out or kept local, a claim it gave back), as site.ts words them, go to stderr. close-class acts only when that first sync leaves the share state synced or
 //     local and this writer holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check
 //     the claim of <class>: <state>[ (<reason>)]`, `this site holds no claim of <class>; run weeds claim --class
 //     <class>` or `<class> is claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of
@@ -43,11 +45,11 @@
 //     Claims the class, or the first one groups --ready lists, for six hours, and shares the claim:
 //     `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
 //     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state>[ (<reason>)]`, the last
-//     after releasing the claim (`; release pending` when that release is not shared yet). A bed origin did not take
-//     in its first sync is named on stderr.
+//     after releasing the claim (`; release pending` when that release is not shared yet). Its first sync's notes,
+//     as close's, go to stderr.
 //   node weeds.ts release --class <kebab>
 //     Ends this writer's claim and shares the release: `released <class>; <share state>`, with the sync's reason and
-//     a bed origin did not take on stderr, as close does; exit 1 with `no claim of <class> held here`.
+//     notes on stderr, as close does; exit 1 with `no claim of <class> held here`.
 //   node weeds.ts groups [--min <n>|--ready]  open weeds per class, most first, and who holds a claim of it
 //                                        (tending); --min <n> keeps the classes whose open weeds sit in n or more
 //                                        files (places), and defaults to 1; --ready keeps the classes claim without
@@ -65,7 +67,9 @@
 // failure: no site, a damaged or newer log, a log that kept moving, or a git error.
 import { parseArgs } from 'node:util';
 import {
+  bedCommit,
   bedPattern,
+  checkSeparator,
   claimableGroups,
   classPattern,
   groupWeeds,
@@ -94,12 +98,12 @@ import type {
   OpenWeed,
   TendedClose,
 } from './log.ts';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand, syncNotes } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
-import { configValue, optionalGit } from './store-git.ts';
+import { configValue, objectIds, optionalGit } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import { censusIn, onSeedLine, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
 import type { Replica, Site } from './store-log.ts';
@@ -163,7 +167,7 @@ export interface CloseFlags {
   readonly tended?: string | undefined;
   readonly 'one-off'?: string | undefined;
   readonly keep?: string | undefined;
-  readonly check?: string | undefined;
+  readonly check?: readonly string[] | undefined;
   readonly baselined?: string | undefined;
 }
 
@@ -199,7 +203,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     tended: flags.tended,
     'one-off': flags['one-off'],
     keep: flags.keep,
-    check: flags.check,
+    check: flags.check?.join(checkSeparator),
   });
 
   if (unprintable !== null) {
@@ -229,16 +233,20 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     return '--tended closes a whole class; use close-class --class <class>';
   }
 
-  if (check === undefined || !hasText(check)) {
+  if (check === undefined || !check.every(hasText)) {
     return '--tended needs --check <where the check lives>';
   }
 
-  if (notRepositoryRelative(check)) {
+  if (check.some(notRepositoryRelative)) {
     return '--check must be a repository-relative path';
   }
 
+  if (check.some((path) => path.includes(checkSeparator))) {
+    return `--check must not hold "${checkSeparator}", which separates the checks of one close`;
+  }
+
   return bedPattern.exec(by)?.[1] === target
-    ? { target: { class: target, baselined: baselinedIds }, kind, by, check }
+    ? { target: { class: target, baselined: baselinedIds }, kind, by, check: check.join(checkSeparator) }
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
@@ -301,7 +309,7 @@ const claimRounds = 3;
 
 function claim(io: Io, site: Site, wanted: string | null, now: Date, seams: SyncSeams): number {
   const holder = holderOf(site);
-  reportDivergedBeds(io, 'claim', sync(site, { ...seams, attempts: syncTries.quick }, now).divergedBeds);
+  reportSyncNotes(io, 'claim', sync(site, { ...seams, attempts: syncTries.quick }, now));
   let owner: ClaimEvent | undefined;
   const rounds = wanted === null ? claimRounds : 1;
 
@@ -365,7 +373,7 @@ function parseFlags(argv: readonly string[]) {
       'one-off': { type: 'string' },
       keep: { type: 'string' },
       reason: { type: 'string', default: '' },
-      check: { type: 'string' },
+      check: { type: 'string', multiple: true },
       baselined: { type: 'string' },
       min: { type: 'string' },
       ready: { type: 'boolean', default: false },
@@ -454,7 +462,7 @@ function offSeedList(site: Site, census: string | undefined, input: AddInput): s
 // matches however it wraps.
 function asProse(text: string): string {
   return text
-    .replace(/^[ \t]*(?:\/\/+|\/\*+|\*+\/?|#+)/gm, ' ')
+    .replace(/^[ \t]*(?:\/\/+|\/\*+|\*+\/?|#+)/gm, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -473,6 +481,7 @@ function unquotedReason(
 
   const path = record ?? seedPath(input.where);
   const sha = censusIn(site.path, census)?.sha;
+  // Stryker disable next-line ConditionalExpression: with no census, git show of undefined:<path> fails as well, and the reason is refused alike
   const text = sha === undefined ? undefined : optionalGit(checkout, ['show', `${sha}:${path}`]);
 
   return text !== undefined && asProse(text).includes(asProse(input.note))
@@ -495,7 +504,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
     flags.in !== undefined && (input.class !== 'duplicate-function' || where === undefined)
       ? '--in goes with --class duplicate-function --where <path> only'
       : null;
-  const secondWhere = (flags.where?.length ?? 0) > 1 ? '--where goes once with decline' : null;
+  const secondWhere = flags.where?.[1] === undefined ? null : '--where goes once with decline';
   const problem =
     secondWhere ??
     strayIn ??
@@ -578,13 +587,25 @@ function reportShared(io: Io, command: string, shared: SyncResult): void {
     io.err(`weeds ${command}: ${escapeUnprintable(shared.reason)}\n`);
   }
 
-  reportDivergedBeds(io, command, shared.divergedBeds);
+  reportSyncNotes(io, command, shared);
 }
 
-function reportDivergedBeds(io: Io, command: string, beds: readonly string[]): void {
-  beds.forEach((bed) => {
-    io.err(`weeds ${command}: ${escapeUnprintable(bed)}\n`);
+function reportSyncNotes(io: Io, command: string, result: SyncResult): void {
+  syncNotes(result).forEach((note) => {
+    io.err(`weeds ${command}: ${note}\n`);
   });
+}
+
+/** The first of the close's check files that the tended bed commit does not hold. */
+function checkMissingFromBed(site: Site, by: string, checks: string): string | undefined {
+  const commit = bedCommit({ by });
+  const paths = checks.split(checkSeparator);
+  const ids = objectIds(
+    site.path,
+    paths.map((path) => `${commit}:${path}`),
+  );
+
+  return paths.find((_path, index) => ids[index] === undefined);
 }
 
 function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date, seams: SyncSeams): number {
@@ -597,6 +618,14 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
   }
 
   const site = openSite(io.cwd);
+  const missingCheck = request.kind === 'tended' ? checkMissingFromBed(site, request.by, request.check) : undefined;
+
+  if (missingCheck !== undefined) {
+    io.err(`weeds ${command}: --check ${missingCheck} is no file at ${request.by}\n`);
+
+    return 2;
+  }
+
   const before = sync(site, { ...seams, attempts: syncTries.quick }, now);
   const refusal = 'class' in request.target ? claimRefusalLine(site, request.target.class, before, now) : undefined;
 

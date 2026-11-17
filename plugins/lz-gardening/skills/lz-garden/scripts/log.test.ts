@@ -7,6 +7,7 @@ import {
   eventPath,
   eventPathPattern,
   groupWeeds,
+  latestTendedClose,
   losingClaims,
   maxClockOf,
   parseEvent,
@@ -448,6 +449,15 @@ test('an add of a class a tend pass closed is regrown and records the latest ten
   assert.deepEqual(
     [outcome.said, outcome.said === 'regrown' ? [outcome.drafts[0].sawTend, outcome.after.uuid] : null],
     ['regrown', ['t4', 't4']],
+  );
+});
+
+test("a class's latest tended close passes over a later one-off close of it and a later tend of another class", () => {
+  const tended = tend('t1', 1, ['x']);
+
+  assert.equal(
+    latestTendedClose([tended, close('o1', 2, ['y'], 'one-off'), tend('t2', 3, ['z'], 'other')], 'any-type'),
+    tended,
   );
 });
 

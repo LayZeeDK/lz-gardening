@@ -39,7 +39,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     `origin`. No ref outside `refs/garden/` is pushed. `git config lzGardening.share false` keeps the garden local.
     An event in the queue that the scripts would not write, such as an add whose id does not match its class,
     `where` (line included) and source, is skipped and named on stderr, and a close ends only the weeds of its own
-    class.
+    class. Every command that syncs names on stderr what its sync left out, kept local or gave back: a shared census
+    that is not one, a census of a commit `origin` lacks, a bed `origin` did not take, a claim another writer won.
   - Privacy: events take repository-relative paths only, and an event that holds this machine's paths is refused. A
     bed that holds them, or that would bring `origin` a commit other than its own, stays in the site, as does a
     census of a commit no branch on `origin` holds. Each census carries the site's `.garden/patterns.json` as it
@@ -56,8 +57,9 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   - Bed: works in a bed, a worktree of the site on branch `bed/<class>`, with the checkout's Node.js dependencies
     linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). A class tended again before its bed
     lands is tended in the same bed.
-  - Close: closes the class as tended, one-off or kept. A tended close names the bed and where its check lives, and
-    shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a bed a sync did not see
+  - Close: closes the class as tended, one-off or kept. A tended close names the bed and where each of its checks
+    lives (`--check` once per check file, each a file the tended bed commit holds; the event's `check` field joins
+    them with `, `), and shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a bed a sync did not see
     land (a failed or timed-out push, or a sync stopped once its log landed) is pushed again by the next sync. Bed
     commits carry the identity of whoever commits them.
   - Proof: the check is proved on a queued weed in the untouched bed before any fix, and on paved-road code, and a

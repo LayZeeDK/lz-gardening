@@ -34,7 +34,7 @@ import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand } from './cli.ts';
+import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand, syncNotes } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
 import { closeReaders, configValue, git, objectIds, optionalGit, refTip } from './store-git.ts';
@@ -335,35 +335,8 @@ function parseCommand(
 }
 
 function reportSync(io: Io, result: SyncResult): void {
-  if (result.sharedCensusIgnored === true) {
-    io.err(
-      `site: the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it\n`,
-    );
-  }
-
-  if (result.censusKeptLocal !== undefined) {
-    io.err(
-      `site: the census of ${escapeUnprintable(result.censusKeptLocal)} stays local: no branch fetched from origin holds that commit\n`,
-    );
-  }
-
-  if (result.localCensusUnreadable === true) {
-    io.err(
-      `site: the site's ${censusRef} is not a census, so it stays local; delete it in the site (git update-ref -d ${censusRef}), and the next tick records a new one\n`,
-    );
-  }
-
-  if (result.censusStillPending !== undefined) {
-    io.err(
-      `site: another sync moved the census first; the census of ${result.censusStillPending} stays pending for the next sync\n`,
-    );
-  }
-
-  result.yielded.forEach(({ claim, owner }) => {
-    io.err(`site: gave back the claim of ${claim.class}; ${owner.holder} holds it\n`);
-  });
-  result.divergedBeds.forEach((bed) => {
-    io.err(`site: ${escapeUnprintable(bed)}\n`);
+  syncNotes(result).forEach((note) => {
+    io.err(`site: ${note}\n`);
   });
 }
 

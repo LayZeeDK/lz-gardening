@@ -65,6 +65,22 @@ test('a new check file on the base is on the base, though its bed landed by squa
   );
 });
 
+test('a close with two checks is not on the base while one of its check files has not landed', (t) => {
+  const landedCheck = { 'checks/a.test.mjs': 'export {};\n' };
+  const { dir, garden, tip } = tendedBed(t, { ...landedCheck, 'checks/b.test.mjs': 'export const b = 1;\n' }, [
+    'checks/a.test.mjs',
+    'checks/b.test.mjs',
+  ]);
+  writeCensus(garden, commit(dir, landedCheck));
+
+  const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
+
+  assert.equal(
+    back.stdout,
+    `regrown ${weedId('any-type', 'src/b.ts:1', 'commit:ccc3333')} after bed/any-type@${tip} (check: checks/a.test.mjs, checks/b.test.mjs not on the base)\n`,
+  );
+});
+
 test("add --census judges the check at this tick's census, so a bed that landed since the garden's census is on the base", (t) => {
   const check = { 'checks/any-type.test.mjs': 'export {};\n' };
   const { dir, tip } = tendedBed(t, check);

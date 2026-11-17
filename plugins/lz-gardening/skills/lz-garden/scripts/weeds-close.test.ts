@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { claimLifetimeMs, replay } from './log.ts';
+import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { openSite, readLog } from './store-log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { commit, git, now } from './test-repo.ts';
@@ -122,6 +123,56 @@ test('close-class --tended by the holder shares the close and the release, then 
   );
 });
 
+test('close-class --tended takes --check once per check file and records them all', (t) => {
+  const { dir, garden } = planted(t);
+  addWeed(dir, 'src/a.ts:1');
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
+  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n', 'eslint.config.mjs': '' });
+
+  const closed = cli(
+    dir,
+    [
+      'close-class',
+      '--class',
+      'any-type',
+      '--tended',
+      `bed/any-type@${tip.slice(0, 7)}`,
+      '--check',
+      'checks/a.mjs',
+      '--check',
+      'eslint.config.mjs',
+    ],
+    process.env,
+    now,
+  );
+
+  assert.deepEqual(
+    [closed.status, readLog({ path: garden }).events.flatMap((event) => (event.op === 'close' ? [event.check] : []))],
+    [0, ['checks/a.mjs, eslint.config.mjs']],
+    closed.stderr,
+  );
+});
+
+test('close-class --tended whose --check file the tended commit does not hold exits 2 and closes nothing', (t) => {
+  const { dir, garden } = planted(t);
+  addWeed(dir, 'src/a.ts:1');
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
+  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
+  const by = `bed/any-type@${tip.slice(0, 7)}`;
+
+  const closed = cli(
+    dir,
+    ['close-class', '--class', 'any-type', '--tended', by, '--check', 'checks/a.mjs', '--check', 'checks/b.mjs'],
+    process.env,
+    now,
+  );
+
+  assert.deepEqual(
+    [closed.status, closed.stderr, replay(readLog({ path: garden }).events, now).open.length],
+    [2, `weeds close-class: --check checks/b.mjs is no file at ${by}\n`, 1],
+  );
+});
+
 test('a tended close made with sharing off exits 0, and the next open pushes the close and then its bed', (t) => {
   const { dir, garden } = planted(t);
   const remote = bareRemote(dir);
@@ -195,6 +246,25 @@ test('claim names on stderr a bed its first sync could not share', (t) => {
   assert.deepEqual(
     [claimed.status, claimed.stderr],
     [0, "weeds claim: any-type: bed/any-type does not descend from origin's bed\n"],
+  );
+});
+
+test('close names a shared census on origin that is not a census, as site does', (t) => {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+  const id = addWeed(dir, 'src/a.ts:1');
+  writePendingCensus({ path: garden, checkout: dir }, 'bad', '{"rev":"main"}\n');
+  git(garden, ['push', '-q', remote, `${pendingCensusRef('bad')}:${censusRef}`]);
+  git(garden, ['update-ref', '-d', pendingCensusRef('bad')]);
+
+  const closed = cli(dir, ['close', '--id', id, '--one-off', 'generated code']);
+
+  assert.deepEqual(
+    [closed.status, closed.stderr],
+    [
+      0,
+      `weeds close: the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it\n`,
+    ],
   );
 });
 

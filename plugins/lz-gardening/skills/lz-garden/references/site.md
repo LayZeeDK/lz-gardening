@@ -90,8 +90,8 @@ needs no credentials of its own and keeps no copy of the token.
 
 Claims decide who tends a class. A sync that shares a claim of this writer's checks it against `origin`'s log: when
 another writer's claim of the class came first, it gives the claim back with a release, pushed in the same sync; a
-`site.ts` command's sync (`open`, `sync` or `bed`) names the class and the holder on stderr, and a `weeds.ts`
-command's sync gives the claim back without a word. `weeds.ts close-class` and `site.ts bed` share one precondition:
+`site.ts` command's sync (`open`, `sync` or `bed`) names the class and the holder on stderr, and so do the syncs
+`weeds.ts claim`, `close`, `close-class` and `release` report, which name the census notes `site.ts` names too. `weeds.ts close-class` and `site.ts bed` share one precondition:
 each syncs first and acts only when that sync is `synced` or `local` and this writer then holds a live claim of the
 class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
 another writer holds a claim of the weed's class; when its first sync is not `synced` or `local`, it closes and says
