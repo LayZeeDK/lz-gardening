@@ -486,6 +486,7 @@ function spawnContents<T>(
 
   if (batch.status !== 0) {
     throw new Error(
+      // Stryker disable next-line StringLiteral: no status and no error is a git a signal ended, which no test sends
       `git cat-file --batch: ${batch.status === null ? (batch.error?.message ?? '') : batch.stderr.toString().trim()}`,
     );
   }

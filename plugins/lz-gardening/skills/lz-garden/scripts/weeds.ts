@@ -417,6 +417,7 @@ function offSeedList(site: Site, census: string | undefined, input: AddInput): s
 
 function decline(io: Io, flags: Flags, now: Date): number {
   const input: AddInput = {
+    // Stryker disable next-line StringLiteral: a decline without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
     where: flags.where,
     source: 'census:seed',

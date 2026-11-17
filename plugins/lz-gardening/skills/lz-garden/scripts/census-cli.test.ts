@@ -385,6 +385,28 @@ test('the seed list names at most 30 duplicate names, the most widely defined fi
   assert.match(result.stdout, /^1 more duplicate names not listed$/m);
 });
 
+test('--seed with exactly 30 duplicate names lists them all and says none are left out', async (t) => {
+  const { dir } = planted(t);
+  const files = Object.fromEntries(
+    Array.from({ length: 30 }, (_, index) => index).flatMap((index) => [
+      [`src/a${String(index)}.ts`, `function shared${String(index)}() {}\n`] as const,
+      [`src/b${String(index)}.ts`, `function shared${String(index)}() {}\n`] as const,
+    ]),
+  );
+  commit(dir, files);
+
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    [
+      result.stdout.split('\n').filter((line) => line.startsWith('= duplicate ')).length,
+      /not listed/.test(result.stdout),
+    ],
+    [30, false],
+  );
+});
+
 test('--seed prints the seed list even when a census was recorded before, and only then', async (t) => {
   const { dir } = planted(t);
   commit(dir, { 'src/a.ts': '// eslint-disable-next-line\nconst a = 1;\n' });

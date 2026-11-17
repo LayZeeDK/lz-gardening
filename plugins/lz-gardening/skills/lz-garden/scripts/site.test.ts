@@ -825,6 +825,20 @@ test('sync --census --seeded counts a seed line queued when a weed of its class 
   );
 });
 
+test('sync --census --seeded on a garden already seeded asks for nothing and logs no second seed', (t) => {
+  const { dir, garden } = planted(t);
+  assert.equal(site(dir, ['sync', '--census', pendCensus(dir, garden).sha, '--seeded']).status, 0);
+  commit(dir, { 'src/b.ts': 'export const b: any = 2;\n' });
+  const { sha } = pendCensus(dir, garden, { hits: { 'any-type': ['src/b.ts:1: export const b: any = 2;'] } });
+
+  const result = site(dir, ['sync', '--census', sha, '--seeded']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, [...logFiles(garden).values()].filter((event) => event['op'] === 'seed').length],
+    [0, '', 1],
+  );
+});
+
 test('sync --census --seeded logs the seed once each line is queued at one of its paths or declined', (t) => {
   const { dir, garden } = planted(t);
   const { sha } = pendCensus(dir, garden, {

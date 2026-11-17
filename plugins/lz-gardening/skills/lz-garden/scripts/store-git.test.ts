@@ -76,6 +76,18 @@ test('a batch read by the spawn strategy from a git that ends on a bad config fa
   );
 });
 
+test('a batch read by the spawn strategy with no git on the PATH fails saying git could not be started', (t) => {
+  const dir = repo(t);
+  const empty = join(dirname(dir), 'empty');
+  mkdirSync(empty);
+  const otherVariables = Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PATH');
+  const env = { ...Object.fromEntries(otherVariables), PATH: empty, [readStrategyVariable]: 'spawn' };
+
+  assert.throws(() => inRun(env, () => catFileBatch(dir, ['HEAD'], (name) => name)), {
+    message: /^git cat-file --batch: spawnSync git ENOENT$/,
+  });
+});
+
 test('each read strategy answers an id read of no names with no ids', (t) => {
   const dir = repo(t);
 
