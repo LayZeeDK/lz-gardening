@@ -72,8 +72,10 @@ Done when every record folder that exists has been listed and its lesson and sum
 ## 3. History
 
 ```bash
-git log --no-merges --format='%h %s' -n 300 <base>
+git log --no-merges --format='%h %p %s' -n 300 <base>
 ```
+
+Each line is a commit's short id, its parent's short id (none for the first commit) and its subject.
 
 Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up runs. Then read the diffs of the newest
 20 commits a page at a time, as the tick's step 3 reads its range, with a budget of 72,000 characters (three pages):
@@ -86,13 +88,15 @@ node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit>..<sha> --chars 72000
 the last line's commit, which the range leaves out. Read every page, one call per page, with the same `--chars`.
 The commits page 1 marks `skip` stay unread: count them for the report, and read none of them with `git show`.
 
-Then read up to five commits the log points at that the pages did not show, one page each:
+Then read up to five commits the log points at that the pages did not show, one page each, `<parent>` the second
+id on the commit's line in the log (`diffs.ts` takes two commit ids and nothing else, so not `<commit>~1`):
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit>~1..<commit> --chars 24000
+node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <parent>..<commit> --chars 24000
 ```
 
-A commit that marks `skip` there is too large for the seed pass: count it as unread too. Done when the pages are read
+A commit that marks `skip` there is too large for the seed pass, and a commit with no parent cannot be read this way:
+count either as unread too. Done when the pages are read
 and the weeds they show are queued.
 
 ## 4. Record and report
