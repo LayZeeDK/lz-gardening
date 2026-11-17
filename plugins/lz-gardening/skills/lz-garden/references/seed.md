@@ -9,25 +9,35 @@ after the seed list misses them.
 
 ## 1. The seed list
 
-With `--seed`, the census output prints the seed list above its JSON line:
+With `--seed`, the census output prints the seed list above its JSON line. Each `=` line is either queued or
+declined, by the rule in `weeds.md`: queue what spreads or invites copying; decline a one-off with a visible reason,
+code that is deliberately unusual and says why, and what a check in the repository already rejects. Decline with
 
-- `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Queue one
-  weed per line, `--where <path>`, `--source census:seed`, the note naming what the hits have in common (read a few).
-  The census keeps at most 1000 hits per pattern, in path order, so for a pattern with more the files are ranked
-  from those 1000.
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>"
+```
+
+which keeps the line's weed out of the queue for good. `sync --seeded` in step 4 refuses to record the seed while a
+line is neither queued nor declined, and names the lines left.
+
+- `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Read a few
+  hits; queue one weed, `--class <pattern>`, `--where <path>`, `--source census:seed`, the note naming what the hits
+  have in common, or decline it with `--class <pattern> --where <path>`. The census keeps at most 1000 hits per
+  pattern, in path order, so for a pattern with more the files are ranked from those 1000.
 - `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
   in the most files first. Test files (`*.spec.*`, `*.test.*`) and files under dot-directories (`.claude/`,
   `.github/` and other tool folders, often deliberate mirrors of each other) are left out of duplicate names, though
   their pattern hits count. Read the definitions, the copy you would keep among them; when they do the same job,
   queue one `duplicate-function` weed per file, `--source census:seed`, the note naming the copy to keep. A comment or
   a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
-  makes that copy no weed. Names that only share a word (two different `parse` functions) are not weeds. A last line
+  makes that copy no weed. Names that only share a word (two different `parse` functions) are not weeds: decline the
+  line with `--class duplicate-function --where <one of its paths>`. A last line
   `<n> more duplicate names not listed` counts the rest. Later ticks report only what is new, so the seed list is the
   one time these are listed.
 
 The line after the seed list, `census: <pattern> <count>, ...` or `census: none`, is the report's census line.
 
-Done when every `=` line has its weeds queued.
+Done when every `=` line has its weeds queued or is declined.
 
 ## 2. The records
 
@@ -62,6 +72,7 @@ weeds are queued.
 
 Run the two commands of the tick's step 5, `groups --ready` and `sync --census <sha>`, with `--seeded` added at the
 end of `sync`. `--seeded` records in the queue that the seed pass ran, so no clone of the repository seeds again.
+When `sync` exits 1 naming seed lines, queue or decline each of them as step 1 says, then run `sync` again.
 
 Done when `sync` exits 0. Then reply with this form, every `<slot>` filled as the list below says. The reply is these
 six lines and ends after the last one; the reason for each weed is in its `--note`.
@@ -69,7 +80,7 @@ six lines and ends after the last one; the reason for each weed is in its `--not
 ```text
 garden: seeded <base> at <short sha>
 <the census line>
-queued <total> (<class> x<n>, ...); <unlisted> duplicate names not listed
+queued <total> (<class> x<n>, ...); declined <declined>; <unlisted> duplicate names not listed
 no check behind: <class>, ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)
@@ -77,7 +88,8 @@ shared: <state> (<reason>)
 
 - `<the census line>`: the census output's `census:` line, as printed.
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this seed pass that printed `added`; `<total>` is the
-  sum of the `<n>`, and `queued 0` has no parentheses. `<unlisted>` is the `<n>` of the census's
+  sum of the `<n>`, and `queued 0` has no parentheses. `<declined>` counts the seed lines declined. `<unlisted>` is
+  the `<n>` of the census's
   `<n> more duplicate names not listed` line, or 0.
 - `no check behind`: the classes step 2 found cleaned up by hand with nothing that now rejects them, or
   `no check behind: none`.

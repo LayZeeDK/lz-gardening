@@ -12,7 +12,9 @@
 //   node site.ts sync [--census <sha> [--seeded]]
 //                                           sync with origin, up to 5 tries; with --census, record the census
 //                                           census.ts took of <sha> unless the garden's census is of that commit or
-//                                           a later one, and with --seeded add the seed event; prints {shared,
+//                                           a later one, and with --seeded add the seed event once every seed line
+//                                           of that census is queued or declined (else exit 1, naming each line
+//                                           left on stderr, and record nothing); prints {shared,
 //                                           events} and reason and conflicts when there are any; exit 0 in every
 //                                           share state; a census another sync beat to the move stays pending, said
 //                                           on stderr
@@ -48,7 +50,8 @@ import {
   writerKey,
 } from './store-log.ts';
 import type { Located, Site } from './store-log.ts';
-import { censusRef, holdsCensusCovering, readableCensus } from './store-census.ts';
+import { censusRef, holdsCensusCovering, pendingCensusRef, readableCensus } from './store-census.ts';
+import { seedLines } from './census.ts';
 import { makeBed } from './site-bed.ts';
 import type { BedSummary } from './site-bed.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
@@ -273,6 +276,22 @@ function bedRefusal(io: Io, site: Site, bedClass: string, now: Date): string | u
   return claimRefusalLine(site, bedClass, shared, now);
 }
 
+function seedLinesLeft(located: Located, sha: string): readonly string[] {
+  const census = readableCensus(located.path, pendingCensusRef(sha)) ?? readableCensus(located.path, censusRef);
+
+  if (census === undefined) {
+    return [];
+  }
+
+  const added = readLog(located).events.flatMap((event) =>
+    event.op === 'add' ? [`${event.class}\u0000${event.where.replace(/:\d+$/, '')}`] : [],
+  );
+
+  return seedLines(census)
+    .filter((seed) => !seed.paths.some((path) => added.includes(`${seed.class}\u0000${path}`)))
+    .map((seed) => seed.line);
+}
+
 function recordSeed(site: Site, sha: string, now: Date): void {
   append(site, (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }] }), now);
 }
@@ -385,6 +404,16 @@ function main(argv: readonly string[], io: Io): number {
 
       if (parsed.census !== undefined && !holdsCensusCovering(located, parsed.census)) {
         io.err(`site: no census of ${parsed.census} to record: run census.ts --rev ${parsed.census} first\n`);
+
+        return 1;
+      }
+
+      const unseeded = parsed.seeded && parsed.census !== undefined ? seedLinesLeft(located, parsed.census) : [];
+
+      if (unseeded.length > 0) {
+        unseeded.forEach((line) => {
+          io.err(`site: seed line neither queued nor declined: ${escapeUnprintable(line)}\n`);
+        });
 
         return 1;
       }

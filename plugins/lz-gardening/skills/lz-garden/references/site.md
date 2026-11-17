@@ -133,10 +133,12 @@ repository, it uses the one site beside the main checkout:
   `garden` branch, writing nothing into it.
 - `site.ts sync [--census <sha> [--seeded]]` syncs the garden log and census, trying up to five times. With `--census`,
   it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares nothing (a `local`
-  or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once. It prints JSON with
-  `shared` and `events` (how many of the site's events the push shared), plus `reason` (git's message) when there is one
-  and `conflicts` (the files whose shared content it kept) when there are any. It exits 0 in every share state, 1 when
-  `--census` has no census to record (above), and 2 when the repository has no site yet (run `open` first), when
+  or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once, but only when each line
+  of that census's seed list is queued (the queue holds an add of its class at one of its paths) or declined; otherwise
+  it records nothing and names each line left on stderr, `site: seed line neither queued nor declined: <line>`. It
+  prints JSON with `shared` and `events` (how many of the site's events the push shared), plus `reason` (git's message)
+  when there is one and `conflicts` (the files whose shared content it kept) when there are any. It exits 0 in every
+  share state, 1 when `--census` has no census to record (above) or a seed line is left, and 2 when the repository has no site yet (run `open` first), when
   `<sha>` is not a full commit id, or when `--seeded` comes without `--census`.
 
 The share states:

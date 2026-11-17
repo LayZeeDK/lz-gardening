@@ -9,6 +9,9 @@
 //     census this tick took, else the commit of the site's census. Then the bed has not landed, or the check's file
 //     is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, the bed's or
 //     the census's commit is in neither the site nor the checkout, or the bed shares no history with the base.
+//   node weeds.ts decline --class <kebab> --where <path> --reason <text>
+//     Leaves a seed line out of the queue: adds its weed with --source census:seed and keeps it (as close --keep
+//     <reason> would) in one append, so no later add queues it. Prints `kept <id>`.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
@@ -56,6 +59,7 @@ import {
   isLayer,
   objectIdPattern,
   planAdd,
+  planDecline,
   planClaim,
   planClose,
   planRelease,
@@ -332,6 +336,7 @@ function parseFlags(argv: readonly string[]) {
       tended: { type: 'string' },
       'one-off': { type: 'string' },
       keep: { type: 'string' },
+      reason: { type: 'string', default: '' },
       check: { type: 'string' },
       min: { type: 'string' },
       ready: { type: 'boolean', default: false },
@@ -379,6 +384,36 @@ function add(io: Io, flags: Flags, now: Date): number {
       const outcome = planAdd(eventsReportingSkipped(io, replica), input, now);
 
       return { drafts: outcome.drafts, status: addStatus(outcome, offBase) };
+    },
+    now,
+  );
+  writeLine(io, status);
+
+  return 0;
+}
+
+function decline(io: Io, flags: Flags, now: Date): number {
+  const input: AddInput = {
+    class: flags.class ?? '',
+    where: flags.where,
+    source: 'census:seed',
+    note: flags.reason,
+    layer: null,
+  };
+  const problem = hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty';
+
+  if (problem !== null) {
+    io.err(`weeds decline: ${problem}\n`);
+
+    return 2;
+  }
+
+  const { status } = append(
+    openSite(io.cwd),
+    (replica) => {
+      const { id, drafts } = planDecline(eventsReportingSkipped(io, replica), input, now);
+
+      return { drafts, status: `kept ${id}` };
     },
     now,
   );
@@ -558,6 +593,7 @@ const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off'
 
 const commands: readonly Command[] = [
   { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], run: add },
+  { name: 'decline', flags: ['class', 'where', 'reason'], run: decline },
   {
     name: 'close',
     flags: closeFlags,
@@ -579,7 +615,9 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
   const command = positionals.length === 1 ? commands.find(({ name }) => name === positionals[0]) : undefined;
 
   if (command === undefined) {
-    io.err('usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n');
+    io.err(
+      'usage: weeds.ts add|decline|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n',
+    );
 
     return 2;
   }

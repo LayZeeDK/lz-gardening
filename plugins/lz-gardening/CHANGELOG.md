@@ -21,7 +21,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     evidence. A weed of a class a tend pass closed is queued as `regrown`, naming the bed and the check that should
     have held it.
   - Seed: the first tick seeds the queue from the census, the repository's records and its history. A seed pass
-    marks the queue seeded, so no other clone seeds again.
+    marks the queue seeded, so no other clone seeds again, and is recorded only once each line of the seed list is
+    queued or declined (`weeds.ts decline`, which keeps the line's weed out of the queue for good).
   - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,
     `.js`, `.jsx`, `.mjs`, `.cjs`).

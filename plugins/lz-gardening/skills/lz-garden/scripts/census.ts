@@ -404,28 +404,38 @@ export function diffCensus(before: Census | null, after: Census): readonly Patte
 const seedFilesPerPattern = 20;
 const seedDuplicateNames = 30;
 
-function seedList(census: Census): string[] {
+/** A line of the seed list: the weeds of `class` it asks a seed pass to queue or decline, in `paths`. */
+export interface SeedLine {
+  readonly line: string;
+  readonly class: string;
+  readonly paths: readonly string[];
+}
+
+export function seedLines(census: Census): SeedLine[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
     [...Map.groupBy(hits, (hit) => splitHit(hit)?.path ?? hit)]
       .map(([path, items]) => ({ path, count: items.length }))
       .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
       .slice(0, seedFilesPerPattern)
-      .map(({ path, count }) => `= [${id}] ${path} ${String(count)}`),
+      .map(({ path, count }) => ({ line: `= [${id}] ${path} ${String(count)}`, class: id, paths: [path] })),
   );
-  const duplicates = Object.entries(census.duplicates).sort(
-    ([a, aPaths], [b, bPaths]) => bPaths.length - aPaths.length || a.localeCompare(b),
-  );
-  const listed = duplicates
+  const listed = Object.entries(census.duplicates)
+    .sort(([a, aPaths], [b, bPaths]) => bPaths.length - aPaths.length || a.localeCompare(b))
     .slice(0, seedDuplicateNames)
-    .map(([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`);
-  const rest = duplicates.length - listed.length;
+    .map(([name, paths]) => ({ line: `= duplicate ${name}: ${paths.join(', ')}`, class: 'duplicate-function', paths }));
+
+  return [...files, ...listed];
+}
+
+function seedList(census: Census): string[] {
+  const lines = seedLines(census);
+  const rest = Object.keys(census.duplicates).length - seedDuplicateNames;
   const counted = Object.entries(census.counts)
     .filter(([, count]) => count > 0)
     .map(([id, count]) => `${id} ${String(count)}`);
 
   return [
-    ...files,
-    ...listed,
+    ...lines.map((seed) => seed.line),
     ...(rest > 0 ? [`${String(rest)} more duplicate names not listed`] : []),
     `census: ${counted.length === 0 ? 'none' : counted.join(', ')}`,
   ];

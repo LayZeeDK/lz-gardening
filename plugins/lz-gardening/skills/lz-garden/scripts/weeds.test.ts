@@ -254,6 +254,43 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
   );
 });
 
+test('decline keeps a seed line out of the queue, so the seed pass adding it later prints kept', (t) => {
+  const dir = checkout(t);
+  const id = weedId('any-type', 'src/a.ts', 'census:seed');
+
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture']);
+  const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts', '--source', 'census:seed']);
+
+  assert.deepEqual(
+    [declined.status, declined.stdout, added.stdout, cli(dir, ['list']).stdout],
+    [0, `kept ${id}\n`, `kept ${id}\n`, ''],
+  );
+});
+
+test('decline needs a reason and a seed line to keep, and records nothing without them', (t) => {
+  const { dir, garden } = planted(t);
+
+  const results = [
+    cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts']),
+    cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', ' ']),
+    cli(dir, ['decline', '--class', 'any-type', '--reason', 'a typed fixture']),
+    cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'x', '--note', 'y']),
+  ].map(({ status, stderr }) => [status, stderr]);
+
+  assert.deepEqual(
+    [results, logFiles(garden).size],
+    [
+      [
+        [2, 'weeds decline: --reason must not be empty\n'],
+        [2, 'weeds decline: --reason must not be empty\n'],
+        [2, 'weeds decline: --where must not be empty\n'],
+        [2, 'weeds decline: --note is not an option of decline\n'],
+      ],
+      0,
+    ],
+  );
+});
+
 test('through the CLI a tend close records its bed and check, and a weed of the class elsewhere names both', (t) => {
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
@@ -884,7 +921,7 @@ test('a usage error in a repository with no site names the usage error, not the 
   assert.deepEqual(
     results.map(({ status, stderr }) => [status, stderr]),
     [
-      [2, 'usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
+      [2, 'usage: weeds.ts add|decline|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
       [2, 'weeds groups: --min must be a whole number of at least 1, got 0\n'],
     ],
   );

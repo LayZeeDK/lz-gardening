@@ -81,8 +81,13 @@ _Avoid_: weed marker, match
 
 **Seed list**:
 What the census shows the seed pass: for each census pattern, the files with the most hits, and the names
-defined in the most files.
+defined in the most files. The seed pass is recorded only once each of its lines is queued or declined.
 _Avoid_: baseline (a baseline is what a check tolerates)
+
+**Decline**:
+To leave a seed line out of the queue on purpose, with a reason. The line's weed is recorded as kept, so no later tick
+queues it.
+_Avoid_: skip, dismiss
 
 **Queue**:
 The grow-only set of events (adds, closes, claims, releases and seeds) that a replay turns into the weeds and their

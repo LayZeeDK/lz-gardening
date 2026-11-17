@@ -181,6 +181,25 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
     : { said: 'regrown', id, drafts: [draft(tend.uuid)], after: tend };
 }
 
+/** A seed line the seed pass leaves out: its weed is added and kept in one go, so no later add queues it. */
+export function planDecline(
+  events: readonly GardenEvent[],
+  input: AddInput,
+  now: Date,
+): { readonly id: string; readonly drafts: readonly EventDraft[] } {
+  const added = planAdd(events, input, now);
+  const keep: EventDraft<CloseEvent> = {
+    op: 'close',
+    ids: [added.id],
+    class: input.class,
+    kind: 'kept',
+    by: input.note,
+    check: null,
+  };
+
+  return { id: added.id, drafts: added.said === 'kept' ? [] : [...added.drafts, keep] };
+}
+
 function closesWeed(close: CloseEvent, weedClass: string | undefined, id: string): boolean {
   return close.class === weedClass && close.ids.includes(id);
 }
