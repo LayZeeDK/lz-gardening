@@ -18,6 +18,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <pat
 ```
 
 which keeps the line's weed out of the queue for good. `<sha>` is the census's commit, as in the tick's add command.
+When the lines of a class left after its queued weeds share one reason, decline them all in one call: leave out
+`--where`, and the command declines every line of that class that no add covers yet and prints
+`declined <n> seed lines of <class>`. Queue a class's weeds first, then decline the rest, one call per class.
 Both commands take `census:seed` for the seed list's lines alone and refuse it for any other weed, which takes the
 source of what it was found in (step 2, and `--source` in `SKILL.md`). `sync --seeded` in step 4 refuses to record the seed while a
 line is neither queued nor declined, and names the lines left.

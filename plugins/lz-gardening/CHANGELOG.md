@@ -23,7 +23,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   - Seed: the first tick seeds the queue from the census, the repository's records and its history (up to 72,000
     characters of the newest 20 commits' diffs, and the report counts the commits left unread). A seed pass
     marks the queue seeded, so no other clone seeds again, and is recorded only once each line of the seed list is
-    queued or declined (`weeds.ts decline`, which keeps the line's weed out of the queue for good). `weeds.ts add`
+    queued or declined (`weeds.ts decline`, which keeps the line's weed out of the queue for good; without `--where`
+    it declines every line of the class not yet queued or declined). `weeds.ts add`
     and `decline` take `--source census:seed` only for a weed on a line of the seed list.
   - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,

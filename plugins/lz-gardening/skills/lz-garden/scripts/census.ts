@@ -23,6 +23,7 @@ import { commandFailed, escapeUnprintable, isMainModule, processIo } from './cli
 import bundledPatterns from './patterns.json' with { type: 'json' };
 import type { Io } from './cli.ts';
 import { classPattern, firstReason } from './log.ts';
+import type { GardenEvent } from './log.ts';
 import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
 import { openSite } from './store-log.ts';
 import type { Site } from './store-log.ts';
@@ -443,6 +444,13 @@ export function seedPath(where: string): string {
 /** Whether a weed of `weedClass` at `where` (a path, with or without `:<line>`) is one the seed line asks about. */
 export function onSeedLine(seed: SeedLine, weedClass: string, where: string): boolean {
   return seed.class === weedClass && seed.paths.includes(seedPath(where));
+}
+
+/** The seed lines that no add among `events` covers: neither queued nor declined. */
+export function seedLinesLeft(seeds: readonly SeedLine[], events: readonly GardenEvent[]): readonly SeedLine[] {
+  const adds = events.filter((event) => event.op === 'add');
+
+  return seeds.filter((seed) => !adds.some((add) => onSeedLine(seed, add.class, add.where)));
 }
 
 function seedList(census: Census): string[] {

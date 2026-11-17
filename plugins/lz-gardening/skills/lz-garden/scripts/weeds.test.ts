@@ -300,12 +300,79 @@ test('decline keeps a seed line out of the queue, so the seed pass adding it lat
   );
 });
 
+test('decline without --where keeps every seed line of its class that is neither queued nor declined', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(
+    garden,
+    censusText('a'.repeat(40), {
+      hits: {
+        'any-type': ['src/a.ts:1: const a: any = 1;', 'src/b.ts:1: const b: any = 1;', 'src/c.ts:1: let c: any;'],
+        'ts-ignore': ['src/d.ts:1: // @ts-ignore'],
+      },
+    }),
+  );
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:seed']);
+
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'typed fixtures']);
+  const later = [
+    ['any-type', 'src/a.ts'],
+    ['any-type', 'src/c.ts'],
+    ['ts-ignore', 'src/d.ts'],
+  ].map(
+    ([weedClass = '', where = '']) =>
+      cli(dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:seed']).stdout.split(' ')[0],
+  );
+
+  assert.deepEqual(
+    [declined.status, declined.stdout, later],
+    [0, 'declined 2 seed lines of any-type\n', ['kept', 'kept', 'added']],
+  );
+});
+
+test('decline without --where keeps one weed for duplicate lines that share a path, and a second run finds none', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(
+    garden,
+    censusText('a'.repeat(40), {
+      duplicates: { foo: ['src/x.ts', 'src/y.ts'], bar: ['src/x.ts', 'src/z.ts'], baz: ['src/v.ts', 'src/w.ts'] },
+    }),
+  );
+  cli(dir, ['add', '--class', 'duplicate-function', '--where', 'src/w.ts', '--source', 'census:seed']);
+
+  const declined = cli(dir, ['decline', '--class', 'duplicate-function', '--reason', 'generated pairs']);
+  const again = cli(dir, ['decline', '--class', 'duplicate-function', '--reason', 'generated pairs']);
+  const later = ['src/x.ts', 'src/z.ts'].map(
+    (where) =>
+      cli(dir, ['add', '--class', 'duplicate-function', '--where', where, '--source', 'census:seed']).stdout.split(
+        ' ',
+      )[0],
+  );
+
+  assert.deepEqual(
+    [declined.stdout, again.stdout, later],
+    [
+      'declined 2 seed lines of duplicate-function\n',
+      'declined 0 seed lines of duplicate-function\n',
+      ['kept', 'added'],
+    ],
+  );
+});
+
+test('decline without --where names one seed line in the singular', (t) => {
+  const dir = seedListed(t);
+
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'a typed fixture']);
+
+  assert.deepEqual([declined.status, declined.stdout], [0, 'declined 1 seed line of any-type\n']);
+});
+
 test('decline needs a reason and a seed line to keep, and records nothing without them', (t) => {
   const { dir, garden } = planted(t);
 
   const results = [
     cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts']),
     cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', ' ']),
+    cli(dir, ['decline', '--class', 'any-type', '--where', '', '--reason', 'a typed fixture']),
     cli(dir, ['decline', '--class', 'any-type', '--reason', 'a typed fixture']),
     cli(dir, ['decline', '--where', 'src/a.ts', '--reason', 'a typed fixture']),
     cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'x', '--note', 'y']),
@@ -320,6 +387,7 @@ test('decline needs a reason and a seed line to keep, and records nothing withou
         [2, 'weeds decline: --reason must not be empty\n'],
         [2, 'weeds decline: --reason must not be empty\n'],
         [2, 'weeds decline: --where must not be empty\n'],
+        [2, 'weeds decline: no line of the seed list is any-type; census:seed is for those lines alone\n'],
         [2, 'weeds decline: --class must be kebab-case\n'],
         [2, 'weeds decline: --note is not an option of decline\n'],
         [2, 'weeds decline: --census must be the full commit id census.ts printed\n'],

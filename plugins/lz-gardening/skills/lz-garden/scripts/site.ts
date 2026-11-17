@@ -51,7 +51,7 @@ import {
 } from './store-log.ts';
 import type { Located, Site } from './store-log.ts';
 import { censusRef, holdsCensusCovering, readableCensus } from './store-census.ts';
-import { onSeedLine, seedLinesIn } from './census.ts';
+import { seedLinesIn, seedLinesLeft } from './census.ts';
 import { makeBed } from './site-bed.ts';
 import type { BedSummary } from './site-bed.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
@@ -285,10 +285,7 @@ function recordSeed(site: Site, sha: string, now: Date): readonly string[] {
         return { drafts: [], left: [] };
       }
 
-      const adds = replica.events.filter((event) => event.op === 'add');
-      const left = seedLinesIn(site.path, sha)
-        .filter((seed) => !adds.some((add) => onSeedLine(seed, add.class, add.where)))
-        .map((seed) => seed.line);
+      const left = seedLinesLeft(seedLinesIn(site.path, sha), replica.events).map((seed) => seed.line);
 
       return { drafts: left.length > 0 ? [] : [{ op: 'seed', sha }], left };
     },

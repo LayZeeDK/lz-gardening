@@ -12,10 +12,13 @@
 //     --source census:seed is for a line of the seed list alone: the class and path (line dropped) must be on a line
 //     of the seed list of the census taken of <sha> and not yet recorded, else of the site's census; otherwise exit
 //     2 with `no line of the seed list is <class> in <path>; census:seed is for those lines alone`.
-//   node weeds.ts decline --class <kebab> --where <path> --reason <text> [--census <sha>]
+//   node weeds.ts decline --class <kebab> [--where <path>] --reason <text> [--census <sha>]
 //     Leaves a seed line out of the queue: adds its weed with --source census:seed (so on a line of the seed list,
 //     as for add) and keeps it (as close --keep <reason> would) in one append, so no later add queues it. Prints
-//     `kept <id>`.
+//     `kept <id>`. Without --where it does this for every seed line of the class that no add covers yet, one weed
+//     at each line's first path unless a weed it keeps already sits on the line, and prints `declined <n> seed
+//     line(s) of <class>`; a class with no line on the seed list exits 2 with `no line of the seed list is <class>;
+//     census:seed is for those lines alone`.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
@@ -90,7 +93,7 @@ import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import { onSeedLine, seedLinesIn, seedPath } from './census.ts';
+import { onSeedLine, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions, SyncResult } from './store-sync.ts';
@@ -331,7 +334,7 @@ function parseFlags(argv: readonly string[]) {
     tokens: true,
     options: {
       class: { type: 'string' },
-      where: { type: 'string', default: '' },
+      where: { type: 'string' },
       // Stryker disable next-line StringLiteral: an add without --source fails validation, and so does the mutant's text
       source: { type: 'string', default: '' },
       note: { type: 'string', default: '' },
@@ -364,7 +367,7 @@ function add(io: Io, flags: Flags, now: Date): number {
   const input: AddInput = {
     // Stryker disable next-line StringLiteral: an add without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
-    where: flags.where,
+    where: flags.where ?? '',
     source: flags.source,
     note: flags.note,
     layer: flags.layer === undefined ? null : wholeNumber(flags.layer),
@@ -419,7 +422,8 @@ function decline(io: Io, flags: Flags, now: Date): number {
   const input: AddInput = {
     // Stryker disable next-line StringLiteral: a decline without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
-    where: flags.where,
+    // With no --where the seed lines name the paths, all repository-relative; `.` stands in for them in validation.
+    where: flags.where ?? '.',
     source: 'census:seed',
     note: flags.reason,
     layer: null,
@@ -434,6 +438,11 @@ function decline(io: Io, flags: Flags, now: Date): number {
   }
 
   const site = openSite(io.cwd);
+
+  if (flags.where === undefined) {
+    return declineClass(io, site, flags.census, input, now);
+  }
+
   const offList = offSeedList(site, flags.census, input);
 
   if (offList !== null) {
@@ -448,6 +457,41 @@ function decline(io: Io, flags: Flags, now: Date): number {
       const { id, drafts } = planDecline(eventsReportingSkipped(io, replica), input, now);
 
       return { drafts, status: `kept ${id}` };
+    },
+    now,
+  );
+  writeLine(io, status);
+
+  return 0;
+}
+
+function declineClass(io: Io, site: Site, census: string | undefined, input: AddInput, now: Date): number {
+  const seeds = seedLinesIn(site.path, census).filter((seed) => seed.class === input.class);
+
+  if (seeds.length === 0) {
+    io.err(`weeds decline: no line of the seed list is ${input.class}; census:seed is for those lines alone\n`);
+
+    return 2;
+  }
+
+  const { status } = append(
+    site,
+    (replica) => {
+      const events = eventsReportingSkipped(io, replica);
+      const left = seedLinesLeft(seeds, events);
+      // A duplicate line can share a path with one before it, which the weed kept at that path already covers.
+      const wheres = left.reduce<readonly string[]>((chosen, seed) => {
+        const [first] = seed.paths;
+
+        return first === undefined || chosen.some((where) => onSeedLine(seed, input.class, where))
+          ? chosen
+          : [...chosen, first];
+      }, []);
+
+      return {
+        drafts: wheres.flatMap((where) => planDecline(events, { ...input, where }, now).drafts),
+        status: `declined ${String(left.length)} seed line${left.length === 1 ? '' : 's'} of ${input.class}`,
+      };
     },
     now,
   );
