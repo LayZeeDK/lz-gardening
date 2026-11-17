@@ -262,6 +262,62 @@ function seedListed(t: TestContext): string {
   return dir;
 }
 
+test('add takes --where more than once and adds one weed per path, a line each, in one append', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/x.ts',
+    '--where',
+    'src/y.ts',
+    '--source',
+    'census:seed',
+    '--note',
+    'keep the src/x.ts foo',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stdout, logFiles(garden).size],
+    [
+      0,
+      `added ${weedId('duplicate-function', 'src/x.ts', 'census:seed')}\n` +
+        `added ${weedId('duplicate-function', 'src/y.ts', 'census:seed')}\n`,
+      2,
+    ],
+  );
+});
+
+test('decline takes --where once: a second one is refused and nothing is recorded', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(
+    garden,
+    censusText('a'.repeat(40), {
+      hits: { 'any-type': ['src/a.ts:1: const a: any = 1;', 'src/b.ts:1: const b: any = 1;'] },
+    }),
+  );
+
+  const declined = cli(dir, [
+    'decline',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts',
+    '--where',
+    'src/b.ts',
+    '--reason',
+    'typed fixtures',
+  ]);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr, logFiles(garden).size],
+    [2, 'weeds decline: --where goes once with decline\n', 0],
+  );
+});
+
 test('add takes census:seed only for a line of the seed list, and records nothing for another weed', (t) => {
   const dir = seedListed(t);
 

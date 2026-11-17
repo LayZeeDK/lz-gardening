@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Usage, from the repository's checkout (the site is the <repo>.garden folder beside it):
-//   node weeds.ts add --class <kebab> --where <path[:line]> --source <kind:ref> --note <text> [--layer <1-6>]
-//                     [--census <sha>]
-//     Prints `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep: a weed left on purpose is
+//   node weeds.ts add --class <kebab> --where <path[:line]> [--where <path[:line]> ...] --source <kind:ref>
+//                     --note <text> [--layer <1-6>] [--census <sha>]
+//     Adds one weed per distinct --where, all in one append, with the same class, source and note, and prints one
+//     line per weed: `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep: a weed left on purpose is
 //     never queued again) or `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass closed its
 //     class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
 //     `(check: <where> not on the base)` when it is not on the census commit: <sha>, the full commit id of the
@@ -352,7 +353,7 @@ function parseFlags(argv: readonly string[]) {
     tokens: true,
     options: {
       class: { type: 'string' },
-      where: { type: 'string' },
+      where: { type: 'string', multiple: true },
       // Stryker disable next-line StringLiteral: an add without --source fails validation, and so does the mutant's text
       source: { type: 'string', default: '' },
       note: { type: 'string', default: '' },
@@ -384,15 +385,15 @@ function writeLine(io: Io, line: string): void {
 }
 
 function add(io: Io, flags: Flags, now: Date): number {
-  const input: AddInput = {
+  const inputs: readonly AddInput[] = [...new Set(flags.where ?? [''])].map((where) => ({
     // Stryker disable next-line StringLiteral: an add without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
-    where: flags.where ?? '',
+    where,
     source: flags.source,
     note: flags.note,
     layer: flags.layer === undefined ? null : wholeNumber(flags.layer),
-  };
-  const problem = censusProblem(flags.census) ?? validateAdd(input);
+  }));
+  const problem = censusProblem(flags.census) ?? firstOf(inputs, validateAdd);
 
   if (problem !== null) {
     io.err(`weeds add: ${problem}\n`);
@@ -401,7 +402,9 @@ function add(io: Io, flags: Flags, now: Date): number {
   }
 
   const site = openSite(io.cwd);
-  const offList = input.source === 'census:seed' ? offSeedList(site, flags.census, input) : null;
+  const offList = firstOf(inputs, (input) =>
+    input.source === 'census:seed' ? offSeedList(site, flags.census, input) : null,
+  );
 
   if (offList !== null) {
     io.err(`weeds add: ${offList}\n`);
@@ -414,15 +417,24 @@ function add(io: Io, flags: Flags, now: Date): number {
   const { status } = append(
     site,
     (replica) => {
-      const outcome = planAdd(eventsReportingSkipped(io, replica), input, now);
+      const events = eventsReportingSkipped(io, replica);
+      const outcomes = inputs.map((input) => planAdd(events, input, now));
 
-      return { drafts: outcome.drafts, status: addStatus(outcome, offBase) };
+      return {
+        drafts: outcomes.flatMap((outcome) => outcome.drafts),
+        status: outcomes.map((outcome) => addStatus(outcome, offBase)).join('\n'),
+      };
     },
     now,
   );
   writeLine(io, status);
 
   return 0;
+}
+
+/** The first problem `check` finds among `items`, or null. */
+function firstOf<T>(items: readonly T[], check: (item: T) => string | null): string | null {
+  return items.map(check).find((problem) => problem !== null) ?? null;
 }
 
 function censusProblem(census: string | undefined): string | null {
@@ -469,20 +481,23 @@ function unquotedReason(
 }
 
 function decline(io: Io, flags: Flags, now: Date): number {
+  const where = flags.where?.[0];
   const input: AddInput = {
     // Stryker disable next-line StringLiteral: a decline without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
     // With no --where the seed lines name the paths, all repository-relative; `.` stands in for them in validation.
-    where: flags.where ?? '.',
+    where: where ?? '.',
     source: 'census:seed',
     note: flags.reason,
     layer: null,
   };
   const strayIn =
-    flags.in !== undefined && (input.class !== 'duplicate-function' || flags.where === undefined)
+    flags.in !== undefined && (input.class !== 'duplicate-function' || where === undefined)
       ? '--in goes with --class duplicate-function --where <path> only'
       : null;
+  const secondWhere = (flags.where?.length ?? 0) > 1 ? '--where goes once with decline' : null;
   const problem =
+    secondWhere ??
     strayIn ??
     censusProblem(flags.census) ??
     (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
@@ -495,7 +510,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
 
   const site = openSite(io.cwd);
 
-  if (flags.where === undefined && input.class === 'duplicate-function') {
+  if (where === undefined && input.class === 'duplicate-function') {
     io.err(
       'weeds decline: decline duplicate-function one file at a time, --where <path>, on the words that keep that copy\n',
     );
@@ -503,7 +518,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
     return 2;
   }
 
-  if (flags.where === undefined) {
+  if (where === undefined) {
     return declineClass(io, site, flags.census, input, now);
   }
 

@@ -29,7 +29,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     are declined one at a time, each on words its file, or the record `--in` names, holds at the census's
     commit). Duplicate names count only module-scope definitions, outside test files and
     `.d.ts` declarations. `weeds.ts add`
-    and `decline` take `--source census:seed` only for a weed on a line of the seed list.
+    and `decline` take `--source census:seed` only for a weed on a line of the seed list; `add` takes `--where` once
+    per weed, so the files of one duplicate name are queued in one call.
   - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`,
     which the census prints as `site pattern <id>: <regex>` lines. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,
