@@ -839,12 +839,23 @@ test('sync --census --seeded on a garden already seeded asks for nothing and log
   );
 });
 
-test('sync --census --seeded logs the seed once each line is queued at one of its paths or declined', (t) => {
+test('sync --census --seeded logs the seed once each path of each line is queued or declined', (t) => {
   const { dir, garden } = planted(t);
   const { sha } = pendCensus(dir, garden, {
     hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] },
-    duplicates: { parse: ['src/a.ts', 'src/b.ts', 'src/c.ts'] },
+    duplicates: { parse: ['src/b.ts', 'src/c.ts'] },
   });
+  cli(dir, [
+    'decline',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/b.ts',
+    '--reason',
+    'src/b.ts:1 loaded alone',
+    '--census',
+    sha,
+  ]);
   cli(dir, [
     'add',
     '--class',

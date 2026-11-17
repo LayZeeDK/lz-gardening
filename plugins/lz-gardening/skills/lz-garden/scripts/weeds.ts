@@ -454,6 +454,14 @@ function decline(io: Io, flags: Flags, now: Date): number {
 
   const site = openSite(io.cwd);
 
+  if (flags.where === undefined && input.class === 'duplicate-function') {
+    io.err(
+      'weeds decline: decline duplicate-function one file at a time, --where <path>, on the words that keep that copy\n',
+    );
+
+    return 2;
+  }
+
   if (flags.where === undefined) {
     return declineClass(io, site, flags.census, input, now);
   }

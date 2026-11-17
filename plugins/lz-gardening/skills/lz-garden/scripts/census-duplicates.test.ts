@@ -25,12 +25,26 @@ test('a name defined in one file is not a duplicate', async (t) => {
   const dir = repo(t);
   commit(dir, {
     'src/x.ts': 'export async function toArray() {}\nfunction once() {}\n',
-    'src/y.mjs': '  function toArray() {}\n',
+    'src/y.mjs': 'function toArray() {}\n',
   });
 
   const census = await takeCensusInRun(dir, 'HEAD', set, now);
 
   assert.deepEqual(census.duplicates, { toArray: ['src/x.ts', 'src/y.mjs'] });
+});
+
+test('only module-scope definitions count: a function inside another, and a .d.ts declaration, do not', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.ts':
+      'export function report() {}\nexport function run() {\n  function end() {}\n  const add = (x) => x;\n}\n',
+    'src/b.ts': 'function walk() {\n  function end() {}\n  const add = (x) => x;\n}\n',
+    'src/c.d.ts': 'export function report(): void;\n',
+  });
+
+  const census = await takeCensusInRun(dir, 'HEAD', set, now);
+
+  assert.deepEqual(census.duplicates, {});
 });
 
 test('const arrow and function-expression definitions count, other consts do not', async (t) => {

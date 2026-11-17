@@ -36,11 +36,11 @@ test('a seed line of a pattern names its class and its one file, and a duplicate
   ]);
 });
 
-test('a seed line is left until an add of its class at one of its paths covers it; a close covers nothing', () => {
+test('a seed line is left until an add of its class covers each of its paths; a close covers nothing', () => {
   const seeds = seedLines(
     census({
       hits: { 'any-type': ['src/a.ts:1: x', 'src/b.ts:2: y'] },
-      duplicates: { parse: ['src/c.ts', 'src/d.ts'] },
+      duplicates: { parse: ['src/c.ts', 'src/d.ts'], fold: ['src/e.ts', 'src/f.ts'] },
     }),
   );
   const add = (weedClass: string, where: string): AddInput => ({
@@ -55,6 +55,8 @@ test('a seed line is left until an add of its class at one of its paths covers i
       ...planAdd([], add('any-type', 'src/a.ts:9'), now).drafts,
       ...planAdd([], add('hollow-assertion', 'src/b.ts'), now).drafts,
       ...planAdd([], add('duplicate-function', 'src/d.ts'), now).drafts,
+      ...planAdd([], add('duplicate-function', 'src/e.ts'), now).drafts,
+      ...planAdd([], add('duplicate-function', 'src/f.ts:3'), now).drafts,
       { op: 'close', ids: ['0123456789'], class: 'any-type', kind: 'kept', by: 'src/b.ts', check: null },
     ],
     0,
@@ -63,7 +65,7 @@ test('a seed line is left until an add of its class at one of its paths covers i
 
   assert.deepEqual(
     seedLinesLeft(seeds, events).map((seed) => seed.line),
-    ['= [any-type] src/b.ts 1'],
+    ['= [any-type] src/b.ts 1', '= duplicate parse: src/c.ts, src/d.ts'],
   );
 });
 

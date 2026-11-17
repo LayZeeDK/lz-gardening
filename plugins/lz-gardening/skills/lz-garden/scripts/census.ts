@@ -291,9 +291,10 @@ export async function takeCensus(
 const definition =
   /^(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
 // git grep takes POSIX extended regex, which has no \s or (?:), so it prefilters and `definition` names the match.
+// The prefilter alone keeps the definitions at the start of a line, the module's own: a hit's text is trimmed.
 const definitionPrefilter =
-  // Stryker disable next-line StringLiteral: the prefilter only narrows what git returns, and the definition regex decides every match; they differ only on non-ASCII whitespace such as a no-break space, which no rule depends on
-  '^[[:space:]]*(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
+  // Stryker disable next-line StringLiteral: past its start, the prefilter only narrows what git returns, and the definition regex decides every match; they differ only on non-ASCII whitespace such as a no-break space, which no rule depends on
+  '^(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
 
 const dotDirectories = '**/.*/**';
 
@@ -303,7 +304,7 @@ interface Definition {
 }
 
 async function definitionsAt(revision: Revision, exclude: readonly string[]): Promise<readonly Definition[]> {
-  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', dotDirectories]);
+  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', '**/*.d.ts', dotDirectories]);
   const hits = await revision.grep(definitionPrefilter, specs, 'definitions');
 
   return hits.flatMap((hit) => {
@@ -446,11 +447,13 @@ export function onSeedLine(seed: SeedLine, weedClass: string, where: string): bo
   return seed.class === weedClass && seed.paths.includes(seedPath(where));
 }
 
-/** The seed lines that no add among `events` covers: neither queued nor declined. */
+/** The seed lines some path of which no add of the line's class covers: not yet queued or declined in full. */
 export function seedLinesLeft(seeds: readonly SeedLine[], events: readonly GardenEvent[]): readonly SeedLine[] {
   const adds = events.filter((event) => event.op === 'add');
 
-  return seeds.filter((seed) => !adds.some((add) => onSeedLine(seed, add.class, add.where)));
+  return seeds.filter(
+    (seed) => !seed.paths.every((path) => adds.some((add) => add.class === seed.class && seedPath(add.where) === path)),
+  );
 }
 
 function seedList(census: Census): string[] {

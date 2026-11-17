@@ -329,35 +329,18 @@ test('decline without --where keeps every seed line of its class that is neither
   );
 });
 
-test('decline without --where keeps one weed for duplicate lines that share a path, and a second run finds none', (t) => {
+test('decline without --where refuses duplicate-function: each documented copy is declined on its own words', (t) => {
   const { dir, garden } = planted(t);
-  writeCensusText(
-    garden,
-    censusText('a'.repeat(40), {
-      duplicates: { foo: ['src/x.ts', 'src/y.ts'], bar: ['src/x.ts', 'src/z.ts'], baz: ['src/v.ts', 'src/w.ts'] },
-    }),
-  );
-  cli(dir, ['add', '--class', 'duplicate-function', '--where', 'src/w.ts', '--source', 'census:seed']);
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
 
   const declined = cli(dir, ['decline', '--class', 'duplicate-function', '--reason', 'generated pairs']);
-  const again = cli(dir, ['decline', '--class', 'duplicate-function', '--reason', 'generated pairs']);
-  const added = [...logFiles(garden).values()]
-    .flatMap((event) => (event['op'] === 'add' ? [event['where']] : []))
-    .sort();
-  const later = ['src/x.ts', 'src/z.ts'].map(
-    (where) =>
-      cli(dir, ['add', '--class', 'duplicate-function', '--where', where, '--source', 'census:seed']).stdout.split(
-        ' ',
-      )[0],
-  );
 
   assert.deepEqual(
-    [declined.stdout, again.stdout, added, later],
+    [declined.status, declined.stderr, logFiles(garden).size],
     [
-      'declined 2 seed lines of duplicate-function\n',
-      'declined 0 seed lines of duplicate-function\n',
-      ['src/w.ts', 'src/x.ts'],
-      ['kept', 'added'],
+      2,
+      'weeds decline: decline duplicate-function one file at a time, --where <path>, on the words that keep that copy\n',
+      0,
     ],
   );
 });
