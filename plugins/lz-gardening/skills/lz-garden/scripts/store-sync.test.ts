@@ -868,9 +868,11 @@ test('a sync turns the hooks and signing off for the gits that write, and for no
   // With the key set, the sync also asks git remote get-url.
   git(second.dir, ['config', 'transfer.credentialsInUrl', 'die']);
   const started = startedGits(t);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
 
-  sync(openSite(second.dir), { attempts: 1, census: base });
+  inRun({ ...env, [readStrategyVariable]: 'spawn' }, () => sync(openSite(second.dir), { attempts: 1, census: base }));
 
+  assert.ok(started().some(({ args }) => args.includes('get-url')));
   const turnsHooksOff = (args: readonly string[]): boolean => args.some((arg) => arg.startsWith('core.hooksPath='));
   const commands = (which: (args: readonly string[]) => boolean): readonly (string | undefined)[] =>
     [
