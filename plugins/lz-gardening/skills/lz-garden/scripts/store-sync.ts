@@ -286,13 +286,17 @@ function originUrls(checkout: string): { readonly fetchUrl: string; readonly pus
   const fetchUrl = urlEndingIn(` (fetch)${filter === undefined ? '' : ` [${filter}]`}`);
   const pushUrl = urlEndingIn(' (push)');
 
-  return fetchUrl === undefined || pushUrl === undefined || refusesCredentials(checkout)
+  // A URL may hold a newline, which git remote -v prints as is, so another remote can list lines that read as origin's.
+  return fetchUrl === undefined ||
+    pushUrl === undefined ||
+    configValue(checkout, 'remote.origin.url') === undefined ||
+    refusesCredentials(checkout)
     ? undefined
     : { fetchUrl, pushUrl };
 }
 
 // git remote -v lists a URL that holds a password whatever transfer.credentialsInUrl says; with the key set, git remote
-// get-url decides, and refuses such a URL under die or a value git does not know.
+// get-url decides: under die it refuses such a URL, and under a value git does not know, every origin.
 function refusesCredentials(checkout: string): boolean {
   return (
     configValue(checkout, 'transfer.credentialsinurl') !== undefined &&

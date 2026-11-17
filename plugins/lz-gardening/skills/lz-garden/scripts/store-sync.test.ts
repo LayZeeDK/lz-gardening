@@ -264,6 +264,22 @@ test('an origin with a push URL of its own is fetched from its URL and pushed to
   );
 });
 
+test('an origin with two push URLs is pushed to at the first, as git remote get-url --push gives it', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  git(second.dir, ['remote', 'set-url', '--push', 'origin', remote]);
+  git(second.dir, ['remote', 'set-url', '--push', '--add', 'origin', join(dirname(second.dir), 'missing.git')]);
+  addWeed(second.dir, 'src/b.ts:1');
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, git(remote, ['rev-parse', logRef])],
+    ['synced', git(second.garden, ['rev-parse', logRef])],
+  );
+});
+
 test('an origin URL that a url.<base>.insteadOf rewrites is fetched from and pushed to at the rewritten URL', (t) => {
   const { first, second, remote } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
@@ -332,6 +348,17 @@ test('an origin whose URL holds no password syncs when the checkout sets transfe
   const result = sync(openSite(dir), { attempts: 1 });
 
   assert.equal(result.state, 'synced');
+});
+
+test('a checkout with no origin stays local when another remote URL holds lines that read as origin', (t) => {
+  const { dir } = planted(t);
+  const remote = bareRemote(dir);
+  git(dir, ['remote', 'remove', 'origin']);
+  git(dir, ['config', 'remote.aaa.url', `x\norigin\t${remote} (fetch)\norigin\t${remote}`]);
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(result.state, 'local');
 });
 
 test('a checkout with another remote that git lists before origin syncs with origin', (t) => {
