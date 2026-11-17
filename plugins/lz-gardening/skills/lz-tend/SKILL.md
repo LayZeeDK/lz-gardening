@@ -24,8 +24,14 @@ Two rules hold for the whole pass:
 - **Read with the Read tool, search with the Grep tool, list files with the Glob tool**, in the checkout and in the
   bed alike. `rg`, `grep`, `find`, `ls`, `cat`, `head` and `tail` through Bash are outside the pass: many users'
   rules refuse them, and a refused command ends the pass.
-- **A refused command ends the pass.** Report the command and its refusal, and stop. The refusal is the user's answer
-  to the command in every form, the forms below included, so the pass reaches the same result no other way.
+- **A refused command the pass needs ends the pass.** A command the pass needs is one of the forms below, a step's
+  own command, or a command of the check or the repository's checks. Report it with its refusal, and stop. The
+  refusal is the user's answer to the command in every form, so the pass reaches the same result no other way. A
+  refused lookup the pass can do without (the source of a dependency, a log outside the workspace) does not end it:
+  name it in the report and go on without that information, never fetching it another way.
+
+When the pass stops at any point after step 1's claim, its last command is `weeds release --class <class>`, so
+another clone can tend the class; the bed and its commits stay in the site for the next pass.
 
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
@@ -43,16 +49,23 @@ the session's working directories (the session's environment lists any added one
   `<site>/beds/<class>`) with its own directory flag. Git: `git -C "<bed>" ...`. Tools: the repository's package
   scripts, `npm --prefix "<bed>" run <script> [-- <args>]` (`pnpm -C "<bed>" run <script>`,
   `yarn --cwd "<bed>" <script>`), which run in the bed. A tool with no script:
-  `npm --prefix "<bed>" exec -- <tool> <args>`, which takes the bed's installed tool but runs in the checkout, so
-  give it the bed's files by full path, and use it only for a tool that finds its config beside the files it reads
-  (Prettier, say). `site` finds the site from the checkout.
+  `npm --prefix "<bed>" exec --no -- <tool> <args>`, which takes the bed's installed tool but runs in the checkout,
+  so give it the bed's files by full path, and use it only for a tool that finds its config beside the files it reads
+  (Prettier, say). `--no` makes it fail when the tool is not installed, where plain `exec` downloads a package of that
+  name from the registry and runs it. Never `exec` `node`: run a test file through the project's test script, or
+  `cd "<bed>" && node --test <file>`. In an Nx workspace, add `--output-style=static` to every `nx run` and
+  `nx run-many`, so each task's output is in the tool result. `site` finds the site from the checkout.
+- Learn what an installed tool does from its `--help` or its documentation, and its version from the lockfile or
+  `npm --prefix "<bed>" ls <package>`; never read `node_modules`.
 - When nothing above fits, run `cd "<bed>" && <command>` with nothing after the command, and send `cd "<checkout>"`
   as your very next call: the shell stays in the bed after a `cd`, and the commands above expect the checkout. Never
   put git after a `cd`: Claude Code refuses such a chain, whatever the allow list says.
 - Send each command bare: no pipe (`| tail`, `| head`, `| node -e`), no redirect (`>`, `2>&1`) and no second command
   after `;` or `&&` (the `cd "<bed>" &&` above aside). Claude Code refuses those forms in the bed and the site. Read
   the summary lines in the tool result; when a command prints more than the result shows, run a narrower one (one
-  project's tests, one file's lint). Write files only in the bed, with the Edit and Write tools.
+  project's tests, one file's lint). Write files only in the bed, with the Edit and Write tools: a rename across a
+  file with Edit's `replace_all`, never a `node -e` or `sed` rewrite. Delete a tracked file with
+  `git -C "<bed>" rm <path>`, never `rm`.
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
@@ -76,11 +89,13 @@ weeds of one class.
 Read every open weed as it is on the base: run `git show <base>:<path>` for each weed's file, one call per file, and
 when the tool result says the output was saved to a file, Read that file to its end. A Read or Grep of the checkout
 does not replace this call: the checkout can be on another branch than `<base>`. Read the commit that planted each
-weed too (`git show <commit>` for a `commit:` source). Then answer in two sentences: what were the agents trying to
-do, and why was the shortcut the nearest example? For copies (a function defined twice, a block repeated), first
-read why each copy exists: a comment, a doc or a test that pins the copies alike can say a copy must stay (a file
-loaded or copied alone, which cannot import the shared one). Such a copy is kept, not removed, and the check pins the
-copies instead. A class whose weeds were `regrown` had a check that did not hold: start from the bed and check that
+weed too (`git show <commit>` for a `commit:` source). Then answer in two sentences, written in your reply before
+step 3: what were the agents trying to do, and why was the shortcut the nearest example? For copies (a function
+defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that pins the copies
+alike can say a copy must stay (a file loaded or copied alone, which cannot import the shared one). Such a copy is
+kept, not removed, and the check pins the copies instead. A copy is kept only on such words, cited by
+`<path>:<line>` in its `--keep` reason; your own judgement that a copy should stay is no reason to keep it, so fix it
+or baseline it (step 6). A class whose weeds were `regrown` had a check that did not hold: start from the bed and check that
 `weeds list` shows on each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule
 too narrow, a suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
 `(check: <where> not on the base)` when its bed had not landed as of the garden's last census, or the check's file is
@@ -91,10 +106,10 @@ could not judge the base (no readable census, the bed's or the census's commit i
 history with the base): read the base yourself (`git show <base>:<where>`) to see whether the check landed before you
 decide which case it is.
 
-Then decide, and say which:
+Then decide, and say which in your reply:
 
-- **Keep**: the pattern is deliberate and right here. `weeds close-class --class <class> --keep "<reason>"`,
-  report, stop.
+- **Keep**: the pattern is deliberate and right here, as the repository says in words you cite by `<path>:<line>`.
+  `weeds close-class --class <class> --keep "<reason>"`, report, stop.
 - **One-off**: on reading, the weeds share no cause or sit in one place.
   `weeds close-class --class <class> --one-off "<reason>"`, report, stop.
 - **Redirect**: a `repeated-lesson` class is tended through the class its lessons are about, and a
@@ -118,6 +133,11 @@ Take the strongest layer that can hold the class. Prefer, in order: change the c
 names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
 Layers 4 to 6 (instructions, skills, style guide) only when nothing stronger can hold it; say why.
 
+When the paved road needs a shared home that does not exist yet (a module every copy can import), make it in the bed,
+with the decision record the repository's instructions ask for (an ADR, say): a human reviews the bed before it
+lands, so the choice of home is theirs to accept or change. Do not stop to ask. When a copy cannot use that home (a
+file that cannot import it), the check pins it as step 2 says.
+
 Done when you have read both files and can name the check, its layer by the number `weeds.md` gives it (a type,
 lint rule or test is layer 2; a change to the code itself is layer 1), the `checks.md` row it follows (or that no
 row fits, and why), where it lives, and the message it prints.
@@ -138,10 +158,11 @@ is not blamed on it. Read the repository's checks from `package.json`, `nx.json`
 instructions, and run in the bed:
 
 - its lint, type-check and format check, the commands its own `check` script or CI runs, not a narrower script
-  such as `check:<part>`;
+  such as `check:<part>`. When your change will touch a root config (the lint config, a base `tsconfig`, the
+  Prettier config), that config reaches every project, so run these for all of them, as CI does;
 - the tests of the projects your change will touch: each package's own test script, or in an Nx workspace
-  `cd "<bed>" && npx nx run-many -t test -p <project>,<project>` (Nx finds its workspace from the directory it runs
-  in, so it needs the `cd`). Run the whole suite only when the repository's done check requires it (CI,
+  `cd "<bed>" && npx --no nx run-many -t test -p <project>,<project> --output-style=static` (Nx finds its workspace
+  from the directory it runs in, so it needs the `cd`). Run the whole suite only when the repository's done check requires it (CI,
   `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes, report it as not run.
 - the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
   the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
@@ -157,18 +178,23 @@ same commands. Done when each has run before any edit and you hold its summary l
 
 ## 5. Rule first, proved on a real weed
 
-Add the check, with its own test when it is a custom rule. Run it in the bed before fixing anything: it must report
-at least one queued weed by path. A check that reports none does not hold this class; change it until it does.
-Then run it on code that does the same job the right way (the paved road, the simplest correct form): it must
-report nothing there. A check that also flags correct code teaches agents to suppress it. Quote both outputs in the
-report: they are the proof. Done when you have both outputs.
+Add the check, with its own test when it is a custom rule, and change nothing else yet: no edit to the code it
+checks, and no commit. Run it in the bed while the code is as the base has it: it must report at least one queued
+weed by the path `weeds list` shows. A file you wrote to trip it is no weed. A check that reports none does not hold
+this class; change it until it does. Keep this first output: it lists the weeds the check holds (step 7). Then run
+`git -C "<bed>" status --short`: it must show only the check's own files.
+
+Then run the check on code that does the same job the right way (the paved road, the simplest correct form): it must
+report nothing there. Code the check skips through a baseline or an exemption list is not that code. A check that
+also flags correct code teaches agents to suppress it. Quote the first output, the status and the second output in
+the report: they are the proof. Done when you have all three.
 
 ## 6. Clear the bed
 
 Fix every instance the check reports. Delete code the weeds made unused. When the instances are too many or too
 risky for one pass, record the rest in a baseline that can only shrink (the tool's own suppression or baseline
-file, or a count the check enforces as a maximum) and never raise one. Every exception left in the code names its
-rule and a reason.
+file, or a list whose length the check asserts as a maximum) and never raise one. Every exception left in the code
+names its rule and a reason.
 
 Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
 file the change touched that step 4 did not run. Skip none: not because you expect the same result, not because the
@@ -190,17 +216,22 @@ call of its own, and read its result before you send the next:
 2. `git -C "<bed>" add <path> <path> ...` stages the files you changed, by path. Stage by name only: `git add -A` and
    `git add .` are refused by many users' rules, and they stage whatever else the bed holds.
 3. `git -C "<bed>" status --short` again: every change you made is staged, and nothing else.
-4. `git -C "<bed>" commit` with a message in the repository's own convention. Read it from the last commits
+4. `git -C "<bed>" commit -m "<subject>" -m "<paragraph>" ...`, one `-m` per paragraph, so no message file is
+   written or removed. Write the message in the repository's own convention. Read it from the last commits
    (`git -C "<bed>" log -10`): their subject form, body and trailers. The convention decides every trailer: add one
    (`Co-Authored-By`, `Signed-off-by`) only when those commits carry it.
 
 Then, from the repository's checkout, renew the claim with `weeds claim --class <class>`: a long pass can outlast it.
 When that prints anything but `claimed`, stop and report its line; the bed stays for the next pass.
 
-A tended close names the check as the one that holds every weed it closes. So first close, one by one, each open
-weed of `weeds list --class <class>` that the check does not hold (a function that shares the name but not the job,
-say): `weeds close --id <id> --keep "<reason>"` when it is deliberate or not this class's mistake, else
-`weeds close --id <id> --one-off "<reason>"`. Name each in the report. Then close the class:
+A tended close names the check as the one that holds every weed it closes. The check holds a weed when step 5's
+first output reported its path, or when the bed fixed it and the check would now report the weed if it came back.
+Go through `weeds list --class <class>` weed by weed and say which holds it. An open weed the check does not hold (a
+function that shares the name but not the job, a copy the check does not name, say) is closed one by one first:
+`weeds close --id <id> --keep "<reason>"` when the repository says it is deliberate (cited as step 2 says) or it is
+not this class's mistake, `weeds close --id <id> --one-off "<reason>"` when it shares no cause with the rest.
+Otherwise the class is not tended yet: widen the check (step 5) or fix the weed (step 6) until the check holds it.
+Name each weed closed one by one in the report. Then close the class:
 `weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with the
 check's file from step 3, repository-relative (`eslint.config.mjs`, not a path on this machine). `<short sha>` is
 the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your last commit: the close shares
@@ -216,8 +247,9 @@ Done when `close-class` prints `closed <n>; <state>`.
 ## 8. Report
 
 - The class, its root cause, and the decision.
-- The check: layer number and `checks.md` row (step 3), file, message, and the quoted output that proved it rejects
-  a real weed.
+- The check: layer number and `checks.md` row (step 3), file, message, and step 5's three quoted outputs: the check
+  on the untouched bed, the bed's status then, and the check on the paved road.
+- Each refused lookup the pass went on without (the rules at the top), and what it would have shown.
 - The weeds closed apart from the class (step 7), each with its id, kind and reason.
 - Instances fixed, instances baselined, code deleted, and the bed's net line count
   (`git -C "<bed>" diff --shortstat <start>`); a tend pass usually leaves the codebase shorter.

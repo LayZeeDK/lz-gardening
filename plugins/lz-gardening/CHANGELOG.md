@@ -52,6 +52,12 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a bed a sync did not see
     land (a failed or timed-out push, or a sync stopped once its log landed) is pushed again by the next sync. Bed
     commits carry the identity of whoever commits them.
+  - Proof: the check is proved on a queued weed in the untouched bed before any fix, and on paved-road code, and a
+    tended close holds only the weeds that proof reported or the bed fixed. A copy is kept only on words the
+    repository wrote, cited by path and line.
+  - Stops: a refused command the pass needs ends it, and the pass releases its claim; a refused lookup it can do
+    without is named in the report. Tools run through `npm exec --no` and `npx --no`, so a missing tool fails instead
+    of being downloaded.
   - Permissions: carries its own rules for reading the `lz-tend` skill and the `lz-garden` references and for running
     the site and weeds scripts, and asks you to add the site as a working directory.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the
