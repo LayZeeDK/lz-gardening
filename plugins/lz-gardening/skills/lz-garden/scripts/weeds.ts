@@ -9,9 +9,13 @@
 //     census this tick took, else the commit of the site's census. Then the bed has not landed, or the check's file
 //     is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, the bed's or
 //     the census's commit is in neither the site nor the checkout, or the bed shares no history with the base.
-//   node weeds.ts decline --class <kebab> --where <path> --reason <text>
-//     Leaves a seed line out of the queue: adds its weed with --source census:seed and keeps it (as close --keep
-//     <reason> would) in one append, so no later add queues it. Prints `kept <id>`.
+//     --source census:seed is for a line of the seed list alone: the class and path (line dropped) must be on a line
+//     of the seed list of the census taken of <sha> and not yet recorded, else of the site's census; otherwise exit
+//     2 with `no line of the seed list is <class> in <path>; census:seed is for those lines alone`.
+//   node weeds.ts decline --class <kebab> --where <path> --reason <text> [--census <sha>]
+//     Leaves a seed line out of the queue: adds its weed with --source census:seed (so on a line of the seed list,
+//     as for add) and keeps it (as close --keep <reason> would) in one append, so no later add queues it. Prints
+//     `kept <id>`.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
@@ -86,6 +90,7 @@ import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
+import { onSeedLine, seedLinesIn } from './census.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions, SyncResult } from './store-sync.ts';
@@ -364,10 +369,7 @@ function add(io: Io, flags: Flags, now: Date): number {
     note: flags.note,
     layer: flags.layer === undefined ? null : wholeNumber(flags.layer),
   };
-  const problem =
-    flags.census === undefined || objectIdPattern.test(flags.census)
-      ? validateAdd(input)
-      : '--census must be the full commit id census.ts printed';
+  const problem = censusProblem(flags.census) ?? validateAdd(input);
 
   if (problem !== null) {
     io.err(`weeds add: ${problem}\n`);
@@ -376,6 +378,14 @@ function add(io: Io, flags: Flags, now: Date): number {
   }
 
   const site = openSite(io.cwd);
+  const offList = input.source === 'census:seed' ? offSeedList(site, flags.census, input) : null;
+
+  if (offList !== null) {
+    io.err(`weeds add: ${offList}\n`);
+
+    return 2;
+  }
+
   const offBase = offBaseIn(io.cwd, site.path, flags.census);
   // The status is worked out before the event is written, so a git failure in the bed check writes nothing.
   const { status } = append(
@@ -392,6 +402,19 @@ function add(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
+function censusProblem(census: string | undefined): string | null {
+  return census === undefined || objectIdPattern.test(census)
+    ? null
+    : '--census must be the full commit id census.ts printed';
+}
+
+// census:seed names a line of the seed list, so a weed found any other way cannot pass for one.
+function offSeedList(site: Site, census: string | undefined, input: AddInput): string | null {
+  return seedLinesIn(site.path, census).some((seed) => onSeedLine(seed, input.class, input.where))
+    ? null
+    : `no line of the seed list is ${input.class} in ${input.where.replace(/:\d+$/, '')}; census:seed is for those lines alone`;
+}
+
 function decline(io: Io, flags: Flags, now: Date): number {
   const input: AddInput = {
     class: flags.class ?? '',
@@ -400,7 +423,8 @@ function decline(io: Io, flags: Flags, now: Date): number {
     note: flags.reason,
     layer: null,
   };
-  const problem = hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty';
+  const problem =
+    censusProblem(flags.census) ?? (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
 
   if (problem !== null) {
     io.err(`weeds decline: ${problem}\n`);
@@ -408,8 +432,17 @@ function decline(io: Io, flags: Flags, now: Date): number {
     return 2;
   }
 
+  const site = openSite(io.cwd);
+  const offList = offSeedList(site, flags.census, input);
+
+  if (offList !== null) {
+    io.err(`weeds decline: ${offList}\n`);
+
+    return 2;
+  }
+
   const { status } = append(
-    openSite(io.cwd),
+    site,
     (replica) => {
       const { id, drafts } = planDecline(eventsReportingSkipped(io, replica), input, now);
 
@@ -593,7 +626,7 @@ const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off'
 
 const commands: readonly Command[] = [
   { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], run: add },
-  { name: 'decline', flags: ['class', 'where', 'reason'], run: decline },
+  { name: 'decline', flags: ['class', 'where', 'reason', 'census'], run: decline },
   {
     name: 'close',
     flags: closeFlags,

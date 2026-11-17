@@ -50,8 +50,8 @@ import {
   writerKey,
 } from './store-log.ts';
 import type { Located, Site } from './store-log.ts';
-import { censusRef, holdsCensusCovering, pendingCensusRef, readableCensus } from './store-census.ts';
-import { seedLines } from './census.ts';
+import { censusRef, holdsCensusCovering, readableCensus } from './store-census.ts';
+import { onSeedLine, seedLinesIn } from './census.ts';
 import { makeBed } from './site-bed.ts';
 import type { BedSummary } from './site-bed.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
@@ -276,24 +276,24 @@ function bedRefusal(io: Io, site: Site, bedClass: string, now: Date): string | u
   return claimRefusalLine(site, bedClass, shared, now);
 }
 
-function seedLinesLeft(located: Located, sha: string): readonly string[] {
-  const census = readableCensus(located.path, pendingCensusRef(sha)) ?? readableCensus(located.path, censusRef);
+/** Appends the seed event once every line of the seed list is queued or declined; returns the lines left. */
+function recordSeed(site: Site, sha: string, now: Date): readonly string[] {
+  return append(
+    site,
+    (replica) => {
+      if (replay(replica.events, now).seeded) {
+        return { drafts: [], left: [] };
+      }
 
-  if (census === undefined) {
-    return [];
-  }
+      const adds = replica.events.filter((event) => event.op === 'add');
+      const left = seedLinesIn(site.path, sha)
+        .filter((seed) => !adds.some((add) => onSeedLine(seed, add.class, add.where)))
+        .map((seed) => seed.line);
 
-  const added = readLog(located).events.flatMap((event) =>
-    event.op === 'add' ? [`${event.class}\u0000${event.where.replace(/:\d+$/, '')}`] : [],
-  );
-
-  return seedLines(census)
-    .filter((seed) => !seed.paths.some((path) => added.includes(`${seed.class}\u0000${path}`)))
-    .map((seed) => seed.line);
-}
-
-function recordSeed(site: Site, sha: string, now: Date): void {
-  append(site, (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }] }), now);
+      return { drafts: left.length > 0 ? [] : [{ op: 'seed', sha }], left };
+    },
+    now,
+  ).left;
 }
 
 type Command =
@@ -408,17 +408,18 @@ function main(argv: readonly string[], io: Io): number {
         return 1;
       }
 
-      const unseeded = parsed.seeded && parsed.census !== undefined ? seedLinesLeft(located, parsed.census) : [];
+      const left =
+        parsed.seeded && parsed.census !== undefined ? recordSeed(withWriter(located), parsed.census, now) : [];
 
-      if (unseeded.length > 0) {
-        unseeded.forEach((line) => {
+      if (left.length > 0) {
+        left.forEach((line) => {
           io.err(`site: seed line neither queued nor declined: ${escapeUnprintable(line)}\n`);
         });
 
         return 1;
       }
 
-      return printSummary(io, syncCommand(io, located, parsed.census, parsed.seeded, now));
+      return printSummary(io, syncCommand(io, located, parsed.census, now));
     }
     case 'bed': {
       return bedCommand(io, located, parsed.bedClass, parsed.base, now);
@@ -443,13 +444,8 @@ function openCommand(io: Io, located: Located, requested: string | undefined, no
   return { ...opened, base, seeded, shared: shared.state, reason: printableReason(shared) };
 }
 
-function syncCommand(io: Io, located: Located, census: string | undefined, seeded: boolean, now: Date): SyncSummary {
+function syncCommand(io: Io, located: Located, census: string | undefined, now: Date): SyncSummary {
   const site = withWriter(located);
-
-  if (seeded && census !== undefined) {
-    recordSeed(site, census, now);
-  }
-
   const shared = sync(site, { attempts: syncTries.sharing, census }, now);
   reportSync(io, shared);
   shared.skipped.forEach((path) => {

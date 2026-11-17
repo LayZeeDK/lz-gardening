@@ -111,7 +111,7 @@ startCounts(
 
 startCounts(
   'sync --census --seeded that records the census of a garden with no origin',
-  { spawn: 13, reader: 9 },
+  { spawn: 14, reader: 9 },
   (t, strategy) => {
     const { dir, garden } = planted(t);
     const sha = git(dir, ['rev-parse', 'HEAD']);

@@ -26,7 +26,7 @@ import { classPattern, firstReason } from './log.ts';
 import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
 import { openSite } from './store-log.ts';
 import type { Site } from './store-log.ts';
-import { censusRef, readCensusAt, writePendingCensus } from './store-census.ts';
+import { censusRef, pendingCensusRef, readableCensus, readCensusAt, writePendingCensus } from './store-census.ts';
 import type { Census, StoredCensus } from './store-census.ts';
 
 // An env in this file is the store's git environment for the run (gitEnv), which drops what would point git at another
@@ -425,6 +425,19 @@ export function seedLines(census: Census): SeedLine[] {
     .map(([name, paths]) => ({ line: `= duplicate ${name}: ${paths.join(', ')}`, class: 'duplicate-function', paths }));
 
   return [...files, ...listed];
+}
+
+/** The seed list of the census taken of `sha` and not yet recorded, else of the garden's census; none without one. */
+export function seedLinesIn(site: string, sha: string | undefined): readonly SeedLine[] {
+  const census =
+    (sha === undefined ? undefined : readableCensus(site, pendingCensusRef(sha))) ?? readableCensus(site, censusRef);
+
+  return census === undefined ? [] : seedLines(census);
+}
+
+/** Whether a weed of `weedClass` at `where` (a path, with or without `:<line>`) is one the seed line asks about. */
+export function onSeedLine(seed: SeedLine, weedClass: string, where: string): boolean {
+  return seed.class === weedClass && seed.paths.includes(where.replace(/:\d+$/, ''));
 }
 
 function seedList(census: Census): string[] {

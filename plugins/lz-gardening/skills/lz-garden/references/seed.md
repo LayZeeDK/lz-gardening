@@ -14,10 +14,12 @@ declined, by the rule in `weeds.md`: queue what spreads or invites copying; decl
 code that is deliberately unusual and says why, and what a check in the repository already rejects. Decline with
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>"
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>" --census <sha>
 ```
 
-which keeps the line's weed out of the queue for good. `sync --seeded` in step 4 refuses to record the seed while a
+which keeps the line's weed out of the queue for good. `<sha>` is the census's commit, as in the tick's add command.
+Both commands take `census:seed` for the seed list's lines alone and refuse it for any other weed, which takes the
+source of what it was found in (step 2, and `--source` in `SKILL.md`). `sync --seeded` in step 4 refuses to record the seed while a
 line is neither queued nor declined, and names the lines left.
 
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Read a few
@@ -46,7 +48,9 @@ Read the repository's records listed under "Records" in `weeds.md`, as they are 
 not every plan.
 
 - A lesson, correction or finding that appears twice or more: `repeated-lesson`, `--where` the code it is about,
-  `--source lesson:<path>:<line>` of each record (one weed per record).
+  `--source lesson:<path>:<line>` of each record (one weed per record). A lesson about no code in this repository
+  (a tool, a service or a way of working) takes `--where` the record's own `<path>:<line>`, the same place as its
+  source.
 - A milestone, phase or commit that cleaned up a repeated mistake: find the mistake's class (`duplicate-function`,
   `any-type`, ...), then check the code at the base for the mistake today. Present again: the hand fix did not hold.
   Queue each instance under the mistake's class, `--source commit:<sha>` of the clean-up, and skip the places the
@@ -54,7 +58,11 @@ not every plan.
   without a `lesson:` source. Absent: queue nothing, and look for the check that keeps it out: Grep the base's lint
   config, compiler config and tests for a rule, flag or test that rejects the class's mistake. Finding none, the
   class has **no check behind** it, and only such a class goes on the report's `no check behind` line.
-- A rule in agent instructions or a style guide that the code breaks: `rule-in-prose`.
+- A rule in agent instructions or a style guide that the code breaks: `rule-in-prose`, `--where` the code that
+  breaks it, `--source lesson:<path>:<line>` of the rule.
+
+A weed you find in the code while reading a record, one that no record names, is queued as the tick queues it:
+`--source commit:<short sha>` of the commit that planted it. `census:seed` belongs to the seed list's lines alone.
 
 Done when every record folder that exists has been listed and its lesson and summary files read.
 

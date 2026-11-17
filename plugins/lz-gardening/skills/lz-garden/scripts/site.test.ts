@@ -814,8 +814,8 @@ test('sync --census --seeded counts a seed line queued when a weed of its class 
   const { sha } = pendCensus(dir, garden, {
     hits: { 'any-type': ['src/a.ts:1: const a: any = 1;', 'src/b.ts:1: const b: any = 2;'] },
   });
-  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:seed']);
-  cli(dir, ['add', '--class', 'ts-suppress', '--where', 'src/b.ts', '--source', 'census:seed']);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:seed', '--census', sha]);
+  cli(dir, ['add', '--class', 'ts-suppress', '--where', 'src/b.ts', '--source', 'commit:abc1234']);
 
   const result = site(dir, ['sync', '--census', sha, '--seeded']);
 
@@ -831,8 +831,18 @@ test('sync --census --seeded logs the seed once each line is queued at one of it
     hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] },
     duplicates: { parse: ['src/a.ts', 'src/b.ts', 'src/c.ts'] },
   });
-  cli(dir, ['add', '--class', 'duplicate-function', '--where', 'src/c.ts:4', '--source', 'census:seed']);
-  cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture']);
+  cli(dir, [
+    'add',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/c.ts:4',
+    '--source',
+    'census:seed',
+    '--census',
+    sha,
+  ]);
+  cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture', '--census', sha]);
 
   const result = site(dir, ['sync', '--census', sha, '--seeded']);
 

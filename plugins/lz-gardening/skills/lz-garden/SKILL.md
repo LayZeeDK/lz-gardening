@@ -63,6 +63,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base>
 
 When `seeded` is false, add `--seed` at the end: the output then holds the seed list.
 
+The census patterns are the plugin's, `${CLAUDE_SKILL_DIR}/scripts/patterns.json`, extended or overridden by id by
+the site's `<site>/.garden/patterns.json` when that file exists. To see what a pattern matches, open these files with
+the Read tool, never through `node` or another command.
+
 The census compares the base with the garden's census, which every clone shares, and sets the new census aside until
 step 5 records it. The last line of output is a JSON summary: `sha`, `previousSha`, `behind`, `commits` (the
 commits from `previousSha` to `sha`, merges left out), `grew`, `newHits`, `newDuplicates`. Lines above it starting
@@ -120,9 +124,11 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   (see "New duplicates" below).
 - `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
   `~` or one through `..` is refused with exit 2.
-- `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record (the path
-  repository-relative, as for `--where`), or
-  `census:seed` in the seed pass. For a census hit, the planting commit is
+- `--source`: what the weed was found in. `commit:<short sha>` of the commit that planted it for a weed in the code,
+  `lesson:<path>:<line>` for a weed in a record (the path repository-relative, as for `--where`), and
+  `census:seed` for a line of the seed list and nothing else: a weed the seed pass finds by reading code or history
+  takes the `commit:` of the commit that planted it, found as below with `<sha>` as the range. For a census hit, the
+  planting commit is
   `git log -n 1 --format=%h -S '<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`, with a space
   after `-S`; for a duplicate, the piece is the name, and for a file after `already`, the range is `<sha>`.
   `repeated-lesson` takes a `lesson:` source only, and `weeds.ts` refuses any other: a clean-up in the code that did

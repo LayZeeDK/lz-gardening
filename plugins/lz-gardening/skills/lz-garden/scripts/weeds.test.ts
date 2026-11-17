@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { maxClockOf, planAdd, replay, stamp, weedId } from './log.ts';
 import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './log.ts';
 import { commit, now, repo } from './test-repo.ts';
-import { planted } from './test-site.ts';
+import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { cli, homeAt, script } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
@@ -254,8 +254,41 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
   );
 });
 
+// A garden whose census lists `any-type` hits in src/a.ts, so `[any-type] src/a.ts` is a line of its seed list.
+function seedListed(t: TestContext): string {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] } }));
+
+  return dir;
+}
+
+test('add takes census:seed only for a line of the seed list, and records nothing for another weed', (t) => {
+  const dir = seedListed(t);
+
+  const results = [
+    ['any-type', 'src/b.ts:1'],
+    ['copied-workaround', 'src/a.ts:1'],
+  ].map(([weedClass = '', where = '']) =>
+    cli(dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:seed']),
+  );
+
+  assert.deepEqual(
+    [results.map(({ status, stderr }) => [status, stderr]), cli(dir, ['list']).stdout],
+    [
+      [
+        [2, 'weeds add: no line of the seed list is any-type in src/b.ts; census:seed is for those lines alone\n'],
+        [
+          2,
+          'weeds add: no line of the seed list is copied-workaround in src/a.ts; census:seed is for those lines alone\n',
+        ],
+      ],
+      '',
+    ],
+  );
+});
+
 test('decline keeps a seed line out of the queue, so the seed pass adding it later prints kept', (t) => {
-  const dir = checkout(t);
+  const dir = seedListed(t);
   const id = weedId('any-type', 'src/a.ts', 'census:seed');
 
   const declined = cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture']);
@@ -275,6 +308,8 @@ test('decline needs a reason and a seed line to keep, and records nothing withou
     cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', ' ']),
     cli(dir, ['decline', '--class', 'any-type', '--reason', 'a typed fixture']),
     cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'x', '--note', 'y']),
+    cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'x', '--census', 'main']),
+    cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture']),
   ].map(({ status, stderr }) => [status, stderr]);
 
   assert.deepEqual(
@@ -285,6 +320,8 @@ test('decline needs a reason and a seed line to keep, and records nothing withou
         [2, 'weeds decline: --reason must not be empty\n'],
         [2, 'weeds decline: --where must not be empty\n'],
         [2, 'weeds decline: --note is not an option of decline\n'],
+        [2, 'weeds decline: --census must be the full commit id census.ts printed\n'],
+        [2, 'weeds decline: no line of the seed list is any-type in src/a.ts; census:seed is for those lines alone\n'],
       ],
       0,
     ],
@@ -909,7 +946,7 @@ test('an unknown command prints the usage line', (t) => {
   const result = cli(checkout(t), ['prune']);
 
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /^usage: weeds\.ts add\|close\|close-class\|claim\|release\|groups\|list/);
+  assert.match(result.stderr, /^usage: weeds\.ts add\|decline\|close\|close-class\|claim\|release\|groups\|list/);
 });
 
 test('a usage error in a repository with no site names the usage error, not the missing site', (t) => {
