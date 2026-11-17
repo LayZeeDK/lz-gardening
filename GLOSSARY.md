@@ -19,14 +19,14 @@ _Avoid_: category, kind, type
 The commit that introduced a weed; a weed found by reading what landed names it as its source.
 
 **Duplicate function**:
-A function name defined in two or more files of the codebase. A function declaration and a `const` bound to an arrow
-function or a function expression count alike.
+A function name defined at module scope in two or more files of the codebase. A function declaration and a `const`
+bound to an arrow function or a function expression count alike; a function defined inside another does not.
 _Avoid_: copy, clone
 
 **Documented copy**:
 A file's own definition of a duplicate function, kept on purpose: words in that file or one beside it say why the
-file cannot use the shared one (it runs alone, it cannot import). A tick leaves it out of the queue and quotes the
-words.
+file cannot use the shared one (it runs alone, it cannot import), or a record says so. A tick leaves it out of the
+queue and quotes the words; a seed pass declines it on them.
 
 **Close**:
 Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
@@ -107,6 +107,11 @@ A garden site that adds events to the queue, named by an id of its own in the si
 **Records**:
 What the repository writes down about its own work: plans, summaries, lessons, decisions, agent instructions and
 commit history. The gardener reads them as evidence and never edits them.
+
+**Held by hand**:
+Said of a weed class a clean-up removed that is absent at the base, with no check to reject its return. The seed
+pass reports such classes: they are where a tend pass adds a check before anything grows back.
+_Avoid_: no check behind
 
 **Sampling**:
 Reading a share of what landed rather than all of it, and judging the whole by it.

@@ -10,8 +10,9 @@ after the seed list misses them.
 ## 1. The seed list
 
 With `--seed`, the census output prints the seed list above its JSON line. Each `=` line is either queued or
-declined, by the rule in `weeds.md`: queue what spreads or invites copying; decline a one-off with a visible reason,
-code that is deliberately unusual and says why, and what a check in the repository already rejects. Decline with
+declined, by the rule in `weeds.md`: queue what spreads or invites copying, and decline only for one of the reasons
+it lists, naming that reason. The same suppression with the same reason in two or more files is queued, one weed per
+file. Decline with
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>" --census <sha>
@@ -21,6 +22,7 @@ which keeps the line's weed out of the queue for good. `<sha>` is the census's c
 When the lines of a class left after its queued weeds share one reason, decline them all in one call: leave out
 `--where`, and the command declines every line of that class that no add covers yet and prints
 `declined <n> seed lines of <class>`. Queue a class's weeds first, then decline the rest, one call per class.
+Duplicate names are the exception: decline each file of a duplicate line on its own, with `--where`.
 Both commands take `census:seed` for the seed list's lines alone and refuse it for any other weed, which takes the
 source of what it was found in (step 2, and `--source` in `SKILL.md`). `sync --seeded` in step 4 refuses to record the seed while a
 line is neither queued nor declined, and names the lines left.
@@ -29,14 +31,16 @@ line is neither queued nor declined, and names the lines left.
   hits; queue one weed, `--class <pattern>`, `--where <path>`, `--source census:seed`, the note naming what the hits
   have in common, or decline it with `--class <pattern> --where <path>`. The census keeps at most 1000 hits per
   pattern, in path order, so for a pattern with more the files are ranked from those 1000.
-- `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
-  in the most files first. Test files (`*.spec.*`, `*.test.*`) and files under dot-directories (`.claude/`,
-  `.github/` and other tool folders, often deliberate mirrors of each other) are left out of duplicate names, though
-  their pattern hits count. Take each file of the line through steps 1 to 3 of the tick's step 4 in `SKILL.md`
-  (its `git show`, the words that make a documented copy), with two differences: a documented copy is declined,
-  `--class duplicate-function --where <path> --reason` the words you found, copied as they stand, instead of going on
-  a `left out:` line; and every other file is queued with `--source census:seed`, the note naming the definition to
-  keep, a file whose `<name>` does a different job included (a naming weed). A last line
+- `= duplicate <name>: <path>, <path>, ...`: a name defined at module scope (a definition at the start of its line)
+  in more than one file, at most 30 names, those defined in the most files first. Test files (`*.spec.*`,
+  `*.test.*`), `.d.ts` declarations and files under dot-directories (`.claude/`, `.github/` and other tool folders,
+  often deliberate mirrors of each other) are left out of duplicate names, though their pattern hits count. Take every file of the line, not one of them, through steps 1 to 3 of the tick's step 4
+  in `SKILL.md` (its `git show`, the words that make a documented copy), with two differences. A documented copy is
+  declined, `--class duplicate-function --where <path> --reason` the words you found, copied as they stand (with
+  `--in <record path>` when they are in a record, not in the file), instead of going on a `left out:` line; the
+  command refuses words the file or record does not hold at the census's commit, so your own account of why a copy
+  differs is no reason to decline it. Every other file is queued with `--source census:seed`, the note naming the
+  definition to keep, a file whose `<name>` does a different job included (a naming weed). A last line
   `<n> more duplicate names not listed` counts the rest. Later ticks report only what is new, so the seed list is the
   one time these are listed.
 
@@ -46,28 +50,32 @@ Done when every `=` line has its weeds queued or is declined.
 
 ## 2. The records
 
-Read the repository's records listed under "Records" in `weeds.md`, as they are on the base: `git show
-<base>:<path>` for a file, `git ls-tree -r --name-only <base> -- <folder>` for a folder. Skim summaries and lessons,
-not every plan.
+Read the repository's records listed under "Records" in `weeds.md`, as they are on the base. List the whole tree
+once, `git ls-tree -r --name-only <base>`, and read every ADR, changelog, lesson file and ledger of findings it
+names, wherever it sits, with `git show <base>:<path>`; skim plans and summaries, not every plan. Search a record too
+large to read whole with Grep and no `head_limit`, then `git show` the lines you queue from.
 
 - A lesson, correction or finding that appears twice or more: `repeated-lesson`, `--where` the code it is about,
-  `--source lesson:<path>:<line>` of each record (one weed per record). A lesson about no code in this repository
+  `--source lesson:<path>:<line>` of each record, one weed per lesson and record: `<line>` is the line that first
+  states it in that record, and the record's later lines go in the note. A lesson about no code in this repository
   (a tool, a service or a way of working) takes `--where` the record's own `<path>:<line>`, the same place as its
-  source.
+  source. `repeated-lesson` is for records only, and `weeds.ts` refuses it without a `lesson:` source.
 - A milestone, phase or commit that cleaned up a repeated mistake: find the mistake's class (`duplicate-function`,
   `any-type`, ...), then check the code at the base for the mistake today. Present again: the hand fix did not hold.
   Queue each instance under the mistake's class, `--source commit:<sha>` of the clean-up, and skip the places the
-  seed list already queued under that class. `repeated-lesson` is for records only, and `weeds.ts` refuses it
-  without a `lesson:` source. Absent: queue nothing, and look for the check that keeps it out: Grep the base's lint
-  config, compiler config and tests for a rule, flag or test that rejects the class's mistake. Finding none, the
-  class has **no check behind** it, and only such a class goes on the report's `no check behind` line.
+  seed list already queued under that class.
+- The same clean-up, its mistake absent at the base: queue nothing, and look for the check that keeps it out: Grep
+  the base's lint config, compiler config and tests for a rule, flag or test that rejects the class's mistake.
+  Finding none, the class is **held by hand**: cleaned up, gone today, and nothing rejects its return. Only such a
+  class goes on the report's `held by hand` line; a class with a weed queued in this pass never does, since its
+  clean-up did not hold and the queue says so.
 - A rule in agent instructions or a style guide that the code breaks: `rule-in-prose`, `--where` the code that
   breaks it, `--source lesson:<path>:<line>` of the rule.
 
 A weed you find in the code while reading a record, one that no record names, is queued as the tick queues it:
 `--source commit:<short sha>` of the commit that planted it. `census:seed` belongs to the seed list's lines alone.
 
-Done when every record folder that exists has been listed and its lesson and summary files read.
+Done when the tree has been listed and every ADR, changelog, lesson file and ledger in it read or searched.
 
 ## 3. History
 
@@ -88,16 +96,17 @@ node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit>..<sha> --chars 72000
 the last line's commit, which the range leaves out. Read every page, one call per page, with the same `--chars`.
 The commits page 1 marks `skip` stay unread: count them for the report, and read none of them with `git show`.
 
-Then read up to five commits the log points at that the pages did not show, one page each, `<parent>` the second
-id on the commit's line in the log (`diffs.ts` takes two commit ids and nothing else, so not `<commit>~1`):
+Then read the commits pointed at that the pages did not show: each clean-up commit step 2 named and each commit the
+log scan above flagged, up to five, the clean-ups first. Read each in one page, `<parent>` the second id on the
+commit's line in the log (`diffs.ts` takes two commit ids and nothing else, so not `<commit>~1`):
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <parent>..<commit> --chars 24000
 ```
 
 A commit that marks `skip` there is too large for the seed pass, and a commit with no parent cannot be read this way:
-count either as unread too. Done when the pages are read
-and the weeds they show are queued.
+count either as unread too, and count the pointed-at commits past the first five as unread. Done when the pages and
+the pointed-at commits are read and the weeds they show are queued.
 
 ## 4. Record and report
 
@@ -107,22 +116,25 @@ ran, so no clone of the repository seeds again: a weed steps 2 and 3 would have 
 When `sync` exits 1 naming seed lines, queue or decline each of them as step 1 says, then run `sync` again.
 
 Done when `sync` exits 0. Then reply with this form, every `<slot>` filled as the list below says. The reply is these
-six lines and ends after the last one; the reason for each weed is in its `--note`.
+seven lines and ends after the last one; the reason for each weed is in its `--note`.
 
 ```text
 garden: seeded <base> at <short sha>
 <the census line>
-queued <total> (<class> x<n>, ...); declined <declined>; <unlisted> duplicate names not listed; <unread> commits unread
-no check behind: <class>, ...
+queued <total> (<class> x<n>, ...); declined <declined>; <unlisted> duplicate names not listed; <unread> commits unread; <read> of <pointed> pointed-at commits read
+held by hand: <class>, ...
+not done: <step> (<what>), ...
 ready to tend: <class> (<open> open, <places> places), ...  -> /lz-gardening:lz-tend <class>
 shared: <state> (<reason>)
 ```
 
 - `<the census line>`: the census output's `census:` line, as printed.
 - `queued`: one `<class> x<n>` per class, `<n>` the adds of this seed pass that printed `added`; `<total>` is the
-  sum of the `<n>`, and `queued 0` has no parentheses. `<declined>` counts the seed lines declined. `<unlisted>` is
-  the `<n>` of the census's
-  `<n> more duplicate names not listed` line, or 0. `<unread>` counts the commits step 3 left unread, or 0.
-- `no check behind`: the classes step 2 found to have no check behind them, as it defines, or
-  `no check behind: none`.
+  sum of the `<n>`, and `queued 0` has no parentheses. `<declined>` counts the pattern lines and the duplicate files
+  declined. `<unlisted>` is the `<n>` of the census's `<n> more duplicate names not listed` line, or 0. `<unread>`
+  counts the commits step 3 left unread, or 0. `<pointed>` counts the commits step 3 found pointed at, and `<read>`
+  those it read.
+- `held by hand`: the classes step 2 found held by hand, as it defines, or `held by hand: none`.
+- `not done`: each part of steps 1 to 3 that ran short of what it asks (a file not shown, a record not read, a step
+  run out of order), named by step, or `not done: none`.
 - `ready to tend` and `shared`: as in the tick's report form (step 5 of `SKILL.md`).

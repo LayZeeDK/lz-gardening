@@ -21,12 +21,17 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     evidence. A weed of a class a tend pass closed is queued as `regrown`, naming the bed and the check that should
     have held it.
   - Seed: the first tick seeds the queue from the census, the repository's records and its history (up to 72,000
-    characters of the newest 20 commits' diffs, and the report counts the commits left unread). A seed pass
-    marks the queue seeded, so no other clone seeds again, and is recorded only once each line of the seed list is
-    queued or declined (`weeds.ts decline`, which keeps the line's weed out of the queue for good; without `--where`
-    it declines every line of the class not yet queued or declined). `weeds.ts add`
+    characters of the newest 20 commits' diffs, and the report counts the commits left unread, names the classes a
+    clean-up removed that nothing now rejects, and says what the pass left undone). A seed pass
+    marks the queue seeded, so no other clone seeds again, and is recorded only once each file of each line of the
+    seed list is queued or declined (`weeds.ts decline`, which keeps the weed out of the queue for good; without
+    `--where` it declines every pattern line of the class not yet queued or declined, and a duplicate name's files
+    are declined one at a time, each on words its file, or the record `--in` names, holds at the census's
+    commit). Duplicate names count only module-scope definitions, outside test files and
+    `.d.ts` declarations. `weeds.ts add`
     and `decline` take `--source census:seed` only for a weed on a line of the seed list.
-  - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`. A
+  - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`,
+    which the census prints as `site pattern <id>: <regex>` lines. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,
     `.js`, `.jsx`, `.mjs`, `.cjs`).
   - Share: the queue (`refs/garden/log`) and the census (`refs/garden/census`) are shared through the repository's
