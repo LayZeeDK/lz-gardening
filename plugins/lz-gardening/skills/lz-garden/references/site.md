@@ -36,9 +36,10 @@ The site shares two refs, the garden log and the census: `site.ts open` and `sit
 `origin` `refs/garden/log` and `refs/garden/census` into the site's `refs/garden-shared/`, merge the log with the site's
 own log, settle the census (below), and push both back to `origin` in one atomic push. They read the URLs from the
 checkout on every run (`git remote -v`: `origin`'s fetch and push URLs, as `git remote get-url origin` and its
-`--push` give them), so the checkout itself fetches nothing
-and gains no refs, and they push no ref outside `refs/garden/`. `git config lzGardening.share false` in the checkout
-keeps the garden local. Events are never edited or deleted, so the merge is the union of both logs' event files: the
+`--push` give them), so the checkout itself fetches nothing and gains no refs, and they push no ref outside
+`refs/garden/`. An `origin` kept only in the legacy `.git/remotes` or `.git/branches` files reads as no `origin`, and
+under `transfer.credentialsInUrl=die` an `origin` whose URL holds a password keeps the garden local, as `git remote
+get-url` refuses it. `git config lzGardening.share false` in the checkout keeps the garden local. Events are never edited or deleted, so the merge is the union of both logs' event files: the
 commit takes the site's log and adds the shared log's files. A file both logs hold with different content keeps the
 shared content and is reported as a conflict; a shared file that is not an event file (`events/<xx>/<uuid>.json`) or
 `garden.json` is not copied, and `site.ts sync` names it on stderr. A shared log in a format other than this version's

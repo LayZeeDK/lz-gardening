@@ -312,6 +312,17 @@ test('an origin with a partial clone filter is synced at its URL, which git list
   );
 });
 
+test('an origin whose URL holds a password stays local when the checkout sets transfer.credentialsInUrl to die', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['remote', 'set-url', 'origin', 'https://user:password@127.0.0.1:1/r.git']);
+  git(dir, ['config', 'transfer.credentialsInUrl', 'die']);
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(result.state, 'local');
+});
+
 for (const [value, state] of [
   ['no', 'local'],
   ['off', 'local'],

@@ -15,6 +15,7 @@ import {
   networkGit,
   networkTimeoutMs,
   objectIds,
+  optionalGit,
   pushReport,
   timedOut,
 } from './store-git.ts';
@@ -272,7 +273,8 @@ const origin = 'origin\t';
 
 // git remote -v prints a remote's first fetch URL and each push URL as git remote get-url does, rewritten by
 // url.<base>.insteadOf and pushInsteadOf; the fetch line ends in " [<filter>]" when the remote has a partial clone
-// filter.
+// filter. It lists only remotes the config defines, so an origin kept only in the legacy .git/remotes or .git/branches
+// files, which git has marked for removal, reads as no origin.
 function originUrls(checkout: string): { readonly fetchUrl: string; readonly pushUrl: string } | undefined {
   const lines = git(checkout, ['remote', '-v'], { readsOnly: true })
     .split('\n')
@@ -284,7 +286,18 @@ function originUrls(checkout: string): { readonly fetchUrl: string; readonly pus
   const fetchUrl = urlEndingIn(` (fetch)${filter === undefined ? '' : ` [${filter}]`}`);
   const pushUrl = urlEndingIn(' (push)');
 
-  return fetchUrl === undefined || pushUrl === undefined ? undefined : { fetchUrl, pushUrl };
+  return fetchUrl === undefined || pushUrl === undefined || refusesCredentials(checkout)
+    ? undefined
+    : { fetchUrl, pushUrl };
+}
+
+// git remote -v lists a URL that holds a password whatever transfer.credentialsInUrl says; with the key set, git remote
+// get-url decides, and refuses such a URL under die or a value git does not know.
+function refusesCredentials(checkout: string): boolean {
+  return (
+    configValue(checkout, 'transfer.credentialsinurl') !== undefined &&
+    optionalGit(checkout, ['remote', 'get-url', 'origin'], { readsOnly: true }) === undefined
+  );
 }
 
 // Unset, the garden is shared; a value goes to git, which reads each spelling it takes (the run's config list holds
