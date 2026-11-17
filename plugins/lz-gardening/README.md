@@ -138,9 +138,9 @@ forms the pass sends to the bed:
 }
 ```
 
-`npm --prefix <bed>` runs the repository's package scripts and installed tools in the bed. A tool that finds its
-workspace from the directory it starts in, such as Nx, runs as `cd <bed> && npx --no <tool>`; `--no` refuses to
-download a package that is not installed. Use `pnpm -C *` or `yarn --cwd *` in place of `npm --prefix *` in a
+`npm --prefix <bed>` installs the bed's dependencies and runs the repository's package scripts in the bed. A tool
+with no script runs from the bed's root, where it finds the bed's config, as `cd <bed> && npx --no <tool>`; `--no`
+refuses to download a package that is not installed. Use `pnpm -C *` or `yarn --cwd *` in place of `npm --prefix *` in a
 repository that uses them. A repository whose tests run with Node.js flags, such as
 `node --conditions=<condition> --test`, needs that form allowed as well. These rules allow any installed tool and any package script to run, so grant them only in
 a session that tends.
