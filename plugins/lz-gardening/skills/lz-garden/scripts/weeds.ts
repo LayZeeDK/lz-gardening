@@ -21,10 +21,12 @@
 //     census:seed is for those lines alone`.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
-//     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives> (a tend
-//     pass added a check; close-class only), --one-off <reason> (no check written), --keep <reason> (the weed is
-//     deliberate). Values are one line of text without control characters. Both sync with origin before they plan
-//     and after they append, then print `<closed|kept> <n>; <share state>`; the last sync's reason and a bed origin
+//     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives>
+//     [--baselined <id>,<id>] (a tend pass added a check; close-class only), --one-off <reason> (no check written),
+//     --keep <reason> (the weed is deliberate). Values are one line of text without control characters.
+//     --baselined names the weeds whose copies stay in the check's baseline: the close leaves them open. It exits 1
+//     with `<id> is no open weed of <class>`, or `every open weed of <class> is baselined; the check holds none of
+//     them`, and closes nothing. Both sync with origin before they plan and after they append, then print `<closed|kept> <n>; <share state>`; the last sync's reason and a bed origin
 //     did not take are named on stderr. close-class acts only when that first sync leaves the share state synced or
 //     local and this writer holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check
 //     the claim of <class>: <state>[ (<reason>)]`, `this site holds no claim of <class>; run weeds claim --class
@@ -53,9 +55,9 @@
 // control character in a field the scripts print; references/site.md lists the rules), is skipped and named on
 // stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read
 // the log again, because another writer moved it, names it again.
-// Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim, a close meets another writer's
-// claim, or a claim or release is refused; 2 on a usage error or any other failure: no site, a damaged or newer log,
-// a log that kept moving, or a git error.
+// Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim or refuses its --baselined
+// weeds, a close meets another writer's claim, or a claim or release is refused; 2 on a usage error or any other
+// failure: no site, a damaged or newer log, a log that kept moving, or a git error.
 import { parseArgs } from 'node:util';
 import {
   bedPattern,
@@ -73,6 +75,7 @@ import {
   releasesOfClaim,
   replay,
   sourcePattern,
+  weedIdPattern,
   unprintablePattern,
 } from './log.ts';
 import type {
@@ -156,6 +159,7 @@ export interface CloseFlags {
   readonly 'one-off'?: string | undefined;
   readonly keep?: string | undefined;
   readonly check?: string | undefined;
+  readonly baselined?: string | undefined;
 }
 
 /** The close a command's flags ask for, or what is wrong with them. */
@@ -198,7 +202,17 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
   }
 
   const { kind, by } = chosen;
-  const { check } = flags;
+  const { check, baselined } = flags;
+
+  if (baselined !== undefined && (byId || kind !== 'tended')) {
+    return '--baselined goes with close-class --tended only';
+  }
+
+  const baselinedIds = baselined?.split(',') ?? [];
+
+  if (!baselinedIds.every((id) => weedIdPattern.test(id))) {
+    return '--baselined must be weed ids separated by commas';
+  }
 
   if (kind !== 'tended') {
     return check === undefined
@@ -219,7 +233,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
   }
 
   return bedPattern.exec(by)?.[1] === target
-    ? { target: { class: target }, kind, by, check }
+    ? { target: { class: target, baselined: baselinedIds }, kind, by, check }
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
@@ -346,6 +360,7 @@ function parseFlags(argv: readonly string[]) {
       keep: { type: 'string' },
       reason: { type: 'string', default: '' },
       check: { type: 'string' },
+      baselined: { type: 'string' },
       min: { type: 'string' },
       ready: { type: 'boolean', default: false },
     },
@@ -549,6 +564,16 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
 
       return 1;
     }
+    case 'baselined not open': {
+      io.err(`weeds ${command}: ${outcome.id} is no open weed of ${outcome.class}\n`);
+
+      return 1;
+    }
+    case 'all baselined': {
+      io.err(`weeds ${command}: every open weed of ${outcome.class} is baselined; the check holds none of them\n`);
+
+      return 1;
+    }
     case 'nothing open': {
       const target = 'id' in request.target ? request.target.id : request.target.class;
       io.err(`weeds ${command}: nothing open for ${target}\n`);
@@ -667,7 +692,7 @@ interface Command {
   readonly run: (io: Io, flags: Flags, now: Date, seams: SyncSeams) => number;
 }
 
-const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off', 'keep', 'check'];
+const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off', 'keep', 'check', 'baselined'];
 
 const commands: readonly Command[] = [
   { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], run: add },

@@ -825,6 +825,25 @@ test('close refuses --class beside --id rather than drop it', () => {
   );
 });
 
+test('--baselined goes with a tended close-class only, and holds weed ids separated by commas', () => {
+  const tended = { class: 'any-type', tended: 'bed/any-type@abc1234', check: 'eslint.config.mjs' };
+
+  assert.deepEqual(
+    [
+      parseCloseFlags('close', { id: 'abc', keep: 'on purpose', baselined: 'def' }),
+      parseCloseFlags('close-class', { class: 'any-type', 'one-off': 'generated', baselined: 'def' }),
+      ...['', 'abc,', 'abc,,def', 'abc def', 'abc\u001b[2J'].map((baselined) =>
+        parseCloseFlags('close-class', { ...tended, baselined }),
+      ),
+    ],
+    [
+      '--baselined goes with close-class --tended only',
+      '--baselined goes with close-class --tended only',
+      ...Array.from({ length: 5 }, () => '--baselined must be weed ids separated by commas'),
+    ],
+  );
+});
+
 test('close-class refuses --id beside --class rather than drop it', () => {
   assert.equal(
     parseCloseFlags('close-class', { id: 'abc', class: 'any-type', keep: 'on purpose' }),
@@ -863,6 +882,88 @@ test('closing a class of several weeds appends one close event naming each weed'
   assert.deepEqual(
     [...logFiles(garden).values()].flatMap((event) => (event['op'] === 'close' ? [event['ids']] : [])),
     [[weedId('any-type', 'src/a.ts:1', 'census:any-type'), weedId('any-type', 'src/b.ts:1', 'census:any-type')]],
+  );
+});
+
+test('a tended close-class leaves the weeds named in --baselined open and closes the rest', (t) => {
+  const dir = checkout(t);
+  const weeds = ['src/a.ts:1', 'src/b.ts:1', 'src/c.ts:1'].map((where) => {
+    cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:any-type']);
+
+    return weedId('any-type', where, 'census:any-type');
+  });
+  const [, b = '', c = ''] = weeds;
+
+  const closed = closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    'bed/any-type@abc1234',
+    '--check',
+    'eslint.config.mjs',
+    '--baselined',
+    `${b},${c}`,
+  ]);
+  const open = cli(dir, ['list', '--class', 'any-type'])
+    .stdout.split('\n')
+    .filter((row) => row !== '')
+    .map((row) => row.split(' ')[0]);
+
+  assert.deepEqual([closed.status, closed.stdout, open], [0, 'closed 1; local\n', [b, c]]);
+});
+
+test('a tended close-class refuses a --baselined id that is no open weed of the class, and closes nothing', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  cli(dir, ['add', '--class', 'hollow-assertion', '--where', 'src/b.ts:1', '--source', 'census:x']);
+  const other = weedId('hollow-assertion', 'src/b.ts:1', 'census:x');
+
+  const results = ['0123456789', other].map((id) =>
+    closeUnderClaim(dir, [
+      'close-class',
+      '--class',
+      'any-type',
+      '--tended',
+      'bed/any-type@abc1234',
+      '--check',
+      'eslint.config.mjs',
+      '--baselined',
+      id,
+    ]),
+  );
+
+  assert.deepEqual(
+    [results.map(({ status, stderr }) => [status, stderr]), cli(dir, ['list']).stdout.split('\n').length - 1],
+    [
+      [
+        [1, 'weeds close-class: 0123456789 is no open weed of any-type\n'],
+        [1, `weeds close-class: ${other} is no open weed of any-type\n`],
+      ],
+      2,
+    ],
+  );
+});
+
+test('a tended close-class that baselines every open weed is refused: its check holds none of them', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+
+  const result = closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    'bed/any-type@abc1234',
+    '--check',
+    'eslint.config.mjs',
+    '--baselined',
+    weedId('any-type', 'src/a.ts:1', 'census:any-type'),
+  ]);
+
+  assert.deepEqual(
+    [result.status, result.stderr, cli(dir, ['list']).stdout.split('\n').length - 1],
+    [1, 'weeds close-class: every open weed of any-type is baselined; the check holds none of them\n', 1],
   );
 });
 

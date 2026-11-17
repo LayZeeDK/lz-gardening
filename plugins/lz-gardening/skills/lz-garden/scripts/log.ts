@@ -37,7 +37,7 @@ export function weedId(weedClass: string, where: string, source: string): string
   return createHash('sha256').update(`${weedClass}\u0000${where}\u0000${source}`).digest('hex').slice(0, 10);
 }
 
-const weedIdPattern = /^[0-9a-f]{10}$/;
+export const weedIdPattern = /^[0-9a-f]{10}$/;
 
 export type CloseKind = 'tended' | 'one-off' | 'kept';
 
@@ -213,7 +213,12 @@ export function latestTendedClose(events: readonly GardenEvent[], weedClass: str
 }
 
 /** The kind and its data travel together, as in a close event. */
-export type CloseRequest = { readonly target: { readonly id: string } | { readonly class: string } } & (
+export type CloseRequest = {
+  readonly target:
+    | { readonly id: string }
+    /** `baselined`: weeds whose copies stay in the check's baseline, which the close leaves open. */
+    | { readonly class: string; readonly baselined?: readonly string[] };
+} & (
   | { readonly kind: 'tended'; readonly by: string; readonly check: string }
   | { readonly kind: 'one-off' | 'kept'; readonly by: string; readonly check: null }
 );
@@ -221,6 +226,8 @@ export type CloseRequest = { readonly target: { readonly id: string } | { readon
 export type CloseOutcome =
   | { readonly said: 'nothing open'; readonly drafts: readonly [] }
   | { readonly said: 'claimed by another'; readonly claim: ClaimEvent; readonly drafts: readonly [] }
+  | { readonly said: 'baselined not open'; readonly id: string; readonly class: string; readonly drafts: readonly [] }
+  | { readonly said: 'all baselined'; readonly class: string; readonly drafts: readonly [] }
   | {
       readonly said: 'closed' | 'kept';
       readonly closed: readonly string[];
@@ -235,11 +242,28 @@ export function planClose(
 ): CloseOutcome {
   const { target, ...close } = request;
   const garden = replay(events, now);
-  const closing = garden.open.filter((weed) => ('id' in target ? weed.id === target.id : weed.class === target.class));
+
+  if ('class' in target) {
+    const notOpen = target.baselined?.find(
+      (id) => !garden.open.some((weed) => weed.id === id && weed.class === target.class),
+    );
+
+    if (notOpen !== undefined) {
+      return { said: 'baselined not open', id: notOpen, class: target.class, drafts: [] };
+    }
+  }
+
+  const closing = garden.open.filter((weed) =>
+    'id' in target
+      ? weed.id === target.id
+      : weed.class === target.class && !(target.baselined?.includes(weed.id) ?? false),
+  );
   const first = closing[0];
 
   if (first === undefined) {
-    return { said: 'nothing open', drafts: [] };
+    return 'class' in target && (target.baselined?.length ?? 0) > 0
+      ? { said: 'all baselined', class: target.class, drafts: [] }
+      : { said: 'nothing open', drafts: [] };
   }
 
   const held = heldByAnother(garden, first.class, writer);
