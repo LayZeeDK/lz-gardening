@@ -66,8 +66,9 @@ the session's working directories (the session's environment lists any added one
   list says.
 - Send each command bare: no pipe (`| tail`, `| head`, `| node -e`), no redirect (`>`, `2>&1`) and no second command
   after `;` or `&&` (the `cd "<bed>" &&` above aside). Claude Code refuses those forms in the bed and the site. Read
-  the summary lines in the tool result; when a command prints more than the result shows, run a narrower one (one
-  project's tests, one file's lint). Write files only in the bed, with the Edit and Write tools: a rename across a
+  the summary lines in the tool result. A passing command's long output is saved to a file the result names; a
+  failing command's output is not, and loses its middle. When a starting command (step 4) prints more than the
+  result shows, run a narrower one (one project's tests, one file's lint); a rerun after the change follows step 6. Write files only in the bed, with the Edit and Write tools: a rename across a
   file with Edit's `replace_all`, never a `node -e` or `sed` rewrite. Delete a tracked file with
   `git -C "<bed>" rm <path>`, never `rm`.
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
@@ -100,7 +101,10 @@ alike can say a copy must stay (a file loaded or copied alone, which cannot impo
 kept, not removed, and the check pins the copies instead. A copy is kept only on such words, cited by
 `<path>:<line>` in its `--keep` reason. The cited line must say that this copy stays or cannot import the shared
 one: a file's description, or a decision about something else, says neither. Your own judgement that a copy should
-stay is no reason to keep it, so fix it or baseline it (step 6). A class whose weeds were `regrown` had a check that did not hold: start from the bed and check that
+stay is no reason to keep it, so fix it or baseline it (step 6). For copies in two projects, search the repository's
+records (ADRs, glossary or context maps, agent instructions, package READMEs) for both projects' names before you
+decide: a line that says one may not import the other keeps both copies, and a check's message never names an import
+the repository rules out. A class whose weeds were `regrown` had a check that did not hold: start from the bed and check that
 `weeds list` shows on each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule
 too narrow, a suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
 `(check: <where> not on the base)` when its bed had not landed as of the garden's last census, or the check's file is
@@ -172,6 +176,9 @@ instructions, and run in the bed:
 - the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
   the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
   file (a root `node --test` suite that loads a module alone, say). A project's test script often leaves these out.
+  A fixture project or a sample that a test copies or mutates counts too, since that test pins its text (a mutant's
+  line and column, say): run that one test file, or, when it cannot finish within the Bash tool's limit, leave the
+  fixture's names as they are and make it the file that keeps the shared definition.
 
 Keep each command and its summary lines: the lines that count passes and failures, and the name of each failing
 check or test. A failing command is a starting result too: its failures are the ones step 6 may see again. When the
@@ -185,7 +192,9 @@ any edit and you hold its summary lines.
 ## 5. Rule first, proved on a real weed
 
 Add the check, with its own test when it is a custom rule, and change nothing else yet: no edit to the code it
-checks, and no commit. Run it in the bed while the code is as the base has it: it must report at least one queued
+checks, and no commit. Write it with no baseline or exemption list, so its first output names every queued weed it
+will hold, the ones you will baseline included; the baseline comes in step 6. When the class needs two checks, add and
+prove both here, before the first fix. Run it in the bed while the code is as the base has it: it must report at least one queued
 weed by the path `weeds list` shows. Run the check alone, on the weeds' files or the projects that hold them
 (`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint), not the repository's whole lint: step 6
 runs that once the fixes are done. A file you wrote to trip it is no weed. A check that reports none does not hold
@@ -205,13 +214,20 @@ only so the merged copy passes it, and name each difference the merge removed in
 does the same job is no fix: it only moves the copy out of the check's reach. While you fix, rerun the check and
 the tests of the projects you changed, no more. When the instances are too many or too risky for one pass, record
 the rest in a baseline that can only shrink (the tool's own suppression or baseline file, or a list whose length the
-check asserts as a maximum) and never raise one. Every exception left in the code names its rule and a reason.
+check asserts as a maximum) and never raise one. A missing shared home is no reason to baseline: making it is step
+3's job. For each group you baseline, say in the report whether it was too large or too risky, and why. Every
+exception left in the code names its rule and a reason. Change a dependency list only through the package manager
+(`npm install <pkg>@<version> --prefix "<bed>/<project>"`, or the repository's own manager), so its lockfile follows;
+in a bed whose `deps` is `linked`, install first (step 4).
 
 Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
 file the change touched that step 4 did not run. Skip none: not because you expect the same result, not because the
 change touches none of the files it covers, and not because it failed or ran long at the start. A command that failed
 at the start runs again too, however long its output: its rerun shows whether the same checks or tests fail and no
-others. Read its summary lines as step 4 says; when a rerun's summary lines are cut from the result, count it as a
+others. A rerun that exits non-zero, or whose summary lines you cannot read, has failed: run the identical command
+once more, word for word and from the same directory, to tell a flaky failure from a real one. A narrower or changed
+command (another project list, `--parallel=1`, another reporter) may show where it failed, to read the failing
+project's target alone, but is never the rerun's result. When the identical rerun fails or is cut again, count it as a
 failure the change may have caused (below). Done when each has run again and passes, or fails with exactly the
 failures it had at the start, by name. Quote their summary lines in one table, each command with its result before
 and after the change; a row with no result after the change means this step is not done, so run that command. A command that fails after the change and has no starting result, or fails with a
@@ -244,7 +260,8 @@ weed by weed and give each exactly one of these fates, and say which:
 - **Held**: step 5's first output reported its path, or the bed fixed it and the check would report the weed if it
   came back. The tended close closes it.
 - **Baselined**: its copy stays in the check's baseline (step 6). Name it in `--baselined` below: it stays open, for
-  the pass that shrinks the baseline.
+  the pass that shrinks the baseline. Every weed of a group that keeps a copy in the baseline is baselined, the file
+  that keeps the shared definition included: the group closes when its last copy goes.
 - **Kept**: the repository says it is deliberate, in words cited as step 2 says.
   `weeds close --id <id> --keep "<reason>"`.
 - **One-off**: it has nothing to fix and shares no cause with the rest. `weeds close --id <id> --one-off "<reason>"`.
