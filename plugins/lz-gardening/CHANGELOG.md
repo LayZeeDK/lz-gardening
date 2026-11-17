@@ -53,7 +53,7 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   - Permissions: carries its own rules for reading the `lz-tend` skill and the `lz-garden` references and for running
     the site and weeds scripts, and asks you to add the site as a working directory.
 - `lz-gardener` agent: the fork the `lz-garden` skill runs in. Reads the repository and writes only through the
-  garden scripts.
+  garden scripts. Runs on the session's model (`model: inherit`).
 - Git reads: on Windows, where starting a git process is slow, each script command reads git objects through one
   long-lived `git cat-file --batch-command` per folder and ends it before the command exits. Other platforms start
   a git process per read. The scripts' own fetches, merges and commits start no auto maintenance

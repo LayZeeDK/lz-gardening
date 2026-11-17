@@ -92,6 +92,9 @@ through its three scripts, which keep the queue and the census in the site. It n
 instructions, hooks or settings. Tend passes propose hooks and permission rules in their report; they never build
 them.
 
+The agent runs on your session's model. To run every subagent, the watch included, on one model, set
+`CLAUDE_CODE_SUBAGENT_MODEL` with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`.
+
 ## Permissions
 
 The `lz-garden` skill carries its own permission rules. They pre-approve what a tick needs: reading the skill's own
