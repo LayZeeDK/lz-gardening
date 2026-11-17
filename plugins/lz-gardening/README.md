@@ -117,6 +117,34 @@ bed (a worktree in the site); it asks for the rest, such as edits in the bed and
 site lies beside your checkout, a tend pass first asks you to add it as a working directory (`/add-dir <site>`);
 without that, Claude Code asks before every read or edit of a file in the bed.
 
+A refused command ends the pass, and a session that cannot ask (`claude -p`, `--permission-mode dontAsk`) refuses
+every command its rules do not allow. To tend in such a session, add the site with `--add-dir <site>` and allow the
+forms the pass sends to the bed:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(npm --prefix *)",
+      "Bash(npx --no *)",
+      "Bash(node --test *)",
+      "Bash(git -C * add *)",
+      "Bash(git -C * commit *)",
+      "Bash(git -C * rm *)"
+    ]
+  }
+}
+```
+
+`npm --prefix <bed>` runs the repository's package scripts and installed tools in the bed. A tool that finds its
+workspace from the directory it starts in, such as Nx, runs as `cd <bed> && npx --no <tool>`; `--no` refuses to
+download a package that is not installed. Use `pnpm -C *` or `yarn --cwd *` in place of `npm --prefix *` in a
+repository that uses them. A repository whose tests run with Node.js flags, such as
+`node --conditions=<condition> --test`, needs that form allowed as well. These rules allow any installed tool and any package script to run, so grant them only in
+a session that tends.
+
 ## Run the watch in CI
 
 To run one watch tick on GitHub Actions, add this workflow as `.github/workflows/garden.yml`. It runs the tick with
