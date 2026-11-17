@@ -27,11 +27,11 @@ line is neither queued nor declined, and names the lines left.
 - `= duplicate <name>: <path>, <path>, ...`: a name defined in more than one file, at most 30 names, those defined
   in the most files first. Test files (`*.spec.*`, `*.test.*`) and files under dot-directories (`.claude/`,
   `.github/` and other tool folders, often deliberate mirrors of each other) are left out of duplicate names, though
-  their pattern hits count. Read the definitions, the copy you would keep among them; when they do the same job,
-  queue one `duplicate-function` weed per file, `--source census:seed`, the note naming the copy to keep. A comment or
-  a doc that says why a copy must exist (a file that cannot import the shared one, a test that pins the copies alike)
-  makes that copy no weed. Names that only share a word (two different `parse` functions) are not weeds: decline the
-  line with `--class duplicate-function --where <one of its paths>`. A last line
+  their pattern hits count. Take each file of the line through steps 1 to 3 of the tick's step 4 in `SKILL.md`
+  (its `git show`, the words that make a documented copy), with two differences: a documented copy is declined,
+  `--class duplicate-function --where <path> --reason` the words you found, copied as they stand, instead of going on
+  a `left out:` line; and every other file is queued with `--source census:seed`, the note naming the definition to
+  keep, a file whose `<name>` does a different job included (a naming weed). A last line
   `<n> more duplicate names not listed` counts the rest. Later ticks report only what is new, so the seed list is the
   one time these are listed.
 
@@ -51,8 +51,9 @@ not every plan.
   `any-type`, ...), then check the code at the base for the mistake today. Present again: the hand fix did not hold.
   Queue each instance under the mistake's class, `--source commit:<sha>` of the clean-up, and skip the places the
   seed list already queued under that class. `repeated-lesson` is for records only, and `weeds.ts` refuses it
-  without a `lesson:` source. Absent: queue nothing, but name the class in the report as one with no check behind
-  it, if no lint rule, type or test now rejects it.
+  without a `lesson:` source. Absent: queue nothing, and look for the check that keeps it out: Grep the base's lint
+  config, compiler config and tests for a rule, flag or test that rejects the class's mistake. Finding none, the
+  class has **no check behind** it, and only such a class goes on the report's `no check behind` line.
 - A rule in agent instructions or a style guide that the code breaks: `rule-in-prose`.
 
 Done when every record folder that exists has been listed and its lesson and summary files read.
@@ -63,10 +64,18 @@ Done when every record folder that exists has been listed and its lesson and sum
 git log --no-merges --format='%h %s' -n 300 <base>
 ```
 
-Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up runs. Read the diffs of the commits
-they point at, and of the newest 20 commits, with `git show <commit>`; when the tool result says the output was saved
-to a file, Read that file to its end. Done when each of those commits is read and its
-weeds are queued.
+Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up runs. Then read the diffs of the newest
+20 commits a page at a time, as the tick's step 3 reads its range:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit>..<sha>
+```
+
+`<commit>` is the 21st line's commit in the log above, and `<sha>` the census's commit; with 21 lines or fewer, take
+the last line's commit and read it with `git show <commit>` as well. Read every page, and a commit page 1 marks
+`skip` with `git show <commit>`. Then read the commits the log points at that the pages did not show, with
+`git show <commit>`; when the tool result says the output was saved to a file, Read that file to its end. Done when
+each of those commits is read and its weeds are queued.
 
 ## 4. Record and report
 
@@ -91,6 +100,6 @@ shared: <state> (<reason>)
   sum of the `<n>`, and `queued 0` has no parentheses. `<declined>` counts the seed lines declined. `<unlisted>` is
   the `<n>` of the census's
   `<n> more duplicate names not listed` line, or 0.
-- `no check behind`: the classes step 2 found cleaned up by hand with nothing that now rejects them, or
+- `no check behind`: the classes step 2 found to have no check behind them, as it defines, or
   `no check behind: none`.
 - `ready to tend` and `shared`: as in the tick's report form (step 5 of `SKILL.md`).

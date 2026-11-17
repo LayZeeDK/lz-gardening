@@ -25,6 +25,7 @@ Two rules hold for the whole tick:
 
 - **Search with the Grep tool, list files with the Glob tool.** These two tools are the tick's only search and
   listing; `git grep`, `rg`, `find` and `ls` are outside the tick, since a shell search can start other programs.
+  Grep patterns are Rust regular expressions, with no look-around and no backreferences: search twice instead.
 - **A refused command ends the tick.** Report the command and its refusal, and stop. The refusal is the user's
   answer, so the tick reaches the same result no other way, with a tool or with another command.
 
