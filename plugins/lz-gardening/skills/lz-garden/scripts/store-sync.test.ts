@@ -323,6 +323,32 @@ test('an origin whose URL holds a password stays local when the checkout sets tr
   assert.equal(result.state, 'local');
 });
 
+test('an origin whose URL holds no password syncs when the checkout sets transfer.credentialsInUrl to die', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['config', 'transfer.credentialsInUrl', 'die']);
+  addWeed(dir, 'src/a.ts:1');
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(result.state, 'synced');
+});
+
+test('a checkout with another remote that git lists before origin syncs with origin', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  git(second.dir, ['remote', 'add', 'a-mirror', join(dirname(second.dir), 'missing.git')]);
+  addWeed(second.dir, 'src/b.ts:1');
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, wheres(second.dir), git(remote, ['rev-parse', logRef])],
+    ['synced', ['src/a.ts:1', 'src/b.ts:1'], git(second.garden, ['rev-parse', logRef])],
+  );
+});
+
 for (const [value, state] of [
   ['no', 'local'],
   ['off', 'local'],
@@ -812,6 +838,8 @@ test('a sync turns the hooks and signing off for the gits that write, and for no
   const { first, second, base } = withALogACensusAndABedToShare(t);
   writeToLogByHand(first.garden, 'garden.json', '{ "format": 1 }');
   sync(openSite(first.dir), { attempts: 1 });
+  // With the key set, the sync also asks git remote get-url.
+  git(second.dir, ['config', 'transfer.credentialsInUrl', 'die']);
   const started = startedGits(t);
 
   sync(openSite(second.dir), { attempts: 1, census: base });
@@ -873,6 +901,16 @@ for (const strategy of readStrategies) {
     );
   });
 }
+
+test('a sync of a checkout with no origin lists its remotes and stops, with no further config read', (t) => {
+  const { dir } = planted(t);
+  const started = startedCommands(t);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
+
+  const result = inRun({ ...env, [readStrategyVariable]: 'spawn' }, () => sync(openSite(dir), { attempts: 1 }));
+
+  assert.deepEqual([result.state, started], ['local', ['rev-parse', 'config', 'remote']]);
+});
 
 test('a sync that pushes a weed and gives back no claim fetches, compares the logs, reads the weed, lists the beds and pushes, and never reads the whole log', (t) => {
   const { dir } = planted(t);
