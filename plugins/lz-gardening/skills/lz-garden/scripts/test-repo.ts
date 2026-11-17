@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import childProcess, { spawn, spawnSync } from 'node:child_process';
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -160,10 +160,24 @@ export function repo(t: TestContext): string {
   return dir;
 }
 
+// One repository is initialised per test process, outside every test, and copied for each test, as starting git
+// costs 40-100 ms on Windows.
+const emptyGitFolder = initialised();
+
 export function init(dir: string): void {
   mkdirSync(dir);
-  git(dir, ['init', '-q', '-b', 'main']);
-  appendFileSync(join(dir, '.git', 'config'), '[user]\n\temail = test@example.com\n\tname = test\n');
+  cpSync(emptyGitFolder, join(dir, '.git'), { recursive: true });
+}
+
+function initialised(): string {
+  const folder = mkdtempSync(join(tmpdir(), 'garden-empty-'));
+  process.once('exit', () => {
+    rmSync(folder, { recursive: true, force: true });
+  });
+  git(folder, ['init', '-q', '-b', 'main', 'repo']);
+  appendFileSync(join(folder, 'repo', '.git', 'config'), '[user]\n\temail = test@example.com\n\tname = test\n');
+
+  return join(folder, 'repo', '.git');
 }
 
 export function commit(dir: string, files: Readonly<Record<string, string>>): string {
@@ -175,5 +189,20 @@ export function commit(dir: string, files: Readonly<Record<string, string>>): st
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-q', '-m', 'x']);
 
-  return git(dir, ['rev-parse', 'HEAD']);
+  return headOf(dir);
+}
+
+// The commit HEAD names, read from the files a commit has just written, as starting git costs 40-100 ms on Windows;
+// git reads any other layout, such as a worktree's .git file.
+function headOf(dir: string): string {
+  const gitDir = join(dir, '.git');
+
+  if (!statSync(gitDir).isDirectory()) {
+    return git(dir, ['rev-parse', 'HEAD']);
+  }
+
+  const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
+  const ref = /^ref: (refs\/heads\/\S+)$/.exec(head)?.[1];
+
+  return ref === undefined ? head : readFileSync(join(gitDir, ref), 'utf8').trim();
 }
