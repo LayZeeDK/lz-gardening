@@ -197,7 +197,7 @@ export function commit(dir: string, files: Readonly<Record<string, string>>): st
 function headOf(dir: string): string {
   const gitDir = join(dir, '.git');
 
-  if (!statSync(gitDir).isDirectory()) {
+  if (statSync(gitDir, { throwIfNoEntry: false })?.isDirectory() !== true) {
     return git(dir, ['rev-parse', 'HEAD']);
   }
 

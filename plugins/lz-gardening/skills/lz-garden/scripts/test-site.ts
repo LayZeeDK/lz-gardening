@@ -118,8 +118,8 @@ function mainOf(checkout: string): string | undefined {
 }
 
 // For a checkout whose main is the template's and a remote path git writes to its config as it is: what git remote add
-// origin <remote> writes, and the remote-tracking main a push or fetch of main then writes (not a fetch's FETCH_HEAD,
-// which every test that reads it fetches first).
+// origin <remote> writes, and the remote-tracking main a push or fetch of main then writes (not its reflog, which no
+// test reads, nor a fetch's FETCH_HEAD, which every test that reads it fetches first).
 function addedTemplateOrigin(dir: string, remote: string): boolean {
   const config = join(dir, '.git', 'config');
 
