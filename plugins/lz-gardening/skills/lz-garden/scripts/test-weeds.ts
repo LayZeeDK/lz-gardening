@@ -6,7 +6,7 @@ import { openSite } from './store-log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { capturingIo, commit, git, now, scriptRun } from './test-repo.ts';
 import type { ScriptRun } from './test-repo.ts';
-import { planted, writeCensus } from './test-site.ts';
+import { censusText, planted, writeCensus, writeCensusText } from './test-site.ts';
 import type { Planted } from './test-site.ts';
 import { run } from './weeds.ts';
 import type { SyncSeams } from './weeds.ts';
@@ -44,6 +44,14 @@ export function cliProcess(cwd: string, args: readonly string[], env = process.e
 
 export function eslintConfig(files: string, rules: string): string {
   return `export default [\n  {\n    files: ${files},\n    rules: ${rules},\n  },\n];\n`;
+}
+
+// A garden whose census lists `any-type` hits in src/a.ts, so `[any-type] src/a.ts` is a line of its seed list.
+export function seedListed(t: TestContext): string {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] } }));
+
+  return dir;
 }
 
 // A bed made by hand: a worktree of the site on bed/<class> at the checkout's main.
