@@ -73,10 +73,10 @@ export function tendedBy(dir: string, weedClass: string, check: Readonly<Record<
 export function tendedBed(
   t: TestContext,
   check: Readonly<Record<string, string>>,
-  where: readonly string[] = [Object.keys(check)[0] ?? ''],
+  checks: readonly string[] = [Object.keys(check)[0] ?? ''],
   before: Readonly<Record<string, string>> = {},
 ): Planted & { readonly bed: string; readonly tip: string } {
-  const checkFlags = where.flatMap((path) => ['--check', path]);
+  const checkFlags = checks.flatMap((path) => ['--check', path]);
   const { dir, garden } = planted(t);
   commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}'), ...before });
   const bed = bedFromMain(garden, 'any-type');

@@ -422,10 +422,8 @@ function add(io: Io, flags: Flags, now: Date): number {
   }
 
   const site = openSite(io.cwd);
-  const seeds = flags.source === 'census:seed' ? seedLinesIn(site.path, flags.census) : [];
-  const offList = firstOf(inputs, (input) =>
-    input.source === 'census:seed' ? offSeedList(seeds, input.class, input.where) : null,
-  );
+  const seeds = flags.source === 'census:seed' ? seedLinesIn(site.path, flags.census) : undefined;
+  const offList = seeds === undefined ? null : firstOf(inputs, (input) => offSeedList(seeds, input.class, input.where));
 
   if (offList !== null) {
     io.err(`weeds add: ${offList}\n`);
@@ -728,7 +726,8 @@ function list(io: Io, flags: Flags, now: Date): number {
 interface Command {
   readonly name: string;
   readonly flags: readonly (keyof Flags)[];
-  readonly repeatable: readonly (keyof Flags)[];
+  /** The flags the parser takes more than once (`multiple: true`); any other given twice is refused. */
+  readonly repeatable: readonly ('where' | 'check')[];
   readonly run: (io: Io, flags: Flags, now: Date, seams: SyncSeams) => number;
 }
 
