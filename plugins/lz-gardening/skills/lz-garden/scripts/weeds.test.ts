@@ -317,16 +317,23 @@ test('add refuses a --where through a parent folder as given, though its plain f
   );
 });
 
-test('add refuses a --where whose plain form is a drive or home path, though ./ hid it as given', (t) => {
+test('add refuses a --where whose plain form is a drive or home path, though ./ or .\\ hid it as given', (t) => {
   const { dir, garden } = planted(t);
+  const wheres = [
+    './c:/Users/ada/a.ts:1',
+    './~/a.ts:1',
+    String.raw`./d:\work\a.ts:1`,
+    String.raw`.\d:\work\a.ts:1`,
+    String.raw`.\~\a.ts:1`,
+  ];
 
-  const results = ['./c:/Users/ada/a.ts:1', './~/a.ts:1', String.raw`./d:\work\a.ts:1`].map((where) =>
+  const results = wheres.map((where) =>
     cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'commit:abc1234']),
   );
 
   assert.deepEqual(
     [results.map(({ status, stderr }) => [status, stderr]), logFiles(garden).size],
-    [Array.from({ length: 3 }, () => [2, 'weeds add: --where must be a repository-relative path\n']), 0],
+    [wheres.map(() => [2, 'weeds add: --where must be a repository-relative path\n']), 0],
   );
 });
 
@@ -856,10 +863,13 @@ test('a tended close-class refuses a --check path holding ", ", which joins seve
   );
 });
 
-test('a tended close-class refuses a --check whose plain form is a home path, though ./ hid it as given', () => {
-  assert.equal(
-    parseCloseFlags('close-class', { class: 'any-type', tended: 'bed/any-type@abc1234', check: ['./~/a.mjs'] }),
-    '--check must be a repository-relative path',
+test('a tended close-class refuses a --check whose plain form is a drive or home path, though ./ or .\\ hid it', () => {
+  const closing = (check: string) =>
+    parseCloseFlags('close-class', { class: 'any-type', tended: 'bed/any-type@abc1234', check: [check] });
+
+  assert.deepEqual(
+    ['./~/a.mjs', String.raw`.\d:\x.mjs`].map(closing),
+    Array.from({ length: 2 }, () => '--check must be a repository-relative path'),
   );
 });
 

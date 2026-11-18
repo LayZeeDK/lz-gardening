@@ -132,9 +132,12 @@ function firstUnprintable(values: Readonly<Record<string, string | readonly stri
 
 const fromRootDriveOrHome = /^(?:[/\\~]|(?<driveLetter>[a-z]:(?!\d+$)))/i;
 const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;
-// A path is checked as given and in its plain form: `./` can hide the root, drive or `~` that normalizing exposes.
+// A path is checked as given and in its plain form with `\` read as `/`: `./` or `.\` can hide the root, drive or `~`
+// that normalizing exposes.
 function notRepositoryRelative(path: string): boolean {
-  return [path, posix.normalize(path)].some((form) => fromRootDriveOrHome.test(form) || throughParent.test(form));
+  return [path, posix.normalize(path.replaceAll('\\', '/'))].some(
+    (form) => fromRootDriveOrHome.test(form) || throughParent.test(form),
+  );
 }
 
 /** The paths in their plain form (`./a` and `a//b` as `a` and `a/b`), each once, in the order given. */
