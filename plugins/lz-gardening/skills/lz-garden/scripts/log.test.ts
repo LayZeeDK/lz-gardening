@@ -490,6 +490,45 @@ test('a close of a class writes one close event naming every open weed of that c
   });
 });
 
+const tendedBy = { kind: 'tended', by: 'bed/any-type@abc1234', check: ['a.mjs', 'b.mjs'] } as const;
+
+test("a tended close of a class leaves its baselined weeds open and joins the check files in the event's check", () => {
+  const events = [add('a1', 1, 'x'), add('a2', 2, 'y'), add('a3', 3, 'z')];
+
+  assert.deepEqual(planClose(events, { target: { class: 'any-type', baselined: ['y'] }, ...tendedBy }, 'w', now), {
+    said: 'closed',
+    closed: ['x', 'z'],
+    drafts: [{ op: 'close', ids: ['x', 'z'], class: 'any-type', ...tendedBy, check: 'a.mjs, b.mjs' }],
+  });
+});
+
+test('a close of a class refuses a baselined id that is no open weed of that class, and closes nothing', () => {
+  const events = [add('a1', 1, 'x'), add('a2', 2, 'y', { class: 'other' })];
+  const closing = (baselined: readonly string[]) =>
+    planClose(events, { target: { class: 'any-type', baselined: [...baselined] }, ...tendedBy }, 'w', now);
+
+  assert.deepEqual(
+    [closing(['q']), closing(['y'])],
+    [
+      { said: 'baselined not open', id: 'q', class: 'any-type', drafts: [] },
+      { said: 'baselined not open', id: 'y', class: 'any-type', drafts: [] },
+    ],
+  );
+});
+
+test('a close of a class whose open weeds are all baselined says so, and one with nothing open and none baselined does not', () => {
+  const closing = (events: readonly GardenEvent[], baselined: readonly string[]) =>
+    planClose(events, { target: { class: 'any-type', baselined: [...baselined] }, ...tendedBy }, 'w', now);
+
+  assert.deepEqual(
+    [closing([add('a1', 1, 'x')], ['x']), closing([], [])],
+    [
+      { said: 'all baselined', class: 'any-type', drafts: [] },
+      { said: 'nothing open', drafts: [] },
+    ],
+  );
+});
+
 test('a keep says kept', () => {
   const keep = { kind: 'kept', by: 'on purpose', check: null } as const;
 

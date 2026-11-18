@@ -106,7 +106,10 @@ test("the seed lines of a class are its lines of the census's seed list, and non
 });
 
 test('a weed takes census:seed only on a line of the seed list, else the refusal names its class and file', () => {
-  const seeds = [{ line: '- [any-type] src/a.ts 2', class: 'any-type', paths: ['src/a.ts'] }];
+  const seeds = [
+    { line: '- [any-type] src/a.ts 2', class: 'any-type', paths: ['src/a.ts'] },
+    { line: '- [ts-ignore] src/c.ts 1', class: 'ts-ignore', paths: ['src/c.ts'] },
+  ];
 
   assert.deepEqual(
     [
