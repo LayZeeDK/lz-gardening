@@ -85,6 +85,11 @@ export function bedCommit(by: string): string {
   return by.slice(by.indexOf('@') + 1);
 }
 
+/** The check files a tended close names in its `check` field. */
+export function checkFiles(tended: TendedClose): readonly string[] {
+  return tended.check.split(checkSeparator);
+}
+
 export interface ClaimEvent extends EventBase {
   readonly op: 'claim';
   readonly class: string;
@@ -223,7 +228,7 @@ export type CloseRequest = {
     /** `baselined`: weeds whose copies stay in the check's baseline, which the close leaves open. */
     | { readonly class: string; readonly baselined?: readonly string[] };
 } & (
-  | { readonly kind: 'tended'; readonly by: string; readonly check: string }
+  | { readonly kind: 'tended'; readonly by: string; readonly check: readonly string[] }
   | { readonly kind: 'one-off' | 'kept'; readonly by: string; readonly check: null }
 );
 
@@ -277,12 +282,15 @@ export function planClose(
   }
 
   const closed = closing.map((weed) => weed.id);
+  const event = { op: 'close', ids: closed, class: first.class } as const;
 
   return {
     said: close.kind === 'kept' ? 'kept' : 'closed',
     closed,
     drafts: [
-      { op: 'close', ids: closed, class: first.class, ...close },
+      close.kind === 'tended'
+        ? { ...event, ...close, check: close.check.join(checkSeparator) }
+        : { ...event, ...close },
       ...('class' in target ? releasesOfLiveClaims(events, first.class, writer, now) : []),
     ],
   };

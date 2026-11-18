@@ -1,5 +1,5 @@
 // Whether a tended close's bed has landed its check on the base, judged by patch ids in the checkout (ADR 0003).
-import { bedCommit, checkSeparator } from './log.ts';
+import { bedCommit, checkFiles } from './log.ts';
 import type { TendedClose } from './log.ts';
 import { git, gitSucceeds, optionalGit, siteObjectsInput } from './store-git.ts';
 import type { GitInput } from './store-git.ts';
@@ -72,7 +72,7 @@ function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: Tende
     return 'base unknown';
   }
 
-  return tended.check.split(checkSeparator).some((where) => checkFileOffBase({ cwd, withSite, where, fork, base, tip }))
+  return checkFiles(tended).some((where) => checkFileOffBase({ cwd, withSite, where, fork, base, tip }))
     ? 'not on the base'
     : 'no label';
 }

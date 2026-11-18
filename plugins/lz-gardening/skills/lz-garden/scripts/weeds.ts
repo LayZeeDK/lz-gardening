@@ -204,7 +204,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     tended: flags.tended,
     'one-off': flags['one-off'],
     keep: flags.keep,
-    check: flags.check?.join(checkSeparator),
+    check: flags.check?.join(' '),
   });
 
   if (unprintable !== null) {
@@ -247,7 +247,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
   }
 
   return bedPattern.exec(by)?.[1] === target
-    ? { target: { class: target, baselined: baselinedIds }, kind, by, check: [...new Set(check)].join(checkSeparator) }
+    ? { target: { class: target, baselined: baselinedIds }, kind, by, check: [...new Set(check)] }
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
@@ -602,9 +602,10 @@ function reportSyncNotes(io: Io, command: string, result: SyncResult): void {
 }
 
 /** The first of the close's check files that the tended bed commit does not hold. */
-function checkMissingFromBed(site: Site, by: string, checks: string): string | undefined {
+function checkMissingFromBed(site: Site, by: string, checks: readonly string[]): string | undefined {
   const commit = bedCommit(by);
-  return catFileBatch(site.path, checks.split(checkSeparator), (path) => `${commit}:${path}`).find(
+
+  return catFileBatch(site.path, checks, (path) => `${commit}:${path}`).find(
     ([, object]) => object.kind !== 'blob',
   )?.[0];
 }

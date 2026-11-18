@@ -1160,7 +1160,7 @@ test('a tended close-class records a --check given twice once', () => {
     check: ['eslint.config.mjs', 'checks/a.mjs', 'eslint.config.mjs'],
   });
 
-  assert.equal(typeof closing === 'string' ? closing : closing.check, 'eslint.config.mjs, checks/a.mjs');
+  assert.deepEqual(typeof closing === 'string' ? closing : closing.check, ['eslint.config.mjs', 'checks/a.mjs']);
 });
 
 test('close-class refuses --id beside --class rather than drop it', () => {
