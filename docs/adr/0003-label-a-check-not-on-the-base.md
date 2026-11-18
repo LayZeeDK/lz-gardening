@@ -42,3 +42,16 @@ lazy fetch off, so git writes to neither.
   so its weeds get no label even when the base lacks the change. The clean merges `site.ts bed` makes cannot cause
   this.
 - A change the base took split or combined differently from the bed's commits reads as not on the base.
+
+## Update, 2026-11-18: a close holds several check files
+
+A tend pass can need two checks, such as a lint rule and a test that holds what the rule cannot, and
+`weeds close-class --tended` kept only the last `--check` given. It now takes `--check` once per check file, and the
+label reads the close as not on the base while any one of its check files has not landed there.
+
+- The close event keeps its single `check` field and joins the files with `, `, so a `--check` holding `, ` is
+  refused: it would split into two files when read back. Each file is recorded once, in its plain form (`./a` as
+  `a`), so one file spelled two ways is not counted twice.
+- Each check must be a file the tended bed commit holds, read in one batched lookup in the site, else the close exits
+  2 before anything syncs. A folder or a missing path is refused, and a file given twice is recorded once.
+- `weeds close` takes `--check` at most once, since it never closes as tended.

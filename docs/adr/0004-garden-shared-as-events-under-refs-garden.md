@@ -89,3 +89,19 @@ keep.
   which refs hold the base missed every holder the question did not name. A bed whose commits add a line or a message
   holding one of those paths stays local too, merges and binary files included, with the diff read by its structure
   rather than its line prefixes. Sync names each kept bed on stderr.
+
+## Update, 2026-11-18: paths are checked twice and stored in their plain form
+
+An event is never removed, so the form a path is stored in, and any machine path that reaches an event, stays on the
+remote for good.
+
+- `--where` and `--check` are stored in their plain form: `./src/a.ts` and `src//a.ts` as `src/a.ts`. Before, two
+  spellings of one path gave a weed two ids, and `add` with `--source census:seed` and `decline` refused a `--where`
+  spelled with `./` as off the seed list.
+- A path is taken only when it is repository-relative both as given and in its plain form, with `\` read as `/`.
+  Checking it as given alone missed a root, drive or `~` hidden behind `./` or `.\`: `./c:/Users/<name>/a.ts` was
+  taken and, once paths were stored plain, stored as a machine path. Checking the plain form alone is weaker, as the
+  form given refuses any `..` segment, while normalizing resolves `a/../b` to `b`.
+- The stored plain form keeps each `\` as it is, since a backslash is a legal file name character on Linux and macOS;
+  only the check reads it as `/`. So a name such as `.\c:` is refused there though it is legal, which errs on the
+  safe side.
