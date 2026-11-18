@@ -106,9 +106,12 @@ import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
-import { catFileBatch, configValue, optionalGit, siteObjectsInput } from './store-git.ts';
+import { catFileBatch, configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import { censusIn, onSeedLine, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
+import { censusIn, offSeedList, seedLines, seedLinesIn, seedLinesLeft } from './census.ts';
+import type { SeedLine } from './census.ts';
+import { copyDeclineRefusal, seedDeclineRefusal } from './weeds-decline.ts';
+import type { Decline } from './weeds-decline.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions, SyncResult } from './store-sync.ts';
@@ -413,8 +416,9 @@ function add(io: Io, flags: Flags, now: Date): number {
   }
 
   const site = openSite(io.cwd);
+  const seeds = flags.source === 'census:seed' ? seedLinesIn(site.path, flags.census) : [];
   const offList = firstOf(inputs, (input) =>
-    input.source === 'census:seed' ? offSeedList(site, flags.census, input) : null,
+    input.source === 'census:seed' ? offSeedList(seeds, input.class, input.where) : null,
   );
 
   if (offList !== null) {
@@ -454,47 +458,6 @@ function censusProblem(census: string | undefined): string | null {
     : '--census must be the full commit id census.ts printed';
 }
 
-// census:seed names a line of the seed list, so a weed found any other way cannot pass for one.
-function offSeedList(site: Site, census: string | undefined, input: AddInput): string | null {
-  return seedLinesIn(site.path, census).some((seed) => onSeedLine(seed, input.class, input.where))
-    ? null
-    : `no line of the seed list is ${input.class} in ${seedPath(input.where)}; census:seed is for those lines alone`;
-}
-
-// Text with each line's comment marker dropped and its whitespace run together, so a comment quoted on one line
-// matches however it wraps.
-function asProse(text: string): string {
-  return text
-    .replace(/^[ \t]*(?:\/\/+|\/\*+|\*+\/?|#+)/gm, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// A duplicate copy stays only on words the repository wrote down, so the reason must be those words.
-function unquotedReason(
-  checkout: string,
-  site: Site,
-  census: string | undefined,
-  input: AddInput,
-  record: string | undefined,
-): string | null {
-  if (input.class !== 'duplicate-function') {
-    return null;
-  }
-
-  const path = record ?? seedPath(input.where);
-  const sha = censusIn(site.path, census)?.sha;
-  // Stryker disable next-line ConditionalExpression: with no census, git show of undefined:<path> fails as well, and the reason is refused alike
-  const text =
-    sha === undefined ? undefined : optionalGit(checkout, ['show', `${sha}:${path}`], siteObjectsInput(site.path));
-
-  const quote = asProse(input.note);
-
-  return text !== undefined && quote !== '' && asProse(text).includes(quote)
-    ? null
-    : `--reason must quote the words that keep this copy, as ${path} holds them at the census's commit`;
-}
-
 function decline(io: Io, flags: Flags, now: Date): number {
   const where = flags.where?.[0];
   const input: AddInput = {
@@ -506,12 +469,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
     note: flags.reason,
     layer: null,
   };
-  const strayIn =
-    flags.in !== undefined && (input.class !== 'duplicate-function' || where === undefined)
-      ? '--in goes with --class duplicate-function --where <path> only'
-      : null;
   const problem =
-    strayIn ??
     firstUnprintable({ in: flags.in }) ??
     censusProblem(flags.census) ??
     (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
@@ -523,25 +481,21 @@ function decline(io: Io, flags: Flags, now: Date): number {
   }
 
   const site = openSite(io.cwd);
-
-  if (where === undefined && input.class === 'duplicate-function') {
-    io.err(
-      'weeds decline: decline duplicate-function one file at a time, --where <path>, on the words that keep that copy\n',
-    );
-
-    return 2;
-  }
-
-  if (where === undefined) {
-    return declineClass(io, site, flags.census, input, now);
-  }
-
-  const refusal = offSeedList(site, flags.census, input) ?? unquotedReason(io.cwd, site, flags.census, input, flags.in);
+  const census = censusIn(site.path, flags.census);
+  const request: Decline = { input, where, record: flags.in, seeds: census === undefined ? [] : seedLines(census) };
+  const refusal =
+    input.class === 'duplicate-function'
+      ? copyDeclineRefusal(io.cwd, site, census, request)
+      : seedDeclineRefusal(request);
 
   if (refusal !== null) {
     io.err(`weeds decline: ${refusal}\n`);
 
     return 2;
+  }
+
+  if (where === undefined) {
+    return declineClass(io, site, request.seeds, input, now);
   }
 
   const { status } = append(
@@ -558,8 +512,8 @@ function decline(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
-function declineClass(io: Io, site: Site, census: string | undefined, input: AddInput, now: Date): number {
-  const seeds = seedLinesIn(site.path, census).filter((seed) => seed.class === input.class);
+function declineClass(io: Io, site: Site, seedList: readonly SeedLine[], input: AddInput, now: Date): number {
+  const seeds = seedList.filter((seed) => seed.class === input.class);
 
   if (seeds.length === 0) {
     io.err(`weeds decline: no line of the seed list is ${input.class}; census:seed is for those lines alone\n`);

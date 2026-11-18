@@ -454,6 +454,13 @@ export function onSeedLine(seed: SeedLine, weedClass: string, where: string): bo
   return seed.class === weedClass && seed.paths.includes(seedPath(where));
 }
 
+/** Why a weed of `weedClass` at `where` cannot take --source census:seed, or null when a line of `seeds` names it. */
+export function offSeedList(seeds: readonly SeedLine[], weedClass: string, where: string): string | null {
+  return seeds.some((seed) => onSeedLine(seed, weedClass, where))
+    ? null
+    : `no line of the seed list is ${weedClass} in ${seedPath(where)}; census:seed is for those lines alone`;
+}
+
 /** The seed lines some path of which no add of the line's class covers: not yet queued or declined in full. */
 export function seedLinesLeft(seeds: readonly SeedLine[], events: readonly GardenEvent[]): readonly SeedLine[] {
   const adds = events.filter((event) => event.op === 'add');
