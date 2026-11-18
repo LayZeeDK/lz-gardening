@@ -184,7 +184,7 @@ startCounts('claim of a class with an origin and no race', { spawn: 24, reader: 
   return gitStarts(t, (env) => cliProcess(dir, ['claim', '--class', 'any-type'], env).status, strategy);
 });
 
-startCounts('close-class --tended with an origin and no shared bed', { spawn: 31, reader: 19 }, (t, strategy) => {
+startCounts('close-class --tended with an origin and no shared bed', { spawn: 32, reader: 19 }, (t, strategy) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
