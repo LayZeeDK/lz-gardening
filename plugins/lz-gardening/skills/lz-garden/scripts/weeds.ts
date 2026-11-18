@@ -408,21 +408,24 @@ function writeLine(io: Io, line: string): void {
 }
 
 function add(io: Io, flags: Flags, now: Date): number {
-  const inputs: readonly AddInput[] = [...new Set(flags.where ?? [''])].map((where) => ({
+  const wheres = flags.where ?? [''];
+  const inputOf = (where: string): AddInput => ({
     // Stryker disable next-line StringLiteral: an add without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
     where,
     source: flags.source,
     note: flags.note,
     layer: flags.layer === undefined ? null : wholeNumber(flags.layer),
-  }));
-  const problem = censusProblem(flags.census) ?? firstOf(inputs, validateAdd);
+  });
+  const problem = censusProblem(flags.census) ?? firstOf(wheres.map(inputOf), validateAdd);
 
   if (problem !== null) {
     io.err(`weeds add: ${problem}\n`);
 
     return 2;
   }
+
+  const inputs = [...new Set(wheres.map((where) => posix.normalize(where)))].map(inputOf);
 
   const site = openSite(io.cwd);
   const seeds = flags.source === 'census:seed' ? seedLinesIn(site.path, flags.census) : undefined;
@@ -466,7 +469,8 @@ function censusProblem(census: string | undefined): string | null {
 }
 
 function decline(io: Io, flags: Flags, now: Date): number {
-  const where = flags.where?.[0];
+  const given = flags.where?.[0];
+  const where = given === undefined ? undefined : posix.normalize(given);
   const input: AddInput = {
     // Stryker disable next-line StringLiteral: a decline without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
@@ -481,7 +485,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
     declineUsageProblem(request) ??
     firstUnprintable({ in: flags.in }) ??
     censusProblem(flags.census) ??
-    (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
+    (hasText(flags.reason) ? validateAdd({ ...input, where: given ?? input.where }) : '--reason must not be empty');
 
   if (problem !== null) {
     io.err(`weeds decline: ${problem}\n`);

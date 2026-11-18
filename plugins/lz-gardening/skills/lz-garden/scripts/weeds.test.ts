@@ -283,6 +283,28 @@ test('add takes --where more than once and adds one weed per path, a line each, 
   );
 });
 
+test('add takes a --where spelled two ways as the one weed, in its plain form, on the seed list', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] } }));
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    './src/a.ts:1',
+    '--where',
+    'src//a.ts:1',
+    '--source',
+    'census:seed',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stdout, logFiles(garden).size],
+    [0, `added ${weedId('any-type', 'src/a.ts:1', 'census:seed')}\n`, 1],
+  );
+});
+
 test('add with several --where refuses them all when a later one is off the seed list, and queues none', (t) => {
   const { dir, garden } = planted(t);
   writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));

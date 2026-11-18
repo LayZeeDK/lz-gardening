@@ -49,6 +49,14 @@ test('decline keeps a seed line out of the queue, so the seed pass adding it lat
   );
 });
 
+test('decline takes a --where spelled with ./ as the seed line it names, in its plain form', (t) => {
+  const dir = seedListed(t);
+
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--where', './src/a.ts', '--reason', 'a typed fixture']);
+
+  assert.deepEqual([declined.status, declined.stdout], [0, `kept ${weedId('any-type', 'src/a.ts', 'census:seed')}\n`]);
+});
+
 test('decline without --where keeps every seed line of its class that is neither queued nor declined', (t) => {
   const { dir, garden } = planted(t);
   writeCensusText(
