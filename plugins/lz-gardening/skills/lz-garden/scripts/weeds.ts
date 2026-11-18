@@ -98,7 +98,8 @@ import type {
   OpenWeed,
   TendedClose,
 } from './log.ts';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand, syncNotes } from './cli.ts';
+import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { syncNotes } from './sync-notes.ts';
 import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
