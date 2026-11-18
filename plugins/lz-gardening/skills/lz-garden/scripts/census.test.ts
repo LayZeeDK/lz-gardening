@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { diffCensus, diffDuplicates, mergePatternSets, parseGrep, parsePatternSet, takeCensus } from './census.ts';
+import {
+  censusAt,
+  diffCensus,
+  diffDuplicates,
+  mergePatternSets,
+  parseGrep,
+  parsePatternSet,
+  revisionNamed,
+} from './census.ts';
 import { parseCensus } from './store-census.ts';
 import { gitEnv, inRun } from './store-git.ts';
 import { censusOf, script, set, takeCensusInRun } from './test-census.ts';
@@ -344,7 +352,7 @@ test('a census in a folder that does not exist fails with the reason git could n
   const env = inRun(process.env, () => gitEnv(dir));
 
   await assert.rejects(
-    takeCensus(join(dir, 'missing'), 'HEAD', set, now, env, (id) => id),
+    async () => censusAt(await revisionNamed(join(dir, 'missing'), env, 'HEAD'), 'HEAD', set, now, (id) => id),
     { code: 'ENOENT' },
   );
 });

@@ -206,13 +206,32 @@ function hitKey(hit: string): string {
 /** One commit of the checkout, read without checking it out. */
 interface Revision {
   readonly sha: string;
+  /** The same checkout at another commit. */
+  readonly at: (sha: string) => Revision;
+  /** Whether the checkout has this commit. */
+  readonly has: () => Promise<boolean>;
+  /** Whether this commit is `later` or one of its ancestors. */
+  readonly isAncestorOf: (later: Revision) => Promise<boolean>;
+  /** The number of non-merge commits from `earlier` to this one. */
+  readonly commitsSince: (earlier: Revision) => Promise<number>;
   /** The hits of an extended regex in the files that match specs; what names the search in an error. */
   readonly grep: (regex: string, specs: readonly string[], what: string) => Promise<readonly string[]>;
+}
+
+/** The commit rev names in the checkout at cwd. */
+export async function revisionNamed(cwd: string, env: Env, rev: string): Promise<Revision> {
+  return revisionAt(cwd, env, await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env));
 }
 
 function revisionAt(cwd: string, env: Env, sha: string): Revision {
   return {
     sha,
+    at: (other) => revisionAt(cwd, env, other),
+    has: async () => (await runGitAsync(cwd, ['cat-file', '-e', `${sha}^{commit}`], env)).code === 0,
+    isAncestorOf: async (later) =>
+      (await runGitAsync(cwd, ['merge-base', '--is-ancestor', sha, later.sha], env)).code === 0,
+    commitsSince: async (earlier) =>
+      Number(await gitAsync(cwd, ['rev-list', '--no-merges', '--count', `${earlier.sha}..${sha}`], env)),
     grep: async (regex, specs, what) => {
       const grep = await runGitAsync(
         cwd,
@@ -245,23 +264,19 @@ function revisionAt(cwd: string, env: Env, sha: string): Revision {
   };
 }
 
-/** The commit as a Revision, or null when the checkout lacks it. */
-async function presentRevision(cwd: string, env: Env, sha: string): Promise<Revision | null> {
-  const has = (await runGitAsync(cwd, ['cat-file', '-e', `${sha}^{commit}`], env)).code === 0;
-
-  return has ? revisionAt(cwd, env, sha) : null;
+/** The revision, or null when the checkout lacks its commit. */
+async function present(revision: Revision): Promise<Revision | null> {
+  return (await revision.has()) ? revision : null;
 }
 
-export async function takeCensus(
-  cwd: string,
+/** The census of revision, which rev names. */
+export async function censusAt(
+  revision: Revision,
   rev: string,
   set: PatternSet,
   now: Date,
-  env: Env,
   nameInErrors: (id: string) => string,
 ): Promise<Census> {
-  const sha = await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env);
-  const revision = revisionAt(cwd, env, sha);
   const greps = set.patterns.map(
     async (pattern) =>
       [
@@ -280,7 +295,7 @@ export async function takeCensus(
 
   return {
     rev: branchName(rev),
-    sha,
+    sha: revision.sha,
     takenAt: now.toISOString(),
     counts: Object.fromEntries(results.map(([id, hits]) => [id, hits.length])),
     hits: Object.fromEntries(results.map(([id, hits]) => [id, hits.slice(0, hitCap)])),
@@ -548,12 +563,13 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const fromExtra = new Set(extra?.patterns.map(({ id }) => id));
   const nameInErrors = (id: string): string =>
     extraFile !== undefined && fromExtra.has(id) ? `${id} from ${extraFile.source}` : id;
-  const after = await takeCensus(io.cwd, rev, set, new Date(), env, nameInErrors);
+  const revision = await revisionNamed(io.cwd, env, rev);
+  const after = await censusAt(revision, rev, set, new Date(), nameInErrors);
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
   // The previous census's commit, when this checkout has it.
-  const previous = before === null ? null : await presentRevision(io.cwd, env, before.sha);
+  const previous = before === null ? null : await present(revision.at(before.sha));
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
   const newDuplicates = diffDuplicates(before, after);
@@ -562,14 +578,8 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const summary = {
     sha: after.sha,
     previousSha: previous?.sha ?? null,
-    behind:
-      previous !== null &&
-      previous.sha !== after.sha &&
-      (await runGitAsync(io.cwd, ['merge-base', '--is-ancestor', after.sha, previous.sha], env)).code === 0,
-    commits:
-      previous === null
-        ? null
-        : Number(await gitAsync(io.cwd, ['rev-list', '--no-merges', '--count', `${previous.sha}..${after.sha}`], env)),
+    behind: previous !== null && previous.sha !== revision.sha && (await revision.isAncestorOf(previous)),
+    commits: previous === null ? null : await revision.commitsSince(previous),
     grew,
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
