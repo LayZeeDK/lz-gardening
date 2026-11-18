@@ -624,7 +624,7 @@ test('a sync that shares the tended closes of two classes puts both beds on the 
 
 function tendedInFirstClone(
   t: TestContext,
-  files: Readonly<Record<string, string>> = { 'checks/any-type.mjs': 'export {};\n' },
+  files: Readonly<Record<string, string>> = {},
 ): {
   readonly second: Planted;
   readonly tip: string;
@@ -635,7 +635,7 @@ function tendedInFirstClone(
   const claimed = cli(first.dir, ['claim', '--class', 'any-type']);
   const made = site(first.dir, ['bed', '--class', 'any-type', '--base', 'main']);
   assert.deepEqual([added.status, claimed.status, made.status], [0, 0, 0], made.stderr);
-  const tip = commit(join(first.garden, 'beds', 'any-type'), files);
+  const tip = commit(join(first.garden, 'beds', 'any-type'), { 'checks/any-type.mjs': 'export {};\n', ...files });
   const closed = cli(first.dir, [
     'close-class',
     '--class',
