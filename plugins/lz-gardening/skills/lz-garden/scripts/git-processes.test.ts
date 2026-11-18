@@ -68,7 +68,7 @@ startCounts('open on a planted site in a repository with no origin', { spawn: 10
 
 startCounts(
   'open on a planted site whose origin holds its log, pushing nothing,',
-  { spawn: 16, reader: 12 },
+  { spawn: 14, reader: 10 },
   (t, strategy) => {
     const { dir } = planted(t);
     bareRemote(dir);
@@ -78,7 +78,7 @@ startCounts(
   },
 );
 
-startCounts('sync of a site with an event the origin lacks', { spawn: 13, reader: 12 }, (t, strategy) => {
+startCounts('sync of a site with an event the origin lacks', { spawn: 11, reader: 10 }, (t, strategy) => {
   const { dir } = planted(t);
   bareRemote(dir);
   assert.equal(siteProcess(dir, ['sync']).summary.get('shared'), 'synced');
@@ -92,7 +92,7 @@ startCounts('sync of a site with an event the origin lacks', { spawn: 13, reader
 
 startCounts(
   'sync of a site whose events the origin lacks while the origin holds events it lacks',
-  { spawn: 14, reader: 13 },
+  { spawn: 12, reader: 11 },
   (t, strategy) => {
     const { first, second } = sharedPair(t);
     assert.equal(
@@ -111,7 +111,7 @@ startCounts(
 
 startCounts(
   'sync --census --seeded that records the census of a garden with no origin',
-  { spawn: 13, reader: 9 },
+  { spawn: 14, reader: 9 },
   (t, strategy) => {
     const { dir, garden } = planted(t);
     const sha = git(dir, ['rev-parse', 'HEAD']);
@@ -123,7 +123,7 @@ startCounts(
 
 startCounts(
   'sync --census that records the census and pushes it, with no other pending census,',
-  { spawn: 17, reader: 14 },
+  { spawn: 15, reader: 12 },
   (t, strategy) => {
     const { dir, garden } = planted(t);
     bareRemote(dir);
@@ -175,7 +175,7 @@ startCounts('an add that adds a weed', { spawn: 7, reader: 5 }, (t, strategy) =>
   );
 });
 
-startCounts('claim of a class with an origin and no race', { spawn: 28, reader: 18 }, (t, strategy) => {
+startCounts('claim of a class with an origin and no race', { spawn: 24, reader: 14 }, (t, strategy) => {
   const { dir } = planted(t);
   bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
@@ -184,7 +184,7 @@ startCounts('claim of a class with an origin and no race', { spawn: 28, reader: 
   return gitStarts(t, (env) => cliProcess(dir, ['claim', '--class', 'any-type'], env).status, strategy);
 });
 
-startCounts('close-class --tended with an origin and no shared bed', { spawn: 35, reader: 23 }, (t, strategy) => {
+startCounts('close-class --tended with an origin and no shared bed', { spawn: 32, reader: 19 }, (t, strategy) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
@@ -198,7 +198,7 @@ startCounts('close-class --tended with an origin and no shared bed', { spawn: 35
     '--tended',
     `bed/any-type@${tip.slice(0, 7)}`,
     '--check',
-    'x.mjs',
+    'checks/any-type.mjs',
   ];
 
   return gitStarts(t, (env) => cliProcess(dir, close, env).status, strategy);
@@ -206,7 +206,7 @@ startCounts('close-class --tended with an origin and no shared bed', { spawn: 35
 
 startCounts(
   'sync --census with one pending census of an older base left by a crashed tick',
-  { spawn: 18, reader: 15 },
+  { spawn: 16, reader: 13 },
   (t, strategy) => {
     const { dir, garden } = planted(t);
     bareRemote(dir);

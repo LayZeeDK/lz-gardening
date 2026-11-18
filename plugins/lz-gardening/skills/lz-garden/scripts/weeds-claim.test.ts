@@ -157,9 +157,15 @@ test('claim --class whose push the origin takes after the time is up releases th
   writeFileSync(join(remote, 'go'), '');
   waitFor(join(remote, 'slept'));
 
+  // Under load the release's own push can outlast the limit after the origin took it, which adds `; release pending`.
   assert.deepEqual(
-    [claimed.status, claimed.stdout, releasedClaims(remote)],
-    [1, 'cannot claim any-type: offline (timed out)\n', [['any-type', true]]],
+    [
+      claimed.status,
+      /^cannot claim any-type: offline \(timed out\)(; release pending)?\n$/.test(claimed.stdout),
+      releasedClaims(remote),
+    ],
+    [1, true, [['any-type', true]]],
+    claimed.stdout,
   );
 });
 

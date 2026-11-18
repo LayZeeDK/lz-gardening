@@ -3,41 +3,30 @@
 // events arrive in. No I/O here: the store reads and writes the events.
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import {
+  bedPattern,
+  classPattern,
+  firstReason,
+  hasText,
+  isLayer,
+  isStampedTime,
+  objectIdPattern,
+  sourcePattern,
+  unprintablePattern,
+} from './log-fields.ts';
 
-export const objectIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-
-export { isRecord } from './log-guard.ts';
-
-export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
-
-export const sourcePattern = /^[a-z][a-z-]*:\S/;
-
-export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,64})$/;
-
-const controlsAndLineBreaks = String.raw`\p{Cc}\p{Zl}\p{Zp}`;
-const bidiControls = String.raw`\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}`;
-export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiControls}]`, 'u');
+/** Separates the check files of one tended close in its `check` field. */
+export const checkSeparator = ', ';
 
 // The event fields the scripts print. The log reader skips an event with an unprintable character in one of them, so
 // these print as read; text from anywhere else (paths, git's messages, census data) goes through escapeUnprintable.
 const printedFields: readonly string[] = ['id', 'where', 'source', 'note', 'check', 'by', 'holder'];
 
-export function hasText(text: string): boolean {
-  return text.trim() !== '';
-}
-
-const strongestLayer = 1;
-const layerCount = 6;
-
-export function isLayer(layer: number): boolean {
-  return Number.isInteger(layer) && layer >= strongestLayer && layer <= layerCount;
-}
-
 export function weedId(weedClass: string, where: string, source: string): string {
   return createHash('sha256').update(`${weedClass}\u0000${where}\u0000${source}`).digest('hex').slice(0, 10);
 }
 
-const weedIdPattern = /^[0-9a-f]{10}$/;
+export const weedIdPattern = /^[0-9a-f]{10}$/;
 
 export type CloseKind = 'tended' | 'one-off' | 'kept';
 
@@ -77,8 +66,14 @@ export type CloseEvent =
 
 export type TendedClose = Extract<CloseEvent, { kind: 'tended' }>;
 
-export function bedCommit(tended: TendedClose): string {
-  return tended.by.slice(tended.by.indexOf('@') + 1);
+/** The commit a tended close's `by` (`bed/<class>@<commit>`) names. */
+export function bedCommit(by: string): string {
+  return by.slice(by.indexOf('@') + 1);
+}
+
+/** The check files a tended close names in its `check` field. */
+export function checkFiles(tended: TendedClose): readonly string[] {
+  return tended.check.split(checkSeparator);
 }
 
 export interface ClaimEvent extends EventBase {
@@ -181,6 +176,25 @@ export function planAdd(events: readonly GardenEvent[], input: AddInput, now: Da
     : { said: 'regrown', id, drafts: [draft(tend.uuid)], after: tend };
 }
 
+/** A seed line the seed pass leaves out: its weed is added and kept in one go, so no later add queues it. */
+export function planDecline(
+  events: readonly GardenEvent[],
+  input: AddInput,
+  now: Date,
+): { readonly id: string; readonly drafts: readonly EventDraft[] } {
+  const added = planAdd(events, input, now);
+  const keep: EventDraft<CloseEvent> = {
+    op: 'close',
+    ids: [added.id],
+    class: input.class,
+    kind: 'kept',
+    by: input.note,
+    check: null,
+  };
+
+  return { id: added.id, drafts: added.said === 'kept' ? [] : [...added.drafts, keep] };
+}
+
 function closesWeed(close: CloseEvent, weedClass: string | undefined, id: string): boolean {
   return close.class === weedClass && close.ids.includes(id);
 }
@@ -194,14 +208,21 @@ export function latestTendedClose(events: readonly GardenEvent[], weedClass: str
 }
 
 /** The kind and its data travel together, as in a close event. */
-export type CloseRequest = { readonly target: { readonly id: string } | { readonly class: string } } & (
-  | { readonly kind: 'tended'; readonly by: string; readonly check: string }
+export type CloseRequest = {
+  readonly target:
+    | { readonly id: string }
+    /** `baselined`: weeds whose copies stay in the check's baseline, which the close leaves open. */
+    | { readonly class: string; readonly baselined?: readonly string[] };
+} & (
+  | { readonly kind: 'tended'; readonly by: string; readonly check: readonly string[] }
   | { readonly kind: 'one-off' | 'kept'; readonly by: string; readonly check: null }
 );
 
 export type CloseOutcome =
   | { readonly said: 'nothing open'; readonly drafts: readonly [] }
   | { readonly said: 'claimed by another'; readonly claim: ClaimEvent; readonly drafts: readonly [] }
+  | { readonly said: 'baselined not open'; readonly id: string; readonly class: string; readonly drafts: readonly [] }
+  | { readonly said: 'all baselined'; readonly class: string; readonly drafts: readonly [] }
   | {
       readonly said: 'closed' | 'kept';
       readonly closed: readonly string[];
@@ -216,11 +237,28 @@ export function planClose(
 ): CloseOutcome {
   const { target, ...close } = request;
   const garden = replay(events, now);
-  const closing = garden.open.filter((weed) => ('id' in target ? weed.id === target.id : weed.class === target.class));
+
+  if ('class' in target) {
+    const notOpen = target.baselined?.find(
+      (id) => !garden.open.some((weed) => weed.id === id && weed.class === target.class),
+    );
+
+    if (notOpen !== undefined) {
+      return { said: 'baselined not open', id: notOpen, class: target.class, drafts: [] };
+    }
+  }
+
+  const closing = garden.open.filter((weed) =>
+    'id' in target
+      ? weed.id === target.id
+      : weed.class === target.class && !(target.baselined?.includes(weed.id) ?? false),
+  );
   const first = closing[0];
 
   if (first === undefined) {
-    return { said: 'nothing open', drafts: [] };
+    return 'class' in target && target.baselined?.[0] !== undefined
+      ? { said: 'all baselined', class: target.class, drafts: [] }
+      : { said: 'nothing open', drafts: [] };
   }
 
   const held = heldByAnother(garden, first.class, writer);
@@ -230,12 +268,15 @@ export function planClose(
   }
 
   const closed = closing.map((weed) => weed.id);
+  const event = { op: 'close', ids: closed, class: first.class } as const;
 
   return {
     said: close.kind === 'kept' ? 'kept' : 'closed',
     closed,
     drafts: [
-      { op: 'close', ids: closed, class: first.class, ...close },
+      close.kind === 'tended'
+        ? { ...event, ...close, check: close.check.join(checkSeparator) }
+        : { ...event, ...close },
       ...('class' in target ? releasesOfLiveClaims(events, first.class, writer, now) : []),
     ],
   };
@@ -461,12 +502,6 @@ export function eventPath(uuid: string): string {
   return `events/${uuid.slice(0, 2)}/${uuid}.json`;
 }
 
-export function isStampedTime(text: string): boolean {
-  const time = Date.parse(text);
-
-  return /^\d{4}-/.test(text) && !Number.isNaN(time) && new Date(time).toISOString() === text;
-}
-
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export const eventPathPattern =
@@ -594,11 +629,6 @@ function sharedFieldFault(json: Readonly<Record<string, unknown>>): string | und
   });
 
   return unprintable === undefined ? undefined : `${unprintable} holds a line break or control character`;
-}
-
-export function firstReason(error: z.ZodError): string {
-  // Stryker disable next-line OptionalChaining,LogicalOperator: a failed parse has at least one issue
-  return error.issues[0]?.message ?? error.message;
 }
 
 export function parseEvent(path: string, text: string): GardenEvent | string {

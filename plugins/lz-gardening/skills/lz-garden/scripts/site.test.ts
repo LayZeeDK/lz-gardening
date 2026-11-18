@@ -419,9 +419,22 @@ test('sync takes no option, so --base, --class and --message are usage errors', 
   assert.deepEqual(statuses, [2, 2, 2]);
 });
 
-function pendCensus(dir: string, garden: string): { readonly sha: string; readonly pending: string } {
+function pendCensus(
+  dir: string,
+  garden: string,
+  found: { readonly hits?: Record<string, string[]>; readonly duplicates?: Record<string, string[]> } = {},
+): { readonly sha: string; readonly pending: string } {
   const sha = git(dir, ['rev-parse', 'HEAD']);
-  const census = { rev: 'main', sha, takenAt: '2026-11-13T00:00:00.000Z', counts: {}, hits: {}, duplicates: {} };
+  const hits = found.hits ?? {};
+  const counts = Object.fromEntries(Object.entries(hits).map(([id, items]) => [id, items.length]));
+  const census = {
+    rev: 'main',
+    sha,
+    takenAt: '2026-11-13T00:00:00.000Z',
+    counts,
+    hits,
+    duplicates: found.duplicates ?? {},
+  };
   writePendingCensus({ path: garden, checkout: dir }, sha, JSON.stringify(census));
 
   return { sha, pending: git(garden, ['rev-parse', pendingCensusRef(sha)]) };
@@ -781,6 +794,87 @@ test('sync --census --seeded adds a seed event naming the commit the seed pass r
   assert.deepEqual(
     [...logFiles(garden).values()].map((event) => [event['op'], event['sha']]),
     [['seed', sha]],
+  );
+});
+
+test('sync --census --seeded logs no seed while a seed line is neither queued nor declined, and names it', (t) => {
+  const { dir, garden } = planted(t);
+  const { sha } = pendCensus(dir, garden, { hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] } });
+
+  const result = site(dir, ['sync', '--census', sha, '--seeded']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, logFiles(garden).size],
+    [1, 'site: seed line neither queued nor declined: = [any-type] src/a.ts 1\n', 0],
+  );
+});
+
+test('sync --census --seeded counts a seed line queued when a weed of its class was added at its path', (t) => {
+  const { dir, garden } = planted(t);
+  const { sha } = pendCensus(dir, garden, {
+    hits: { 'any-type': ['src/a.ts:1: const a: any = 1;', 'src/b.ts:1: const b: any = 2;'] },
+  });
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:seed', '--census', sha]);
+  cli(dir, ['add', '--class', 'ts-suppress', '--where', 'src/b.ts', '--source', 'commit:abc1234']);
+
+  const result = site(dir, ['sync', '--census', sha, '--seeded']);
+
+  assert.deepEqual(
+    [result.status, result.stderr],
+    [1, 'site: seed line neither queued nor declined: = [any-type] src/b.ts 1\n'],
+  );
+});
+
+test('sync --census --seeded on a garden already seeded asks for nothing and logs no second seed', (t) => {
+  const { dir, garden } = planted(t);
+  assert.equal(site(dir, ['sync', '--census', pendCensus(dir, garden).sha, '--seeded']).status, 0);
+  commit(dir, { 'src/b.ts': 'export const b: any = 2;\n' });
+  const { sha } = pendCensus(dir, garden, { hits: { 'any-type': ['src/b.ts:1: export const b: any = 2;'] } });
+
+  const result = site(dir, ['sync', '--census', sha, '--seeded']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, [...logFiles(garden).values()].filter((event) => event['op'] === 'seed').length],
+    [0, '', 1],
+  );
+});
+
+test('sync --census --seeded logs the seed once each path of each line is queued or declined', (t) => {
+  const { dir, garden } = planted(t);
+  commit(dir, { 'src/b.ts': '// Loaded alone by the worker.\nexport function parse() {}\n' });
+  const { sha } = pendCensus(dir, garden, {
+    hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] },
+    duplicates: { parse: ['src/b.ts', 'src/c.ts'] },
+  });
+  cli(dir, [
+    'decline',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/b.ts',
+    '--reason',
+    'Loaded alone by the worker.',
+    '--census',
+    sha,
+  ]);
+  cli(dir, [
+    'add',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/c.ts:4',
+    '--source',
+    'census:seed',
+    '--census',
+    sha,
+  ]);
+  cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture', '--census', sha]);
+
+  const result = site(dir, ['sync', '--census', sha, '--seeded']);
+
+  assert.deepEqual(
+    [result.status, result.stderr, [...logFiles(garden).values()].some((event) => event['op'] === 'seed')],
+    [0, '', true],
   );
 });
 

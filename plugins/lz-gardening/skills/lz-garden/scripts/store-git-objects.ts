@@ -1,6 +1,6 @@
 // What an object read asks git and what git answers: the requests and answers of `git cat-file`, a tree object's
 // entries, and the walk that lists a commit's files from them.
-import { objectIdPattern } from './log.ts';
+import { objectIdPattern } from './log-fields.ts';
 
 export interface ObjectHeader {
   readonly oid: string;

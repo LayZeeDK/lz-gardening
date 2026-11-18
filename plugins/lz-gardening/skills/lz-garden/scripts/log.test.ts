@@ -7,12 +7,14 @@ import {
   eventPath,
   eventPathPattern,
   groupWeeds,
+  latestTendedClose,
   losingClaims,
   maxClockOf,
   parseEvent,
   planAdd,
   planClaim,
   planClose,
+  planDecline,
   planGiveBack,
   planRelease,
   releasedClaims,
@@ -368,6 +370,28 @@ test('an add of a weed the log has never seen is added, and records that its wri
   });
 });
 
+test('a decline of a weed the log has never seen adds it and keeps it with the reason in one plan', () => {
+  const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
+
+  assert.deepEqual(planDecline([], input(), now), {
+    id,
+    drafts: [
+      { op: 'add', id, ...input(), sawCloses: [], sawTend: null },
+      { op: 'close', ids: [id], class: 'any-type', kind: 'kept', by: 'cast', check: null },
+    ],
+  });
+});
+
+test('a decline of an open weed keeps it without a second add, and of a kept weed writes nothing', () => {
+  const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
+  const kept = [add('a1', 1, id), close('a2', 2, [id], 'kept')];
+
+  assert.deepEqual(
+    [planDecline([add('a1', 1, id)], input(), now).drafts, planDecline(kept, input(), now)],
+    [[{ op: 'close', ids: [id], class: 'any-type', kind: 'kept', by: 'cast', check: null }], { id, drafts: [] }],
+  );
+});
+
 test('an add of a weed the log shows open is seen and writes nothing', () => {
   const id = weedId('any-type', 'src/a.ts:1', 'census:any-type');
 
@@ -428,6 +452,15 @@ test('an add of a class a tend pass closed is regrown and records the latest ten
   );
 });
 
+test("a class's latest tended close passes over a later one-off close of it and a later tend of another class", () => {
+  const tended = tend('t1', 1, ['x']);
+
+  assert.equal(
+    latestTendedClose([tended, close('o1', 2, ['y'], 'one-off'), tend('t2', 3, ['z'], 'other')], 'any-type'),
+    tended,
+  );
+});
+
 const oneOff = { kind: 'one-off', by: 'generated code', check: null } as const;
 
 test('a close that finds nothing open says so and writes nothing', () => {
@@ -455,6 +488,45 @@ test('a close of a class writes one close event naming every open weed of that c
     closed: ['x', 'z'],
     drafts: [{ op: 'close', ids: ['x', 'z'], class: 'any-type', ...oneOff }],
   });
+});
+
+const tendedBy = { kind: 'tended', by: 'bed/any-type@abc1234', check: ['a.mjs', 'b.mjs'] } as const;
+
+test("a tended close of a class leaves its baselined weeds open and joins the check files in the event's check", () => {
+  const events = [add('a1', 1, 'x'), add('a2', 2, 'y'), add('a3', 3, 'z')];
+
+  assert.deepEqual(planClose(events, { target: { class: 'any-type', baselined: ['y'] }, ...tendedBy }, 'w', now), {
+    said: 'closed',
+    closed: ['x', 'z'],
+    drafts: [{ op: 'close', ids: ['x', 'z'], class: 'any-type', ...tendedBy, check: 'a.mjs, b.mjs' }],
+  });
+});
+
+test('a close of a class refuses a baselined id that is no open weed of that class, and closes nothing', () => {
+  const events = [add('a1', 1, 'x'), add('a2', 2, 'y', { class: 'other' })];
+  const closing = (baselined: readonly string[]) =>
+    planClose(events, { target: { class: 'any-type', baselined: [...baselined] }, ...tendedBy }, 'w', now);
+
+  assert.deepEqual(
+    [closing(['q']), closing(['y'])],
+    [
+      { said: 'baselined not open', id: 'q', class: 'any-type', drafts: [] },
+      { said: 'baselined not open', id: 'y', class: 'any-type', drafts: [] },
+    ],
+  );
+});
+
+test('a close of a class whose open weeds are all baselined says so, and one with nothing open and none baselined does not', () => {
+  const closing = (events: readonly GardenEvent[], baselined: readonly string[]) =>
+    planClose(events, { target: { class: 'any-type', baselined: [...baselined] }, ...tendedBy }, 'w', now);
+
+  assert.deepEqual(
+    [closing([add('a1', 1, 'x')], ['x']), closing([], [])],
+    [
+      { said: 'all baselined', class: 'any-type', drafts: [] },
+      { said: 'nothing open', drafts: [] },
+    ],
+  );
 });
 
 test('a keep says kept', () => {
@@ -956,7 +1028,7 @@ test('an event file whose class has text after a kebab-case class id is skipped'
 });
 
 test('the bed commit of a tend close is what its by names after the @', () => {
-  assert.equal(bedCommit(tend(uuid, 4, [weed])), '1a2b3c4');
+  assert.equal(bedCommit(tend(uuid, 4, [weed]).by), '1a2b3c4');
 });
 
 test('an event file whose at is not a date is skipped', () => {

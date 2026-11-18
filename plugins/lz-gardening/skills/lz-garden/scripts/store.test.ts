@@ -18,7 +18,8 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { eventPath, isRecord, weedId } from './log.ts';
+import { eventPath, weedId } from './log.ts';
+import { isRecord } from './log-guard.ts';
 import type { EventDraft } from './log.ts';
 import {
   catFileBatch,

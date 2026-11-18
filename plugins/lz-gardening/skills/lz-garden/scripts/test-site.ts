@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -84,11 +94,64 @@ export function planted(t: TestContext): Planted {
   return { dir, garden };
 }
 
+// A bare remote with the template's main pushed to it, made once per test process: a local push starts several
+// processes, so bareRemote and sharedPair copy this one for a checkout whose main is still the template's.
+const templateRemote = pushedRemote(join(template, 'repo'));
+const templateMain = mainOf(join(template, 'repo'));
+
+function pushedRemote(checkout: string): string {
+  const folder = mkdtempSync(join(tmpdir(), 'garden-remote-'));
+  process.once('exit', () => {
+    rmSync(folder, { recursive: true, force: true });
+  });
+  const remote = join(folder, 'remote.git');
+  git(folder, ['init', '-q', '--bare', remote]);
+  git(checkout, ['push', '-q', remote, 'main']);
+
+  return remote;
+}
+
+function mainOf(checkout: string): string | undefined {
+  const ref = join(checkout, '.git', 'refs', 'heads', 'main');
+
+  return existsSync(ref) ? readFileSync(ref, 'utf8').trim() : undefined;
+}
+
+// For a checkout whose main is the template's and a remote path git writes to its config as it is: what git remote add
+// origin <remote> writes, and the remote-tracking main a push or fetch of main then writes (not its reflog, which no
+// test reads, nor a fetch's FETCH_HEAD, which every test that reads it fetches first).
+function addedTemplateOrigin(dir: string, remote: string): boolean {
+  const config = join(dir, '.git', 'config');
+
+  if (
+    templateMain === undefined ||
+    mainOf(dir) !== templateMain ||
+    !/^[\w.~:\\/-]+$/.test(remote) ||
+    readFileSync(config, 'utf8').includes('[remote "origin"]')
+  ) {
+    return false;
+  }
+
+  appendFileSync(
+    config,
+    `[remote "origin"]\n\turl = ${remote.replaceAll('\\', '\\\\')}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n`,
+  );
+  mkdirSync(join(dir, '.git', 'refs', 'remotes', 'origin'), { recursive: true });
+  writeFileSync(join(dir, '.git', 'refs', 'remotes', 'origin', 'main'), `${templateMain}\n`);
+
+  return true;
+}
+
 export function bareRemote(dir: string): string {
   const remote = join(dirname(dir), 'remote.git');
-  git(dirname(dir), ['init', '-q', '--bare', remote]);
-  git(dir, ['remote', 'add', 'origin', remote]);
-  git(dir, ['push', '-q', 'origin', 'main']);
+
+  if (addedTemplateOrigin(dir, remote)) {
+    cpSync(templateRemote, remote, { recursive: true });
+  } else {
+    git(dirname(dir), ['init', '-q', '--bare', remote]);
+    git(dir, ['remote', 'add', 'origin', remote]);
+    git(dir, ['push', '-q', 'origin', 'main']);
+  }
 
   return remote;
 }
@@ -106,8 +169,12 @@ export function sharedPair(t: TestContext): {
   const first = planted(t);
   const remote = bareRemote(first.dir);
   const second = planted(t);
-  git(second.dir, ['remote', 'add', 'origin', remote]);
-  git(second.dir, ['fetch', '-q', 'origin']);
+
+  // first's main is the template's, so the remote's main is too, as a fetch would write it.
+  if (!addedTemplateOrigin(second.dir, remote)) {
+    git(second.dir, ['remote', 'add', 'origin', remote]);
+    git(second.dir, ['fetch', '-q', 'origin']);
+  }
 
   return { first, second, remote };
 }

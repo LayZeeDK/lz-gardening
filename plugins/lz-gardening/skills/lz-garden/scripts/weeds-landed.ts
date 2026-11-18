@@ -1,7 +1,7 @@
 // Whether a tended close's bed has landed its check on the base, judged by patch ids in the checkout (ADR 0003).
-import { bedCommit } from './log.ts';
+import { bedCommit, checkFiles } from './log.ts';
 import type { TendedClose } from './log.ts';
-import { git, gitSucceeds, optionalGit } from './store-git.ts';
+import { git, gitSucceeds, optionalGit, siteObjectsInput } from './store-git.ts';
 import type { GitInput } from './store-git.ts';
 import { censusRef, readableCensus } from './store-census.ts';
 
@@ -56,17 +56,7 @@ function baseInSiteOf(site: string, census: string | undefined): BaseInSite | un
     return undefined;
   }
 
-  const withSite = {
-    readsOnly: true,
-    env: {
-      GIT_ALTERNATE_OBJECT_DIRECTORIES: git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
-        readsOnly: true,
-      }),
-      GIT_NO_LAZY_FETCH: '1',
-    },
-  };
-
-  return { base, withSite };
+  return { base, withSite: siteObjectsInput(site) };
 }
 
 function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: TendedClose): BaseLabel {
@@ -75,28 +65,31 @@ function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: Tende
   }
 
   const { base, withSite } = judged;
-  const tip = bedCommit(tended);
-  const where = tended.check;
-  const hasCheck = (commit: string): boolean => gitSucceeds(cwd, ['cat-file', '-e', `${commit}:${where}`], withSite);
+  const tip = bedCommit(tended.by);
   const fork = optionalGit(cwd, ['merge-base', tip, base], withSite);
 
   if (fork === undefined) {
     return 'base unknown';
   }
 
+  return checkFiles(tended).some((where) => checkFileOffBase({ cwd, withSite, where, fork, base, tip }))
+    ? 'not on the base'
+    : 'no label';
+}
+
+function checkFileOffBase(landing: Landing): boolean {
+  const { cwd, withSite, where, fork, base, tip } = landing;
+  const hasCheck = (commit: string): boolean => gitSucceeds(cwd, ['cat-file', '-e', `${commit}:${where}`], withSite);
+
   if (!hasCheck(tip)) {
-    return 'no label';
+    return false;
   }
 
   if (!hasCheck(base)) {
-    return 'not on the base';
+    return true;
   }
 
-  if (!hasCheck(fork)) {
-    return 'no label';
-  }
-
-  return bedChangeMissingFromBase({ cwd, withSite, where, fork, base, tip }) ? 'not on the base' : 'no label';
+  return hasCheck(fork) && bedChangeMissingFromBase(landing);
 }
 
 export function offBaseIn(cwd: string, site: string, census: string | undefined): (tended: TendedClose) => BaseLabel {

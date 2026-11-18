@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isRecord } from './log.ts';
+import { isRecord } from './log-guard.ts';
 import { logRef } from './store-log.ts';
 import { git } from './test-repo.ts';
 

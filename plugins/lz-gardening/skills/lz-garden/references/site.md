@@ -35,15 +35,18 @@ repository lands work.
 The site shares two refs, the garden log and the census: `site.ts open` and `site.ts sync` fetch the repository's
 `origin` `refs/garden/log` and `refs/garden/census` into the site's `refs/garden-shared/`, merge the log with the site's
 own log, settle the census (below), and push both back to `origin` in one atomic push. They read the URLs from the
-checkout on every run (`git remote get-url origin` to fetch, `--push` to push), so the checkout itself fetches nothing
-and gains no refs, and they push no ref outside `refs/garden/`. `git config lzGardening.share false` in the checkout
-keeps the garden local. Events are never edited or deleted, so the merge is the union of both logs' event files: the
-commit takes the site's log and adds the shared log's files. A file both logs hold with different content keeps the
-shared content and is reported as a conflict; a shared file that is not an event file (`events/<xx>/<uuid>.json`) or
-`garden.json` is not copied, and `site.ts sync` names it on stderr. A shared log in a format other than this version's
-stops the sync with exit 2, naming both formats; one that is not a commit holding `garden.json` stops it with exit 2
-too, saying to delete or fix it on `origin`. Because every site holds the whole log, a site made again, or one whose
-remote ref was deleted, gets the log back on its next sync.
+checkout on every run (`git remote -v`: `origin`'s fetch and push URLs, as `git remote get-url origin` and its
+`--push` give them), so the checkout itself fetches nothing and gains no refs, and they push no ref outside
+`refs/garden/`. An `origin` kept only in the legacy `.git/remotes` or `.git/branches` files, or with no
+`remote.origin.url`, reads as no `origin`. Under `transfer.credentialsInUrl=die` an `origin` whose URL holds a
+password keeps the garden local, as does any `origin` under a value git does not know, as `git remote get-url` refuses
+them. `git config lzGardening.share false` in the checkout keeps the garden local. Events are never edited or deleted,
+so the merge is the union of both logs' event files: the commit takes the site's log and adds the shared log's files.
+A file both logs hold with different content keeps the shared content and is reported as a conflict; a shared file
+that is not an event file (`events/<xx>/<uuid>.json`) or `garden.json` is not copied, and `site.ts sync` names it on
+stderr. A shared log in a format other than this version's stops the sync with exit 2, naming both formats; one that
+is not a commit holding `garden.json` stops it with exit 2 too, saying to delete or fix it on `origin`. Because every
+site holds the whole log, a site made again, or one whose remote ref was deleted, gets the log back on its next sync.
 
 After the log lands, a sync pushes beds in a push of their own, one ref per bed, so a bed `origin` refuses holds back
 neither the log nor another bed. For each class, the latest tended close in the merged log names the bed: the sync
@@ -87,14 +90,15 @@ needs no credentials of its own and keeps no copy of the token.
 
 Claims decide who tends a class. A sync that shares a claim of this writer's checks it against `origin`'s log: when
 another writer's claim of the class came first, it gives the claim back with a release, pushed in the same sync; a
-`site.ts` command's sync (`open`, `sync` or `bed`) names the class and the holder on stderr, and a `weeds.ts`
-command's sync gives the claim back without a word. `weeds.ts close-class` and `site.ts bed` share one precondition:
+`site.ts` command's sync (`open`, `sync` or `bed`) names the class and the holder on stderr. `weeds.ts claim` prints
+the same lines, and the census notes `site.ts` prints, for its first sync; `close`, `close-class` and `release` for
+their last. `weeds.ts close-class` and `site.ts bed` share one precondition:
 each syncs first and acts only when that sync is `synced` or `local` and this writer then holds a live claim of the
 class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
 another writer holds a claim of the weed's class; when its first sync is not `synced` or `local`, it closes and says
 `planned <state>` on stderr. Each `weeds.ts` command takes only the flags its usage lists, and exits 2 on any
-other; `close` names its weed with `--id`, never `--class`, and `close-class` the reverse, and a blank `--id` exits 2
-too.
+other and on a flag given twice, except `--where` of `add` and `--check` of `close-class`; `close` names its weed
+with `--id`, never `--class`, and `close-class` the reverse, and a blank `--id` exits 2 too.
 
 A claim's `until` is six hours after its writer's clock. A reader counts the claim live while `until` is ahead of its
 own clock by at most seven hours, which allows one hour of clock skew between machines. A claim from a writer whose
@@ -130,11 +134,14 @@ repository, it uses the one site beside the main checkout:
   `garden` branch, writing nothing into it.
 - `site.ts sync [--census <sha> [--seeded]]` syncs the garden log and census, trying up to five times. With `--census`,
   it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares nothing (a `local`
-  or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once. It prints JSON with
-  `shared` and `events` (how many of the site's events the push shared), plus `reason` (git's message) when there is one
-  and `conflicts` (the files whose shared content it kept) when there are any. It exits 0 in every share state, 1 when
-  `--census` has no census to record (above), and 2 when the repository has no site yet (run `open` first), when
-  `<sha>` is not a full commit id, or when `--seeded` comes without `--census`.
+  or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once, but only when each line
+  of that census's seed list is queued (the queue holds an add of its class at each of its paths) or declined; otherwise
+  it records nothing and names each line left on stderr, `site: seed line neither queued nor declined: <line>`. It
+  prints JSON with `shared` and `events` (how many of the site's events the push shared), plus `reason` (git's message)
+  when there is one and `conflicts` (the files whose shared content it kept) when there are any. It exits 0 in every
+  share state, 1 when `--census` has no census to record (above) or a seed line is left, and 2 when the repository
+  has no site yet (run `open` first), when `<sha>` is not a full commit id, or when `--seeded` comes without
+  `--census`.
 
 The share states:
 

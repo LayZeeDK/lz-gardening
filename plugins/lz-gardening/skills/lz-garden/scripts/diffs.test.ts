@@ -147,6 +147,21 @@ test('a diff of exactly 400,000 characters is read, and one a character longer i
   );
 });
 
+test('--chars sets the budget: a diff of exactly that length is read, and one a character longer is skipped', (t) => {
+  const dir = repo(t);
+  const base = commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const probeSize = 10_000;
+  const overhead = diffLength(printed(dir, [oneLineCommit(dir, base, 'p.txt', probeSize)])) - probeSize;
+
+  const fits = printed(dir, [oneLineCommit(dir, base, 'q.txt', 20_000 - overhead), '--chars', '20000']);
+  const over = printed(dir, [oneLineCommit(dir, base, 'r.txt', 20_001 - overhead), '--chars', '20000']);
+
+  assert.deepEqual(
+    [diffLength(fits), summaryOf(fits).get('read'), diffLength(over), summaryOf(over).get('read')],
+    [20_000, 1, 20_001, 0],
+  );
+});
+
 test('a page holds exactly 24,000 characters, and one character more starts a second page', (t) => {
   const dir = repo(t);
   const base = commit(dir, { 'a.ts': 'export const a = 1;\n' });
@@ -182,8 +197,8 @@ test('a range with anything before or after its two commit ids is refused with t
   });
 
   assert.deepEqual(statuses, [
-    [2, 'usage: diffs.ts <commit>..<commit> [--page <n>]\n'],
-    [2, 'usage: diffs.ts <commit>..<commit> [--page <n>]\n'],
+    [2, 'usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n'],
+    [2, 'usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n'],
   ]);
 });
 
@@ -247,6 +262,26 @@ test('a page past the last of several is refused, naming the pages in the plural
   assert.deepEqual([status, stderr()], [2, 'diffs: no page 3; the range has 2 pages\n']);
 });
 
+test('--chars that is not a whole number above 0 is refused with exit 2, naming the value', (t) => {
+  const dir = repo(t);
+  const from = commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const to = commit(dir, { 'b.ts': 'export const b = 2;\n' });
+  const refusals = ['20k', '0', '1.5', ''].map((chars) => {
+    const { io, stdout, stderr } = capturingIo(dir, process.env);
+
+    return [run([`${from}..${to}`, `--chars=${chars}`], io), stdout(), stderr()];
+  });
+
+  assert.deepEqual(
+    refusals,
+    ['20k', '0', '1.5', ''].map((chars) => [
+      2,
+      '',
+      `diffs: --chars takes a whole number of characters above 0, not '${chars}'\n`,
+    ]),
+  );
+});
+
 test('an argument that is not a range of two commit ids is refused with exit 2 and the usage', (t) => {
   const dir = repo(t);
   commit(dir, { 'a.ts': 'export const a = 1;\n' });
@@ -254,7 +289,10 @@ test('an argument that is not a range of two commit ids is refused with exit 2 a
 
   const status = run(['HEAD'], io);
 
-  assert.deepEqual([status, stdout(), stderr()], [2, '', 'usage: diffs.ts <commit>..<commit> [--page <n>]\n']);
+  assert.deepEqual(
+    [status, stdout(), stderr()],
+    [2, '', 'usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n'],
+  );
 });
 
 test('a commit whose diff alone passes 400,000 characters is skipped, and a smaller one is read', (t) => {

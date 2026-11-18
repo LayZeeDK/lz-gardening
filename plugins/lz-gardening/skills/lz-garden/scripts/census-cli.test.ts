@@ -204,6 +204,35 @@ test("the census counts the extra patterns in the site's .garden/patterns.json",
   assert.match(result.stdout, /^todo +1 {2}new$/m);
 });
 
+test('the census prints each pattern the site adds or overrides, with its regex, so no one opens the site file', async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(garden);
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    result.stdout.split('\n').filter((line) => line.startsWith('site pattern ')),
+    ['site pattern todo: TODO'],
+  );
+});
+
+test('a site pattern that searches its own paths names them after its regex', async (t) => {
+  const { dir, garden } = planted(t);
+  writeSitePatterns(
+    garden,
+    JSON.stringify({ patterns: [{ id: 'todo', regex: 'TODO', paths: ['**/*.md', 'docs/**'] }] }),
+  );
+
+  const result = await census(dir, ['--rev', 'HEAD']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    result.stdout.split('\n').filter((line) => line.startsWith('site pattern ')),
+    ['site pattern todo: TODO in **/*.md, docs/**'],
+  );
+});
+
 test("a site's .garden/patterns.json that is not JSON is refused, naming the file", async (t) => {
   const { dir, garden } = planted(t);
   writeSitePatterns(garden, '{ "patterns": [\n');
@@ -383,6 +412,28 @@ test('the seed list names at most 30 duplicate names, the most widely defined fi
   assert.equal(listed.length, 30);
   assert.equal(listed[0], '= duplicate shared30: src/a30.ts, src/b30.ts, src/c.ts');
   assert.match(result.stdout, /^1 more duplicate names not listed$/m);
+});
+
+test('--seed with exactly 30 duplicate names lists them all and says none are left out', async (t) => {
+  const { dir } = planted(t);
+  const files = Object.fromEntries(
+    Array.from({ length: 30 }, (_, index) => index).flatMap((index) => [
+      [`src/a${String(index)}.ts`, `function shared${String(index)}() {}\n`] as const,
+      [`src/b${String(index)}.ts`, `function shared${String(index)}() {}\n`] as const,
+    ]),
+  );
+  commit(dir, files);
+
+  const result = await census(dir, ['--rev', 'HEAD', '--seed']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(
+    [
+      result.stdout.split('\n').filter((line) => line.startsWith('= duplicate ')).length,
+      /not listed/.test(result.stdout),
+    ],
+    [30, false],
+  );
 });
 
 test('--seed prints the seed list even when a census was recorded before, and only then', async (t) => {

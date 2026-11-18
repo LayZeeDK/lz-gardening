@@ -25,6 +25,7 @@ Two rules hold for the whole tick:
 
 - **Search with the Grep tool, list files with the Glob tool.** These two tools are the tick's only search and
   listing; `git grep`, `rg`, `find` and `ls` are outside the tick, since a shell search can start other programs.
+  Grep patterns are Rust regular expressions, with no look-around and no backreferences: search twice instead.
 - **A refused command ends the tick.** Report the command and its refusal, and stop. The refusal is the user's
   answer, so the tick reaches the same result no other way, with a tool or with another command.
 
@@ -61,6 +62,12 @@ node "${CLAUDE_SKILL_DIR}/scripts/census.ts" --rev <base>
 ```
 
 When `seeded` is false, add `--seed` at the end: the output then holds the seed list.
+
+The census patterns are the plugin's, `${CLAUDE_SKILL_DIR}/scripts/patterns.json`, extended or overridden by id by
+the site's `<site>/.garden/patterns.json` when that file exists. To see what a pattern matches, Read the plugin's file;
+the census prints each pattern the site adds or overrides as `site pattern <id>: <regex>[ in <path>, ...]`, so never
+open the site's file, which lies outside the working directory, and never read either file through `node` or another
+command.
 
 The census compares the base with the garden's census, which every clone shares, and sets the new census aside until
 step 5 records it. The last line of output is a JSON summary: `sha`, `previousSha`, `behind`, `commits` (the
@@ -118,10 +125,13 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 - `--class`: the catalogue's class id; for a census hit, the pattern id; for a new duplicate, `duplicate-function`
   (see "New duplicates" below).
 - `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
-  `~` or one through `..` is refused with exit 2.
-- `--source`: `commit:<short sha>` of the commit that planted it, `lesson:<path>:<line>` for a record (the path
-  repository-relative, as for `--where`), or
-  `census:seed` in the seed pass. For a census hit, the planting commit is
+  `~` or one through `..` is refused with exit 2. Give `--where` once per weed to add several weeds that share the
+  class, source and note in one call, such as the files of one duplicate name; the script prints a line for each.
+- `--source`: what the weed was found in. `commit:<short sha>` of the commit that planted it for a weed in the code,
+  `lesson:<path>:<line>` for a weed in a record (the path repository-relative, as for `--where`), and
+  `census:seed` for a line of the seed list and nothing else: a weed the seed pass finds by reading code or history
+  takes the `commit:` of the commit that planted it, found as below with `<sha>` as the range. For a census hit, the
+  planting commit is
   `git log -n 1 --format=%h -S '<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`, with a space
   after `-S`; for a duplicate, the piece is the name, and for a file after `already`, the range is `<sha>`.
   `repeated-lesson` takes a `lesson:` source only, and `weeds.ts` refuses any other: a clean-up in the code that did
@@ -138,8 +148,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 file after `already` that `node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" list --class duplicate-function` does not
 show. Take them one at a time:
 
-1. Run `git show <sha>:<path>` for that file, one call per file, and read its header comment and the definition of
-   `<name>`. When the tool result says the output was saved to a file, Read that file to its end. A Grep or Read of
+1. Run `git show <sha>:<path>` for that file, one call per file (`git show` of several files runs them together with
+   nothing between them); send the calls for all the files of one line in the same message. Read each file's header
+   comment and its definition of `<name>`. When the tool result says the output was saved to a file, Read that file
+   to its end. A Grep or Read of
    the checkout does not replace this call, since the checkout can be on another branch than `<sha>`, and neither
    does a diff page of step 3, which shows only what a commit changed.
 2. Look for words that say why this copy must exist: a comment in the file, or a document the repository keeps, that
@@ -148,18 +160,20 @@ show. Take them one at a time:
    self-contained, is not one.
 3. A documented copy goes on the reply's `left out:` line, its reason the words you found, copied as they stand
    (`...` where you cut some out), and the file they are in when it is not the copy itself. Every other file
-   is queued, one weed per file, with a note naming the definition to keep: the file that holds that definition is
-   queued too, and so is a file whose `<name>` does a different job (a naming weed). A tend pass decides what
-   happens to each. No file of a `+ duplicate` line ends neither queued nor on `left out:`.
+   is queued, one weed per file (one `add` with a `--where` per file), with a note naming the definition to keep:
+   the file that holds that definition is queued too, and so is a file whose `<name>` does a different job (a
+   naming weed). A tend pass decides what happens to each. No file of a `+ duplicate` line ends neither queued nor
+   on `left out:`.
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
 `(check: <where> not on the base)`, the bed's change to that check is not on the base at this tick's census: the bed
-has not landed, or the check's file is gone from the base. Report it that way, not as a check that failed. When it
-reads `(check: <where>, base unknown)`, the site could not judge the base: the census is missing or unreadable, the
-bed's or the census's commit is not in the site or the checkout, or the bed shares no history with the base. Report
-the check's landing as unknown. Done when every weed from steps 2 and 3 printed one of those words, and every file
-of a new duplicate had its own `git show <sha>:<path>` and is either queued or a documented copy.
+has not landed, or one of the check's files is gone from the base. Report it that way, not as a check that failed.
+When it reads `(check: <where>, base unknown)`, the site could not judge the base: the census is missing or
+unreadable, the bed's or the census's commit is not in the site or the checkout, or the bed shares no history with
+the base. Report the check's landing as unknown. Done when every weed from steps 2 and 3 printed one of those
+words, and every file of a new duplicate had its own `git show <sha>:<path>` and is either queued or a documented
+copy.
 
 ## 5. Group, record, report
 

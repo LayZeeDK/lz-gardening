@@ -3,7 +3,8 @@
 // It reads the revision with `git grep`, so it never checks anything out and works in a clone with no working tree.
 // Usage, from the repository's checkout once site.ts open has planted the garden site:
 //   node census.ts --rev <rev> [--seed]
-//     Prints a table of counts with the change since the site's census (refs/garden/census), then the new hits, then
+//     Prints `site pattern <id>: <regex>[ in <path>, ...]` per pattern the site adds or overrides, then a table of
+//     counts with the change since the site's census (refs/garden/census), then the new hits, then
 //     `+ duplicate <name>: new <path>, ...[; already <path>, ...]` per name newly defined in another file, then, with
 //     --seed, the seed list (`= ` lines) and `census: <id> <count>, ...` (or `census: none`), then one JSON summary
 //     line: sha, previousSha (null when there is no census or this checkout lacks its commit), behind (the census's
@@ -19,16 +20,19 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
-import { commandFailed, escapeUnprintable, isMainModule, processIo } from './cli.ts';
+import { commandFailed, isMainModule, processIo } from './cli.ts';
 import bundledPatterns from './patterns.json' with { type: 'json' };
 import type { Io } from './cli.ts';
-import { classPattern, firstReason } from './log.ts';
+import { classPattern, escapeUnprintable, firstReason } from './log-fields.ts';
+import type { GardenEvent } from './log.ts';
 import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
 import { openSite } from './store-log.ts';
 import type { Site } from './store-log.ts';
-import { censusRef, readCensusAt, writePendingCensus } from './store-census.ts';
+import { censusRef, pendingCensusRef, readableCensus, readCensusAt, writePendingCensus } from './store-census.ts';
 import type { Census, StoredCensus } from './store-census.ts';
 
+// An env in this file is the store's git environment for the run (gitEnv), which drops what would point git at another
+// repository.
 type Env = Readonly<NodeJS.ProcessEnv>;
 
 export interface Pattern {
@@ -146,12 +150,6 @@ function branchName(rev: string): string {
   return rev.replace(/^origin\//, '');
 }
 
-// env, in every git call below, is the store's git environment for the run (gitEnv), which drops what would point git
-// at another repository.
-async function hasCommit(cwd: string, env: Env, sha: string): Promise<boolean> {
-  return (await runGitAsync(cwd, ['cat-file', '-e', `${sha}^{commit}`], env)).code === 0;
-}
-
 function pathspecs(paths: readonly string[], exclude: readonly string[]): string[] {
   return [...paths.map((glob) => `:(top,glob)${glob}`), ...exclude.map((glob) => `:(top,exclude,glob)${glob}`)];
 }
@@ -205,74 +203,99 @@ function hitKey(hit: string): string {
   return parts === null ? hit : `${parts.path}\u0000${parts.text}`;
 }
 
-async function grepRevision(
-  cwd: string,
-  env: Env,
-  sha: string,
-  regex: string,
-  specs: readonly string[],
-  what: string,
-): Promise<readonly string[]> {
-  const grep = await runGitAsync(
-    cwd,
-    [
-      '-c',
-      'core.quotePath=false',
-      'grep',
-      '--no-color',
-      '--full-name',
-      '-n',
-      '-I',
-      '-E',
-      '-e',
-      regex,
-      sha,
-      '--',
-      ...specs,
-    ],
-    env,
-  );
-
-  // git grep exits 1 when nothing matches, and also when it could not read a file, which it reports only on stderr.
-  // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
-  if (grep.code > 1 || /^error: /m.test(grep.stderr)) {
-    throw new Error(`git grep for ${what}: ${grep.stderr.trim()}`);
-  }
-
-  return parseGrep(grep.stdout, sha);
+/** One commit of the checkout, read without checking it out. */
+interface Revision {
+  readonly sha: string;
+  /** The same checkout at another commit. */
+  readonly at: (sha: string) => Revision;
+  /** Whether the checkout has this commit. */
+  readonly has: () => Promise<boolean>;
+  /** Whether this commit is `later` or one of its ancestors. */
+  readonly isAncestorOf: (later: Revision) => Promise<boolean>;
+  /** The number of non-merge commits from `earlier` to this one. */
+  readonly commitsSince: (earlier: Revision) => Promise<number>;
+  /** The hits of an extended regex in the files that match specs; what names the search in an error. */
+  readonly grep: (regex: string, specs: readonly string[], what: string) => Promise<readonly string[]>;
 }
 
-export async function takeCensus(
-  cwd: string,
+/** The commit rev names in the checkout at cwd. */
+export async function revisionNamed(cwd: string, env: Env, rev: string): Promise<Revision> {
+  return revisionAt(cwd, env, await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env));
+}
+
+function revisionAt(cwd: string, env: Env, sha: string): Revision {
+  return {
+    sha,
+    at: (other) => revisionAt(cwd, env, other),
+    has: async () => (await runGitAsync(cwd, ['cat-file', '-e', `${sha}^{commit}`], env)).code === 0,
+    isAncestorOf: async (later) =>
+      (await runGitAsync(cwd, ['merge-base', '--is-ancestor', sha, later.sha], env)).code === 0,
+    commitsSince: async (earlier) =>
+      Number(await gitAsync(cwd, ['rev-list', '--no-merges', '--count', `${earlier.sha}..${sha}`], env)),
+    grep: async (regex, specs, what) => {
+      const grep = await runGitAsync(
+        cwd,
+        [
+          '-c',
+          'core.quotePath=false',
+          'grep',
+          '--no-color',
+          '--full-name',
+          '-n',
+          '-I',
+          '-E',
+          '-e',
+          regex,
+          sha,
+          '--',
+          ...specs,
+        ],
+        env,
+      );
+
+      // git grep exits 1 when nothing matches, and also when it could not read a file, which it reports only on stderr.
+      // Stryker disable next-line LzJsNumericLiteral: git exits 0, 1 or 128 and above, so > 1 and > 2 split them alike
+      if (grep.code > 1 || /^error: /m.test(grep.stderr)) {
+        throw new Error(`git grep for ${what}: ${grep.stderr.trim()}`);
+      }
+
+      return parseGrep(grep.stdout, sha);
+    },
+  };
+}
+
+/** The revision, or null when the checkout lacks its commit. */
+async function present(revision: Revision): Promise<Revision | null> {
+  return (await revision.has()) ? revision : null;
+}
+
+/** The census of revision, which rev names. */
+export async function censusAt(
+  revision: Revision,
   rev: string,
   set: PatternSet,
   now: Date,
-  env: Env,
   nameInErrors: (id: string) => string,
 ): Promise<Census> {
-  const sha = await gitAsync(cwd, ['rev-parse', '--verify', `${rev}^{commit}`], env);
   const greps = set.patterns.map(
     async (pattern) =>
       [
         pattern.id,
-        await grepRevision(
-          cwd,
-          env,
-          sha,
+        await revision.grep(
           pattern.regex,
           pathspecs(pattern.paths.length === 0 ? sourceGlobs : pattern.paths, set.exclude),
           nameInErrors(pattern.id),
         ),
       ] as const,
   );
-  const found = findDuplicates(cwd, env, sha, set.exclude);
+  const found = findDuplicates(revision, set.exclude);
   await Promise.allSettled([...greps, found]);
   const results = await Promise.all(greps);
   const duplicates = await found;
 
   return {
     rev: branchName(rev),
-    sha,
+    sha: revision.sha,
     takenAt: now.toISOString(),
     counts: Object.fromEntries(results.map(([id, hits]) => [id, hits.length])),
     hits: Object.fromEntries(results.map(([id, hits]) => [id, hits.slice(0, hitCap)])),
@@ -284,9 +307,10 @@ export async function takeCensus(
 const definition =
   /^(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
 // git grep takes POSIX extended regex, which has no \s or (?:), so it prefilters and `definition` names the match.
+// The prefilter alone keeps the definitions at the start of a line, the module's own: a hit's text is trimmed.
 const definitionPrefilter =
-  // Stryker disable next-line StringLiteral: the prefilter only narrows what git returns, and the definition regex decides every match; they differ only on non-ASCII whitespace such as a no-break space, which no rule depends on
-  '^[[:space:]]*(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
+  // Stryker disable next-line StringLiteral: past its start, the prefilter only narrows what git returns, and the definition regex decides every match; they differ only on non-ASCII whitespace such as a no-break space, which no rule depends on
+  '^(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
 
 const dotDirectories = '**/.*/**';
 
@@ -295,14 +319,9 @@ interface Definition {
   readonly path: string;
 }
 
-async function definitionsAt(
-  cwd: string,
-  env: Env,
-  sha: string,
-  exclude: readonly string[],
-): Promise<readonly Definition[]> {
-  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', dotDirectories]);
-  const hits = await grepRevision(cwd, env, sha, definitionPrefilter, specs, 'definitions');
+async function definitionsAt(revision: Revision, exclude: readonly string[]): Promise<readonly Definition[]> {
+  const specs = pathspecs(sourceGlobs, [...exclude, '**/*.spec.*', '**/*.test.*', '**/*.d.ts', dotDirectories]);
+  const hits = await revision.grep(definitionPrefilter, specs, 'definitions');
 
   return hits.flatMap((hit) => {
     const parts = splitHit(hit);
@@ -315,12 +334,10 @@ async function definitionsAt(
 }
 
 async function findDuplicates(
-  cwd: string,
-  env: Env,
-  sha: string,
+  revision: Revision,
   exclude: readonly string[],
 ): Promise<Readonly<Record<string, readonly string[]>>> {
-  const byName = Map.groupBy(await definitionsAt(cwd, env, sha, exclude), (item) => item.name);
+  const byName = Map.groupBy(await definitionsAt(revision, exclude), (item) => item.name);
 
   return Object.fromEntries(
     [...byName.entries()]
@@ -405,28 +422,83 @@ export function diffCensus(before: Census | null, after: Census): readonly Patte
 const seedFilesPerPattern = 20;
 const seedDuplicateNames = 30;
 
-function seedList(census: Census): string[] {
+/** A line of the seed list: the weeds of `class` it asks a seed pass to queue or decline, in `paths`. */
+export interface SeedLine {
+  readonly line: string;
+  readonly class: string;
+  readonly paths: readonly string[];
+}
+
+export function seedLines(census: Census): SeedLine[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
     [...Map.groupBy(hits, (hit) => splitHit(hit)?.path ?? hit)]
       .map(([path, items]) => ({ path, count: items.length }))
       .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
       .slice(0, seedFilesPerPattern)
-      .map(({ path, count }) => `= [${id}] ${path} ${String(count)}`),
+      .map(({ path, count }) => ({ line: `= [${id}] ${path} ${String(count)}`, class: id, paths: [path] })),
   );
-  const duplicates = Object.entries(census.duplicates).sort(
-    ([a, aPaths], [b, bPaths]) => bPaths.length - aPaths.length || a.localeCompare(b),
-  );
-  const listed = duplicates
+  const listed = Object.entries(census.duplicates)
+    .sort(([a, aPaths], [b, bPaths]) => bPaths.length - aPaths.length || a.localeCompare(b))
     .slice(0, seedDuplicateNames)
-    .map(([name, paths]) => `= duplicate ${name}: ${paths.join(', ')}`);
-  const rest = duplicates.length - listed.length;
+    .map(([name, paths]) => ({ line: `= duplicate ${name}: ${paths.join(', ')}`, class: 'duplicate-function', paths }));
+
+  return [...files, ...listed];
+}
+
+/** The census taken of `sha` and not yet recorded, else the site's census. */
+export function censusIn(site: string, sha: string | undefined): Census | undefined {
+  return (
+    (sha === undefined ? undefined : readableCensus(site, pendingCensusRef(sha))) ?? readableCensus(site, censusRef)
+  );
+}
+
+/** The seed list of the census taken of `sha` and not yet recorded, else of the garden's census; none without one. */
+export function seedLinesIn(site: string, sha: string | undefined): readonly SeedLine[] {
+  const census = censusIn(site, sha);
+
+  return census === undefined ? [] : seedLines(census);
+}
+
+/** The seed lines of `weedClass` in `census`; none without a census. */
+export function seedLinesOf(census: Census | undefined, weedClass: string): readonly SeedLine[] {
+  return census === undefined ? [] : seedLines(census).filter((seed) => seed.class === weedClass);
+}
+
+/** The path of a weed's `--where`, its `:<line>` dropped: the form a seed line names files in. */
+export function seedPath(where: string): string {
+  return where.replace(/:\d+$/, '');
+}
+
+/** Whether a weed of `weedClass` at `where` (a path, with or without `:<line>`) is one the seed line asks about. */
+export function onSeedLine(seed: SeedLine, weedClass: string, where: string): boolean {
+  return seed.class === weedClass && seed.paths.includes(seedPath(where));
+}
+
+/** Why a weed of `weedClass` at `where` cannot take --source census:seed, or null when a line of `seeds` names it. */
+export function offSeedList(seeds: readonly SeedLine[], weedClass: string, where: string): string | null {
+  return seeds.some((seed) => onSeedLine(seed, weedClass, where))
+    ? null
+    : `no line of the seed list is ${weedClass} in ${seedPath(where)}; census:seed is for those lines alone`;
+}
+
+/** The seed lines some path of which no add of the line's class covers: not yet queued or declined in full. */
+export function seedLinesLeft(seeds: readonly SeedLine[], events: readonly GardenEvent[]): readonly SeedLine[] {
+  const adds = events.filter((event) => event.op === 'add');
+
+  return seeds.filter(
+    (seed) => !seed.paths.every((path) => adds.some((add) => add.class === seed.class && seedPath(add.where) === path)),
+  );
+}
+
+function seedList(census: Census): string[] {
+  const lines = seedLines(census);
+  const rest = Object.keys(census.duplicates).length - seedDuplicateNames;
   const counted = Object.entries(census.counts)
     .filter(([, count]) => count > 0)
     .map(([id, count]) => `${id} ${String(count)}`);
 
   return [
-    ...files,
-    ...listed,
+    ...lines.map((seed) => seed.line),
     ...(rest > 0 ? [`${String(rest)} more duplicate names not listed`] : []),
     `census: ${counted.length === 0 ? 'none' : counted.join(', ')}`,
   ];
@@ -462,6 +534,10 @@ function readSite(cwd: string): {
   return { site, recorded, extraFile: extraPatterns(site.path, recorded) };
 }
 
+function sitePatternLine({ id, regex, paths }: Pattern): string {
+  return `site pattern ${id}: ${regex}${paths.length === 0 ? '' : ` in ${paths.join(', ')}`}`;
+}
+
 async function main(argv: readonly string[], io: Io): Promise<number> {
   const { values } = parseArgs({
     args: [...argv],
@@ -487,30 +563,23 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
   const fromExtra = new Set(extra?.patterns.map(({ id }) => id));
   const nameInErrors = (id: string): string =>
     extraFile !== undefined && fromExtra.has(id) ? `${id} from ${extraFile.source}` : id;
-  const after = await takeCensus(io.cwd, rev, set, new Date(), env, nameInErrors);
+  const revision = await revisionNamed(io.cwd, env, rev);
+  const after = await censusAt(revision, rev, set, new Date(), nameInErrors);
   const deltas = diffCensus(before, after);
   const serialize = (census: Census): string => `${JSON.stringify(census, null, 2)}\n`;
   const changed = recorded === null || serialize({ ...after, takenAt: recorded.census.takenAt }) !== recorded.text;
-  const previousSha = before !== null && (await hasCommit(io.cwd, env, before.sha)) ? before.sha : null;
+  // The previous census's commit, when this checkout has it.
+  const previous = before === null ? null : await present(revision.at(before.sha));
 
   const grew = deltas.filter((delta) => delta.before !== null && delta.after > delta.before).map((delta) => delta.id);
   const newDuplicates = diffDuplicates(before, after);
   // A name that was defined in one file only had no entry in the previous census, so that file is found at its commit.
-  const earlier =
-    previousSha === null || newDuplicates.length === 0
-      ? []
-      : await definitionsAt(io.cwd, env, previousSha, set.exclude);
+  const earlier = previous === null || newDuplicates.length === 0 ? [] : await definitionsAt(previous, set.exclude);
   const summary = {
     sha: after.sha,
-    previousSha,
-    behind:
-      previousSha !== null &&
-      previousSha !== after.sha &&
-      (await runGitAsync(io.cwd, ['merge-base', '--is-ancestor', after.sha, previousSha], env)).code === 0,
-    commits:
-      previousSha === null
-        ? null
-        : Number(await gitAsync(io.cwd, ['rev-list', '--no-merges', '--count', `${previousSha}..${after.sha}`], env)),
+    previousSha: previous?.sha ?? null,
+    behind: previous !== null && previous.sha !== revision.sha && (await revision.isAncestorOf(previous)),
+    commits: previous === null ? null : await revision.commitsSince(previous),
     grew,
     newHits: deltas.reduce((sum, delta) => sum + delta.added.length, 0),
     newDuplicates,
@@ -527,6 +596,7 @@ async function main(argv: readonly string[], io: Io): Promise<number> {
     .filter(([, count]) => count > hitCap)
     .map(([id]) => id);
   const lines = [
+    ...(extra?.patterns.map(sitePatternLine) ?? []),
     ...formatDelta(deltas),
     ...(capped.length === 0 ? [] : [`hits capped at ${String(hitCap)}: ${capped.join(', ')}`]),
     ...duplicateLines(before, after, newDuplicates, earlier),

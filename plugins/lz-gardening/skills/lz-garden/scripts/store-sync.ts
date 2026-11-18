@@ -1,12 +1,14 @@
 // Sharing with origin: fetch origin's garden refs, merge its log into the site's, give back claims a sync lost, settle
 // the census, and push the log, the census and the beds.
 import { eventPathPattern, parseEvent, planGiveBack, releasesOfLostClaims } from './log.ts';
+import { escapeUnprintable } from './log-fields.ts';
 import type { LostClaim } from './log.ts';
 import { markUnpushed, planBeds, pushBeds } from './store-beds.ts';
 import { censusRef, finishPendingCensus, leaseOnFetchedCensus, localCensusOf, settleCensus } from './store-census.ts';
 import type { CensusTips, Recorded } from './store-census.ts';
 import {
   catFileBatch,
+  configValue,
   git,
   gitReason,
   isAncestor,
@@ -72,29 +74,19 @@ interface Outcome {
   readonly pushedEvents: number;
   readonly conflicts: readonly string[];
   readonly skipped: readonly string[];
-  readonly yielded: readonly LostClaim[];
-  readonly divergedBeds: readonly string[];
-  readonly censusStillPending?: string;
-}
-
-interface WithoutCensusNotes extends Outcome {
-  readonly sharedCensusIgnored?: undefined;
-  readonly censusKeptLocal?: undefined;
-  readonly localCensusUnreadable?: undefined;
-}
-
-interface WithCensusNotes extends Outcome {
-  readonly sharedCensusIgnored?: boolean;
-  readonly censusKeptLocal?: string;
-  readonly localCensusUnreadable?: boolean;
+  /**
+   * What the sync left out, gave back or could not share, one line each, in the order a command prints them on stderr.
+   * Every command that reports a sync prints all of them.
+   */
+  readonly notes: readonly string[];
 }
 
 export type SyncResult =
-  | (WithoutCensusNotes & { readonly state: 'local'; readonly reason?: undefined })
-  | (WithoutCensusNotes & { readonly state: 'behind'; readonly reason: string })
-  | (WithoutCensusNotes & { readonly state: 'offline'; readonly reason: string })
-  | (WithCensusNotes & { readonly state: 'read-only'; readonly reason: string })
-  | (WithCensusNotes & { readonly state: 'synced'; readonly reason?: undefined });
+  | (Outcome & { readonly state: 'local'; readonly reason?: undefined })
+  | (Outcome & { readonly state: 'behind'; readonly reason: string })
+  | (Outcome & { readonly state: 'offline'; readonly reason: string })
+  | (Outcome & { readonly state: 'read-only'; readonly reason: string })
+  | (Outcome & { readonly state: 'synced'; readonly reason?: undefined });
 
 export type ShareState = SyncResult['state'];
 
@@ -107,7 +99,16 @@ export interface SyncOptions {
 
 const nothingMerged = { pushedEvents: 0, conflicts: [], skipped: [] } as const;
 
-const nothingShared = { ...nothingMerged, yielded: [], divergedBeds: [] } as const;
+const nothingShared = { ...nothingMerged, notes: [] } as const;
+
+// The notes a try learned that a sync reports after its census notes: the claims the try gave back, which the tries
+// add up, and the beds it could not push.
+interface Learned {
+  readonly givenBack: readonly string[];
+  readonly unpushedBeds: readonly string[];
+}
+
+const nothingLearned = { givenBack: [], unpushedBeds: [] } as const;
 
 interface Leaving {
   readonly path: string;
@@ -260,44 +261,94 @@ export function isShared(result: SyncResult): boolean {
 }
 
 export function sync(site: Site, options: SyncOptions, now = new Date()): SyncResult {
-  const { result, recorded } = syncWithOrigin(site, options, now);
+  const { result, recorded, givenBack, unpushedBeds } = syncWithOrigin(site, options, now);
 
-  const lost =
-    options.census !== undefined && finishPendingCensus(site, options.census, recorded) === lostToAnotherWriter;
+  const stillPending =
+    options.census === undefined || finishPendingCensus(site, options.census, recorded) !== lostToAnotherWriter
+      ? []
+      : [`another sync moved the census first; the census of ${options.census} stays pending for the next sync`];
 
-  return lost ? { ...result, censusStillPending: options.census } : result;
+  // The notes of the last try's census come first, then the pending census, the claims every try gave back, and the
+  // beds the last try could not push.
+  return { ...result, notes: [...result.notes, ...stillPending, ...givenBack, ...unpushedBeds] };
+}
+
+const origin = 'origin\t';
+
+// git remote -v prints a remote's first fetch URL and each push URL as git remote get-url does, rewritten by
+// url.<base>.insteadOf and pushInsteadOf; the fetch line ends in " [<filter>]" when the remote has a partial clone
+// filter. It lists only remotes the config defines, so an origin kept only in the legacy .git/remotes or .git/branches
+// files, which git has marked for removal, reads as no origin.
+function originUrls(checkout: string): { readonly fetchUrl: string; readonly pushUrl: string } | undefined {
+  const lines = git(checkout, ['remote', '-v'], { readsOnly: true })
+    .split('\n')
+    .filter((line) => line.startsWith(origin))
+    .map((line) => line.slice(origin.length));
+  const filter = lines.length === 0 ? undefined : configValue(checkout, 'remote.origin.partialclonefilter');
+  const urlEndingIn = (end: string): string | undefined =>
+    lines.find((line) => line.endsWith(end))?.slice(0, -end.length);
+  const fetchUrl = urlEndingIn(` (fetch)${filter === undefined ? '' : ` [${filter}]`}`);
+  const pushUrl = urlEndingIn(' (push)');
+
+  // A URL may hold a newline, which git remote -v prints as is, so another remote can list lines that read as origin's.
+  return fetchUrl === undefined ||
+    pushUrl === undefined ||
+    configValue(checkout, 'remote.origin.url') === undefined ||
+    refusesCredentials(checkout)
+    ? undefined
+    : { fetchUrl, pushUrl };
+}
+
+// git remote -v lists a URL that holds a password whatever transfer.credentialsInUrl says; with the key set, git remote
+// get-url decides: under die it refuses such a URL, and under a value git does not know, every origin.
+function refusesCredentials(checkout: string): boolean {
+  return (
+    configValue(checkout, 'transfer.credentialsinurl') !== undefined &&
+    optionalGit(checkout, ['remote', 'get-url', 'origin'], { readsOnly: true }) === undefined
+  );
+}
+
+// Unset, the garden is shared; a value goes to git, which reads each spelling it takes (the run's config list holds
+// an empty value and a key with no value alike, which git reads as false and true).
+function shared(checkout: string): boolean {
+  return (
+    configValue(checkout, shareKey) === undefined ||
+    git(checkout, ['config', '--type=bool', shareKey], { readsOnly: true }) === 'true'
+  );
 }
 
 // What a try that settled the census recorded of the pending one.
-type Tried = SyncResult & { readonly recorded?: Recorded | undefined };
+type Tried = SyncResult & Learned & { readonly recorded?: Recorded | undefined };
 
 function syncWithOrigin(
   site: Site,
   { attempts, wait = sleep, timeoutMs = networkTimeoutMs, census: pendingSha }: SyncOptions,
   now: Date,
-): { readonly result: SyncResult; readonly recorded: Recorded | undefined } {
-  const fetchUrl = optionalGit(site.checkout, ['remote', 'get-url', 'origin'], { readsOnly: true });
+): Learned & { readonly result: SyncResult; readonly recorded: Recorded | undefined } {
+  const urls = originUrls(site.checkout);
 
-  if (
-    fetchUrl === undefined ||
-    git(site.checkout, ['config', '--type=bool', '--default=true', shareKey], { readsOnly: true }) === 'false'
-  ) {
-    return { result: { state: 'local', ...nothingShared }, recorded: undefined };
+  if (urls === undefined || !shared(site.checkout)) {
+    return { result: { state: 'local', ...nothingShared }, recorded: undefined, ...nothingLearned };
   }
 
-  const pushUrl = git(site.checkout, ['remote', 'get-url', '--push', 'origin'], { readsOnly: true });
-  let yielded: readonly LostClaim[] = [];
+  const { fetchUrl, pushUrl } = urls;
+  let givenBack: readonly string[] = [];
   let conflicts: readonly string[] = [];
   let skipped: readonly string[] = [];
 
   for (let attempt = 1; ; attempt += 1) {
-    const { recorded, ...result } = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
-    yielded = [...yielded, ...result.yielded];
+    const {
+      recorded,
+      givenBack: givenBackThisTry,
+      unpushedBeds,
+      ...result
+    } = syncOnce(site, { fetchUrl, pushUrl, timeoutMs, pendingSha, now });
+    givenBack = [...givenBack, ...givenBackThisTry];
     conflicts = [...conflicts, ...result.conflicts];
     skipped = [...new Set([...skipped, ...result.skipped])];
 
     if (result.state !== 'behind' || attempt >= attempts) {
-      return { result: { ...result, yielded, conflicts, skipped }, recorded };
+      return { result: { ...result, conflicts, skipped }, recorded, givenBack, unpushedBeds };
     }
 
     wait(2 ** (attempt - 1) * 1000 * (0.5 + Math.random()));
@@ -362,7 +413,7 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   );
 
   if (timedOut(fetched)) {
-    return { state: 'offline', reason: 'timed out', ...nothingShared };
+    return { state: 'offline', reason: 'timed out', ...nothingShared, ...nothingLearned };
   }
 
   if (fetched.status !== 0) {
@@ -370,16 +421,27 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
       state: lostSharedRefLock.test(fetched.stderr) ? 'behind' : 'offline',
       reason: gitReason(fetched.stderr),
       ...nothingShared,
+      ...nothingLearned,
     };
   }
 
   const { upToDate, census: censusTips, sharedTip, leaving, ...mergedLog } = mergeShared(site);
   const given = giveBackLosingClaims(site, sharedTip, leaving, attempt.now);
-  const found = { conflicts: mergedLog.conflicts, skipped: mergedLog.skipped, yielded: given.lost };
+  const found = {
+    conflicts: mergedLog.conflicts,
+    skipped: mergedLog.skipped,
+    givenBack: given.lost.map(({ claim, owner }) => `gave back the claim of ${claim.class}; ${owner.holder} holds it`),
+  };
   const settledCensus = settleCensus(site, censusTips, pendingSha);
 
   if (settledCensus === lostToAnotherWriter) {
-    return { state: 'behind', reason: 'another sync of the site moved the census first', ...nothingShared, ...found };
+    return {
+      state: 'behind',
+      reason: 'another sync of the site moved the census first',
+      ...nothingShared,
+      ...nothingLearned,
+      ...found,
+    };
   }
 
   const { recorded, ...settled } = settledCensus;
@@ -391,15 +453,27 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     ...mergedLog,
     ...found,
     pushedEvents,
-    ...(settled.ignored ? { sharedCensusIgnored: true } : {}),
-    ...(typeof localCensus === 'object' ? { censusKeptLocal: localCensus.keptLocal } : {}),
-    ...(localCensus === 'unreadable' ? { localCensusUnreadable: true } : {}),
+    notes: [
+      ...(settled.ignored
+        ? [`the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it`]
+        : []),
+      ...(typeof localCensus === 'object'
+        ? [
+            `the census of ${escapeUnprintable(localCensus.keptLocal)} stays local: no branch fetched from origin holds that commit`,
+          ]
+        : []),
+      ...(localCensus === 'unreadable'
+        ? [
+            `the site's ${censusRef} is not a census, so it stays local; delete it in the site (git update-ref -d ${censusRef}), and the next tick records a new one`,
+          ]
+        : []),
+    ],
   };
 
   const beds = markUnpushed(site, planBeds(site, leaving));
 
   if (upToDate && !censusAhead) {
-    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, beds, attempt), recorded };
+    return { state: 'synced', ...merged, unpushedBeds: pushBeds(site, beds, attempt).map(escapeUnprintable), recorded };
   }
 
   const pushed = networkGit(
@@ -417,14 +491,14 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
     timeoutMs,
   );
 
-  const unshared = { ...nothingShared, ...found, recorded };
+  const unshared = { ...nothingShared, ...nothingLearned, ...found, recorded };
 
   if (timedOut(pushed)) {
     return { state: 'offline', reason: 'timed out', ...unshared };
   }
 
   if (pushed.status === 0) {
-    return { state: 'synced', ...merged, divergedBeds: pushBeds(site, beds, attempt), recorded };
+    return { state: 'synced', ...merged, unpushedBeds: pushBeds(site, beds, attempt).map(escapeUnprintable), recorded };
   }
 
   const lost = lostRaceOf(pushed.stdout);
@@ -434,6 +508,6 @@ function syncOnce(site: Site, attempt: Attempt): Tried {
   }
 
   return declined(pushed.stdout)
-    ? { state: 'read-only', reason: gitReason(pushed.stderr), ...merged, pushedEvents: 0, divergedBeds: [], recorded }
+    ? { state: 'read-only', reason: gitReason(pushed.stderr), ...merged, pushedEvents: 0, unpushedBeds: [], recorded }
     : { state: 'offline', reason: gitReason(pushed.stderr), ...unshared };
 }

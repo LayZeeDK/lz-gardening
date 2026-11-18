@@ -150,7 +150,10 @@ test('a sync that gives back a claim counts the claim and its release as pushed'
 
   const result = sync(openSite(second.dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.yielded.length, result.pushedEvents], ['synced', 1, 2]);
+  assert.deepEqual(
+    [result.state, result.notes, result.pushedEvents],
+    ['synced', [`gave back the claim of any-type; ${holderOf(first.dir)} holds it`], 2],
+  );
 });
 
 test('a claim appended and never pushed of a class nobody else claimed is pushed by the next open', (t) => {

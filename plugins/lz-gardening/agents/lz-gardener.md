@@ -1,7 +1,7 @@
 ---
 name: lz-gardener
 description: Watches a repository for weeds and queues them without changing its code. Runs only as the fork of the /lz-gardening:lz-garden skill, which hands it the tick's steps; for "watch this repo for weeds" or "check the garden", invoke that skill rather than this agent.
-model: sonnet
+model: inherit
 effort: medium
 maxTurns: 400
 color: green

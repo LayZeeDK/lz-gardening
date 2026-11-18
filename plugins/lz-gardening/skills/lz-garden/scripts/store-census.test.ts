@@ -20,6 +20,8 @@ import {
 } from './test-site.ts';
 import type { Planted } from './test-site.ts';
 
+const sharedCensusLeftOut = `the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it`;
+
 function storedAt(garden: string, ref: string): StoredCensus {
   const read = readCensusAt(garden, ref);
   assert.ok(read.kind === 'census', `${ref} holds a census`);
@@ -299,7 +301,7 @@ test('a sync that takes the shared census as its own does not say it left it out
   const { first, second } = sharedPair(t);
   record(first, git(first.dir, ['rev-parse', 'HEAD']));
 
-  assert.equal(sync(openSite(second.dir), { attempts: 1 }).sharedCensusIgnored, undefined);
+  assert.equal(sync(openSite(second.dir), { attempts: 1 }).notes.includes(sharedCensusLeftOut), false);
 });
 
 test('a site takes a shared census of a newer base commit in place of its own, and leaves it on the origin', (t) => {
@@ -339,7 +341,7 @@ test('a census of a newer base commit recorded while the garden was local is kep
 test('a sync that keeps its census of a newer base commit over the shared one does not say it left the shared one out', (t) => {
   const { place } = newerCensusRecordedWhileLocal(t);
 
-  assert.equal(sync(openSite(place.dir), { attempts: 1 }).sharedCensusIgnored, undefined);
+  assert.equal(sync(openSite(place.dir), { attempts: 1 }).notes.includes(sharedCensusLeftOut), false);
 });
 
 function pushNotACensus(place: Planted, remote: string): string {
@@ -366,7 +368,7 @@ test('a sync says when it left out a shared census that is not a census', (t) =>
   const place = planted(t);
   pushNotACensus(place, bareRemote(place.dir));
 
-  assert.equal(sync(openSite(place.dir), { attempts: 1 }).sharedCensusIgnored, true);
+  assert.equal(sync(openSite(place.dir), { attempts: 1 }).notes.includes(sharedCensusLeftOut), true);
 });
 
 test('a sync whose origin cannot be reached records the pending census as its census', (t) => {
@@ -624,7 +626,7 @@ test('a sync of a site whose census, not a census, is the one the origin holds d
   writeUnreadableCensus(place);
   git(place.garden, ['push', '-q', remote, `${censusRef}:${censusRef}`]);
 
-  assert.equal(sync(openSite(place.dir), { attempts: 1 }).sharedCensusIgnored, undefined);
+  assert.equal(sync(openSite(place.dir), { attempts: 1 }).notes.includes(sharedCensusLeftOut), false);
 });
 
 test('a census of a commit only a tag and another remote hold stays local', (t) => {
@@ -655,7 +657,13 @@ test('a census of a commit the checkout lacks stays local', (t) => {
 
   const result = sync(openSite(place.dir), { attempts: 1, census: missing });
 
-  assert.deepEqual([result.censusKeptLocal, remoteCensus(remote)], [missing, '']);
+  assert.deepEqual(
+    [
+      result.notes.includes(`the census of ${missing} stays local: no branch fetched from origin holds that commit`),
+      remoteCensus(remote),
+    ],
+    [true, ''],
+  );
 });
 
 test('a census commit is authored as lz-gardening with no address, and an origin that checks every object takes it', (t) => {

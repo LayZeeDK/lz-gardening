@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
-import { eventPath, isRecord } from './log.ts';
+import { eventPath } from './log.ts';
+import { isRecord } from './log-guard.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
 import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
 import { logRef, openSite } from './store-log.ts';
-import { censusRef, writePendingCensus } from './store-census.ts';
+import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { isShared, lostRaceOf, mergeShared, sleep, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo, scriptProcess, startedCommands, startedGits } from './test-repo.ts';
@@ -26,7 +27,7 @@ import {
   writeCensus,
 } from './test-site.ts';
 import type { Planted } from './test-site.ts';
-import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
+import { addWeed, bedFromMain, cli, tendedBed } from './test-weeds.ts';
 
 test('a site whose checkout has no origin stays local and keeps its log as it was', (t) => {
   const { dir, garden } = planted(t);
@@ -230,7 +231,38 @@ test('a sync whose push the origin declines names no bed as left out', (t) => {
 
   const result = sync(openSite(dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.divergedBeds], ['read-only', []]);
+  assert.deepEqual([result.state, result.notes], ['read-only', []]);
+});
+
+// The log's push lands and leaves origin no repository, so the bed's push fails with git's reason, which names the
+// origin's path, unprintable character and all.
+test('a sync notes the shared census it left out, then the census it kept local, then the bed it could not push', (t) => {
+  const { dir, garden } = tendedBed(t, { 'checks/any-type.mjs': 'export {};\n' });
+  const remote = join(dirname(dir), 'remote‮.git');
+  git(dirname(dir), ['init', '-q', '--bare', remote]);
+  git(dir, ['remote', 'add', 'origin', remote]);
+  git(dir, ['push', '-q', 'origin', 'main']);
+  const notACensus = git(dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: garden, checkout: dir }, notACensus, '{"rev":"main"}\n');
+  git(garden, ['push', '-q', remote, `+${pendingCensusRef(notACensus)}:${censusRef}`]);
+  git(garden, ['update-ref', '-d', pendingCensusRef(notACensus)]);
+  const unpushed = commit(dir, { 'src/c.ts': 'export const c = 3;\n' });
+  writePendingCensus({ path: garden, checkout: dir }, unpushed, censusText(unpushed));
+  remoteHook(remote, 'post-receive', 'rm HEAD');
+
+  const result = sync(openSite(dir), { attempts: 1, census: unpushed });
+
+  assert.deepEqual(
+    [result.state, result.notes],
+    [
+      'synced',
+      [
+        `the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it`,
+        `the census of ${unpushed} stays local: no branch fetched from origin holds that commit`,
+        `any-type: fatal: '${remote.replace('‮', '\\u{202e}')}' does not appear to be a git repository`,
+      ],
+    ],
+  );
 });
 
 test('a site set to sign every push still shares its log, unsigned', (t) => {
@@ -261,6 +293,160 @@ test('an origin with a push URL of its own is fetched from its URL and pushed to
   assert.deepEqual(
     [wheres(second.dir), git(pushRemote, ['rev-parse', logRef]), git(remote, ['rev-parse', logRef])],
     [['src/a.ts:1', 'src/b.ts:1'], git(second.garden, ['rev-parse', logRef]), git(first.garden, ['rev-parse', logRef])],
+  );
+});
+
+test('an origin with two push URLs is pushed to at the first, as git remote get-url --push gives it', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  git(second.dir, ['remote', 'set-url', '--push', 'origin', remote]);
+  git(second.dir, ['remote', 'set-url', '--push', '--add', 'origin', join(dirname(second.dir), 'missing.git')]);
+  addWeed(second.dir, 'src/b.ts:1');
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, git(remote, ['rev-parse', logRef])],
+    ['synced', git(second.garden, ['rev-parse', logRef])],
+  );
+});
+
+test('an origin URL that a url.<base>.insteadOf rewrites is fetched from and pushed to at the rewritten URL', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  git(second.dir, ['config', `url.${remote}.insteadOf`, 'garden-alias:origin']);
+  git(second.dir, ['remote', 'set-url', 'origin', 'garden-alias:origin']);
+  addWeed(second.dir, 'src/b.ts:1');
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, wheres(second.dir), git(remote, ['rev-parse', logRef])],
+    ['synced', ['src/a.ts:1', 'src/b.ts:1'], git(second.garden, ['rev-parse', logRef])],
+  );
+});
+
+test('an origin URL that a url.<base>.pushInsteadOf rewrites is fetched from as it is and pushed to rewritten', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  const pushRemote = join(dirname(second.dir), 'push.git');
+  git(dirname(second.dir), ['init', '-q', '--bare', pushRemote]);
+  git(second.dir, ['config', `url.${pushRemote}.pushInsteadOf`, remote]);
+  addWeed(second.dir, 'src/b.ts:1');
+
+  sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [wheres(second.dir), git(pushRemote, ['rev-parse', logRef]), git(remote, ['rev-parse', logRef])],
+    [['src/a.ts:1', 'src/b.ts:1'], git(second.garden, ['rev-parse', logRef]), git(first.garden, ['rev-parse', logRef])],
+  );
+});
+
+test('an origin with a partial clone filter is synced at its URL, which git lists with the filter beside it', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  git(second.dir, ['config', 'remote.origin.partialclonefilter', 'blob:none']);
+  addWeed(second.dir, 'src/b.ts:1');
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, wheres(second.dir), git(remote, ['rev-parse', logRef])],
+    ['synced', ['src/a.ts:1', 'src/b.ts:1'], git(second.garden, ['rev-parse', logRef])],
+  );
+});
+
+test('an origin whose URL holds a password stays local when the checkout sets transfer.credentialsInUrl to die', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['remote', 'set-url', 'origin', 'https://user:password@127.0.0.1:1/r.git']);
+  git(dir, ['config', 'transfer.credentialsInUrl', 'die']);
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(result.state, 'local');
+});
+
+test('an origin whose URL holds no password syncs when the checkout sets transfer.credentialsInUrl to die', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['config', 'transfer.credentialsInUrl', 'die']);
+  addWeed(dir, 'src/a.ts:1');
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(result.state, 'synced');
+});
+
+test('a checkout with no origin stays local when another remote URL holds lines that read as origin', (t) => {
+  const { dir } = planted(t);
+  const remote = bareRemote(dir);
+  git(dir, ['remote', 'remove', 'origin']);
+  git(dir, ['config', 'remote.aaa.url', `x\norigin\t${remote} (fetch)\norigin\t${remote}`]);
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(result.state, 'local');
+});
+
+test('a checkout with another remote that git lists before origin syncs with origin', (t) => {
+  const { first, second, remote } = sharedPair(t);
+  addWeed(first.dir, 'src/a.ts:1');
+  sync(openSite(first.dir), { attempts: 1 });
+  git(second.dir, ['remote', 'add', 'a-mirror', join(dirname(second.dir), 'missing.git')]);
+  addWeed(second.dir, 'src/b.ts:1');
+
+  const result = sync(openSite(second.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, wheres(second.dir), git(remote, ['rev-parse', logRef])],
+    ['synced', ['src/a.ts:1', 'src/b.ts:1'], git(second.garden, ['rev-parse', logRef])],
+  );
+});
+
+for (const [value, state] of [
+  ['no', 'local'],
+  ['off', 'local'],
+  ['0', 'local'],
+  ['', 'local'],
+  ['yes', 'synced'],
+  ['on', 'synced'],
+  ['1', 'synced'],
+  ['TRUE', 'synced'],
+] as const) {
+  test(`a checkout whose lzGardening.share is '${value}' reads as ${state}`, (t) => {
+    const { dir } = planted(t);
+    bareRemote(dir);
+    git(dir, ['config', 'lzGardening.share', value]);
+
+    const result = sync(openSite(dir), { attempts: 1 });
+
+    assert.equal(result.state, state);
+  });
+}
+
+test('a checkout that names lzGardening.share with no value shares the garden', (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  appendFileSync(join(dir, '.git', 'config'), '[lzGardening]\n\tshare\n');
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.equal(result.state, 'synced');
+});
+
+test("a checkout whose lzGardening.share is not a boolean fails the sync with git's reason", (t) => {
+  const { dir } = planted(t);
+  bareRemote(dir);
+  git(dir, ['config', 'lzGardening.share', 'maybe']);
+
+  assert.throws(
+    () => sync(openSite(dir), { attempts: 1 }),
+    /bad boolean config value 'maybe' for 'lzgardening\.share'/,
   );
 });
 
@@ -687,7 +873,7 @@ function withALogACensusAndABedToShare(t: TestContext): {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   addWeed(second.dir, 'src/b.ts:1');
-  const tip = commit(anyTypeBedFromMain(second.garden), { 'checks/any-type.mjs': 'export {};\n' });
+  const tip = commit(bedFromMain(second.garden, 'any-type'), { 'checks/any-type.mjs': 'export {};\n' });
   git(second.dir, ['config', 'lzGardening.share', 'false']);
   assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).status, 0);
   const closed = cli(second.dir, [
@@ -711,10 +897,14 @@ test('a sync turns the hooks and signing off for the gits that write, and for no
   const { first, second, base } = withALogACensusAndABedToShare(t);
   writeToLogByHand(first.garden, 'garden.json', '{ "format": 1 }');
   sync(openSite(first.dir), { attempts: 1 });
+  // With the key set, the sync also asks git remote get-url.
+  git(second.dir, ['config', 'transfer.credentialsInUrl', 'die']);
   const started = startedGits(t);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
 
-  sync(openSite(second.dir), { attempts: 1, census: base });
+  inRun({ ...env, [readStrategyVariable]: 'spawn' }, () => sync(openSite(second.dir), { attempts: 1, census: base }));
 
+  assert.ok(started().some(({ args }) => args.includes('get-url')));
   const turnsHooksOff = (args: readonly string[]): boolean => args.some((arg) => arg.startsWith('core.hooksPath='));
   const commands = (which: (args: readonly string[]) => boolean): readonly (string | undefined)[] =>
     [
@@ -768,10 +958,20 @@ for (const strategy of readStrategies) {
 
     assert.deepEqual(
       [result.state, started],
-      ['synced', ['rev-parse', 'config', 'remote', 'config', 'remote', 'config', 'fetch', 'cat-file', 'for-each-ref']],
+      ['synced', ['rev-parse', 'config', 'remote', 'config', 'fetch', 'cat-file', 'for-each-ref']],
     );
   });
 }
+
+test('a sync of a checkout with no origin lists its remotes and stops, with no further config read', (t) => {
+  const { dir } = planted(t);
+  const started = startedCommands(t);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !mayPointAtARepository(name)));
+
+  const result = inRun({ ...env, [readStrategyVariable]: 'spawn' }, () => sync(openSite(dir), { attempts: 1 }));
+
+  assert.deepEqual([result.state, started], ['local', ['rev-parse', 'config', 'remote']]);
+});
 
 test('a sync that pushes a weed and gives back no claim fetches, compares the logs, reads the weed, lists the beds and pushes, and never reads the whole log', (t) => {
   const { dir } = planted(t);
@@ -789,8 +989,6 @@ test('a sync that pushes a weed and gives back no claim fetches, compares the lo
       'synced',
       [
         'rev-parse',
-        'config',
-        'remote',
         'config',
         'remote',
         'config',

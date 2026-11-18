@@ -1,12 +1,12 @@
 // Run: node --test store-git.test.ts
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
-import { mkdirSync, renameSync } from 'node:fs';
+import { appendFileSync, mkdirSync, renameSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
-import { isRecord } from './log.ts';
+import { isRecord } from './log-guard.ts';
 import {
   catFileBatch,
   closeReaders,
@@ -21,9 +21,12 @@ import {
   moveRefIfStill,
   networkGit,
   objectIds,
+  optionalGit,
   pushReport,
   refsUnder,
   refTip,
+  runGit,
+  siteObjectsInput,
   treeAt,
 } from './store-git.ts';
 import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
@@ -54,6 +57,61 @@ function sha256Repo(t: TestContext): string {
 
   return dir;
 }
+
+test("a read with the site's objects input sees a commit only the site holds, with lazy fetching turned off", (t) => {
+  const checkout = repo(t);
+  commit(checkout, { 'a.txt': 'a\n' });
+  const site = join(dirname(checkout), 'site');
+  init(site);
+  const onlyInSite = commit(site, { 'b.txt': 'b\n' });
+
+  const [input, through, without] = inRun(process.env, () => {
+    const objects = siteObjectsInput(site);
+
+    return [
+      objects,
+      optionalGit(checkout, ['cat-file', '-t', onlyInSite], objects),
+      optionalGit(checkout, ['cat-file', '-t', onlyInSite]),
+    ] as const;
+  });
+
+  assert.deepEqual(
+    [through, without, input.readsOnly, input.env?.['GIT_NO_LAZY_FETCH']],
+    ['commit', undefined, true, '1'],
+  );
+});
+
+test('a git that ends on a bad config before it reads its input fails with its own error, not as one that could not start', (t) => {
+  const dir = repo(t);
+  appendFileSync(join(dir, '.git', 'config'), '[core\n');
+
+  const result = runGit(dir, ['cat-file', '--batch-check'], { input: 'HEAD\n'.repeat(4_000_000), readsOnly: true });
+
+  assert.deepEqual([result.status, /fatal: bad config line \d+ in file /.test(result.stderr)], [128, true]);
+});
+
+test('a batch read by the spawn strategy from a git that ends on a bad config fails with the error git gives', (t) => {
+  const dir = repo(t);
+  appendFileSync(join(dir, '.git', 'config'), '[core\n');
+  const names = Array.from({ length: 400_000 }, () => 'HEAD');
+
+  assert.throws(
+    () => inRun({ ...process.env, [readStrategyVariable]: 'spawn' }, () => catFileBatch(dir, names, (name) => name)),
+    { message: /^git cat-file --batch: fatal: bad config line \d+ in file / },
+  );
+});
+
+test('a batch read by the spawn strategy with no git on the PATH fails saying git could not be started', (t) => {
+  const dir = repo(t);
+  const empty = join(dirname(dir), 'empty');
+  mkdirSync(empty);
+  const otherVariables = Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PATH');
+  const env = { ...Object.fromEntries(otherVariables), PATH: empty, [readStrategyVariable]: 'spawn' };
+
+  assert.throws(() => inRun(env, () => catFileBatch(dir, ['HEAD'], (name) => name)), {
+    message: /^git cat-file --batch: spawnSync git ENOENT$/,
+  });
+});
 
 test('each read strategy answers an id read of no names with no ids', (t) => {
   const dir = repo(t);

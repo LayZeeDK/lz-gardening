@@ -12,7 +12,9 @@
 //   node site.ts sync [--census <sha> [--seeded]]
 //                                           sync with origin, up to 5 tries; with --census, record the census
 //                                           census.ts took of <sha> unless the garden's census is of that commit or
-//                                           a later one, and with --seeded add the seed event; prints {shared,
+//                                           a later one, and with --seeded add the seed event once every seed line
+//                                           of that census is queued or declined (else exit 1, naming each line
+//                                           left on stderr, and record nothing); prints {shared,
 //                                           events} and reason and conflicts when there are any; exit 0 in every
 //                                           share state; a census another sync beat to the move stays pending, said
 //                                           on stderr
@@ -28,24 +30,14 @@
 // Exit 0 on success, 1 when bed cannot check the claim or this site does not hold it, or when sync --census has no
 // census of <sha> to record and the garden's census is not of <sha> or a later commit (nothing is synced or seeded
 // then), 2 on a usage error, no site, a git error or a site or census it cannot use.
-import { existsSync, lstatSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand } from './cli.ts';
+import { isMainModule, printableReason, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
-import {
-  closeReaders,
-  configValue,
-  git,
-  gitReason,
-  gitSucceeds,
-  objectIds,
-  optionalGit,
-  refTip,
-  runGit,
-} from './store-git.ts';
+import { closeReaders, configValue, git, objectIds, optionalGit, refTip } from './store-git.ts';
 import {
   append,
   logRef,
@@ -59,10 +51,13 @@ import {
 } from './store-log.ts';
 import type { Located, Site } from './store-log.ts';
 import { censusRef, holdsCensusCovering, readableCensus } from './store-census.ts';
-import { fetchedBedRef } from './store-beds.ts';
+import { seedLinesIn, seedLinesLeft } from './census.ts';
+import { makeBed } from './site-bed.ts';
+import type { BedSummary } from './site-bed.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
-import { classPattern, isRecord, objectIdPattern, replay } from './log.ts';
+import { replay } from './log.ts';
+import { classPattern, escapeUnprintable, objectIdPattern } from './log-fields.ts';
 
 export interface BaseFacts {
   readonly base: string | undefined;
@@ -263,47 +258,6 @@ function openOrPlant(top: string, site: string, requested: string | undefined): 
   return { site, created: false, base };
 }
 
-const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
-  ['pnpm-lock.yaml', (bed) => `pnpm -C ${bed} install --frozen-lockfile`],
-  ['yarn.lock', (bed) => `yarn --cwd ${bed} install --frozen-lockfile`],
-  ['package-lock.json', (bed) => `npm --prefix ${bed} ci`],
-];
-const lockfiles = installs.map(([lockfile]) => lockfile);
-
-function posixShellQuoted(text: string): string {
-  return `'${text.replaceAll("'", "'\\''")}'`;
-}
-
-function installCommand(bed: string): string {
-  const found = installs.find(([lockfile]) => existsSync(join(bed, lockfile)));
-  const quoted = posixShellQuoted(bed);
-
-  return found === undefined ? `npm --prefix ${quoted} install` : found[1](quoted);
-}
-
-// The bed's lockfile comes from the base, so only a plain file is read: a link can name any file, a FIFO hangs.
-function sameBytes(checkout: string, bed: string): boolean {
-  return (
-    existsSync(checkout) &&
-    lstatSync(bed, { throwIfNoEntry: false })?.isFile() === true &&
-    readFileSync(checkout).equals(readFileSync(bed))
-  );
-}
-
-function declaresWorkspaces(dir: string): boolean {
-  const file = join(dir, 'package.json');
-  const text = readFileSync(file, 'utf8');
-  let manifest: unknown;
-
-  try {
-    manifest = JSON.parse(text);
-  } catch {
-    throw new Error(`${file} is not valid JSON`);
-  }
-
-  return (isRecord(manifest) && 'workspaces' in manifest) || existsSync(join(dir, 'pnpm-workspace.yaml'));
-}
-
 function checkBed(site: string, bedClass: string, base: string): void {
   if (!classPattern.test(bedClass)) {
     throw new Error(`--class must be a kebab-case class id, got ${bedClass}`);
@@ -323,124 +277,21 @@ function bedRefusal(io: Io, site: Site, bedClass: string, now: Date): string | u
   return claimRefusalLine(site, bedClass, shared, now);
 }
 
-function mergeInto(bed: string, commitId: string, name: string): void {
-  const merged = runGit(bed, ['merge', '-q', '--no-edit', commitId]);
+/** Appends the seed event once every line of the seed list is queued or declined; returns the lines left. */
+function recordSeed(site: Site, sha: string, now: Date): readonly string[] {
+  return append(
+    site,
+    (replica) => {
+      if (replay(replica.events, now).seeded) {
+        return { drafts: [], left: [] };
+      }
 
-  if (merged.status === 0) {
-    return;
-  }
+      const left = seedLinesLeft(seedLinesIn(site.path, sha), replica.events).map((seed) => seed.line);
 
-  // A merge git refused before it began, such as over a file in the way, leaves nothing to merge by hand.
-  if (!gitSucceeds(bed, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])) {
-    throw new Error(`${name} does not merge into ${bed}: ${gitReason(merged.stderr)}`);
-  }
-
-  gitSucceeds(bed, ['merge', '--abort']);
-  throw new Error(`${name} does not merge into ${bed} cleanly; merge it there by hand, then run bed again`);
-}
-
-type Deps = 'none' | 'linked' | 'installed' | 'install';
-
-type BedSummary = {
-  readonly bed: string;
-  readonly branch: string;
-  readonly start: string;
-  readonly created: boolean;
-} & ({ readonly deps: Exclude<Deps, 'install'> } | { readonly deps: 'install'; readonly install: string });
-
-function makeBed(top: string, site: string, bedClass: string, base: string): BedSummary {
-  git(site, ['fetch', '-q', 'origin', base]);
-  const branch = `bed/${bedClass}`;
-  const branchRef = `refs/heads/${branch}`;
-  // Stryker disable next-line StringLiteral: a fetch that succeeded always leaves FETCH_HEAD, so the default never applies
-  const [start = '', branchTip, shared] = objectIds(site, ['FETCH_HEAD', branchRef, fetchedBedRef(bedClass)]);
-  const bed = join(site, 'beds', bedClass);
-  const hasBranch = branchTip !== undefined;
-  const entry = lstatSync(bed, { throwIfNoEntry: false });
-
-  if (
-    entry !== undefined &&
-    (!hasBranch || !entry.isDirectory() || optionalGit(bed, ['symbolic-ref', '-q', 'HEAD']) !== branchRef)
-  ) {
-    throw new Error(`${bed} is not the worktree of ${branch}; move it aside, then run bed again`);
-  }
-
-  if (hasBranch) {
-    if (entry === undefined) {
-      git(site, ['worktree', 'prune']);
-      git(site, ['worktree', 'add', '-q', bed, branch]);
-    }
-
-    if (gitSucceeds(bed, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])) {
-      throw new Error(`a merge is in progress in ${bed}; finish or abort it, then run bed again`);
-    }
-
-    if (shared !== undefined) {
-      mergeInto(bed, shared, `origin's ${branch}`);
-    }
-
-    mergeInto(bed, start, base);
-  } else {
-    git(site, ['worktree', 'add', '-q', '-b', branch, bed, shared ?? start]);
-
-    if (shared !== undefined) {
-      mergeInto(bed, start, base);
-    }
-  }
-
-  const deps = plantDeps(top, bed);
-  const made = { bed, branch, start, created: !hasBranch };
-
-  return deps === 'install' ? { ...made, deps, install: installCommand(bed) } : { ...made, deps };
-}
-
-function sharesLockfile(top: string, bed: string): boolean {
-  return lockfiles.some((name) => sameBytes(join(top, name), join(bed, name)));
-}
-
-function linkable(top: string, bed: string): boolean {
-  return (
-    lstatSync(join(bed, 'package.json'), { throwIfNoEntry: false })?.isFile() === true &&
-    existsSync(join(top, 'node_modules')) &&
-    sharesLockfile(top, bed) &&
-    !declaresWorkspaces(bed)
-  );
-}
-
-function plantDeps(top: string, bed: string): Deps {
-  const entry = lstatSync(join(bed, 'node_modules'), { throwIfNoEntry: false });
-
-  if (entry !== undefined) {
-    if (!entry.isSymbolicLink()) {
-      return 'installed';
-    }
-
-    if (linkable(top, bed)) {
-      return 'linked';
-    }
-
-    rmSync(join(bed, 'node_modules'));
-  }
-
-  if (existsSync(join(bed, '.pnp.cjs'))) {
-    return 'installed';
-  }
-
-  if (lstatSync(join(bed, 'package.json'), { throwIfNoEntry: false }) === undefined) {
-    return 'none';
-  }
-
-  if (!linkable(top, bed)) {
-    return 'install';
-  }
-
-  symlinkSync(join(top, 'node_modules'), join(bed, 'node_modules'), 'junction');
-
-  return 'linked';
-}
-
-function recordSeed(site: Site, sha: string, now: Date): void {
-  append(site, (replica) => ({ drafts: replay(replica.events, now).seeded ? [] : [{ op: 'seed', sha }] }), now);
+      return { drafts: left.length > 0 ? [] : [{ op: 'seed', sha }], left };
+    },
+    now,
+  ).left;
 }
 
 type Command =
@@ -485,35 +336,8 @@ function parseCommand(
 }
 
 function reportSync(io: Io, result: SyncResult): void {
-  if (result.sharedCensusIgnored === true) {
-    io.err(
-      `site: the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it\n`,
-    );
-  }
-
-  if (result.censusKeptLocal !== undefined) {
-    io.err(
-      `site: the census of ${escapeUnprintable(result.censusKeptLocal)} stays local: no branch fetched from origin holds that commit\n`,
-    );
-  }
-
-  if (result.localCensusUnreadable === true) {
-    io.err(
-      `site: the site's ${censusRef} is not a census, so it stays local; delete it in the site (git update-ref -d ${censusRef}), and the next tick records a new one\n`,
-    );
-  }
-
-  if (result.censusStillPending !== undefined) {
-    io.err(
-      `site: another sync moved the census first; the census of ${result.censusStillPending} stays pending for the next sync\n`,
-    );
-  }
-
-  result.yielded.forEach(({ claim, owner }) => {
-    io.err(`site: gave back the claim of ${claim.class}; ${owner.holder} holds it\n`);
-  });
-  result.divergedBeds.forEach((bed) => {
-    io.err(`site: ${escapeUnprintable(bed)}\n`);
+  result.notes.forEach((note) => {
+    io.err(`site: ${note}\n`);
   });
 }
 
@@ -555,7 +379,18 @@ function main(argv: readonly string[], io: Io): number {
         return 1;
       }
 
-      return printSummary(io, syncCommand(io, located, parsed.census, parsed.seeded, now));
+      const left =
+        parsed.seeded && parsed.census !== undefined ? recordSeed(withWriter(located), parsed.census, now) : [];
+
+      if (left.length > 0) {
+        left.forEach((line) => {
+          io.err(`site: seed line neither queued nor declined: ${escapeUnprintable(line)}\n`);
+        });
+
+        return 1;
+      }
+
+      return printSummary(io, syncCommand(io, located, parsed.census, now));
     }
     case 'bed': {
       return bedCommand(io, located, parsed.bedClass, parsed.base, now);
@@ -580,13 +415,8 @@ function openCommand(io: Io, located: Located, requested: string | undefined, no
   return { ...opened, base, seeded, shared: shared.state, reason: printableReason(shared) };
 }
 
-function syncCommand(io: Io, located: Located, census: string | undefined, seeded: boolean, now: Date): SyncSummary {
+function syncCommand(io: Io, located: Located, census: string | undefined, now: Date): SyncSummary {
   const site = withWriter(located);
-
-  if (seeded && census !== undefined) {
-    recordSeed(site, census, now);
-  }
-
   const shared = sync(site, { attempts: syncTries.sharing, census }, now);
   reportSync(io, shared);
   shared.skipped.forEach((path) => {

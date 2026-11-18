@@ -1,12 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-
-test('an unprintable character is written as its code point in hex', () => {
-  assert.equal(escapeUnprintable('a\u001bb'), 'a\\u{1b}b');
-});
 
 test('a reason is printed in parentheses after a space, and no reason prints nothing', () => {
   assert.deepEqual([reasonOf({ reason: 'timed out' }), reasonOf({})], [' (timed out)', '']);

@@ -92,6 +92,9 @@ through its three scripts, which keep the queue and the census in the site. It n
 instructions, hooks or settings. Tend passes propose hooks and permission rules in their report; they never build
 them.
 
+The agent runs on your session's model. To run every subagent, the watch included, on one model, set
+`CLAUDE_CODE_SUBAGENT_MODEL` with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`.
+
 ## Permissions
 
 The `lz-garden` skill carries its own permission rules. They pre-approve what a tick needs: reading the skill's own
@@ -113,6 +116,34 @@ reading the `lz-tend` skill and the `lz-garden` references, and running the site
 bed (a worktree in the site); it asks for the rest, such as edits in the bed and the repository's checks. Because the
 site lies beside your checkout, a tend pass first asks you to add it as a working directory (`/add-dir <site>`);
 without that, Claude Code asks before every read or edit of a file in the bed.
+
+A refused command ends the pass, and a session that cannot ask (`claude -p`, `--permission-mode dontAsk`) refuses
+every command its rules do not allow. To tend in such a session, add the site with `--add-dir <site>` and allow the
+forms the pass sends to the bed:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(npm --prefix *)",
+      "Bash(npx --no *)",
+      "Bash(node --test *)",
+      "Bash(git -C * add *)",
+      "Bash(git -C * commit *)",
+      "Bash(git -C * rm *)"
+    ]
+  }
+}
+```
+
+`npm --prefix <bed>` installs the bed's dependencies and runs the repository's package scripts in the bed. A tool
+with no script runs from the bed's root, where it finds the bed's config, as `cd <bed> && npx --no -- <tool>`; `--no`
+refuses to download a package that is not installed, and `--` keeps npm from reading the tool's options as its own.
+Use `pnpm -C *` or `yarn --cwd *` in place of `npm --prefix *` in a repository that uses them. A repository whose
+tests run with Node.js flags, such as `node --conditions=<condition> --test`, needs that form allowed as well. These
+rules allow any installed tool and any package script to run, so grant them only in a session that tends.
 
 ## Run the watch in CI
 

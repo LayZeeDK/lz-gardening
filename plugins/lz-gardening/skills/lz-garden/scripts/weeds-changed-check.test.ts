@@ -91,7 +91,7 @@ test('run from a folder inside the checkout, an unlanded check is still not on t
 });
 
 test('a check the bed took from an unrelated history it merged is not on the base', (t) => {
-  const { dir, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, 'eslint.config.mjs');
+  const { dir, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, ['eslint.config.mjs']);
   const other = repo(t);
   commit(other, { 'eslint.config.mjs': eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }") });
   git(bed, ['fetch', '-q', other, 'main']);
@@ -110,7 +110,7 @@ test('a check the bed took from an unrelated history it merged is not on the bas
 });
 
 test('a check the bed and the base both took from the same older unrelated history is on the base', (t) => {
-  const { dir, garden, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, 'eslint.config.mjs');
+  const { dir, garden, bed } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, ['eslint.config.mjs']);
   const other = repo(t);
   writeFileSync(join(other, 'eslint.config.mjs'), eslintConfig("['src/**']", "{ 'no-explicit-any': 'error' }"));
   git(other, ['add', '-A']);
@@ -201,7 +201,7 @@ test('a check the base changed in another way than the bed did is not on the bas
 });
 
 test('a check path holding glob characters names that one file, not the files the glob would match', (t) => {
-  const { dir, tip } = tendedBed(t, { 'src/b.txt': 'b2\n' }, 'src/[ab].txt', {
+  const { dir, tip } = tendedBed(t, { 'src/b.txt': 'b2\n' }, ['src/[ab].txt'], {
     'src/[ab].txt': 'check\n',
     'src/b.txt': 'b\n',
   });
@@ -215,7 +215,7 @@ test('a check path holding glob characters names that one file, not the files th
 });
 
 test('a checkout cloned without every object never fetches for the label', (t) => {
-  const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const { dir, garden, bed } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   git(dir, ['config', 'uploadpack.allowFilter', 'true']);
   const partial = join(dirname(dir), 'partial');
   git(dirname(dir), [
@@ -227,7 +227,7 @@ test('a checkout cloned without every object never fetches for the label', (t) =
     partial,
   ]);
   const census = git(partial, ['rev-parse', 'HEAD']);
-  const elsewhere = commit(dir, { 'src/c.ts': 'export const c = 1;\n' });
+  const elsewhere = commit(bed, { 'src/c.ts': 'export const c = 1;\n' });
   [
     ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'],
     ['claim', '--class', 'any-type'],

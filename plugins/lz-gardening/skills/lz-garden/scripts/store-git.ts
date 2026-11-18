@@ -4,7 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
-import { objectIdPattern } from './log.ts';
+import { objectIdPattern } from './log-fields.ts';
 import { parseContents, readStrategyOf } from './store-git-objects.ts';
 import { readerReads, workerPump } from './store-git-reader.ts';
 import type { ObjectContents, ObjectReads, ReadAt, TreeEntry } from './store-git-objects.ts';
@@ -207,7 +207,9 @@ function spawnGit(
 ): SpawnSyncReturns<string> {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8', env, input, maxBuffer: Infinity, timeout });
 
-  if (result.error !== undefined && !timedOut(result)) {
+  // A git that ended before reading all its input (a bad config, say) leaves an EPIPE or EOF error beside its own
+  // status and message, which say what happened.
+  if (result.error !== undefined && result.status === null && !timedOut(result)) {
     // The arguments stay out: a fetch or push carries the origin URL, and a token in it.
     throw new Error(`git could not start: ${result.error.message}`);
   }
@@ -302,6 +304,14 @@ export function optionalGit(cwd: string, args: readonly string[], options: GitIn
 
 export function gitSucceeds(cwd: string, args: readonly string[], options: GitInput = {}): boolean {
   return runGit(cwd, args, options).status === 0;
+}
+
+/** Reads in the checkout that also see the site's objects (beds, a census taken in another clone), never fetching. */
+export function siteObjectsInput(site: string): GitInput {
+  // Stryker disable next-line ObjectLiteral,BooleanLiteral: rev-parse --git-path prints the same path with or without the write settings
+  const objects = git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], { readsOnly: true });
+
+  return { readsOnly: true, env: { GIT_ALTERNATE_OBJECT_DIRECTORIES: objects, GIT_NO_LAZY_FETCH: '1' } };
 }
 
 /** The first line of git's message, as a reason to print. */
@@ -483,7 +493,10 @@ function spawnContents<T>(
   });
 
   if (batch.status !== 0) {
-    throw new Error(`git cat-file --batch: ${batch.error?.message ?? batch.stderr.toString().trim()}`);
+    throw new Error(
+      // Stryker disable next-line StringLiteral: no status and no error is a git a signal ended, which no test sends
+      `git cat-file --batch: ${batch.status === null ? (batch.error?.message ?? '') : batch.stderr.toString().trim()}`,
+    );
   }
 
   const parsed = parseContents(batch.stdout, items, '\n');

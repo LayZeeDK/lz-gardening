@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { run, takeCensus } from './census.ts';
+import { censusAt, revisionNamed, run } from './census.ts';
 import type { PatternSet } from './census.ts';
 import { gitEnv, inRun } from './store-git.ts';
 import { openSite } from './store-log.ts';
@@ -32,15 +32,14 @@ export const set: PatternSet = {
 };
 
 /** A census taken as census.ts takes it: in the run's git environment for the checkout. */
-export function takeCensusInRun(cwd: string, rev: string, patterns: PatternSet, at: Date): Promise<Census> {
-  return takeCensus(
+export async function takeCensusInRun(cwd: string, rev: string, patterns: PatternSet, at: Date): Promise<Census> {
+  const revision = await revisionNamed(
     cwd,
-    rev,
-    patterns,
-    at,
     inRun(process.env, () => gitEnv(cwd)),
-    (id) => id,
+    rev,
   );
+
+  return censusAt(revision, rev, patterns, at, (id) => id);
 }
 
 export function censusOf(

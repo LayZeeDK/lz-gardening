@@ -9,9 +9,9 @@ import { test } from 'node:test';
 import { maxClockOf, planAdd, replay, stamp, weedId } from './log.ts';
 import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './log.ts';
 import { commit, now, repo } from './test-repo.ts';
-import { planted } from './test-site.ts';
+import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { cli, homeAt, script } from './test-weeds.ts';
+import { cli, homeAt, script, seedListed, tendedBy } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 
@@ -239,7 +239,7 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
       '--class',
       'hollow-assertion',
       '--tended',
-      'bed/hollow-assertion@abc1234',
+      tendedBy(dir, 'hollow-assertion', { 'scripts/hollow-assertion.test.mjs': 'export {};\n' }),
       '--check',
       'scripts/hollow-assertion.test.mjs',
     ]).stdout,
@@ -254,16 +254,180 @@ test('through the CLI a weed is added, seen, regrown after a close, and kept out
   );
 });
 
+test('add takes --where more than once and adds one weed per path, a line each, in one append', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/x.ts',
+    '--where',
+    'src/y.ts',
+    '--source',
+    'census:seed',
+    '--note',
+    'keep the src/x.ts foo',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stdout, logFiles(garden).size],
+    [
+      0,
+      `added ${weedId('duplicate-function', 'src/x.ts', 'census:seed')}\n` +
+        `added ${weedId('duplicate-function', 'src/y.ts', 'census:seed')}\n`,
+      2,
+    ],
+  );
+});
+
+test('add takes a --where spelled two ways as the one weed, in its plain form, on the seed list', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] } }));
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--where',
+    './src/a.ts:1',
+    '--where',
+    'src//a.ts:1',
+    '--source',
+    'census:seed',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stdout, logFiles(garden).size],
+    [0, `added ${weedId('any-type', 'src/a.ts:1', 'census:seed')}\n`, 1],
+  );
+});
+
+test('add refuses a --where through a parent folder as given, though its plain form would stay inside', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] } }));
+
+  const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/x/../a.ts:1', '--source', 'census:seed']);
+
+  assert.deepEqual(
+    [added.status, added.stderr, logFiles(garden).size],
+    [2, 'weeds add: --where must be a repository-relative path\n', 0],
+  );
+});
+
+test('add refuses a --where whose plain form is a drive or home path, though ./ or .\\ hid it as given', (t) => {
+  const { dir, garden } = planted(t);
+  const wheres = [
+    './c:/Users/ada/a.ts:1',
+    './~/a.ts:1',
+    String.raw`./d:\work\a.ts:1`,
+    String.raw`.\d:\work\a.ts:1`,
+    String.raw`.\~\a.ts:1`,
+  ];
+
+  const results = wheres.map((where) =>
+    cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'commit:abc1234']),
+  );
+
+  assert.deepEqual(
+    [results.map(({ status, stderr }) => [status, stderr]), logFiles(garden).size],
+    [wheres.map(() => [2, 'weeds add: --where must be a repository-relative path\n']), 0],
+  );
+});
+
+test('add with several --where refuses them all when a later one is off the seed list, and queues none', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/x.ts',
+    '--where',
+    'src/z.ts',
+    '--source',
+    'census:seed',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds add: no line of the seed list is duplicate-function in src/z.ts; census:seed is for those lines alone\n',
+      0,
+    ],
+  );
+});
+
+test('add refuses a single-value flag given twice rather than keep the last, and records nothing', (t) => {
+  const { dir, garden } = planted(t);
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--class',
+    'ts-ignore',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'commit:aaa1111',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stderr, logFiles(garden).size],
+    [2, 'weeds add: --class goes once with add\n', 0],
+  );
+});
+
+test('close takes --check at most once, as it never closes a class as tended', (t) => {
+  const dir = repo(t);
+
+  const closed = cli(dir, ['close', '--id', 'abc', '--one-off', 'r', '--check', 'a.mjs', '--check', 'b.mjs']);
+
+  assert.deepEqual([closed.status, closed.stderr], [2, 'weeds close: --check goes once with close\n']);
+});
+
+test('add takes census:seed only for a line of the seed list, and records nothing for another weed', (t) => {
+  const dir = seedListed(t);
+
+  const results = [
+    ['any-type', 'src/b.ts:1'],
+    ['copied-workaround', 'src/a.ts:1'],
+  ].map(([weedClass = '', where = '']) =>
+    cli(dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:seed']),
+  );
+
+  assert.deepEqual(
+    [results.map(({ status, stderr }) => [status, stderr]), cli(dir, ['list']).stdout],
+    [
+      [
+        [2, 'weeds add: no line of the seed list is any-type in src/b.ts; census:seed is for those lines alone\n'],
+        [
+          2,
+          'weeds add: no line of the seed list is copied-workaround in src/a.ts; census:seed is for those lines alone\n',
+        ],
+      ],
+      '',
+    ],
+  );
+});
+
 test('through the CLI a tend close records its bed and check, and a weed of the class elsewhere names both', (t) => {
   const { dir, garden } = planted(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
 
   const closed = closeUnderClaim(dir, [
     'close-class',
     '--class',
     'any-type',
     '--tended',
-    'bed/any-type@bbb2222',
+    by,
     '--check',
     'eslint.config.mjs',
   ]);
@@ -274,17 +438,11 @@ test('through the CLI a tend close records its bed and check, and a weed of the 
   assert.equal(closed.stdout, 'closed 1; local\n');
   assert.match(
     back.stdout,
-    /^regrown [0-9a-f]{10} after bed\/any-type@bbb2222 \(check: eslint\.config\.mjs, base unknown\)\n$/,
+    new RegExp(`^regrown [0-9a-f]{10} after ${by} \\(check: eslint\\.config\\.mjs, base unknown\\)\\n$`),
   );
   assert.deepEqual(
     ['ids', 'class', 'by', 'kind', 'check'].map((field) => close?.[field]),
-    [
-      [weedId('any-type', 'src/a.ts:1', 'commit:aaa1111')],
-      'any-type',
-      'bed/any-type@bbb2222',
-      'tended',
-      'eslint.config.mjs',
-    ],
+    [[weedId('any-type', 'src/a.ts:1', 'commit:aaa1111')], 'any-type', by, 'tended', 'eslint.config.mjs'],
   );
 });
 
@@ -317,15 +475,8 @@ test('through the CLI a one-off close and a keep each record their reason and ki
 test('list shows a regrown weed with the bed and check it came back after', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);
-  closeUnderClaim(dir, [
-    'close-class',
-    '--class',
-    'any-type',
-    '--tended',
-    'bed/any-type@bbb2222',
-    '--check',
-    'eslint.config.mjs',
-  ]);
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
+  closeUnderClaim(dir, ['close-class', '--class', 'any-type', '--tended', by, '--check', 'eslint.config.mjs']);
   const id = idOf(
     cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:4', '--source', 'commit:ccc3333', '--note', 'cast'])
       .stdout,
@@ -333,7 +484,7 @@ test('list shows a regrown weed with the bed and check it came back after', (t) 
 
   assert.equal(
     cli(dir, ['list', '--class', 'any-type']).stdout,
-    `${id} any-type src/b.ts:4 [commit:ccc3333] [regrown after bed/any-type@bbb2222 (check: eslint.config.mjs, base unknown)] cast\n`,
+    `${id} any-type src/b.ts:4 [commit:ccc3333] [regrown after ${by} (check: eslint.config.mjs, base unknown)] cast\n`,
   );
 });
 
@@ -681,6 +832,86 @@ test('close refuses --class beside --id rather than drop it', () => {
   );
 });
 
+test('--baselined goes with a tended close-class only, and holds weed ids separated by commas', () => {
+  const tended = { class: 'any-type', tended: 'bed/any-type@abc1234', check: ['eslint.config.mjs'] };
+
+  assert.deepEqual(
+    [
+      parseCloseFlags('close', { id: 'abc', keep: 'on purpose', baselined: 'def' }),
+      parseCloseFlags('close-class', { class: 'any-type', 'one-off': 'generated', baselined: 'def' }),
+      ...['', 'abc,', 'abc,,def', 'abc def', 'abc\u001b[2J'].map((baselined) =>
+        parseCloseFlags('close-class', { ...tended, baselined }),
+      ),
+    ],
+    [
+      '--baselined goes with close-class --tended only',
+      '--baselined goes with close-class --tended only',
+      ...Array.from({ length: 5 }, () => '--baselined must be weed ids separated by commas'),
+    ],
+  );
+});
+
+test('a tended close-class refuses a --check path holding ", ", which joins several checks in the close', () => {
+  assert.equal(
+    parseCloseFlags('close-class', {
+      class: 'any-type',
+      tended: 'bed/any-type@abc1234',
+      check: ['checks/a, b.mjs'],
+    }),
+    '--check must not hold ", ", which separates the checks of one close',
+  );
+});
+
+test('a tended close-class refuses a --check whose plain form is a drive or home path, though ./ or .\\ hid it', () => {
+  const closing = (check: string) =>
+    parseCloseFlags('close-class', { class: 'any-type', tended: 'bed/any-type@abc1234', check: [check] });
+
+  assert.deepEqual(
+    ['./~/a.mjs', String.raw`.\d:\x.mjs`].map(closing),
+    Array.from({ length: 2 }, () => '--check must be a repository-relative path'),
+  );
+});
+
+test('a tended close-class refuses its check files when any one of them is wrong, not only when all are', () => {
+  const closing = (check: readonly string[]) =>
+    parseCloseFlags('close-class', { class: 'any-type', tended: 'bed/any-type@abc1234', check: [...check] });
+
+  assert.deepEqual(
+    [
+      closing(['eslint.config.mjs', '']),
+      closing(['eslint.config.mjs', '../b.mjs']),
+      closing(['eslint.config.mjs', 'checks/a, b.mjs']),
+      closing(['eslint.config.mjs', 'checks/a\u0007.mjs']),
+    ],
+    [
+      '--tended needs --check <where the check lives>',
+      '--check must be a repository-relative path',
+      '--check must not hold ", ", which separates the checks of one close',
+      '--check must be one line of text without control characters',
+    ],
+  );
+});
+
+test('a tended close-class records a --check given twice once', () => {
+  const closing = parseCloseFlags('close-class', {
+    class: 'any-type',
+    tended: 'bed/any-type@abc1234',
+    check: ['eslint.config.mjs', 'checks/a.mjs', 'eslint.config.mjs'],
+  });
+
+  assert.deepEqual(typeof closing === 'string' ? closing : closing.check, ['eslint.config.mjs', 'checks/a.mjs']);
+});
+
+test('a tended close-class records a --check spelled two ways once, in its plain form', () => {
+  const closing = parseCloseFlags('close-class', {
+    class: 'any-type',
+    tended: 'bed/any-type@abc1234',
+    check: ['./checks/a.mjs', 'checks//a.mjs', 'checks/a.mjs'],
+  });
+
+  assert.deepEqual(typeof closing === 'string' ? closing : closing.check, ['checks/a.mjs']);
+});
+
 test('close-class refuses --id beside --class rather than drop it', () => {
   assert.equal(
     parseCloseFlags('close-class', { id: 'abc', class: 'any-type', keep: 'on purpose' }),
@@ -719,6 +950,91 @@ test('closing a class of several weeds appends one close event naming each weed'
   assert.deepEqual(
     [...logFiles(garden).values()].flatMap((event) => (event['op'] === 'close' ? [event['ids']] : [])),
     [[weedId('any-type', 'src/a.ts:1', 'census:any-type'), weedId('any-type', 'src/b.ts:1', 'census:any-type')]],
+  );
+});
+
+test('a tended close-class leaves the weeds named in --baselined open and closes the rest', (t) => {
+  const dir = checkout(t);
+  const weeds = ['src/a.ts:1', 'src/b.ts:1', 'src/c.ts:1'].map((where) => {
+    cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'census:any-type']);
+
+    return weedId('any-type', where, 'census:any-type');
+  });
+  const [, b = '', c = ''] = weeds;
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
+
+  const closed = closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    by,
+    '--check',
+    'eslint.config.mjs',
+    '--baselined',
+    `${b},${c}`,
+  ]);
+  const open = cli(dir, ['list', '--class', 'any-type'])
+    .stdout.split('\n')
+    .filter((row) => row !== '')
+    .map((row) => row.split(' ')[0]);
+
+  assert.deepEqual([closed.status, closed.stdout, open], [0, 'closed 1; local\n', [b, c]]);
+});
+
+test('a tended close-class refuses a --baselined id that is no open weed of the class, and closes nothing', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  cli(dir, ['add', '--class', 'hollow-assertion', '--where', 'src/b.ts:1', '--source', 'census:x']);
+  const other = weedId('hollow-assertion', 'src/b.ts:1', 'census:x');
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
+
+  const results = ['0123456789', other].map((id) =>
+    closeUnderClaim(dir, [
+      'close-class',
+      '--class',
+      'any-type',
+      '--tended',
+      by,
+      '--check',
+      'eslint.config.mjs',
+      '--baselined',
+      id,
+    ]),
+  );
+
+  assert.deepEqual(
+    [results.map(({ status, stderr }) => [status, stderr]), cli(dir, ['list']).stdout.split('\n').length - 1],
+    [
+      [
+        [1, 'weeds close-class: 0123456789 is no open weed of any-type\n'],
+        [1, `weeds close-class: ${other} is no open weed of any-type\n`],
+      ],
+      2,
+    ],
+  );
+});
+
+test('a tended close-class that baselines every open weed is refused: its check holds none of them', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
+
+  const result = closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    by,
+    '--check',
+    'eslint.config.mjs',
+    '--baselined',
+    weedId('any-type', 'src/a.ts:1', 'census:any-type'),
+  ]);
+
+  assert.deepEqual(
+    [result.status, result.stderr, cli(dir, ['list']).stdout.split('\n').length - 1],
+    [1, 'weeds close-class: every open weed of any-type is baselined; the check holds none of them\n', 1],
   );
 });
 
@@ -872,7 +1188,7 @@ test('an unknown command prints the usage line', (t) => {
   const result = cli(checkout(t), ['prune']);
 
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /^usage: weeds\.ts add\|close\|close-class\|claim\|release\|groups\|list/);
+  assert.match(result.stderr, /^usage: weeds\.ts add\|decline\|close\|close-class\|claim\|release\|groups\|list/);
 });
 
 test('a usage error in a repository with no site names the usage error, not the missing site', (t) => {
@@ -884,7 +1200,7 @@ test('a usage error in a repository with no site names the usage error, not the 
   assert.deepEqual(
     results.map(({ status, stderr }) => [status, stderr]),
     [
-      [2, 'usage: weeds.ts add|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
+      [2, 'usage: weeds.ts add|decline|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
       [2, 'weeds groups: --min must be a whole number of at least 1, got 0\n'],
     ],
   );

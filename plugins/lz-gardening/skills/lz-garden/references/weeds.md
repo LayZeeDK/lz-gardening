@@ -5,8 +5,17 @@ recognize it, and the layer that usually holds it.
 
 A weed is a pattern an agent will copy. Agents imitate the nearest example and take the shortest path that
 compiles, so one shortcut in a file becomes the template for the next ten. Queue what spreads or invites copying.
-Leave out a one-off with a visible reason, code that is deliberately unusual and says why, and what a check in the
-repository already rejects. A bug is not a weed: route it to the repository's normal review or issue flow.
+Leave out only, and name which in the reason:
+
+- a one-off with a visible reason, particular to its line;
+- code that is deliberately unusual and says why, in its own words or a record's;
+- what a check in the repository already rejects, naming the check you read;
+- not the class: the hit is text in a string, a comment or a test's input, not code that does what the class names.
+
+A reason on each line does not make a repeated suppression a one-off: two or more files that carry the same rule (or
+mutator) with the same reason are one root cause, so queue one weed per file. Spikes, examples and vendored samples
+are code like any other, for every class: queue their weeds unless a reason above holds, as for the rest of the
+repository. A bug is not a weed: route it to the repository's normal review or issue flow.
 
 ## Layers
 
@@ -28,8 +37,9 @@ A weed held only at layer 4 to 6 regrows whenever an agent misses the text. Pref
 `scripts/patterns.json` finds these by text; the class id is the pattern id. A repository adds or overrides
 patterns in the site's `.garden/patterns.json` (same shape). A pattern without `paths` searches the JavaScript and
 TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`), the files the census looks for
-duplicate functions in, so data files and prose do not count. Duplicate functions leave out test files (`*.spec.*`,
-`*.test.*`) and files under dot-directories.
+duplicate functions in, so data files and prose do not count. Duplicate functions count only definitions at the
+start of a line, the module's own, not a function defined inside another; they leave out test files (`*.spec.*`,
+`*.test.*`), `.d.ts` declarations and files under dot-directories.
 
 | Class                                                                                    | Usual layer | Note                                                                                                                                                                                                                                                                                          |
 | ---------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -71,7 +81,8 @@ edit them:
 
 - `.planning/` (phases, plans, summaries, verification reports, learnings) and `.project/` (milestones, archive,
   lessons), whichever the repository has.
-- `AGENTS.md`, `CLAUDE.md`, rules folders, `CONTRIBUTING.md`, ADRs, a changelog, retrospectives.
+- `AGENTS.md`, `CLAUDE.md`, rules folders, `CONTRIBUTING.md`, ADRs, a changelog, retrospectives, ledgers of
+  findings, wherever they sit: a package's own `docs/adr/` counts as much as the root's.
 - Commit subjects: a `revert`, a "fix ... again", or a clean-up milestone names a weed that already spread once.
 
 A milestone or phase whose goal was cleaning up a repeated mistake is the best seed there is: the class is known,

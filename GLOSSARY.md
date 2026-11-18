@@ -19,14 +19,14 @@ _Avoid_: category, kind, type
 The commit that introduced a weed; a weed found by reading what landed names it as its source.
 
 **Duplicate function**:
-A function name defined in two or more files of the codebase. A function declaration and a `const` bound to an arrow
-function or a function expression count alike.
+A function name defined at module scope in two or more files of the codebase. A function declaration and a `const`
+bound to an arrow function or a function expression count alike; a function defined inside another does not.
 _Avoid_: copy, clone
 
 **Documented copy**:
 A file's own definition of a duplicate function, kept on purpose: words in that file or one beside it say why the
-file cannot use the shared one (it runs alone, it cannot import). A tick leaves it out of the queue and quotes the
-words.
+file cannot use the shared one (it runs alone, it cannot import), or a record says so. A tick leaves it out of the
+queue and quotes the words.
 
 **Close**:
 Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
@@ -36,7 +36,7 @@ check was written), or kept.
 Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
 A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it. When the
 weed reads `not on the base`, the bed's change to its check is not on the base the census was taken of: the bed has
-not landed, or the check's file is gone from the base. When it reads `base unknown`, the site could not tell.
+not landed, or one of the check's files is gone from the base. When it reads `base unknown`, the site could not tell.
 
 **Kept**:
 Said of a weed a human or a tend pass judged deliberate; it is never queued again.
@@ -81,8 +81,13 @@ _Avoid_: weed marker, match
 
 **Seed list**:
 What the census shows the seed pass: for each census pattern, the files with the most hits, and the names
-defined in the most files.
+defined in the most files. The seed pass is recorded only once each file of each of its lines is queued or declined.
 _Avoid_: baseline (a baseline is what a check tolerates)
+
+**Decline**:
+To leave a seed line, or one file of a duplicate name's line, out of the queue on purpose, with a reason. Its weed is
+recorded as kept, so no later tick queues it.
+_Avoid_: skip, dismiss
 
 **Queue**:
 The grow-only set of events (adds, closes, claims, releases and seeds) that a replay turns into the weeds and their
@@ -102,6 +107,10 @@ A garden site that adds events to the queue, named by an id of its own in the si
 **Records**:
 What the repository writes down about its own work: plans, summaries, lessons, decisions, agent instructions and
 commit history. The gardener reads them as evidence and never edits them.
+
+**Held by hand**:
+Said of a weed class a clean-up removed that is absent at the base, with no check to reject its return.
+_Avoid_: no check behind
 
 **Sampling**:
 Reading a share of what landed rather than all of it, and judging the whole by it.

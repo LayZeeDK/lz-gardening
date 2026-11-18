@@ -32,8 +32,7 @@ export default tseslint.config(
         'error',
         {
           selector: 'FunctionDeclaration[id.name="isRecord"], VariableDeclarator[id.name="isRecord"]',
-          message:
-            'isRecord is defined once, in lz-garden/scripts/log-guard.ts (log.ts re-exports it): import it instead of redefining it.',
+          message: 'isRecord is defined once, in lz-garden/scripts/log-guard.ts: import it instead of redefining it.',
         },
       ],
     },
