@@ -61,6 +61,18 @@ test('const arrow and function-expression definitions count, other consts do not
   assert.deepEqual(census.duplicates, { isRecord: ['src/a.ts', 'src/b.ts'], toKey: ['src/c.ts', 'src/d.mts'] });
 });
 
+test('a const with a type annotation counts as a definition when it holds a function', async (t) => {
+  const dir = repo(t);
+  commit(dir, {
+    'src/a.ts': "export const later: Hooks['later'] = (run) => run();\nconst limit: number = 5;\n",
+    'src/b.ts': 'const later = (run: () => void) => run();\nconst limit: number = 5;\n',
+  });
+
+  const census = await takeCensusInRun(dir, 'HEAD', set, now);
+
+  assert.deepEqual(census.duplicates, { later: ['src/a.ts', 'src/b.ts'] });
+});
+
 test('definitions in test files, non-source files and excluded globs are not counted', async (t) => {
   const dir = repo(t);
   commit(dir, {

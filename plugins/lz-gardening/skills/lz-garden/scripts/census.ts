@@ -305,12 +305,12 @@ export async function censusAt(
 
 // A const holding a parenthesised expression (`const x = (a + b)`) also counts; a parser would not.
 const definition =
-  /^(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
+  /^(?:export\s+)?(?:(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?:\(|function[\s(]|[A-Za-z_$][\w$]*\s*=>))/;
 // git grep takes POSIX extended regex, which has no \s or (?:), so it prefilters and `definition` names the match.
 // The prefilter alone keeps the definitions at the start of a line, the module's own: a hit's text is trimmed.
 const definitionPrefilter =
   // Stryker disable next-line StringLiteral: past its start, the prefilter only narrows what git returns, and the definition regex decides every match; they differ only on non-ASCII whitespace such as a no-break space, which no rule depends on
-  '^(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*=)';
+  '^(export[[:space:]]+)?((async[[:space:]]+)?function[[:space:]]+[A-Za-z_$]|const[[:space:]]+[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*(:[^=]+)?=)';
 
 const dotDirectories = '**/.*/**';
 
