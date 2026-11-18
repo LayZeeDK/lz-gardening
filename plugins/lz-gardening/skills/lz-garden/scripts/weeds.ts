@@ -56,6 +56,8 @@
 //                                        --class may take: ready, not stale-verification or repeated-lesson, and
 //                                        claimed by no other writer; both together are a usage error
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
+// A flag goes once per command, but --where with add and --check with close and close-class; given twice, it exits 2
+// with `--<flag> goes once with <command>`.
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
 // An event file the log cannot read, or that these commands would not write (among them one with a line break or
@@ -508,9 +510,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
     flags.in !== undefined && (input.class !== 'duplicate-function' || where === undefined)
       ? '--in goes with --class duplicate-function --where <path> only'
       : null;
-  const secondWhere = flags.where?.[1] === undefined ? null : '--where goes once with decline';
   const problem =
-    secondWhere ??
     strayIn ??
     firstUnprintable({ in: flags.in }) ??
     censusProblem(flags.census) ??
@@ -778,28 +778,31 @@ function list(io: Io, flags: Flags, now: Date): number {
 interface Command {
   readonly name: string;
   readonly flags: readonly (keyof Flags)[];
+  readonly repeatable: readonly (keyof Flags)[];
   readonly run: (io: Io, flags: Flags, now: Date, seams: SyncSeams) => number;
 }
 
 const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off', 'keep', 'check', 'baselined'];
 
 const commands: readonly Command[] = [
-  { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], run: add },
-  { name: 'decline', flags: ['class', 'where', 'reason', 'in', 'census'], run: decline },
+  { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], repeatable: ['where'], run: add },
+  { name: 'decline', flags: ['class', 'where', 'reason', 'in', 'census'], repeatable: [], run: decline },
   {
     name: 'close',
     flags: closeFlags,
+    repeatable: ['check'],
     run: (io, flags, now, seams) => close(io, 'close', flags, now, seams),
   },
   {
     name: 'close-class',
     flags: closeFlags,
+    repeatable: ['check'],
     run: (io, flags, now, seams) => close(io, 'close-class', flags, now, seams),
   },
-  { name: 'claim', flags: ['class'], run: claimCommand },
-  { name: 'release', flags: ['class'], run: release },
-  { name: 'groups', flags: ['min', 'ready'], run: groups },
-  { name: 'list', flags: ['class'], run: list },
+  { name: 'claim', flags: ['class'], repeatable: [], run: claimCommand },
+  { name: 'release', flags: ['class'], repeatable: [], run: release },
+  { name: 'groups', flags: ['min', 'ready'], repeatable: [], run: groups },
+  { name: 'list', flags: ['class'], repeatable: [], run: list },
 ];
 
 function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): number {
@@ -814,12 +817,21 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
     return 2;
   }
 
-  const stray = tokens
-    .flatMap((token) => (token.kind === 'option' ? [token.name] : []))
-    .find((flag) => !command.flags.some((name) => name === flag));
+  const named = tokens.flatMap((token) => (token.kind === 'option' ? [token.name] : []));
+  const stray = named.find((flag) => !command.flags.some((name) => name === flag));
 
   if (stray !== undefined) {
     io.err(`weeds ${command.name}: --${stray} is not an option of ${command.name}\n`);
+
+    return 2;
+  }
+
+  const repeated = named.find(
+    (flag, index) => named.indexOf(flag) !== index && !command.repeatable.some((name) => name === flag),
+  );
+
+  if (repeated !== undefined) {
+    io.err(`weeds ${command.name}: --${repeated} goes once with ${command.name}\n`);
 
     return 2;
   }

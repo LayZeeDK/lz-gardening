@@ -344,6 +344,27 @@ test('decline takes --where once: a second one is refused and nothing is recorde
   );
 });
 
+test('add refuses a single-value flag given twice rather than keep the last, and records nothing', (t) => {
+  const { dir, garden } = planted(t);
+
+  const added = cli(dir, [
+    'add',
+    '--class',
+    'any-type',
+    '--class',
+    'ts-ignore',
+    '--where',
+    'src/a.ts:1',
+    '--source',
+    'commit:aaa1111',
+  ]);
+
+  assert.deepEqual(
+    [added.status, added.stderr, logFiles(garden).size],
+    [2, 'weeds add: --class goes once with add\n', 0],
+  );
+});
+
 test('add takes census:seed only for a line of the seed list, and records nothing for another weed', (t) => {
   const dir = seedListed(t);
 

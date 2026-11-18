@@ -30,7 +30,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     commit). Duplicate names count only module-scope definitions, outside test files and
     `.d.ts` declarations. `weeds.ts add`
     and `decline` take `--source census:seed` only for a weed on a line of the seed list; `add` takes `--where` once
-    per weed, so the files of one duplicate name are queued in one call.
+    per weed, so the files of one duplicate name are queued in one call. Every other `weeds.ts` flag, but
+    `--check` of `close` and `close-class`, goes once: given twice, it is refused (exit 2), not read as its last value.
   - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`,
     which the census prints as `site pattern <id>: <regex>` lines. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,
