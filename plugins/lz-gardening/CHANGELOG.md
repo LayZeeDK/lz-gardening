@@ -59,9 +59,9 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     lands is tended in the same bed.
   - Close: closes the class as tended, one-off or kept. A tended close names the bed and where each of its checks
     lives (`--check` once per check file, each a file the tended bed commit holds; the event's `check` field joins
-    them with `, `), and shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a bed a sync did not see
-    land (a failed or timed-out push, or a sync stopped once its log landed) is pushed again by the next sync. Bed
-    commits carry the identity of whoever commits them.
+    them with `, `), and shares the bed on `origin` as `refs/garden/beds/<class>` for a human to fetch and land; a
+    bed a sync did not see land (a failed or timed-out push, or a sync stopped once its log landed) is pushed again
+    by the next sync. Bed commits carry the identity of whoever commits them.
   - Proof: the check is proved on a queued weed in the untouched bed before any fix, and on paved-road code, and a
     tended close holds only the weeds that proof reported or the bed fixed. A weed whose copy stays in the check's
     baseline stays open (`weeds.ts close-class --baselined`). A copy is kept only on words the repository wrote that

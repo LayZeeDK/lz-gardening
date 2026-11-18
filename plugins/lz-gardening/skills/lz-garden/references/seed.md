@@ -36,15 +36,17 @@ line is neither queued nor declined, and names the lines left.
 - `= duplicate <name>: <path>, <path>, ...`: a name defined at module scope (a definition at the start of its line)
   in more than one file, at most 30 names, those defined in the most files first. Test files (`*.spec.*`,
   `*.test.*`), `.d.ts` declarations and files under dot-directories (`.claude/`, `.github/` and other tool folders,
-  often deliberate mirrors of each other) are left out of duplicate names, though their pattern hits count. Take every file of the line, not one of them, through steps 1 to 3 of the tick's step 4
-  in `SKILL.md` (its `git show`, the words that make a documented copy), with two differences. A documented copy is
-  declined, `--class duplicate-function --where <path> --reason` the words you found, copied as they stand (with
-  `--in <record path>` when they are in a record, not in the file), instead of going on a `left out:` line; the
-  command refuses words the file or record does not hold at the census's commit, so your own account of why a copy
-  differs is no reason to decline it. Every other file is queued with `--source census:seed`, the note naming the
-  definition to keep, a file whose `<name>` does a different job included (a naming weed). A last line
-  `<n> more duplicate names not listed` counts the rest. Later ticks report only what is new, so the seed list is the
-  one time these are listed.
+  often deliberate mirrors of each other) are left out of duplicate names, though their pattern hits count. Take
+  every file of the line, not one of them, through steps 1 to 3 of the tick's step 4 in `SKILL.md` (its `git show`,
+  the words that make a documented copy), with two differences. A documented copy is declined,
+  `--class duplicate-function --where <path> --reason` the words you found (with `--in <record path>` when they are
+  in a record, not in the file), instead of going on a `left out:` line. Quote one unbroken run of the words, with
+  no `...`, and pick a run that holds no backtick, `$` or double quote; the command matches it against the file or
+  record at the census's commit with comment markers and line breaks ignored, and refuses words it does not hold, so
+  your own account of why a copy differs is no reason to decline it. Every other file is queued with
+  `--source census:seed`, the note naming the definition to keep, a file whose `<name>` does a different job
+  included (a naming weed). A last line `<n> more duplicate names not listed` counts the rest. Later ticks report
+  only what is new, so the seed list is the one time these are listed.
 
 The line after the seed list, `census: <pattern> <count>, ...` or `census: none`, is the report's census line.
 
@@ -56,8 +58,8 @@ Read the repository's records listed under "Records" in `weeds.md`, as they are 
 once, `git ls-tree -r --name-only <base>`, and read every ADR, changelog, lesson file and ledger of findings it
 names, wherever it sits, with `git show <base>:<path>`, one call per record sent together in one message (`git show`
 of several files runs them together, and a `lesson:` source needs each record's own line numbers); skim plans and
-summaries, not every plan. Search a record too
-large to read whole with Grep and no `head_limit`, then `git show` the lines you queue from.
+summaries, not every plan. For a record too large to read whole, `git show <base>:<path>` saves its output to a
+file the tool result names: Grep that file with no `head_limit`, and Read the lines you queue from with an offset.
 
 - A lesson, correction or finding that appears twice or more: `repeated-lesson`, `--where` the code it is about,
   `--source lesson:<path>:<line>` of each record, one weed per lesson and record: `<line>` is the line that first
@@ -109,7 +111,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <parent>..<commit> --chars 24000
 ```
 
 A commit that marks `skip` there is too large for the seed pass, and a commit with no parent cannot be read this way:
-count either as unread too, and count the pointed-at commits past the first five as unread. Done when the pages and
+count either as unread too (pointed-at commits past the first five go on the report's `<read> of <pointed>` count,
+not here). Done when the pages and
 the pointed-at commits are read and the weeds they show are queued.
 
 ## 4. Record and report

@@ -160,18 +160,20 @@ show. Take them one at a time:
    self-contained, is not one.
 3. A documented copy goes on the reply's `left out:` line, its reason the words you found, copied as they stand
    (`...` where you cut some out), and the file they are in when it is not the copy itself. Every other file
-   is queued, one weed per file (one `add` with a `--where` per file), with a note naming the definition to keep: the file that holds that definition is
-   queued too, and so is a file whose `<name>` does a different job (a naming weed). A tend pass decides what
-   happens to each. No file of a `+ duplicate` line ends neither queued nor on `left out:`.
+   is queued, one weed per file (one `add` with a `--where` per file), with a note naming the definition to keep:
+   the file that holds that definition is queued too, and so is a file whose `<name>` does a different job (a
+   naming weed). A tend pass decides what happens to each. No file of a `+ duplicate` line ends neither queued nor
+   on `left out:`.
 
 The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
 the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
 `(check: <where> not on the base)`, the bed's change to that check is not on the base at this tick's census: the bed
-has not landed, or the check's file is gone from the base. Report it that way, not as a check that failed. When it
-reads `(check: <where>, base unknown)`, the site could not judge the base: the census is missing or unreadable, the
-bed's or the census's commit is not in the site or the checkout, or the bed shares no history with the base. Report
-the check's landing as unknown. Done when every weed from steps 2 and 3 printed one of those words, and every file
-of a new duplicate had its own `git show <sha>:<path>` and is either queued or a documented copy.
+has not landed, or one of the check's files is gone from the base. Report it that way, not as a check that failed.
+When it reads `(check: <where>, base unknown)`, the site could not judge the base: the census is missing or
+unreadable, the bed's or the census's commit is not in the site or the checkout, or the bed shares no history with
+the base. Report the check's landing as unknown. Done when every weed from steps 2 and 3 printed one of those
+words, and every file of a new duplicate had its own `git show <sha>:<path>` and is either queued or a documented
+copy.
 
 ## 5. Group, record, report
 

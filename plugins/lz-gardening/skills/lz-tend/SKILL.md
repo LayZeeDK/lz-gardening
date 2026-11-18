@@ -54,10 +54,11 @@ the session's working directories (the session's environment lists any added one
   `cd "<bed>" && npx --no -- prettier --check .` or
   `cd "<bed>" && npx --no -- nx run-many -t lint --output-style=static`. `--no` makes it fail when the tool is not
   installed, where plain `npx` downloads a package of that name from the registry and runs it; `--` keeps npm from
-  reading the tool's options (`--check`) as its own, which npm 12 refuses. Never `npx` `node`: run a test file through the project's test script, or
-  `cd "<bed>" && node --test <file>`. Put options before file and path arguments: many tools read what follows the
-  files as more files. In an Nx workspace, add `--output-style=static` to every `nx run` and `nx run-many`, so each
-  task's output is in the tool result. `site` and `weeds` find the site from the checkout.
+  reading the tool's options (`--check`) as its own, which npm 12 refuses. Never `npx` `node`: run a test file
+  through the project's test script, or `cd "<bed>" && node --test <file>`.
+  Put options before file and path arguments: many tools read what follows the files as more files. In an Nx
+  workspace, add `--output-style=static` to every `nx run` and `nx run-many`, so each task's output is in the tool
+  result. `site` and `weeds` find the site from the checkout.
 - Learn what an installed tool does from its `--help` or its documentation, and its version from the lockfile or
   `npm --prefix "<bed>" ls <package>`; never read `node_modules`.
 - After every `cd "<bed>" && <command>`, send `cd "<checkout>"` as your very next call: the shell stays in the bed
@@ -68,9 +69,9 @@ the session's working directories (the session's environment lists any added one
   after `;` or `&&` (the `cd "<bed>" &&` above aside). Claude Code refuses those forms in the bed and the site. Read
   the summary lines in the tool result. A passing command's long output is saved to a file the result names; a
   failing command's output is not, and loses its middle. When a starting command (step 4) prints more than the
-  result shows, run a narrower one (one project's tests, one file's lint); a rerun after the change follows step 6. Write files only in the bed, with the Edit and Write tools: a rename across a
-  file with Edit's `replace_all`, never a `node -e` or `sed` rewrite. Delete a tracked file with
-  `git -C "<bed>" rm <path>`, never `rm`.
+  result shows, run a narrower one (one project's tests, one file's lint); a rerun after the change follows step 6.
+  Write files only in the bed, with the Edit and Write tools: a rename across a file with Edit's `replace_all`,
+  never a `node -e` or `sed` rewrite. Delete a tracked file with `git -C "<bed>" rm <path>`, never `rm`.
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
@@ -104,16 +105,17 @@ one: a file's description, or a decision about something else, says neither. You
 stay is no reason to keep it, so fix it or baseline it (step 6). For copies in two projects, search the repository's
 records (ADRs, glossary or context maps, agent instructions, package READMEs) for both projects' names before you
 decide: a line that says one may not import the other keeps both copies, and a check's message never names an import
-the repository rules out. A class whose weeds were `regrown` had a check that did not hold: start from the bed and check that
-`weeds list` shows on each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`), and find why (a rule
-too narrow, a suppression, an exception that spread, a bed not landed yet) before writing another. The check reads
-`(check: <where> not on the base)` when its bed had not landed as of the garden's last census, or the check's file is
-gone from the base; a tend pass takes no census, so a bed that landed since still reads so. When the bed has not
-landed, its check never ran on the base: tend the class again in the same bed, which step 4 brings up to the base,
-and change the check only if it misses the new weeds. The check reads `(check: <where>, base unknown)` when the site
-could not judge the base (no readable census, the bed's or the census's commit is missing, or the bed shares no
-history with the base): read the base yourself (`git show <base>:<where>`) to see whether the check landed before you
-decide which case it is.
+the repository rules out. A class whose weeds were `regrown` had a check that did not hold: start from the bed and
+check that `weeds list` shows on each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`),
+and find why (a rule too narrow, a suppression, an exception that spread, a bed not landed yet) before writing
+another. The check reads `(check: <where> not on the base)` when its bed had not landed as of the garden's last
+census, or one of its check files is gone from the base (`<where>` holds each check file, separated by `, `); a tend
+pass takes no census, so a bed that landed since still reads so. When the bed has not landed, its check never ran on
+the base: tend the class again in the same bed, which step 4 brings up to the base, and change the check only if it
+misses the new weeds. The check reads `(check: <where>, base unknown)` when the site could not judge the base
+(no readable census, the bed's or the census's commit is missing, or the bed shares no
+history with the base): read the base yourself (`git show <base>:<path>` for each path in `<where>`) to see whether
+the check landed before you decide which case it is.
 
 Then decide, and say which in your reply:
 
@@ -171,8 +173,9 @@ instructions, and run in the bed:
   Prettier config), that config reaches every project, so run these for all of them, as CI does;
 - the tests of the projects your change will touch: each package's own test script, or in an Nx workspace
   `cd "<bed>" && npx --no -- nx run-many -t test -p <project>,<project> --output-style=static` (Nx finds its workspace
-  from the directory it runs in, so it needs the `cd`). Run the whole suite only when the repository's done check requires it (CI,
-  `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes, report it as not run.
+  from the directory it runs in, so it needs the `cd`). Run the whole suite only when the repository's done check
+  requires it (CI, `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes,
+  report it as not run.
 - the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
   the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
   file (a root `node --test` suite that loads a module alone, say). A project's test script often leaves these out.
@@ -194,10 +197,11 @@ any edit and you hold its summary lines.
 Add the check, with its own test when it is a custom rule, and change nothing else yet: no edit to the code it
 checks, and no commit. Write it with no baseline or exemption list, so its first output names every queued weed it
 will hold, the ones you will baseline included; the baseline comes in step 6. When the class needs two checks, add and
-prove both here, before the first fix. Run it in the bed while the code is as the base has it: it must report at least one queued
-weed by the path `weeds list` shows. Run the check alone, on the weeds' files or the projects that hold them
-(`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint), not the repository's whole lint: step 6
-runs that once the fixes are done. A file you wrote to trip it is no weed. A check that reports none does not hold
+prove both here, before the first fix. Run it in the bed while the code is as the base has it: it must report at
+least one queued weed by the path `weeds list` shows. Run the check alone, on the weeds' files or the projects that
+hold them (`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint), not the repository's whole
+lint: step 6 runs that once the fixes are done. A file you wrote to trip it is no weed.
+A check that reports none does not hold
 this class; change it until it does. Keep this first output: it lists the weeds the check holds (step 7). Then run
 `git -C "<bed>" status --short`: it must show only the check's own files.
 
@@ -217,7 +221,7 @@ the rest in a baseline that can only shrink (the tool's own suppression or basel
 check asserts as a maximum) and never raise one. A missing shared home is no reason to baseline: making it is step
 3's job. For each group you baseline, say in the report whether it was too large or too risky, and why. Every
 exception left in the code names its rule and a reason. Change a dependency list only through the package manager
-(`npm install <pkg>@<version> --prefix "<bed>/<project>"`, or the repository's own manager), so its lockfile follows;
+(`npm --prefix "<bed>/<project>" install <pkg>@<version>`, or the repository's own manager), so its lockfile follows;
 in a bed whose `deps` is `linked`, install first (step 4).
 
 Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
@@ -230,12 +234,13 @@ command (another project list, `--parallel=1`, another reporter) may show where 
 project's target alone, but is never the rerun's result. When the identical rerun fails or is cut again, count it as a
 failure the change may have caused (below). Done when each has run again and passes, or fails with exactly the
 failures it had at the start, by name. Quote their summary lines in one table, each command with its result before
-and after the change; a row with no result after the change means this step is not done, so run that command. A command that fails after the change and has no starting result, or fails with a
-failure it did not have at the start, may be a failure your change caused: stop before step 7 and report it with its
-output, so a human judges it. The class stays open and the bed stays as it is. A rerun that fails on a slip of
-your own, such as a format or lint error in a file you changed, you fix; then run that command again, and every
-other command only when the fix touched code or config it covers (a format fix touches no test). Do not start the
-whole set over.
+and after the change; a row with no result after the change means this step is not done, so run that command. A
+command that fails after the change and has no starting result, or fails with a failure it did not have at the start,
+may be a failure your change caused: stop before step 7 and report it with its output, so a human judges it. The
+class stays open and the bed stays as it is.
+A rerun that fails on a slip of your own, such as a format or lint error in a file you changed, you fix; then run
+that command again, and every other command only when the fix touched code or config it covers (a format fix
+touches no test). Do not start the whole set over.
 
 ## 7. Commit and close
 
@@ -284,9 +289,9 @@ nothing when its first sync is not `synced` or `local` or the claim is no longer
 line; the bed stays for the next pass. (The per-weed `close --id` closes above need no claim of this site's: when
 their first sync is not `synced` or `local` they still close, and say `planned <state>` on stderr.) It prints
 `closed <n>; <state>`: the close and the end of the claim land in the site's queue and, when the state is `synced`,
-on `origin`, followed by the bed. Any other state shares them on the next `site open`. A line on stderr names a bed
-`origin` did not take. A later weed of the class, anywhere, is then queued as `regrown` and names this bed and check.
-Done when `close-class` prints `closed <n>; <state>`.
+on `origin`, followed by the bed. Any other state shares them on the next `site open`. Lines on stderr name what its
+syncs left out or kept local, such as a bed `origin` did not take. A later weed of the class, anywhere, is then
+queued as `regrown` and names this bed and check. Done when `close-class` prints `closed <n>; <state>`.
 
 ## 8. Report
 

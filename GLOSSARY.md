@@ -26,7 +26,7 @@ _Avoid_: copy, clone
 **Documented copy**:
 A file's own definition of a duplicate function, kept on purpose: words in that file or one beside it say why the
 file cannot use the shared one (it runs alone, it cannot import), or a record says so. A tick leaves it out of the
-queue and quotes the words; a seed pass declines it on them.
+queue and quotes the words.
 
 **Close**:
 Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
@@ -81,12 +81,12 @@ _Avoid_: weed marker, match
 
 **Seed list**:
 What the census shows the seed pass: for each census pattern, the files with the most hits, and the names
-defined in the most files. The seed pass is recorded only once each of its lines is queued or declined.
+defined in the most files. The seed pass is recorded only once each file of each of its lines is queued or declined.
 _Avoid_: baseline (a baseline is what a check tolerates)
 
 **Decline**:
-To leave a seed line out of the queue on purpose, with a reason. The line's weed is recorded as kept, so no later tick
-queues it.
+To leave a seed line, or one file of a duplicate name's line, out of the queue on purpose, with a reason. Its weed is
+recorded as kept, so no later tick queues it.
 _Avoid_: skip, dismiss
 
 **Queue**:
@@ -109,8 +109,7 @@ What the repository writes down about its own work: plans, summaries, lessons, d
 commit history. The gardener reads them as evidence and never edits them.
 
 **Held by hand**:
-Said of a weed class a clean-up removed that is absent at the base, with no check to reject its return. The seed
-pass reports such classes: they are where a tend pass adds a check before anything grows back.
+Said of a weed class a clean-up removed that is absent at the base, with no check to reject its return.
 _Avoid_: no check behind
 
 **Sampling**:
