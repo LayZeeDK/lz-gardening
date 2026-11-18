@@ -602,7 +602,7 @@ function reportSyncNotes(io: Io, command: string, result: SyncResult): void {
 
 /** The first of the close's check files that the tended bed commit does not hold. */
 function checkMissingFromBed(site: Site, by: string, checks: string): string | undefined {
-  const commit = bedCommit({ by });
+  const commit = bedCommit(by);
   return catFileBatch(site.path, checks.split(checkSeparator), (path) => `${commit}:${path}`).find(
     ([, object]) => object.kind !== 'blob',
   )?.[0];

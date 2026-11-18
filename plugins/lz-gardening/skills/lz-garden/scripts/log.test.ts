@@ -989,7 +989,7 @@ test('an event file whose class has text after a kebab-case class id is skipped'
 });
 
 test('the bed commit of a tend close is what its by names after the @', () => {
-  assert.equal(bedCommit(tend(uuid, 4, [weed])), '1a2b3c4');
+  assert.equal(bedCommit(tend(uuid, 4, [weed]).by), '1a2b3c4');
 });
 
 test('an event file whose at is not a date is skipped', () => {

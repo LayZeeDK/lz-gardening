@@ -80,8 +80,9 @@ export type CloseEvent =
 
 export type TendedClose = Extract<CloseEvent, { kind: 'tended' }>;
 
-export function bedCommit(tended: Pick<TendedClose, 'by'>): string {
-  return tended.by.slice(tended.by.indexOf('@') + 1);
+/** The commit a tended close's `by` (`bed/<class>@<commit>`) names. */
+export function bedCommit(by: string): string {
+  return by.slice(by.indexOf('@') + 1);
 }
 
 export interface ClaimEvent extends EventBase {

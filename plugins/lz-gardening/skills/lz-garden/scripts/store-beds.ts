@@ -167,7 +167,7 @@ export function planBeds(site: Site, leaving: readonly { readonly path: string }
     const close = latestTendedClose(events, bed.weedClass);
     const shared = tips.get(fetchedBedRef(bed.weedClass));
 
-    if (close === undefined || !bed.tip.startsWith(bedCommit(close))) {
+    if (close === undefined || !bed.tip.startsWith(bedCommit(close.by))) {
       return [];
     }
 

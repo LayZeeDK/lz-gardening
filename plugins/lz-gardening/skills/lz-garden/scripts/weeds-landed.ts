@@ -65,7 +65,7 @@ function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: Tende
   }
 
   const { base, withSite } = judged;
-  const tip = bedCommit(tended);
+  const tip = bedCommit(tended.by);
   const fork = optionalGit(cwd, ['merge-base', tip, base], withSite);
 
   if (fork === undefined) {
