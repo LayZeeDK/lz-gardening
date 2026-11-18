@@ -147,7 +147,10 @@ Layers 4 to 6 (instructions, skills, style guide) only when nothing stronger can
 When the paved road needs a shared home that does not exist yet (a module every copy can import), make it in the bed,
 with the decision record the repository's instructions ask for (an ADR, say): a human reviews the bed before it
 lands, so the choice of home is theirs to accept or change. Do not stop to ask. When a copy cannot use that home (a
-file that cannot import it), the check pins it as step 2 says.
+file that cannot import it), the check pins it as step 2 says. The exception is a home that would be a new project
+or a new public entry point of a published package (a new export path, say): that is the maintainers' change to
+make, not the bed's. Make no such home; baseline the copies that need it (step 6) and name in the report the home
+they wait for.
 
 Done when you have read both files and can name the check, its layer by the number `weeds.md` gives it (a type,
 lint rule or test is layer 2; a change to the code itself is layer 1), the `checks.md` row it follows (or that no
@@ -220,7 +223,8 @@ does the same job is no fix: it only moves the copy out of the check's reach. Wh
 the tests of the projects you changed, no more. When the instances are too many or too risky for one pass, record
 the rest in a baseline that can only shrink (the tool's own suppression or baseline file, or a list whose length the
 check asserts as a maximum) and never raise one. A missing shared home is no reason to baseline: making it is step
-3's job. For each group you baseline, say in the report whether it was too large or too risky, and why. Every
+3's job, unless step 3 leaves it to the maintainers (a new project or public entry point). For each group you
+baseline, say in the report whether it was too large, too risky, or waiting for such a home, and why. Every
 exception left in the code names its rule and a reason. Change a dependency list only through the package manager
 (`npm --prefix "<bed>/<project>" install <pkg>@<version>`, or the repository's own manager), so its lockfile follows;
 in a bed whose `deps` is `linked`, install first (step 4).

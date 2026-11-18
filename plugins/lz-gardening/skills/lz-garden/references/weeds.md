@@ -11,6 +11,8 @@ Leave out only, and name which in the reason:
 - code that is deliberately unusual and says why, in its own words or a record's;
 - what a check in the repository already rejects, naming the check you read;
 - not the class: the hit is text in a string, a comment or a test's input, not code that does what the class names.
+  A suppression a test needs to pass a wrong type or value on purpose (an `@ts-expect-error` above a call that tests
+  how the code rejects it) is a test's input too, however many test files repeat it.
 
 A reason on each line does not make a repeated suppression a one-off: two or more files that carry the same rule (or
 mutator) with the same reason are one root cause, so queue one weed per file. Spikes, examples and vendored samples
