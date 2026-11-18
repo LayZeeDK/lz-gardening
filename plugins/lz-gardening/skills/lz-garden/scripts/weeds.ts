@@ -2,9 +2,10 @@
 // Usage, from the repository's checkout (the site is the <repo>.garden folder beside it):
 //   node weeds.ts add --class <kebab> --where <path[:line]> [--where <path[:line]> ...] --source <kind:ref>
 //                     --note <text> [--layer <1-6>] [--census <sha>]
-//     Adds one weed per distinct --where (`./a` and `a` are one path, recorded as `a`; so for decline), all in one
-//     append, with the same class, source and note, and prints one line per weed: `added <id>`, `seen <id>`
-//     (already open), `kept <id>` (closed with --keep: a weed left on purpose is never queued again) or
+//     Adds one weed per distinct --where (`./a` and `a//b` are recorded as `a` and `a/b`, so those spellings make
+//     one weed; decline records its --where the same way), all in one append, with the same class, source and
+//     note, and prints one line per weed: `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep:
+//     a weed left on purpose is never queued again) or
 //     `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass closed its class, so the check that
 //     was meant to hold it did not; the latest tend pass is named). The check reads
 //     `(check: <where> not on the base)` when it is not on the census commit: <sha>, the full commit id of the
@@ -61,8 +62,9 @@
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
 // A flag goes once per command, except --where with add and --check with close and close-class; given twice, it
 // exits 2 with `--<flag> goes once with <command>`. A usage error is named before the site is looked for.
-// Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
-// folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
+// Paths (--where, a lesson:<path> source, --check) are repository-relative, as given and in their plain form, and no
+// event may hold this machine's home folder, the checkout's path or the site's path: the queue is shared with the
+// repository (exit 2).
 // An event file the log cannot read, or that these commands would not write (among them one with a line break or
 // control character in a field the scripts print; references/site.md lists the rules), is skipped and named on
 // stderr, with the characters that break or reorder a line written as \u{<hex>}; an add or close that has to read
@@ -129,8 +131,14 @@ function firstUnprintable(values: Readonly<Record<string, string | undefined>>):
 
 const fromRootDriveOrHome = /^(?:[/\\~]|(?<driveLetter>[a-z]:(?!\d+$)))/i;
 const throughParent = /(?:^|[/\\])\.\.(?:[/\\]|$)/;
+// A path is checked as given and in its plain form: `./` can hide the root, drive or `~` that normalizing exposes.
 function notRepositoryRelative(path: string): boolean {
-  return fromRootDriveOrHome.test(path) || throughParent.test(path);
+  return [path, posix.normalize(path)].some((form) => fromRootDriveOrHome.test(form) || throughParent.test(form));
+}
+
+/** The paths in their plain form (`./a` and `a//b` as `a` and `a/b`), each once, in the order given. */
+function plainPaths(paths: readonly string[]): readonly string[] {
+  return [...new Set(paths.map((path) => posix.normalize(path)))];
 }
 
 export function validateAdd(input: AddInput): string | null {
@@ -260,7 +268,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
         target: { class: target, baselined: baselinedIds },
         kind,
         by,
-        check: [...new Set(check.map((path) => posix.normalize(path)))],
+        check: plainPaths(check),
       }
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
@@ -430,7 +438,7 @@ function add(io: Io, flags: Flags, now: Date): number {
     return 2;
   }
 
-  const inputs = [...new Set(wheres.map((where) => posix.normalize(where)))].map(inputOf);
+  const inputs = plainPaths(wheres).map(inputOf);
 
   const site = openSite(io.cwd);
   const seeds = flags.source === 'census:seed' ? seedLinesIn(site.path, flags.census) : undefined;
@@ -474,13 +482,12 @@ function censusProblem(census: string | undefined): string | null {
 }
 
 function decline(io: Io, flags: Flags, now: Date): number {
-  const given = flags.where?.[0];
-  const where = given === undefined ? undefined : posix.normalize(given);
+  const [where] = plainPaths(flags.where ?? []);
   const input: AddInput = {
     // Stryker disable next-line StringLiteral: a decline without --class fails validation, and so does the mutant's text
     class: flags.class ?? '',
-    // With no --where the seed lines name the paths, all repository-relative; `.` stands in for them in validation.
-    where: where ?? '.',
+    // Validated as given. With no --where the seed lines name the paths, all repository-relative; `.` stands in.
+    where: flags.where?.[0] ?? '.',
     source: 'census:seed',
     note: flags.reason,
     layer: null,
@@ -490,7 +497,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
     declineUsageProblem(request) ??
     firstUnprintable({ in: flags.in }) ??
     censusProblem(flags.census) ??
-    (hasText(flags.reason) ? validateAdd({ ...input, where: given ?? input.where }) : '--reason must not be empty');
+    (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
 
   if (problem !== null) {
     io.err(`weeds decline: ${problem}\n`);
@@ -515,7 +522,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
   const { status } = append(
     site,
     (replica) => {
-      const { id, drafts } = planDecline(eventsReportingSkipped(io, replica), input, now);
+      const { id, drafts } = planDecline(eventsReportingSkipped(io, replica), { ...input, where }, now);
 
       return { drafts, status: `kept ${id}` };
     },

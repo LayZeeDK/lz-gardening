@@ -305,6 +305,31 @@ test('add takes a --where spelled two ways as the one weed, in its plain form, o
   );
 });
 
+test('add refuses a --where through a parent folder as given, though its plain form would stay inside', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { hits: { 'any-type': ['src/a.ts:1: const a: any = 1;'] } }));
+
+  const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/x/../a.ts:1', '--source', 'census:seed']);
+
+  assert.deepEqual(
+    [added.status, added.stderr, logFiles(garden).size],
+    [2, 'weeds add: --where must be a repository-relative path\n', 0],
+  );
+});
+
+test('add refuses a --where whose plain form is a drive or home path, though ./ hid it as given', (t) => {
+  const { dir, garden } = planted(t);
+
+  const results = ['./c:/Users/ada/a.ts:1', './~/a.ts:1', String.raw`./d:\work\a.ts:1`].map((where) =>
+    cli(dir, ['add', '--class', 'any-type', '--where', where, '--source', 'commit:abc1234']),
+  );
+
+  assert.deepEqual(
+    [results.map(({ status, stderr }) => [status, stderr]), logFiles(garden).size],
+    [Array.from({ length: 3 }, () => [2, 'weeds add: --where must be a repository-relative path\n']), 0],
+  );
+});
+
 test('add with several --where refuses them all when a later one is off the seed list, and queues none', (t) => {
   const { dir, garden } = planted(t);
   writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
@@ -819,6 +844,13 @@ test('a tended close-class refuses a --check path holding ", ", which joins seve
       check: ['checks/a, b.mjs'],
     }),
     '--check must not hold ", ", which separates the checks of one close',
+  );
+});
+
+test('a tended close-class refuses a --check whose plain form is a home path, though ./ hid it as given', () => {
+  assert.equal(
+    parseCloseFlags('close-class', { class: 'any-type', tended: 'bed/any-type@abc1234', check: ['./~/a.mjs'] }),
+    '--check must be a repository-relative path',
   );
 });
 

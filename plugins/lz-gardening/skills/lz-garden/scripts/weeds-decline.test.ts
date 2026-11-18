@@ -57,6 +57,17 @@ test('decline takes a --where spelled with ./ as the seed line it names, in its 
   assert.deepEqual([declined.status, declined.stdout], [0, `kept ${weedId('any-type', 'src/a.ts', 'census:seed')}\n`]);
 });
 
+test('decline refuses a --where through a parent folder as given, though its plain form names a seed line', (t) => {
+  const dir = seedListed(t);
+
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--where', 'src/x/../a.ts', '--reason', 'a fixture']);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr],
+    [2, 'weeds decline: --where must be a repository-relative path\n'],
+  );
+});
+
 test('decline without --where keeps every seed line of its class that is neither queued nor declined', (t) => {
   const { dir, garden } = planted(t);
   writeCensusText(
