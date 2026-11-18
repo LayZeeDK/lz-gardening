@@ -128,7 +128,10 @@ test('a first commit given alone is refused with exit 2, as it has no parent to 
 
   const status = run([first], io);
 
-  assert.deepEqual([status, stdout(), stderr()], [2, '', `diffs: ${first} has no parent, so it cannot be read alone\n`]);
+  assert.deepEqual(
+    [status, stdout(), stderr()],
+    [2, '', `diffs: ${first} has no parent, so it cannot be read alone\n`],
+  );
 });
 
 test("a page lists the range's commits, then a blank line, then each diff under its id and message, trimmed", (t) => {
@@ -156,6 +159,20 @@ test('a range reads its diffs with plain git reads, none of the settings or conf
   assert.deepEqual(
     started().map(({ args }) => args[0]),
     ['log', 'rev-list'],
+  );
+});
+
+test('one commit id alone is read with plain git reads too, its parent looked up first', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const pointed = commit(dir, { 'b.ts': 'export const b = 2;\n' });
+  const started = startedGits(t);
+
+  printed(dir, [pointed]);
+
+  assert.deepEqual(
+    started().map(({ args }) => args[0]),
+    ['rev-parse', 'log', 'rev-list'],
   );
 });
 
