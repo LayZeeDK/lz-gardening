@@ -21,11 +21,12 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <pat
 which keeps the line's weed out of the queue for good. `<sha>` is the census's commit, as in the tick's add command.
 When the lines of a class left after its queued weeds share one reason, decline them all in one call: leave out
 `--where`, and the command declines every line of that class that no add covers yet and prints
-`declined <n> seed lines of <class>`. Queue a class's weeds first, then decline the rest, one call per class.
+`declined <n> seed line(s) of <class>`. Queue a class's weeds first, then decline the rest, one call per class.
 Duplicate names are the exception: decline each file of a duplicate line on its own, with `--where`.
-Both commands take `census:seed` for the seed list's lines alone and refuse it for any other weed, which takes the
-source of what it was found in (step 2, and `--source` in `SKILL.md`). `sync --seeded` in step 4 refuses to record the seed while a
-line is neither queued nor declined, and names the lines left.
+`add` takes `--source census:seed`, and `decline` records its weed with it, for the seed list's lines alone; both
+refuse any other weed, which takes the source of what it was found in (step 2, and `--source` in `SKILL.md`).
+`sync --seeded` in step 4 refuses to record the seed while a line is neither queued nor declined, and names the lines
+left.
 
 - `= [<pattern>] <path> <count>`: the files with the most hits for that pattern, at most 20 per pattern. Read a few
   hits; queue one weed, `--class <pattern>`, `--where <path>`, `--source census:seed`, the note naming what the hits
@@ -112,8 +113,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <parent>..<commit> --chars 24000
 
 A commit that marks `skip` there is too large for the seed pass, and a commit with no parent cannot be read this way:
 count either as unread too (pointed-at commits past the first five go on the report's `<read> of <pointed>` count,
-not here). Done when the pages and
-the pointed-at commits are read and the weeds they show are queued.
+not here). Done when the pages and the pointed-at commits are read and the weeds they show are queued.
 
 ## 4. Record and report
 

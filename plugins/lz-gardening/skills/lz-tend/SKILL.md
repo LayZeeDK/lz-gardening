@@ -112,10 +112,10 @@ another. The check reads `(check: <where> not on the base)` when its bed had not
 census, or one of its check files is gone from the base (`<where>` holds each check file, separated by `, `); a tend
 pass takes no census, so a bed that landed since still reads so. When the bed has not landed, its check never ran on
 the base: tend the class again in the same bed, which step 4 brings up to the base, and change the check only if it
-misses the new weeds. The check reads `(check: <where>, base unknown)` when the site could not judge the base
-(no readable census, the bed's or the census's commit is missing, or the bed shares no
-history with the base): read the base yourself (`git show <base>:<path>` for each path in `<where>`) to see whether
-the check landed before you decide which case it is.
+misses the new weeds. The check reads `(check: <where>, base unknown)` when the site could not judge the base (no
+readable census, the bed's or the census's commit is missing, or the bed shares no history with the base): read the
+base yourself (`git show <base>:<path>` for each path in `<where>`) to see whether the check landed before you decide
+which case it is.
 
 Then decide, and say which in your reply:
 
@@ -200,10 +200,9 @@ will hold, the ones you will baseline included; the baseline comes in step 6. Wh
 prove both here, before the first fix. Run it in the bed while the code is as the base has it: it must report at
 least one queued weed by the path `weeds list` shows. Run the check alone, on the weeds' files or the projects that
 hold them (`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint), not the repository's whole
-lint: step 6 runs that once the fixes are done. A file you wrote to trip it is no weed.
-A check that reports none does not hold
-this class; change it until it does. Keep this first output: it lists the weeds the check holds (step 7). Then run
-`git -C "<bed>" status --short`: it must show only the check's own files.
+lint: step 6 runs that once the fixes are done. A file you wrote to trip it is no weed. A check that reports none
+does not hold this class; change it until it does. Keep this first output: it lists the weeds the check holds (step
+7). Then run `git -C "<bed>" status --short`: it must show only the check's own files.
 
 Then run the check on code that does the same job the right way (the paved road, the simplest correct form): it must
 report nothing there. Code the check skips through a baseline or an exemption list is not that code. A check that
@@ -290,8 +289,9 @@ line; the bed stays for the next pass. (The per-weed `close --id` closes above n
 their first sync is not `synced` or `local` they still close, and say `planned <state>` on stderr.) It prints
 `closed <n>; <state>`: the close and the end of the claim land in the site's queue and, when the state is `synced`,
 on `origin`, followed by the bed. Any other state shares them on the next `site open`. Lines on stderr name what its
-syncs left out or kept local, such as a bed `origin` did not take. A later weed of the class, anywhere, is then
-queued as `regrown` and names this bed and check. Done when `close-class` prints `closed <n>; <state>`.
+last sync left out, kept local or gave back, such as a bed `origin` did not take. A later weed of the class,
+anywhere, is then queued as `regrown` and names this bed and check. Done when `close-class` prints
+`closed <n>; <state>`.
 
 ## 8. Report
 

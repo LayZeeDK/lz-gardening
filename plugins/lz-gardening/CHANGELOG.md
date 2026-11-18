@@ -27,11 +27,11 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     seed list is queued or declined (`weeds.ts decline`, which keeps the weed out of the queue for good; without
     `--where` it declines every pattern line of the class not yet queued or declined, and a duplicate name's files
     are declined one at a time, each on words its file, or the record `--in` names, holds at the census's
-    commit). Duplicate names count only module-scope definitions, outside test files and
-    `.d.ts` declarations. `weeds.ts add`
-    and `decline` take `--source census:seed` only for a weed on a line of the seed list; `add` takes `--where` once
-    per weed, so the files of one duplicate name are queued in one call. Every other `weeds.ts` flag, but
-    `--check` of `close` and `close-class`, goes once: given twice, it is refused (exit 2), not read as its last value.
+    commit). Duplicate names count only module-scope definitions, outside test files and `.d.ts` declarations.
+    `weeds.ts add` takes `--source census:seed`, and `decline` records its weed with it, only for a weed on a line of
+    the seed list; `add` takes `--where` once per weed, so the files of one duplicate name are queued in one call.
+    Every other `weeds.ts` flag goes once, except `--check` of `close` and `close-class`: given twice, it is refused
+    (exit 2), not read as its last value.
   - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`,
     which the census prints as `site pattern <id>: <regex>` lines. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,

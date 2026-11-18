@@ -97,8 +97,8 @@ each syncs first and acts only when that sync is `synced` or `local` and this wr
 class; otherwise each exits 1 and changes nothing. `close --id` needs no claim, and exits 1, closing nothing, while
 another writer holds a claim of the weed's class; when its first sync is not `synced` or `local`, it closes and says
 `planned <state>` on stderr. Each `weeds.ts` command takes only the flags its usage lists, and exits 2 on any
-other; `close` names its weed with `--id`, never `--class`, and `close-class` the reverse, and a blank `--id` exits 2
-too.
+other and on a flag given twice, except `--where` of `add` and `--check` of `close` and `close-class`; `close`
+names its weed with `--id`, never `--class`, and `close-class` the reverse, and a blank `--id` exits 2 too.
 
 A claim's `until` is six hours after its writer's clock. A reader counts the claim live while `until` is ahead of its
 own clock by at most seven hours, which allows one hour of clock skew between machines. A claim from a writer whose
@@ -135,12 +135,13 @@ repository, it uses the one site beside the main checkout:
 - `site.ts sync [--census <sha> [--seeded]]` syncs the garden log and census, trying up to five times. With `--census`,
   it records the census `census.ts` took at `<sha>` (above), and records it even when the sync shares nothing (a `local`
   or `offline` garden). `--seeded` also appends the event that marks the garden seeded, once, but only when each line
-  of that census's seed list is queued (the queue holds an add of its class at one of its paths) or declined; otherwise
+  of that census's seed list is queued (the queue holds an add of its class at each of its paths) or declined; otherwise
   it records nothing and names each line left on stderr, `site: seed line neither queued nor declined: <line>`. It
   prints JSON with `shared` and `events` (how many of the site's events the push shared), plus `reason` (git's message)
   when there is one and `conflicts` (the files whose shared content it kept) when there are any. It exits 0 in every
-  share state, 1 when `--census` has no census to record (above) or a seed line is left, and 2 when the repository has no site yet (run `open` first), when
-  `<sha>` is not a full commit id, or when `--seeded` comes without `--census`.
+  share state, 1 when `--census` has no census to record (above) or a seed line is left, and 2 when the repository
+  has no site yet (run `open` first), when `<sha>` is not a full commit id, or when `--seeded` comes without
+  `--census`.
 
 The share states:
 
