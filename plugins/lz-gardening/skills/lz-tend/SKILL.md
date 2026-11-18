@@ -174,12 +174,13 @@ instructions, and run in the bed:
 - its lint, type-check and format check, the commands its own `check` script or CI runs, not a narrower script
   such as `check:<part>`. When your change will touch a root config (the lint config, a base `tsconfig`, the
   Prettier config), that config reaches every project, so run these for all of them, as CI does;
-- the tests of the projects your change will touch, one command per project even when the lint and type-check above
+- the tests of the projects your change will touch (a root config counts as touching only the projects whose files
+  you will edit, unless a test reads that config), one command per project even when the lint and type-check above
   run for all of them, so each summary comes back whole: each package's own test script, or in an Nx workspace
   `cd "<bed>" && npx --no -- nx run-many -t test -p <project> --output-style=static` (Nx finds its workspace from the
   directory it runs in, so it needs the `cd`). Run the whole suite only when the repository's done check requires
-  it (CI, `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes, report it as not
-  run.
+  it (CI, `AGENTS.md`, a pre-commit rule), still one command per project, and when that suite outruns the Bash
+  tool's 10 minutes, report it as not run.
 - the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
   the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
   file (a root `node --test` suite that loads a module alone, say). A project's test script often leaves these out.
@@ -191,10 +192,10 @@ Keep each command and its summary lines: the lines that count passes and failure
 check or test. A failing command is a starting result too: its failures are the ones step 6 may see again. When the
 tool result says a command's output was saved to a file, Read the end of that file for its summary lines. When you
 cannot read a command's summary lines (the output was cut, or the command timed out), it is no starting result:
-replace it with narrower
-commands whose summary lines you can read (one project's tests, one test folder) and keep those. Step 6 runs the
-same commands, word for word and from the same directory, so their results compare. Done when each has run before
-any edit and you hold its summary lines.
+replace it with narrower commands whose summary lines you can read (one project's tests, one test folder) and keep
+those. Step 6 runs the same commands, word for word and from the same directory, so their results compare. Done when
+each has run before any edit and you hold its summary lines, with one test command per project: no `-p` that lists
+two projects, and no `run-many -t test` without `-p`.
 
 ## 5. Rule first, proved on a real weed
 
@@ -224,32 +225,37 @@ the tests of the projects you changed, no more. When the instances are too many 
 the rest in a baseline that can only shrink (the tool's own suppression or baseline file, or a list whose length the
 check asserts as a maximum) and never raise one. A missing shared home is no reason to baseline: making it is step
 3's job, unless step 3 leaves it to the maintainers (a new project or public entry point). For each group you
-baseline, say in the report whether it was too large, too risky, or waiting for such a home, and why. A copy this
-pass creates in a second project, because that project cannot import the home, is baselined like the others or not
-made; the check never names it as a second owner. Every
-exception left in the code names its rule and a reason. Change a dependency list only through the package manager
-(`npm --prefix "<bed>/<project>" install <pkg>@<version>`, or the repository's own manager), so its lockfile follows;
-in a bed whose `deps` is `linked`, install first (step 4).
+baseline, say in the report whether it was too large, too risky, or waiting for such a home, and why. Make no copy
+of the home in a project that cannot import it: leave that project's instances as they are, in the baseline, and the
+check never names such a copy as a second owner. Every exception left in the code names its rule and a reason.
+Change a dependency list only through the package manager (`npm --prefix "<bed>/<project>" install <pkg>@<version>`,
+or the repository's own manager), so its lockfile follows; in a bed whose `deps` is `linked`, install first (step 4).
 
 Then run every command of step 4's starting results again in the bed, all of them, and the tests of any project or
 file the change touched that step 4 did not run. Skip none: not because you expect the same result, not because the
 change touches none of the files it covers, and not because it failed or ran long at the start. A command that failed
 at the start runs again too, however long its output: its rerun shows whether the same checks or tests fail and no
-others. A rerun that exits non-zero, or whose summary lines you cannot read, has failed: run the identical command
-once more, word for word and from the same directory, to tell a flaky failure from a real one. A narrower or changed
-command (another project list, `--parallel=1`, another reporter) may show where it failed, to read the failing
-project's target alone, but is never the rerun's result. When the identical rerun fails or is cut again, you may run
-each failing project's target alone to read its failures. When every failure is in a file this pass wrote and the
-fix touches only that file, fix it and run the identical command once more. Otherwise count it as a failure the
-change may have caused (below): report it and release the claim, without looking further for its cause. Done
-when each has run again and passes, or fails with exactly the failures it had at the start, by name. Quote their
-summary lines in one table, each command with its result before and after the change; a row with no result after
-the change means this step is not done, so run that command. A command that fails after the change and has no
-starting result, or fails with a failure it did not have at the start, may be a failure your change caused: stop
-before step 7 and report it with its output, so a human judges it. The class stays open and the bed stays as it is.
-A rerun that fails on a slip of your own, such as a format or lint error in a file you changed, you fix; then run
-that command again, and every other command only when the fix touched code or config it covers (a format fix
-touches no test). Do not start the whole set over.
+others.
+
+A rerun that exits non-zero, or whose summary lines you cannot read, has failed. Handle it in this order:
+
+1. When its own output shows a format or lint error in a file you changed, fix it and run that command again; run
+   another command again only when the fix touched code or config it covers (a format fix touches no test). Do not
+   start the whole set over. When it still fails, go on to 2.
+2. Otherwise run the identical command once more, word for word and from the same directory, to tell a flaky failure
+   from a real one.
+3. When that fails or is cut too, you may run each failing project's target alone to read its failures. A narrower or
+   changed command (another project list, `--parallel=1`, another reporter) is never the rerun's result.
+4. When every failure is in the check you added in step 5 or its own test, and the fix touches only those files, fix
+   it without narrowing what the check reports, and run the identical command once more.
+5. Any other failure, or a failure after that run, counts as one the change may have caused (below): report it and
+   release the claim, without looking further for its cause.
+
+A command that fails after the change and has no starting result, or fails with a failure it did not have at the
+start, may be a failure your change caused: stop before step 7 and report it with its output, so a human judges it.
+The class stays open and the bed stays as it is. Quote the summary lines in one table, each command with its result
+before and after the change; a row with no result after the change means this step is not done, so run that command.
+Done when each command has run again and passes, or fails with exactly the failures it had at the start, by name.
 
 ## 7. Commit and close
 
@@ -276,8 +282,9 @@ weed by weed and give each exactly one of these fates, and say which:
 - **Baselined**: its copy stays in the check's baseline (step 6). Name it in `--baselined` below: it stays open, for
   the pass that shrinks the baseline. Every weed of a group that keeps a copy in the baseline is baselined, the file
   that keeps the shared definition included: the group closes when its last copy goes. A weed in a file the check
-  cannot reach at all (one its tool ignores) is in no baseline, so it is not baselined: it has none of these fates
-  until the check reaches it or the bed fixes it (below).
+  cannot reach (one its tool ignores) is first widened to or fixed (below). When neither can be done (a fixture a
+  test pins, step 4), name it in `--baselined` too, the only way the close leaves a weed open, and say in the report
+  that no check reaches it.
 - **Kept**: the repository says it is deliberate, in words cited as step 2 says, even when the check names it as an
   allowed owner. `weeds close --id <id> --keep "<reason>"`, before the class close.
 - **One-off**: it has nothing to fix and shares no cause with the rest. `weeds close --id <id> --one-off "<reason>"`.

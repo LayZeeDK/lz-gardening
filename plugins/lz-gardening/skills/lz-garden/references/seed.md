@@ -19,12 +19,16 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <pat
 ```
 
 which keeps the line's weed out of the queue for good. `<sha>` is the census's commit, as in the tick's add command.
-When the lines of a class left after its queued weeds share one reason, which you know only after reading the hits of
-every one of those lines (search the class's pattern over the whole repository, as the census does; a search that
-leaves out a line's path does not count), decline them all in one call: leave
-out `--where`, and the command declines every line of that class that no add covers yet and prints
+When the lines of a class left after its queued weeds share one reason, decline them all in one call: leave out
+`--where`, and the command declines every line of that class that no add covers yet and prints
 `declined <n> seed line(s) of <class>`. Queue a class's weeds first, then decline the rest, one call per class.
 Duplicate names are the exception: decline each file of a duplicate line on its own, with `--where`.
+Before any decline, read the hits of every line it will decline: one Grep per line, all in one message, with the
+pattern's regex (the census's `site pattern` line for a site pattern, else that id's entry in
+`${CLAUDE_SKILL_DIR}/scripts/patterns.json`, which you Read), `path` the line's `<path>`, `output_mode: "content"`
+and no `head_limit`. Each must show the line's `<count>` hits; when it shows another number, the checkout differs
+from the base, so read that file with `git show <base>:<path>`. A search of a folder, or of some of the lines, is not that
+reading.
 `add` takes `--source census:seed`, and `decline` records its weed with it, for the seed list's lines alone; both
 refuse any other weed, which takes the source of what it was found in (step 2, and `--source` in `SKILL.md`).
 `sync --seeded` in step 4 refuses to record the seed while a line is neither queued nor declined, and names the lines
@@ -149,6 +153,7 @@ shared: <state> (<reason>)
   those it read.
 - `held by hand`: the classes step 2 found held by hand, as it defines, or `held by hand: none`.
 - `not done`: each part of steps 1 to 3 that you skipped or cut short (a file not shown, a record not read, a weed
-  you could not queue, a step run out of order), named by step, or `not done: none`. A step that ran in full and
+  you could not queue, a step run out of order, a clean-up commit read but not checked at the base), named by step,
+  or `not done: none`. A step that ran in full and
   found nothing is done.
 - `ready to tend` and `shared`: as in the tick's report form (step 5 of `SKILL.md`).
