@@ -1,6 +1,7 @@
-// The shapes the garden's values take: commit ids, class ids, sources, bed names, layers, stamped times and printable
-// text. The event schemas hold an event's fields to them, and the other scripts hold what they read or are given to
-// them. Neither needs the events or the replay for that, and these change less often than the log does.
+// The shapes the garden's values take: git object ids (of commits, trees and blobs), class ids, sources, bed names,
+// layers, stamped times and printable text. The event schemas hold an event's fields to them, and the other scripts
+// hold what they read or are given to them. Neither needs the events or the replay for that, and these change less
+// often than the log does. It also turns a failed schema parse into one message: the first reason the schema gives.
 import type { z } from 'zod';
 
 export const objectIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
