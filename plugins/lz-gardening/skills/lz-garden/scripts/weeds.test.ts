@@ -1153,6 +1153,16 @@ test('a tended close-class refuses a --check path holding ", ", which joins seve
   );
 });
 
+test('a tended close-class records a --check given twice once', () => {
+  const closing = parseCloseFlags('close-class', {
+    class: 'any-type',
+    tended: 'bed/any-type@abc1234',
+    check: ['eslint.config.mjs', 'checks/a.mjs', 'eslint.config.mjs'],
+  });
+
+  assert.equal(typeof closing === 'string' ? closing : closing.check, 'eslint.config.mjs, checks/a.mjs');
+});
+
 test('close-class refuses --id beside --class rather than drop it', () => {
   assert.equal(
     parseCloseFlags('close-class', { id: 'abc', class: 'any-type', keep: 'on purpose' }),

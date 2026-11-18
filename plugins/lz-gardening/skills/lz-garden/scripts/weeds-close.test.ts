@@ -173,6 +173,23 @@ test('close-class --tended whose --check file the tended commit does not hold ex
   );
 });
 
+test('close-class --tended whose --check names a folder at the tended commit exits 2, as a folder is no check file', (t) => {
+  const { dir, garden } = planted(t);
+  addWeed(dir, 'src/a.ts:1');
+  assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
+  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
+  const by = `bed/any-type@${tip.slice(0, 7)}`;
+
+  const closed = cli(
+    dir,
+    ['close-class', '--class', 'any-type', '--tended', by, '--check', 'checks'],
+    process.env,
+    now,
+  );
+
+  assert.deepEqual([closed.status, closed.stderr], [2, `weeds close-class: --check checks is no file at ${by}\n`]);
+});
+
 test('a tended close made with sharing off exits 0, and the next open pushes the close and then its bed', (t) => {
   const { dir, garden } = planted(t);
   const remote = bareRemote(dir);

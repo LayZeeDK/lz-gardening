@@ -103,7 +103,7 @@ import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
-import { configValue, objectIds, optionalGit, siteObjectsInput } from './store-git.ts';
+import { catFileBatch, configValue, optionalGit, siteObjectsInput } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import { censusIn, onSeedLine, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
 import type { Replica, Site } from './store-log.ts';
@@ -246,7 +246,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
   }
 
   return bedPattern.exec(by)?.[1] === target
-    ? { target: { class: target, baselined: baselinedIds }, kind, by, check: check.join(checkSeparator) }
+    ? { target: { class: target, baselined: baselinedIds }, kind, by, check: [...new Set(check)].join(checkSeparator) }
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
@@ -603,13 +603,9 @@ function reportSyncNotes(io: Io, command: string, result: SyncResult): void {
 /** The first of the close's check files that the tended bed commit does not hold. */
 function checkMissingFromBed(site: Site, by: string, checks: string): string | undefined {
   const commit = bedCommit({ by });
-  const paths = checks.split(checkSeparator);
-  const ids = objectIds(
-    site.path,
-    paths.map((path) => `${commit}:${path}`),
-  );
-
-  return paths.find((_path, index) => ids[index] === undefined);
+  return catFileBatch(site.path, checks.split(checkSeparator), (path) => `${commit}:${path}`).find(
+    ([, object]) => object.kind !== 'blob',
+  )?.[0];
 }
 
 function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date, seams: SyncSeams): number {
