@@ -103,7 +103,7 @@ import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
-import { configValue, objectIds, optionalGit } from './store-git.ts';
+import { configValue, objectIds, optionalGit, siteObjectsInput } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
 import { censusIn, onSeedLine, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
 import type { Replica, Site } from './store-log.ts';
@@ -482,9 +482,12 @@ function unquotedReason(
   const path = record ?? seedPath(input.where);
   const sha = censusIn(site.path, census)?.sha;
   // Stryker disable next-line ConditionalExpression: with no census, git show of undefined:<path> fails as well, and the reason is refused alike
-  const text = sha === undefined ? undefined : optionalGit(checkout, ['show', `${sha}:${path}`]);
+  const text =
+    sha === undefined ? undefined : optionalGit(checkout, ['show', `${sha}:${path}`], siteObjectsInput(site.path));
 
-  return text !== undefined && asProse(text).includes(asProse(input.note))
+  const quote = asProse(input.note);
+
+  return text !== undefined && quote !== '' && asProse(text).includes(quote)
     ? null
     : `--reason must quote the words that keep this copy, as ${path} holds them at the census's commit`;
 }
@@ -508,6 +511,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
   const problem =
     secondWhere ??
     strayIn ??
+    firstUnprintable({ in: flags.in }) ??
     censusProblem(flags.census) ??
     (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
 

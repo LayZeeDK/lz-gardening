@@ -1,7 +1,7 @@
 // Whether a tended close's bed has landed its check on the base, judged by patch ids in the checkout (ADR 0003).
 import { bedCommit, checkSeparator } from './log.ts';
 import type { TendedClose } from './log.ts';
-import { git, gitSucceeds, optionalGit } from './store-git.ts';
+import { git, gitSucceeds, optionalGit, siteObjectsInput } from './store-git.ts';
 import type { GitInput } from './store-git.ts';
 import { censusRef, readableCensus } from './store-census.ts';
 
@@ -56,17 +56,7 @@ function baseInSiteOf(site: string, census: string | undefined): BaseInSite | un
     return undefined;
   }
 
-  const withSite = {
-    readsOnly: true,
-    env: {
-      GIT_ALTERNATE_OBJECT_DIRECTORIES: git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
-        readsOnly: true,
-      }),
-      GIT_NO_LAZY_FETCH: '1',
-    },
-  };
-
-  return { base, withSite };
+  return { base, withSite: siteObjectsInput(site) };
 }
 
 function checkOffBase(cwd: string, judged: BaseInSite | undefined, tended: TendedClose): BaseLabel {

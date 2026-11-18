@@ -11,7 +11,7 @@ import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './
 import { commit, git, now, repo } from './test-repo.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { cli, homeAt, script, tendedBy } from './test-weeds.ts';
+import { anyTypeBedFromMain, cli, homeAt, script, tendedBy } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 
@@ -519,6 +519,71 @@ test('a duplicate-function decline matches a quote across lines that open with /
   assert.deepEqual(
     declined.map(({ status, stderr }) => [status, stderr]),
     Array.from({ length: 5 }, () => [0, '']),
+  );
+});
+
+test("a duplicate-function decline reads the census's commit through the site, though the checkout lacks it", (t) => {
+  const { dir, garden } = planted(t);
+  const bed = anyTypeBedFromMain(garden);
+  const onlyInSite = commit(bed, {
+    'src/x.ts': 'export function foo() {}\n',
+    'src/y.ts': '// Kept apart: the worker loads no shared module.\nexport function foo() {}\n',
+  });
+  writeCensusText(garden, censusText(onlyInSite, { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
+
+  const declined = cli(dir, [
+    'decline',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/y.ts',
+    '--reason',
+    'the worker loads no shared module.',
+  ]);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr, spawnSync('git', ['cat-file', '-e', onlyInSite], { cwd: dir }).status],
+    [0, '', 1],
+  );
+});
+
+test('a duplicate-function decline refuses an --in path holding a control character, which its refusal would print raw', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
+
+  const declined = cli(dir, [
+    'decline',
+    '--class',
+    'duplicate-function',
+    '--where',
+    'src/y.ts',
+    '--reason',
+    'kept apart',
+    '--in',
+    'docs/a\u001b[2J.md',
+  ]);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr],
+    [2, 'weeds decline: --in must be one line of text without control characters\n'],
+  );
+});
+
+test('a duplicate-function decline is refused on a reason of comment markers alone, which quotes no words', (t) => {
+  const declined = declinedOnWords(
+    t,
+    { 'src/a.ts': '// Kept apart: the worker loads no shared module.\nexport function foo() {}\n' },
+    ['//'],
+  );
+
+  assert.deepEqual(
+    declined.map(({ status, stderr }) => [status, stderr]),
+    [
+      [
+        2,
+        "weeds decline: --reason must quote the words that keep this copy, as src/a.ts holds them at the census's commit\n",
+      ],
+    ],
   );
 });
 

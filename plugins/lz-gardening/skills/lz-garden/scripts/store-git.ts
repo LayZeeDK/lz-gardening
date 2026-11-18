@@ -306,6 +306,19 @@ export function gitSucceeds(cwd: string, args: readonly string[], options: GitIn
   return runGit(cwd, args, options).status === 0;
 }
 
+/** Reads in the checkout that also see the site's objects (beds, a census taken in another clone), never fetching. */
+export function siteObjectsInput(site: string): GitInput {
+  return {
+    readsOnly: true,
+    env: {
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
+        readsOnly: true,
+      }),
+      GIT_NO_LAZY_FETCH: '1',
+    },
+  };
+}
+
 /** The first line of git's message, as a reason to print. */
 export function gitReason(stderr: string): string {
   return stderr.trim().replace(/\n.*/s, '').trim();
