@@ -22,7 +22,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     have held it.
   - Seed: the first tick seeds the queue from the census, the repository's records and its history (up to 72,000
     characters of the newest 20 commits' diffs, and the report counts the commits left unread, names the classes a
-    clean-up removed that nothing now rejects, and says what the pass left undone). A seed pass
+    clean-up removed that nothing now rejects, and says what the pass left undone; `diffs.ts <commit>` reads a commit the
+    pass is pointed at from its parent). A seed pass
     marks the queue seeded, so no other clone seeds again, and is recorded only once each file of each line of the
     seed list is queued or declined (`weeds.ts decline`, which keeps the weed out of the queue for good; without
     `--where` it declines every pattern line of the class not yet queued or declined, and a duplicate name's files

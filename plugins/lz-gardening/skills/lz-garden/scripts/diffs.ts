@@ -1,5 +1,6 @@
 // The diffs a tick reads, a page at a time:
-//   node diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]
+//   node diffs.ts <commit>..<commit> | <commit> [--page <n>] [--chars <n>]
+// One commit id alone reads that commit's own diff, from its parent; a commit with no parent is refused.
 // Takes the newest 30 commits of the range, merges left out, and reads their diffs smallest first up to 400,000
 // characters in all, or the `--chars` given; the rest are skipped. Page 1 opens with one line per commit, `read` or `skip`, its short id, its
 // diff's length in characters and its subject, then `skip <n> commits past the newest 30` when there are more. The
@@ -9,7 +10,7 @@
 import { parseArgs } from 'node:util';
 import { isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import { git } from './store-git.ts';
+import { git, gitSucceeds } from './store-git.ts';
 
 export interface CommitDiff {
   readonly sha: string;
@@ -100,10 +101,18 @@ function main(argv: readonly string[], io: Io): number {
     options: { page: { type: 'string', default: '1' }, chars: { type: 'string', default: String(budget) } },
   });
   // Stryker disable next-line StringLiteral: with no range given, the default and the mutant's text both fail the check below
-  const [range = ''] = positionals;
+  const [given = ''] = positionals;
+  const alone = /^[0-9a-f]{4,64}$/.test(given);
+  const range = alone ? `${given}^..${given}` : given;
 
-  if (!/^[0-9a-f]{4,64}\.\.[0-9a-f]{4,64}$/.test(range)) {
-    io.err('usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n');
+  if (!alone && !/^[0-9a-f]{4,64}\.\.[0-9a-f]{4,64}$/.test(range)) {
+    io.err('usage: diffs.ts <commit>..<commit> | <commit> [--page <n>] [--chars <n>]\n');
+
+    return 2;
+  }
+
+  if (alone && !gitSucceeds(io.cwd, ['rev-parse', '--verify', '--quiet', `${given}^`], { readsOnly: true })) {
+    io.err(`diffs: ${given} has no parent, so it cannot be read alone\n`);
 
     return 2;
   }

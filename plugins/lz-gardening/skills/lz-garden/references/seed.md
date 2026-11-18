@@ -87,10 +87,10 @@ Done when the tree has been listed and every ADR, changelog, lesson file and led
 ## 3. History
 
 ```bash
-git log --no-merges --format=%h%x20%p%x20%s -n 300 <base>
+git log --no-merges --format=%h%x20%s -n 300 <base>
 ```
 
-Each line is a commit's short id, its parent's short id (none for the first commit) and its subject.
+Each line is a commit's short id and its subject.
 
 Look for reverts, "again", "still", "re-fix", repeated subjects and clean-up runs. Then read the diffs of the newest
 20 commits a page at a time, as the tick's step 3 reads its range, with a budget of 72,000 characters (three pages):
@@ -104,15 +104,15 @@ the last line's commit, which the range leaves out. Read every page, one call pe
 The commits page 1 marks `skip` stay unread: count them for the report, and read none of them with `git show`.
 
 Then read the commits pointed at that the pages did not show: each clean-up commit step 2 named and each commit the
-log scan above flagged, up to five, the clean-ups first. Read each in one page, `<parent>` the second id on the
-commit's line in the log (`diffs.ts` takes two commit ids and nothing else, so not `<commit>~1`):
+log scan above flagged, up to five, the clean-ups first. Read each in one page by its own id alone, the first word of
+its line in the log:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <parent>..<commit> --chars 24000
+node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit> --chars 24000
 ```
 
-A commit that marks `skip` there is too large for the seed pass, and a commit with no parent cannot be read this way:
-count either as unread too (pointed-at commits past the first five go on the report's `<read> of <pointed>` count,
+A commit that marks `skip` there is too large for the seed pass, and the first commit, which `diffs.ts` refuses as it
+has no parent, cannot be read this way: count either as unread too (pointed-at commits past the first five go on the report's `<read> of <pointed>` count,
 not here). Done when the pages and the pointed-at commits are read and the weeds they show are queued.
 
 ## 4. Record and report

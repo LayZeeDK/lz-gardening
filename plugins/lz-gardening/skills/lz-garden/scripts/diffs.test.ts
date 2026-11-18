@@ -104,6 +104,33 @@ test("the CLI prints a range's first page: a read line per commit, its diff, and
   assert.deepEqual(Object.fromEntries(summaryOf(stdout())), { page: 1, pages: 1, commits: 1, read: 1, skipped: 0 });
 });
 
+test("one commit id alone reads that commit's own diff, from its parent", (t) => {
+  const dir = repo(t);
+  commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const pointed = commit(dir, { 'b.ts': 'export const b = 2;\n' });
+  commit(dir, { 'c.ts': 'export const c = 3;\n' });
+
+  const stdout = printed(dir, [pointed]);
+
+  const readIds = [...stdout.matchAll(/^read ([0-9a-f]+)/gm)].map((match) => match[1] ?? '');
+
+  assert.deepEqual(
+    [readIds.length, pointed.startsWith(readIds[0] ?? '-'), /^\+export const b = 2;$/m.test(stdout)],
+    [1, true, true],
+  );
+  assert.equal(summaryOf(stdout).get('commits'), 1);
+});
+
+test('a first commit given alone is refused with exit 2, as it has no parent to read from', (t) => {
+  const dir = repo(t);
+  const first = commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const { io, stdout, stderr } = capturingIo(dir, process.env);
+
+  const status = run([first], io);
+
+  assert.deepEqual([status, stdout(), stderr()], [2, '', `diffs: ${first} has no parent, so it cannot be read alone\n`]);
+});
+
 test("a page lists the range's commits, then a blank line, then each diff under its id and message, trimmed", (t) => {
   const dir = repo(t);
   const from = commit(dir, { 'a.ts': 'export const a = 1;\n' });
@@ -197,8 +224,8 @@ test('a range with anything before or after its two commit ids is refused with t
   });
 
   assert.deepEqual(statuses, [
-    [2, 'usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n'],
-    [2, 'usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n'],
+    [2, 'usage: diffs.ts <commit>..<commit> | <commit> [--page <n>] [--chars <n>]\n'],
+    [2, 'usage: diffs.ts <commit>..<commit> | <commit> [--page <n>] [--chars <n>]\n'],
   ]);
 });
 
@@ -291,7 +318,7 @@ test('an argument that is not a range of two commit ids is refused with exit 2 a
 
   assert.deepEqual(
     [status, stdout(), stderr()],
-    [2, '', 'usage: diffs.ts <commit>..<commit> [--page <n>] [--chars <n>]\n'],
+    [2, '', 'usage: diffs.ts <commit>..<commit> | <commit> [--page <n>] [--chars <n>]\n'],
   );
 });
 
