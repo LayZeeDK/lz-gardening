@@ -384,9 +384,8 @@ test('add refuses a single-value flag given twice rather than keep the last, and
   );
 });
 
-test('close takes --check at most once, as it never closes a class as tended; close-class takes it more', (t) => {
+test('close takes --check at most once, as it never closes a class as tended', (t) => {
   const dir = repo(t);
-  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
 
   const closed = cli(dir, ['close', '--id', 'abc', '--one-off', 'r', '--check', 'a.mjs', '--check', 'b.mjs']);
 
