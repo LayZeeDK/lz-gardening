@@ -39,8 +39,10 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     `origin`. No ref outside `refs/garden/` is pushed. `git config lzGardening.share false` keeps the garden local.
     An event in the queue that the scripts would not write, such as an add whose id does not match its class,
     `where` (line included) and source, is skipped and named on stderr, and a close ends only the weeds of its own
-    class. Every command that syncs names on stderr what its sync left out, kept local or gave back: a shared census
-    that is not one, a census of a commit `origin` lacks, a bed `origin` did not take, a claim another writer won.
+    class. A sync names on stderr what it left out, kept local or gave back (a shared census that is not one, a
+    census of a commit `origin` lacks, a bed `origin` did not take, a claim another writer won): every sync of a
+    `site.ts` command, the first sync of `weeds.ts claim`, and the last sync of `weeds.ts close`, `close-class` and
+    `release`.
   - Privacy: events take repository-relative paths only, and an event that holds this machine's paths is refused. A
     bed that holds them, or that would bring `origin` a commit other than its own, stays in the site, as does a
     census of a commit no branch on `origin` holds. Each census carries the site's `.garden/patterns.json` as it
