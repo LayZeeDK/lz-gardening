@@ -1,14 +1,8 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { unprintablePattern } from './log-fields.ts';
+import { escapeUnprintable } from './log-fields.ts';
 import { inRun } from './store-git.ts';
-
-const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
-
-export function escapeUnprintable(text: string): string {
-  return text.replace(everyUnprintable, (character) => `\\u{${character.charCodeAt(0).toString(16)}}`);
-}
 
 interface WithReason {
   readonly reason?: string | undefined;

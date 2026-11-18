@@ -1,7 +1,8 @@
 // The shapes the garden's values take: git object ids (of commits, trees and blobs), class ids, sources, bed names,
 // layers, stamped times and printable text. The event schemas hold an event's fields to them, and the other scripts
 // hold what they read or are given to them. Neither needs the events or the replay for that, and these change less
-// often than the log does. It also turns a failed schema parse into one message: the first reason the schema gives.
+// often than the log does. It also escapes the text it would not print, and turns a failed schema parse into one
+// message: the first reason the schema gives.
 import type { z } from 'zod';
 
 export const objectIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
@@ -15,6 +16,12 @@ export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,64})$/;
 const controlsAndLineBreaks = String.raw`\p{Cc}\p{Zl}\p{Zp}`;
 const bidiControls = String.raw`\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}`;
 export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiControls}]`, 'u');
+
+const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');
+
+export function escapeUnprintable(text: string): string {
+  return text.replace(everyUnprintable, (character) => `\\u{${character.charCodeAt(0).toString(16)}}`);
+}
 
 export function hasText(text: string): boolean {
   return text.trim() !== '';

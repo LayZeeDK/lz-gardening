@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
+import { escapeUnprintable } from './log-fields.ts';
 import type { Io } from './cli.ts';
 
 test('an unprintable character is written as its code point in hex', () => {

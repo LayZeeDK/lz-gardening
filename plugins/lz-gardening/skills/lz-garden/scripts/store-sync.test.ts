@@ -10,7 +10,7 @@ import { isRecord } from './log-guard.ts';
 import { inRun, mayPointAtARepository } from './store-git.ts';
 import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
 import { logRef, openSite } from './store-log.ts';
-import { censusRef, writePendingCensus } from './store-census.ts';
+import { censusRef, pendingCensusRef, writePendingCensus } from './store-census.ts';
 import { isShared, lostRaceOf, mergeShared, sleep, sync } from './store-sync.ts';
 import { writeEntriesToLogByHand, writeToLogByHand } from './test-log.ts';
 import { commit, git, repo, scriptProcess, startedCommands, startedGits } from './test-repo.ts';
@@ -27,7 +27,7 @@ import {
   writeCensus,
 } from './test-site.ts';
 import type { Planted } from './test-site.ts';
-import { addWeed, bedFromMain, cli } from './test-weeds.ts';
+import { addWeed, bedFromMain, cli, tendedBed } from './test-weeds.ts';
 
 test('a site whose checkout has no origin stays local and keeps its log as it was', (t) => {
   const { dir, garden } = planted(t);
@@ -231,7 +231,38 @@ test('a sync whose push the origin declines names no bed as left out', (t) => {
 
   const result = sync(openSite(dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.divergedBeds], ['read-only', []]);
+  assert.deepEqual([result.state, result.notes], ['read-only', []]);
+});
+
+// The log's push lands and leaves origin no repository, so the bed's push fails with git's reason, which names the
+// origin's path, unprintable character and all.
+test('a sync notes the shared census it left out, then the census it kept local, then the bed it could not push', (t) => {
+  const { dir, garden } = tendedBed(t, { 'checks/any-type.mjs': 'export {};\n' });
+  const remote = join(dirname(dir), 'remote‮.git');
+  git(dirname(dir), ['init', '-q', '--bare', remote]);
+  git(dir, ['remote', 'add', 'origin', remote]);
+  git(dir, ['push', '-q', 'origin', 'main']);
+  const notACensus = git(dir, ['rev-parse', 'HEAD']);
+  writePendingCensus({ path: garden, checkout: dir }, notACensus, '{"rev":"main"}\n');
+  git(garden, ['push', '-q', remote, `+${pendingCensusRef(notACensus)}:${censusRef}`]);
+  git(garden, ['update-ref', '-d', pendingCensusRef(notACensus)]);
+  const unpushed = commit(dir, { 'src/c.ts': 'export const c = 3;\n' });
+  writePendingCensus({ path: garden, checkout: dir }, unpushed, censusText(unpushed));
+  remoteHook(remote, 'post-receive', 'rm HEAD');
+
+  const result = sync(openSite(dir), { attempts: 1, census: unpushed });
+
+  assert.deepEqual(
+    [result.state, result.notes],
+    [
+      'synced',
+      [
+        `the shared ${censusRef} on origin is not a census; it was left out, and the next census replaces it`,
+        `the census of ${unpushed} stays local: no branch fetched from origin holds that commit`,
+        `any-type: fatal: '${remote.replace('‮', '\\u{202e}')}' does not appear to be a git repository`,
+      ],
+    ],
+  );
 });
 
 test('a site set to sign every push still shares its log, unsigned', (t) => {

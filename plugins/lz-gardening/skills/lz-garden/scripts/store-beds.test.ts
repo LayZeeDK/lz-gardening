@@ -99,7 +99,7 @@ test("a tended close made in another clone is not pushed from this site's own be
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], theirs]);
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], theirs]);
 });
 
 test('a bed branch moved past the commit its close names pushes nothing', (t) => {
@@ -113,7 +113,7 @@ test('a bed branch moved past the commit its close names pushes nothing', (t) =>
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], '']);
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], '']);
 });
 
 test('a bed ref deleted on the origin after its close was shared is not pushed back', (t) => {
@@ -124,7 +124,7 @@ test('a bed ref deleted on the origin after its close was shared is not pushed b
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], '']);
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], '']);
 });
 
 test('a bed whose ref on origin is not a commit stays local and is named, and the log still lands', (t) => {
@@ -139,7 +139,7 @@ test('a bed whose ref on origin is not a commit stays local and is named, and th
   const result = sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual(
-    [result.state, result.divergedBeds, git(place.remote, ['rev-parse', logRef])],
+    [result.state, result.notes, git(place.remote, ['rev-parse', logRef])],
     [
       'synced',
       ["any-type: bed/any-type stays local: origin's refs/garden/beds/any-type is not a commit"],
@@ -176,7 +176,7 @@ test("a bed the origin refuses leaves the log synced and is named with git's rea
   const result = sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual(
-    [result.state, result.divergedBeds, bedRef(place.remote), git(place.remote, ['rev-parse', logRef])],
+    [result.state, result.notes, bedRef(place.remote), git(place.remote, ['rev-parse', logRef])],
     [
       'synced',
       ['any-type: [remote rejected] (pre-receive hook declined)'],
@@ -209,9 +209,9 @@ test("a bed whose push fails before git names its ref is named with git's reason
   originBack(place);
 
   assert.deepEqual(
-    [result.state, result.divergedBeds.map((bed) => /^any-type: fatal: .+/.test(bed)), bedRef(place.remote)],
+    [result.state, result.notes.map((bed) => /^any-type: fatal: .+/.test(bed)), bedRef(place.remote)],
     ['synced', [true], ''],
-    result.divergedBeds.join('\n'),
+    result.notes.join('\n'),
   );
 });
 
@@ -222,7 +222,7 @@ test('a later sync pushes a bed whose push failed, though its close is already o
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], place.tip]);
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], place.tip]);
 });
 
 test('a bed a later sync pushed is not pushed back once origin deletes it', (t) => {
@@ -234,7 +234,7 @@ test('a bed a later sync pushed is not pushed back once origin deletes it', (t) 
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.state, result.divergedBeds, bedRef(place.remote)], ['synced', [], '']);
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], '']);
 });
 
 test('a bed that landed unseen is not pushed back once origin deletes it', (t) => {
@@ -278,7 +278,7 @@ test('a bed whose push takes longer than the time allowed is named as timed out'
 
   const result = sync(openSite(place.dir), { attempts: 1, timeoutMs: 5000 });
 
-  assert.deepEqual([result.state, result.divergedBeds], ['synced', ['any-type: timed out']]);
+  assert.deepEqual([result.state, result.notes], ['synced', ['any-type: timed out']]);
 });
 
 function stopOnReceive(pidFile: string): string {
@@ -317,7 +317,7 @@ test('a bed made from a commit no branch fetched from origin holds stays local a
   const result = sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual(
-    [result.state, result.divergedBeds, bedRef(place.remote)],
+    [result.state, result.notes, bedRef(place.remote)],
     ['synced', ['any-type: bed/any-type stays local: its base is on no branch fetched from origin'], ''],
   );
 });
@@ -336,7 +336,7 @@ test('a bed made from a commit only a tag holds stays local and is named', (t) =
   const result = sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual(
-    [result.state, result.divergedBeds, bedRef(place.remote)],
+    [result.state, result.notes, bedRef(place.remote)],
     ['synced', ['any-type: bed/any-type stays local: its base is on no branch fetched from origin'], ''],
   );
 });
@@ -378,7 +378,7 @@ test("a bed that adds a line holding the site's path stays local and is named", 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual(
-    [result.state, result.divergedBeds, bedRef(place.remote)],
+    [result.state, result.notes, bedRef(place.remote)],
     ['synced', ['any-type: bed/any-type stays local: it holds a path on this machine'], ''],
   );
 });
@@ -391,7 +391,7 @@ function keptLocalForAPath(t: TestContext, make: (place: Tended) => void): reado
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  return [result.state, result.divergedBeds, bedRef(place.remote)];
+  return [result.state, result.notes, bedRef(place.remote)];
 }
 
 const keptForAPath = ['synced', ['any-type: bed/any-type stays local: it holds a path on this machine'], ''] as const;
@@ -531,7 +531,7 @@ test("a bed that edits a file beside a line holding the site's path, a line orig
 
   const result = sync(openSite(dir), { attempts: 1 });
 
-  assert.deepEqual([result.divergedBeds, bedRef(remote)], [[], tip]);
+  assert.deepEqual([result.notes, bedRef(remote)], [[], tip]);
 });
 
 test('a bed with no line holding the home folder is pushed when the home folder is the relative path here', (t) => {
@@ -540,7 +540,7 @@ test('a bed with no line holding the home folder is pushed when the home folder 
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.divergedBeds, bedRef(place.remote)], [[], place.tip]);
+  assert.deepEqual([result.notes, bedRef(place.remote)], [[], place.tip]);
 });
 
 test('a bed that adds the line here is pushed when the home folder is the relative path +here, as the + before an added line is no part of it', (t) => {
@@ -549,7 +549,7 @@ test('a bed that adds the line here is pushed when the home folder is the relati
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.divergedBeds, bedRef(place.remote)], [[], place.tip]);
+  assert.deepEqual([result.notes, bedRef(place.remote)], [[], place.tip]);
 });
 
 test("a sync looks in the checkout for the bed's own commits and for no other name", (t) => {
@@ -619,7 +619,7 @@ test('a sync that shares the tended closes of two classes puts both beds on the 
 
   const result = sync(openSite(place.dir), { attempts: 1 });
 
-  assert.deepEqual([result.divergedBeds, bedRef(place.remote), bedRef(place.remote, 'other')], [[], anyType, other]);
+  assert.deepEqual([result.notes, bedRef(place.remote), bedRef(place.remote, 'other')], [[], anyType, other]);
 });
 
 function tendedInFirstClone(
@@ -709,7 +709,7 @@ test("a bed that does not descend from the origin's bed is left out and named, a
   const result = sync(openSite(place.dir), { attempts: 1 });
 
   assert.deepEqual(
-    [result.state, result.divergedBeds, bedRef(place.remote)],
+    [result.state, result.notes, bedRef(place.remote)],
     ['synced', ["any-type: bed/any-type does not descend from origin's bed"], shared],
   );
 });

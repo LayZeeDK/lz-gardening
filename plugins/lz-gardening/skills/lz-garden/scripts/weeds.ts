@@ -91,6 +91,7 @@ import {
 import {
   bedPattern,
   classPattern,
+  escapeUnprintable,
   hasText,
   isLayer,
   objectIdPattern,
@@ -108,8 +109,7 @@ import type {
   OpenWeed,
   TendedClose,
 } from './log.ts';
-import { escapeUnprintable, isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
-import { syncNotes } from './sync-notes.ts';
+import { isMainModule, processIo, reasonOf, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimedByLine, claimRefusalLine } from './weeds-claim.ts';
 import { offBaseIn } from './weeds-landed.ts';
@@ -569,7 +569,7 @@ function reportShared(io: Io, command: string, shared: SyncResult): void {
 }
 
 function reportSyncNotes(io: Io, command: string, result: SyncResult): void {
-  syncNotes(result).forEach((note) => {
+  result.notes.forEach((note) => {
     io.err(`weeds ${command}: ${note}\n`);
   });
 }

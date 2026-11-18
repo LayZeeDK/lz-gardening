@@ -34,8 +34,7 @@ import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { escapeUnprintable, isMainModule, printableReason, processIo, runCommand } from './cli.ts';
-import { syncNotes } from './sync-notes.ts';
+import { isMainModule, printableReason, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
 import { claimRefusalLine } from './weeds-claim.ts';
 import { closeReaders, configValue, git, objectIds, optionalGit, refTip } from './store-git.ts';
@@ -58,7 +57,7 @@ import type { BedSummary } from './site-bed.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
 import { replay } from './log.ts';
-import { classPattern, objectIdPattern } from './log-fields.ts';
+import { classPattern, escapeUnprintable, objectIdPattern } from './log-fields.ts';
 
 export interface BaseFacts {
   readonly base: string | undefined;
@@ -337,7 +336,7 @@ function parseCommand(
 }
 
 function reportSync(io: Io, result: SyncResult): void {
-  syncNotes(result).forEach((note) => {
+  result.notes.forEach((note) => {
     io.err(`site: ${note}\n`);
   });
 }
