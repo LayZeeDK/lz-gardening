@@ -215,7 +215,7 @@ test('a check path holding glob characters names that one file, not the files th
 });
 
 test('a checkout cloned without every object never fetches for the label', (t) => {
-  const { dir, garden } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  const { dir, garden, bed } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
   git(dir, ['config', 'uploadpack.allowFilter', 'true']);
   const partial = join(dirname(dir), 'partial');
   git(dirname(dir), [
@@ -227,7 +227,7 @@ test('a checkout cloned without every object never fetches for the label', (t) =
     partial,
   ]);
   const census = git(partial, ['rev-parse', 'HEAD']);
-  const elsewhere = commit(dir, { 'src/c.ts': 'export const c = 1;\n' });
+  const elsewhere = commit(bed, { 'src/c.ts': 'export const c = 1;\n' });
   [
     ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333'],
     ['claim', '--class', 'any-type'],

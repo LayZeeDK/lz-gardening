@@ -61,7 +61,8 @@ test('a tend close whose check was given a control character by hand is skipped 
 });
 
 test('a check that names no file at the bed commit gets no label, since nothing says where it lives', (t) => {
-  const { dir, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' }, 'checks/any-type.test.mjs:1');
+  const { dir, garden, tip } = tendedBed(t, { 'checks/any-type.test.mjs': 'export {};\n' });
+  editCheckByHand(garden, 'checks/any-type.test.mjs:1');
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
