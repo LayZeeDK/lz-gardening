@@ -444,6 +444,11 @@ export function seedLinesIn(site: string, sha: string | undefined): readonly See
   return census === undefined ? [] : seedLines(census);
 }
 
+/** The seed lines of `weedClass` in `census`; none without a census. */
+export function seedLinesOf(census: Census | undefined, weedClass: string): readonly SeedLine[] {
+  return census === undefined ? [] : seedLines(census).filter((seed) => seed.class === weedClass);
+}
+
 /** The path of a weed's `--where`, its `:<line>` dropped: the form a seed line names files in. */
 export function seedPath(where: string): string {
   return where.replace(/:\d+$/, '');

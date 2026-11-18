@@ -1,7 +1,7 @@
 // The seed list as data: its lines, the census they come from, and which weeds a line asks about.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { offSeedList, onSeedLine, seedLines, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
+import { offSeedList, onSeedLine, seedLines, seedLinesIn, seedLinesLeft, seedLinesOf, seedPath } from './census.ts';
 import { planAdd, stamp } from './log.ts';
 import type { AddInput } from './log.ts';
 import { now } from './test-repo.ts';
@@ -93,6 +93,15 @@ test('a seed line asks about a weed of its class in one of its files, with or wi
       onSeedLine(line, 'duplicate-function', 'src/b.ts'),
     ],
     [true, true, false, false],
+  );
+});
+
+test("the seed lines of a class are its lines of the census's seed list, and none without a census", () => {
+  const taken = census({ hits: { 'any-type': ['src/a.ts:1: x'], 'ts-ignore': ['src/b.ts:2: y'] } });
+
+  assert.deepEqual(
+    [seedLinesOf(taken, 'any-type').map((seed) => seed.paths), seedLinesOf(undefined, 'any-type')],
+    [[['src/a.ts']], []],
   );
 });
 

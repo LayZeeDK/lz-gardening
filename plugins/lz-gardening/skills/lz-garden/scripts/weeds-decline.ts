@@ -1,7 +1,6 @@
 // Which seed lines `weeds.ts decline` may leave out of the queue. A seed line of most classes is declined by its
 // class and path; a duplicate-function copy is declined one file at a time, on words the repository wrote down.
-import { offSeedList, seedLines, seedPath } from './census.ts';
-import type { SeedLine } from './census.ts';
+import { offSeedList, seedLinesOf, seedPath } from './census.ts';
 import { optionalGit, siteObjectsInput } from './store-git.ts';
 import type { Census } from './store-census.ts';
 import type { Site } from './store-log.ts';
@@ -19,18 +18,17 @@ const strayIn = '--in goes with --class duplicate-function --where <path> only';
 
 /** Why the decline's flags cannot go together, which needs no site, or null. */
 export function declineUsageProblem({ weedClass, where, record }: Decline): string | null {
-  if (weedClass === 'duplicate-function' && where === undefined) {
+  if (weedClass !== 'duplicate-function') {
+    return record === undefined ? null : strayIn;
+  }
+
+  if (where === undefined) {
     return record === undefined
       ? 'decline duplicate-function one file at a time, --where <path>, on the words that keep that copy'
       : strayIn;
   }
 
-  return record === undefined || weedClass === 'duplicate-function' ? null : strayIn;
-}
-
-/** The seed lines of `weedClass` in `census`; none without a census. */
-export function seedLinesOf(census: Census | undefined, weedClass: string): readonly SeedLine[] {
-  return census === undefined ? [] : seedLines(census).filter((seed) => seed.class === weedClass);
+  return null;
 }
 
 /** Why `census` keeps the decline from being recorded, or null. */
