@@ -77,6 +77,9 @@ file the tool result names: Grep that file with no `head_limit`, and Read the li
   Finding none, the class is **held by hand**: cleaned up, gone today, and nothing rejects its return. Only such a
   class goes on the report's `held by hand` line; a class with a weed queued in this pass never does, since its
   clean-up did not hold and the queue says so.
+- Every clean-up you read, here or in step 3, ends in one of the cases above (its mistake queued, a check found that
+  keeps it out, or its class held by hand), or, when you did not check the base for it, on the report's `not done`
+  line as read but not checked.
 - A rule in agent instructions or a style guide that the code breaks: `rule-in-prose`, `--where` the code that
   breaks it, `--source lesson:<path>:<line>` of the rule.
 
@@ -113,8 +116,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <commit> --chars 24000
 ```
 
 A commit that marks `skip` there is too large for the seed pass, and the first commit, which `diffs.ts` refuses as it
-has no parent, cannot be read this way: count either as unread too (pointed-at commits past the first five go on the report's `<read> of <pointed>` count,
-not here). Done when the pages and the pointed-at commits are read and the weeds they show are queued.
+has no parent, cannot be read this way: count either as unread too (pointed-at commits past the first five go on the
+report's `<read> of <pointed>` count, not here). Done when the pages and the pointed-at commits are read and the
+weeds they show are queued.
 
 ## 4. Record and report
 
