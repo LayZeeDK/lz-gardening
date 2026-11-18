@@ -2,10 +2,11 @@
 // Usage, from the repository's checkout (the site is the <repo>.garden folder beside it):
 //   node weeds.ts add --class <kebab> --where <path[:line]> [--where <path[:line]> ...] --source <kind:ref>
 //                     --note <text> [--layer <1-6>] [--census <sha>]
-//     Adds one weed per distinct --where, all in one append, with the same class, source and note, and prints one
-//     line per weed: `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep: a weed left on
-//     purpose is never queued again) or `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass
-//     closed its class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
+//     Adds one weed per distinct --where (`./a` and `a` are one path, recorded as `a`; so for decline), all in one
+//     append, with the same class, source and note, and prints one line per weed: `added <id>`, `seen <id>`
+//     (already open), `kept <id>` (closed with --keep: a weed left on purpose is never queued again) or
+//     `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass closed its class, so the check that
+//     was meant to hold it did not; the latest tend pass is named). The check reads
 //     `(check: <where> not on the base)` when it is not on the census commit: <sha>, the full commit id of the
 //     census this tick took, else the commit of the site's census. Then the bed has not landed, or one of the check's
 //     files is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, the bed's or
@@ -40,10 +41,9 @@
 //     that first sync leaves the share state synced or local and this writer holds a live claim of the class, as bed
 //     does; otherwise it exits 1 with `cannot check the claim of <class>: <state>[ (<reason>)]`, `this site holds no
 //     claim of <class>; run weeds claim --class <class>` or `<class> is claimed by <holder> until <time>`, and
-//     closes nothing. It ends this writer's claim of
-//     the class. close --id needs no claim, names a first sync other than synced or local on stderr, and leaves the
-//     claim as it is; it exits 1 with `<class> is claimed by <holder> until <time>`, closing nothing, while another
-//     writer holds one.
+//     closes nothing. It ends this writer's claim of the class. close --id needs no claim, names a first sync other
+//     than synced or local on stderr, and leaves the claim as it is; it exits 1 with `<class> is claimed by <holder>
+//     until <time>`, closing nothing, while another writer holds one.
 //   node weeds.ts claim [--class <kebab>]
 //     Claims the class, or the first one groups --ready lists, for six hours, and shares the claim:
 //     `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
@@ -398,6 +398,11 @@ function parseFlags(argv: readonly string[]) {
 
 type Flags = ReturnType<typeof parseFlags>['values'];
 
+/** The flags the parser takes more than once (`multiple: true`). */
+type RepeatableFlag = {
+  [Flag in keyof Flags]-?: Flags[Flag] extends readonly string[] | undefined ? Flag : never;
+}[keyof Flags];
+
 // Number() also reads hex, exponents and padding.
 function wholeNumber(text: string): number {
   return /^\d+$/.test(text) ? Number(text) : Number.NaN;
@@ -733,8 +738,8 @@ function list(io: Io, flags: Flags, now: Date): number {
 interface Command {
   readonly name: string;
   readonly flags: readonly (keyof Flags)[];
-  /** The flags the parser takes more than once (`multiple: true`); any other given twice is refused. */
-  readonly repeatable: readonly ('where' | 'check')[];
+  /** The repeatable flags this command takes more than once; any other flag given twice is refused. */
+  readonly repeatable: readonly RepeatableFlag[];
   readonly run: (io: Io, flags: Flags, now: Date, seams: SyncSeams) => number;
 }
 

@@ -58,7 +58,7 @@ function sha256Repo(t: TestContext): string {
   return dir;
 }
 
-test("a read with the site's objects input sees a commit only the site holds, and never fetches a missing one", (t) => {
+test("a read with the site's objects input sees a commit only the site holds, with lazy fetching turned off", (t) => {
   const checkout = repo(t);
   commit(checkout, { 'a.txt': 'a\n' });
   const site = join(dirname(checkout), 'site');

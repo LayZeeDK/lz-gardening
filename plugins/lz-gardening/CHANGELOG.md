@@ -29,9 +29,10 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     are declined one at a time, each on words its file, or the record `--in` names, holds at the census's
     commit). Duplicate names count only module-scope definitions, outside test files and `.d.ts` declarations.
     `weeds.ts add` takes `--source census:seed`, and `decline` records its weed with it, only for a weed on a line of
-    the seed list; `add` takes `--where` once per weed, so the files of one duplicate name are queued in one call.
-    Every other `weeds.ts` flag goes once, except `--check` of `close` and `close-class`: given twice, it is refused
-    (exit 2), not read as its last value.
+    the seed list; `add` takes `--where` once per weed, so the files of one duplicate name are queued in one call. A
+    path given as `./a` or `a//b` is recorded as `a` or `a/b`, so two spellings of one path make one weed. Every
+    other `weeds.ts` flag goes once, except `--check` of `close` and `close-class`: given twice, it is refused (exit
+    2), not read as its last value.
   - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`,
     which the census prints as `site pattern <id>: <regex>` lines. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,
@@ -61,8 +62,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). A class tended again before its bed
     lands is tended in the same bed.
   - Close: closes the class as tended, one-off or kept. A tended close names the bed and where each of its checks
-    lives (`--check` once per check file, each a file the tended bed commit holds, recorded once in its plain form
-    however it is spelled; the event's `check` field joins them with `, `), and shares the bed on `origin` as
+    lives (`--check` once per check file, each a file the tended bed commit holds, `./a` and `a` recorded once as
+    `a`; the event's `check` field joins them with `, `), and shares the bed on `origin` as
     `refs/garden/beds/<class>` for a human to fetch and land; a bed a sync did not see land (a failed or timed-out
     push, or a sync stopped once its log landed) is pushed again by the next sync. Bed commits carry the identity of
     whoever commits them.
