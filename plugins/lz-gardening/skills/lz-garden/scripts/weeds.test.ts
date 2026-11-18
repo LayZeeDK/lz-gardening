@@ -810,6 +810,16 @@ test('a tended close-class records a --check given twice once', () => {
   assert.deepEqual(typeof closing === 'string' ? closing : closing.check, ['eslint.config.mjs', 'checks/a.mjs']);
 });
 
+test('a tended close-class records a --check spelled two ways once, in its plain form', () => {
+  const closing = parseCloseFlags('close-class', {
+    class: 'any-type',
+    tended: 'bed/any-type@abc1234',
+    check: ['./checks/a.mjs', 'checks//a.mjs', 'checks/a.mjs'],
+  });
+
+  assert.deepEqual(typeof closing === 'string' ? closing : closing.check, ['checks/a.mjs']);
+});
+
 test('close-class refuses --id beside --class rather than drop it', () => {
   assert.equal(
     parseCloseFlags('close-class', { id: 'abc', class: 'any-type', keep: 'on purpose' }),

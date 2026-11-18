@@ -67,6 +67,7 @@
 // Exit 0 on success; 1 when a close finds nothing open, close-class lacks the claim or refuses its --baselined
 // weeds, a close meets another writer's claim, or a claim or release is refused; 2 on a usage error or any other
 // failure: no site, a damaged or newer log, a log that kept moving, or a git error.
+import { posix } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   bedCommit,
@@ -252,7 +253,12 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
   }
 
   return bedPattern.exec(by)?.[1] === target
-    ? { target: { class: target, baselined: baselinedIds }, kind, by, check: [...new Set(check)] }
+    ? {
+        target: { class: target, baselined: baselinedIds },
+        kind,
+        by,
+        check: [...new Set(check.map((path) => posix.normalize(path)))],
+      }
     : `--tended must be bed/${target}@<commit>, got ${by}`;
 }
 
