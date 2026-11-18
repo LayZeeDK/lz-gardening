@@ -124,7 +124,7 @@ import type { SyncOptions, SyncResult } from './store-sync.ts';
 
 function firstUnprintable(values: Readonly<Record<string, string | readonly string[] | undefined>>): string | null {
   const flag = Object.entries(values).find(([, value]) =>
-    [value ?? []].flat().some((text) => unprintablePattern.test(text)),
+    [value].flat().some((text) => text !== undefined && unprintablePattern.test(text)),
   )?.[0];
 
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
