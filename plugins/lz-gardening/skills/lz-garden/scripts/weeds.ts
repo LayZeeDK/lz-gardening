@@ -60,8 +60,8 @@
 //                                        --class may take: ready, not stale-verification or repeated-lesson, and
 //                                        claimed by no other writer; both together are a usage error
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
-// A flag goes once per command, except --where with add and --check with close and close-class; given twice, it
-// exits 2 with `--<flag> goes once with <command>`. A usage error is named before the site is looked for.
+// A flag goes once per command, except --where with add and --check with close-class; given twice, it exits 2 with
+// `--<flag> goes once with <command>`. A usage error is named before the site is looked for.
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, as given and in their plain form, and no
 // event may hold this machine's home folder, the checkout's path or the site's path: the queue is shared with the
 // repository (exit 2).
@@ -122,9 +122,10 @@ import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
 import type { SyncOptions, SyncResult } from './store-sync.ts';
 
-function firstUnprintable(values: Readonly<Record<string, string | undefined>>): string | null {
-  // Stryker disable next-line StringLiteral: an absent flag has no text, and the mutant's text has no control character either
-  const flag = Object.entries(values).find(([, value]) => unprintablePattern.test(value ?? ''))?.[0];
+function firstUnprintable(values: Readonly<Record<string, string | readonly string[] | undefined>>): string | null {
+  const flag = Object.entries(values).find(([, value]) =>
+    [value ?? []].flat().some((text) => unprintablePattern.test(text)),
+  )?.[0];
 
   return flag === undefined ? null : `--${flag} must be one line of text without control characters`;
 }
@@ -221,7 +222,7 @@ export function parseCloseFlags(command: 'close' | 'close-class', flags: CloseFl
     tended: flags.tended,
     'one-off': flags['one-off'],
     keep: flags.keep,
-    check: flags.check?.join(' '),
+    check: flags.check,
   });
 
   if (unprintable !== null) {
@@ -758,7 +759,7 @@ const commands: readonly Command[] = [
   {
     name: 'close',
     flags: closeFlags,
-    repeatable: ['check'],
+    repeatable: [],
     run: (io, flags, now, seams) => close(io, 'close', flags, now, seams),
   },
   {

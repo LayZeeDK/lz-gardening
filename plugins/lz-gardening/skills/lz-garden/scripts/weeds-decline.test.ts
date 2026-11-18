@@ -68,6 +68,22 @@ test('decline refuses a --where through a parent folder as given, though its pla
   );
 });
 
+test('a duplicate-function decline of a file on no duplicate line is refused as off the seed list', (t) => {
+  const { dir, garden } = planted(t);
+  writeCensusText(garden, censusText('a'.repeat(40), { duplicates: { foo: ['src/x.ts', 'src/y.ts'] } }));
+
+  const declined = cli(dir, ['decline', '--class', 'duplicate-function', '--where', 'src/z.ts', '--reason', 'r']);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr, logFiles(garden).size],
+    [
+      2,
+      'weeds decline: no line of the seed list is duplicate-function in src/z.ts; census:seed is for those lines alone\n',
+      0,
+    ],
+  );
+});
+
 test('decline without --where keeps every seed line of its class that is neither queued nor declined', (t) => {
   const { dir, garden } = planted(t);
   writeCensusText(

@@ -377,6 +377,15 @@ test('add refuses a single-value flag given twice rather than keep the last, and
   );
 });
 
+test('close takes --check at most once, as it never closes a class as tended; close-class takes it more', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a = 1;\n' });
+
+  const closed = cli(dir, ['close', '--id', 'abc', '--one-off', 'r', '--check', 'a.mjs', '--check', 'b.mjs']);
+
+  assert.deepEqual([closed.status, closed.stderr], [2, 'weeds close: --check goes once with close\n']);
+});
+
 test('add takes census:seed only for a line of the seed list, and records nothing for another weed', (t) => {
   const dir = seedListed(t);
 
@@ -851,6 +860,26 @@ test('a tended close-class refuses a --check whose plain form is a home path, th
   assert.equal(
     parseCloseFlags('close-class', { class: 'any-type', tended: 'bed/any-type@abc1234', check: ['./~/a.mjs'] }),
     '--check must be a repository-relative path',
+  );
+});
+
+test('a tended close-class refuses its check files when any one of them is wrong, not only when all are', () => {
+  const closing = (check: readonly string[]) =>
+    parseCloseFlags('close-class', { class: 'any-type', tended: 'bed/any-type@abc1234', check: [...check] });
+
+  assert.deepEqual(
+    [
+      closing(['eslint.config.mjs', '']),
+      closing(['eslint.config.mjs', '../b.mjs']),
+      closing(['eslint.config.mjs', 'checks/a, b.mjs']),
+      closing(['eslint.config.mjs', 'checks/a\u0007.mjs']),
+    ],
+    [
+      '--tended needs --check <where the check lives>',
+      '--check must be a repository-relative path',
+      '--check must not hold ", ", which separates the checks of one close',
+      '--check must be one line of text without control characters',
+    ],
   );
 });
 
