@@ -1,7 +1,7 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { unprintablePattern } from './log.ts';
+import { unprintablePattern } from './log-fields.ts';
 import { inRun } from './store-git.ts';
 
 const everyUnprintable = new RegExp(unprintablePattern.source, 'gu');

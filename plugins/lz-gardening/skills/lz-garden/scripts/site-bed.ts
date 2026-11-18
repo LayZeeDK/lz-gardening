@@ -4,7 +4,7 @@ import { existsSync, lstatSync, readFileSync, rmSync, symlinkSync } from 'node:f
 import { join } from 'node:path';
 import { git, gitReason, gitSucceeds, objectIds, optionalGit, runGit } from './store-git.ts';
 import { fetchedBedRef } from './store-beds.ts';
-import { isRecord } from './log.ts';
+import { isRecord } from './log-guard.ts';
 
 const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
   ['pnpm-lock.yaml', (bed) => `pnpm -C ${bed} install --frozen-lockfile`],

@@ -23,7 +23,7 @@ import { z } from 'zod';
 import { commandFailed, escapeUnprintable, isMainModule, processIo } from './cli.ts';
 import bundledPatterns from './patterns.json' with { type: 'json' };
 import type { Io } from './cli.ts';
-import { classPattern, firstReason } from './log.ts';
+import { classPattern, firstReason } from './log-fields.ts';
 import type { GardenEvent } from './log.ts';
 import { gitAsync, gitEnv, inRun, runGitAsync } from './store-git.ts';
 import { openSite } from './store-log.ts';

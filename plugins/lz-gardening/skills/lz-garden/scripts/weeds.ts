@@ -76,14 +76,9 @@ import { posix } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   bedCommit,
-  bedPattern,
   checkSeparator,
   claimableGroups,
-  classPattern,
   groupWeeds,
-  hasText,
-  isLayer,
-  objectIdPattern,
   planAdd,
   planDecline,
   planClaim,
@@ -91,10 +86,17 @@ import {
   planRelease,
   releasesOfClaim,
   replay,
-  sourcePattern,
   weedIdPattern,
-  unprintablePattern,
 } from './log.ts';
+import {
+  bedPattern,
+  classPattern,
+  hasText,
+  isLayer,
+  objectIdPattern,
+  sourcePattern,
+  unprintablePattern,
+} from './log-fields.ts';
 import type {
   AddInput,
   AddOutcome,

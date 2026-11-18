@@ -3,38 +3,24 @@
 // events arrive in. No I/O here: the store reads and writes the events.
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-
-export const objectIdPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-
-export { isRecord } from './log-guard.ts';
-
-export const classPattern = /^[a-z0-9][a-z0-9-]*$/;
-
-export const sourcePattern = /^[a-z][a-z-]*:\S/;
-
-export const bedPattern = /^bed\/([a-z0-9][a-z0-9-]*)@([0-9a-f]{4,64})$/;
+import {
+  bedPattern,
+  classPattern,
+  firstReason,
+  hasText,
+  isLayer,
+  isStampedTime,
+  objectIdPattern,
+  sourcePattern,
+  unprintablePattern,
+} from './log-fields.ts';
 
 /** Separates the check files of one tended close in its `check` field. */
 export const checkSeparator = ', ';
 
-const controlsAndLineBreaks = String.raw`\p{Cc}\p{Zl}\p{Zp}`;
-const bidiControls = String.raw`\u{61c}\u{200e}\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}`;
-export const unprintablePattern = new RegExp(`[${controlsAndLineBreaks}${bidiControls}]`, 'u');
-
 // The event fields the scripts print. The log reader skips an event with an unprintable character in one of them, so
 // these print as read; text from anywhere else (paths, git's messages, census data) goes through escapeUnprintable.
 const printedFields: readonly string[] = ['id', 'where', 'source', 'note', 'check', 'by', 'holder'];
-
-export function hasText(text: string): boolean {
-  return text.trim() !== '';
-}
-
-const strongestLayer = 1;
-const layerCount = 6;
-
-export function isLayer(layer: number): boolean {
-  return Number.isInteger(layer) && layer >= strongestLayer && layer <= layerCount;
-}
 
 export function weedId(weedClass: string, where: string, source: string): string {
   return createHash('sha256').update(`${weedClass}\u0000${where}\u0000${source}`).digest('hex').slice(0, 10);
@@ -516,12 +502,6 @@ export function eventPath(uuid: string): string {
   return `events/${uuid.slice(0, 2)}/${uuid}.json`;
 }
 
-export function isStampedTime(text: string): boolean {
-  const time = Date.parse(text);
-
-  return /^\d{4}-/.test(text) && !Number.isNaN(time) && new Date(time).toISOString() === text;
-}
-
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export const eventPathPattern =
@@ -649,11 +629,6 @@ function sharedFieldFault(json: Readonly<Record<string, unknown>>): string | und
   });
 
   return unprintable === undefined ? undefined : `${unprintable} holds a line break or control character`;
-}
-
-export function firstReason(error: z.ZodError): string {
-  // Stryker disable next-line OptionalChaining,LogicalOperator: a failed parse has at least one issue
-  return error.issues[0]?.message ?? error.message;
 }
 
 export function parseEvent(path: string, text: string): GardenEvent | string {

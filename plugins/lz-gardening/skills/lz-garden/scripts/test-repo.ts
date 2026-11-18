@@ -9,7 +9,7 @@ import { text } from 'node:stream/consumers';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Io } from './cli.ts';
-import { isRecord } from './log.ts';
+import { isRecord } from './log-guard.ts';
 import { gitStartChannel } from './store-git-reader.ts';
 import { mayPointAtARepository } from './store-git.ts';
 

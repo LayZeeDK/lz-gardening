@@ -6,7 +6,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
-import { isRecord } from './log.ts';
+import { isRecord } from './log-guard.ts';
 import {
   catFileBatch,
   closeReaders,

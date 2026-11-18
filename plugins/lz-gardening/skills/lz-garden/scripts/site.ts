@@ -57,7 +57,8 @@ import { makeBed } from './site-bed.ts';
 import type { BedSummary } from './site-bed.ts';
 import { sleep, sync, syncTries } from './store-sync.ts';
 import type { ShareState, SyncResult } from './store-sync.ts';
-import { classPattern, objectIdPattern, replay } from './log.ts';
+import { replay } from './log.ts';
+import { classPattern, objectIdPattern } from './log-fields.ts';
 
 export interface BaseFacts {
   readonly base: string | undefined;

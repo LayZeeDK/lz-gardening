@@ -4,7 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
-import { objectIdPattern } from './log.ts';
+import { objectIdPattern } from './log-fields.ts';
 import { parseContents, readStrategyOf } from './store-git-objects.ts';
 import { readerReads, workerPump } from './store-git-reader.ts';
 import type { ObjectContents, ObjectReads, ReadAt, TreeEntry } from './store-git-objects.ts';
