@@ -430,7 +430,6 @@ export function seedLines(census: Census): SeedLine[] {
   return [...files, ...listed];
 }
 
-/** The seed list of the census taken of `sha` and not yet recorded, else of the garden's census; none without one. */
 /** The census taken of `sha` and not yet recorded, else the site's census. */
 export function censusIn(site: string, sha: string | undefined): Census | undefined {
   return (
@@ -438,6 +437,7 @@ export function censusIn(site: string, sha: string | undefined): Census | undefi
   );
 }
 
+/** The seed list of the census taken of `sha` and not yet recorded, else of the garden's census; none without one. */
 export function seedLinesIn(site: string, sha: string | undefined): readonly SeedLine[] {
   const census = censusIn(site, sha);
 
