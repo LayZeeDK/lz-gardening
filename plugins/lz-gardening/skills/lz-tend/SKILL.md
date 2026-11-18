@@ -174,8 +174,8 @@ instructions, and run in the bed:
 - its lint, type-check and format check, the commands its own `check` script or CI runs, not a narrower script
   such as `check:<part>`. When your change will touch a root config (the lint config, a base `tsconfig`, the
   Prettier config), that config reaches every project, so run these for all of them, as CI does;
-- the tests of the projects your change will touch, one command per project, so each summary comes back whole: each
-  package's own test script, or in an Nx workspace
+- the tests of the projects your change will touch, one command per project even when the lint and type-check above
+  run for all of them, so each summary comes back whole: each package's own test script, or in an Nx workspace
   `cd "<bed>" && npx --no -- nx run-many -t test -p <project> --output-style=static` (Nx finds its workspace from the
   directory it runs in, so it needs the `cd`). Run the whole suite only when the repository's done check requires
   it (CI, `AGENTS.md`, a pre-commit rule), and when that suite outruns the Bash tool's 10 minutes, report it as not
@@ -224,7 +224,9 @@ the tests of the projects you changed, no more. When the instances are too many 
 the rest in a baseline that can only shrink (the tool's own suppression or baseline file, or a list whose length the
 check asserts as a maximum) and never raise one. A missing shared home is no reason to baseline: making it is step
 3's job, unless step 3 leaves it to the maintainers (a new project or public entry point). For each group you
-baseline, say in the report whether it was too large, too risky, or waiting for such a home, and why. Every
+baseline, say in the report whether it was too large, too risky, or waiting for such a home, and why. A copy this
+pass creates in a second project, because that project cannot import the home, is baselined like the others or not
+made; the check never names it as a second owner. Every
 exception left in the code names its rule and a reason. Change a dependency list only through the package manager
 (`npm --prefix "<bed>/<project>" install <pkg>@<version>`, or the repository's own manager), so its lockfile follows;
 in a bed whose `deps` is `linked`, install first (step 4).
@@ -236,8 +238,10 @@ at the start runs again too, however long its output: its rerun shows whether th
 others. A rerun that exits non-zero, or whose summary lines you cannot read, has failed: run the identical command
 once more, word for word and from the same directory, to tell a flaky failure from a real one. A narrower or changed
 command (another project list, `--parallel=1`, another reporter) may show where it failed, to read the failing
-project's target alone, but is never the rerun's result. When the identical rerun fails or is cut again, count it as a
-failure the change may have caused (below): report it and release the claim, without looking for its cause. Done
+project's target alone, but is never the rerun's result. When the identical rerun fails or is cut again, you may run
+each failing project's target alone to read its failures. When every failure is in a file this pass wrote and the
+fix touches only that file, fix it and run the identical command once more. Otherwise count it as a failure the
+change may have caused (below): report it and release the claim, without looking further for its cause. Done
 when each has run again and passes, or fails with exactly the failures it had at the start, by name. Quote their
 summary lines in one table, each command with its result before and after the change; a row with no result after
 the change means this step is not done, so run that command. A command that fails after the change and has no
@@ -271,9 +275,11 @@ weed by weed and give each exactly one of these fates, and say which:
   came back. The tended close closes it.
 - **Baselined**: its copy stays in the check's baseline (step 6). Name it in `--baselined` below: it stays open, for
   the pass that shrinks the baseline. Every weed of a group that keeps a copy in the baseline is baselined, the file
-  that keeps the shared definition included: the group closes when its last copy goes.
-- **Kept**: the repository says it is deliberate, in words cited as step 2 says.
-  `weeds close --id <id> --keep "<reason>"`.
+  that keeps the shared definition included: the group closes when its last copy goes. A weed in a file the check
+  cannot reach at all (one its tool ignores) is in no baseline, so it is not baselined: it has none of these fates
+  until the check reaches it or the bed fixes it (below).
+- **Kept**: the repository says it is deliberate, in words cited as step 2 says, even when the check names it as an
+  allowed owner. `weeds close --id <id> --keep "<reason>"`, before the class close.
 - **One-off**: it has nothing to fix and shares no cause with the rest. `weeds close --id <id> --one-off "<reason>"`.
   A function that shares a queued name but does another job is no one-off: it is a naming weed, fixed by a rename
   that says its job, after which the check holds it.
