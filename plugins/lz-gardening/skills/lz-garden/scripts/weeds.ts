@@ -3,12 +3,12 @@
 //   node weeds.ts add --class <kebab> --where <path[:line]> [--where <path[:line]> ...] --source <kind:ref>
 //                     --note <text> [--layer <1-6>] [--census <sha>]
 //     Adds one weed per distinct --where, all in one append, with the same class, source and note, and prints one
-//     line per weed: `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep: a weed left on purpose is
-//     never queued again) or `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass closed its
-//     class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
+//     line per weed: `added <id>`, `seen <id>` (already open), `kept <id>` (closed with --keep: a weed left on
+//     purpose is never queued again) or `regrown <id> after bed/<class>@<commit> (check: <where>)` (a tend pass
+//     closed its class, so the check that was meant to hold it did not; the latest tend pass is named). The check reads
 //     `(check: <where> not on the base)` when it is not on the census commit: <sha>, the full commit id of the
-//     census this tick took, else the commit of the site's census. Then the bed has not landed, or the check's file
-//     is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, the bed's or
+//     census this tick took, else the commit of the site's census. Then the bed has not landed, or one of the check's
+//     files is gone from the base. It reads `(check: <where>, base unknown)` when there is no such census, the bed's or
 //     the census's commit is in neither the site nor the checkout, or the bed shares no history with the base.
 //     --source census:seed is for a line of the seed list alone: the class and path (line dropped) must be on a line
 //     of the seed list of the census taken of <sha> and not yet recorded, else of the site's census; otherwise exit
@@ -29,15 +29,18 @@
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives>
 //     [--baselined <id>,<id>] (a tend pass added a check; close-class only), --one-off <reason> (no check written),
 //     --keep <reason> (the weed is deliberate). Values are one line of text without control characters.
-//     --check goes once per check file; each must be a file the tended commit holds in the site and must not hold
-//     `, `, which joins them in the close's check field (exit 2 with `--check <path> is no file at <bed>`).
+//     --check goes once per check file, a path spelled two ways (`./a`, `a`) counting once; each must be a file the
+//     tended commit holds in the site (else exit 2 with `--check <path> is no file at <bed>`) and must not hold `, `,
+//     which joins them in the close's check field (else exit 2).
 //     --baselined names the weeds whose copies stay in the check's baseline: the close leaves them open. It exits 1
 //     with `<id> is no open weed of <class>`, or `every open weed of <class> is baselined; the check holds none of
-//     them`, and closes nothing. Both sync with origin before they plan and after they append, then print `<closed|kept> <n>; <share state>`; the last sync's reason and notes (a bed origin
-//     did not take, a census it left out or kept local, a claim it gave back), as site.ts words them, go to stderr. close-class acts only when that first sync leaves the share state synced or
-//     local and this writer holds a live claim of the class, as bed does; otherwise it exits 1 with `cannot check
-//     the claim of <class>: <state>[ (<reason>)]`, `this site holds no claim of <class>; run weeds claim --class
-//     <class>` or `<class> is claimed by <holder> until <time>`, and closes nothing. It ends this writer's claim of
+//     them`, and closes nothing. Both sync with origin before they plan and after they append, then print
+//     `<closed|kept> <n>; <share state>`; the last sync's reason and notes (a bed origin did not take, a census it
+//     left out or kept local, a claim it gave back), as site.ts words them, go to stderr. close-class acts only when
+//     that first sync leaves the share state synced or local and this writer holds a live claim of the class, as bed
+//     does; otherwise it exits 1 with `cannot check the claim of <class>: <state>[ (<reason>)]`, `this site holds no
+//     claim of <class>; run weeds claim --class <class>` or `<class> is claimed by <holder> until <time>`, and
+//     closes nothing. It ends this writer's claim of
 //     the class. close --id needs no claim, names a first sync other than synced or local on stderr, and leaves the
 //     claim as it is; it exits 1 with `<class> is claimed by <holder> until <time>`, closing nothing, while another
 //     writer holds one.
@@ -45,8 +48,8 @@
 //     Claims the class, or the first one groups --ready lists, for six hours, and shares the claim:
 //     `claimed <class> until <time>`. Exit 1 with `taken <class> by <holder> until <time>`,
 //     `nothing ready to tend`, `nothing open for <class>` or `cannot claim <class>: <state>[ (<reason>)]`, the last
-//     after releasing the claim (`; release pending` when that release is not shared yet). Its first sync's notes,
-//     as close's, go to stderr.
+//     after releasing the claim (`; release pending` when that release is not shared yet). Its first sync's notes go
+//     to stderr, worded as close words them.
 //   node weeds.ts release --class <kebab>
 //     Ends this writer's claim and shares the release: `released <class>; <share state>`, with the sync's reason and
 //     notes on stderr, as close does; exit 1 with `no claim of <class> held here`.
@@ -56,8 +59,8 @@
 //                                        --class may take: ready, not stale-verification or repeated-lesson, and
 //                                        claimed by no other writer; both together are a usage error
 //   node weeds.ts list [--class <kebab>] open weeds, one per line; a regrown weed shows the bed and check, as add does
-// A flag goes once per command, but --where with add and --check with close and close-class; given twice, it exits 2
-// with `--<flag> goes once with <command>`.
+// A flag goes once per command, except --where with add and --check with close and close-class; given twice, it
+// exits 2 with `--<flag> goes once with <command>`. A usage error is named before the site is looked for.
 // Paths (--where, a lesson:<path> source, --check) are repository-relative, and no event may hold this machine's home
 // folder, the checkout's path or the site's path: the queue is shared with the repository (exit 2).
 // An event file the log cannot read, or that these commands would not write (among them one with a line break or
