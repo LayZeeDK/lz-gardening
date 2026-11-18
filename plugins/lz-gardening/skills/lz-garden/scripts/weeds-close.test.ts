@@ -8,7 +8,7 @@ import { openSite, readLog } from './store-log.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
 import { commit, git, now } from './test-repo.ts';
 import { bareRemote, planted, sharedPair, site } from './test-site.ts';
-import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
+import { addWeed, bedFromMain, cli } from './test-weeds.ts';
 
 test("close-class after the site's claim expired is refused once its first sync fetches another writer's newer claim", (t) => {
   const { first, second } = sharedPair(t);
@@ -113,7 +113,7 @@ test('close-class --tended by the holder shares the close and the release, then 
   const remote = bareRemote(dir);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
-  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
+  const tip = commit(bedFromMain(garden, 'any-type'), { 'checks/a.mjs': 'export {};\n' });
 
   const closed = tendedClose(dir, tip);
 
@@ -127,7 +127,7 @@ test('close-class --tended takes --check once per check file and records them al
   const { dir, garden } = planted(t);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
-  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n', 'eslint.config.mjs': '' });
+  const tip = commit(bedFromMain(garden, 'any-type'), { 'checks/a.mjs': 'export {};\n', 'eslint.config.mjs': '' });
 
   const closed = cli(
     dir,
@@ -157,7 +157,7 @@ test('close-class --tended whose --check file the tended commit does not hold ex
   const { dir, garden } = planted(t);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
-  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
+  const tip = commit(bedFromMain(garden, 'any-type'), { 'checks/a.mjs': 'export {};\n' });
   const by = `bed/any-type@${tip.slice(0, 7)}`;
 
   const closed = cli(
@@ -177,7 +177,7 @@ test('close-class --tended whose --check names a folder at the tended commit exi
   const { dir, garden } = planted(t);
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
-  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
+  const tip = commit(bedFromMain(garden, 'any-type'), { 'checks/a.mjs': 'export {};\n' });
   const by = `bed/any-type@${tip.slice(0, 7)}`;
 
   const closed = cli(
@@ -196,7 +196,7 @@ test('a tended close made with sharing off exits 0, and the next open pushes the
   addWeed(dir, 'src/a.ts:1');
   git(dir, ['config', 'lzGardening.share', 'false']);
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
-  const tip = commit(anyTypeBedFromMain(garden), { 'checks/a.mjs': 'export {};\n' });
+  const tip = commit(bedFromMain(garden, 'any-type'), { 'checks/a.mjs': 'export {};\n' });
   const closed = tendedClose(dir, tip);
   git(dir, ['config', 'lzGardening.share', 'true']);
 
@@ -229,7 +229,7 @@ test('close-class whose origin cannot be reached exits 1 and closes nothing, as 
 test('close-class --tended whose bed does not descend from the shared bed names it on stderr and exits 0', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
-  const bed = anyTypeBedFromMain(garden);
+  const bed = bedFromMain(garden, 'any-type');
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
   assert.equal(tendedClose(dir, commit(bed, { 'checks/a.mjs': 'export {};\n' })).status, 0);
@@ -248,7 +248,7 @@ test('close-class --tended whose bed does not descend from the shared bed names 
 test('claim names on stderr a bed its first sync could not share', (t) => {
   const { dir, garden } = planted(t);
   bareRemote(dir);
-  const bed = anyTypeBedFromMain(garden);
+  const bed = bedFromMain(garden, 'any-type');
   addWeed(dir, 'src/a.ts:1');
   assert.equal(cli(dir, ['claim', '--class', 'any-type'], process.env, now).status, 0);
   assert.equal(tendedClose(dir, commit(bed, { 'checks/a.mjs': 'export {};\n' })).status, 0);

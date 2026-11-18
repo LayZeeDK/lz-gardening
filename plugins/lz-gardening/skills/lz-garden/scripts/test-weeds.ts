@@ -46,8 +46,8 @@ export function eslintConfig(files: string, rules: string): string {
   return `export default [\n  {\n    files: ${files},\n    rules: ${rules},\n  },\n];\n`;
 }
 
-// The any-type bed made by hand: a worktree of the site on bed/any-type at the checkout's main.
-export function anyTypeBedFromMain(garden: string, weedClass = 'any-type'): string {
+// A bed made by hand: a worktree of the site on bed/<class> at the checkout's main.
+export function bedFromMain(garden: string, weedClass: string): string {
   const bed = join(garden, 'beds', weedClass);
   git(garden, ['fetch', '-q', 'origin', 'main']);
   git(garden, ['worktree', 'add', '-q', '-b', `bed/${weedClass}`, bed, 'FETCH_HEAD']);
@@ -57,7 +57,7 @@ export function anyTypeBedFromMain(garden: string, weedClass = 'any-type'): stri
 
 // A bed of the class that commits `check` on the checkout's main, named as --tended takes it.
 export function tendedBy(dir: string, weedClass: string, check: Readonly<Record<string, string>>): string {
-  const tip = commit(anyTypeBedFromMain(openSite(dir).path, weedClass), check);
+  const tip = commit(bedFromMain(openSite(dir).path, weedClass), check);
 
   return `bed/${weedClass}@${tip.slice(0, 7)}`;
 }
@@ -65,13 +65,13 @@ export function tendedBy(dir: string, weedClass: string, check: Readonly<Record<
 export function tendedBed(
   t: TestContext,
   check: Readonly<Record<string, string>>,
-  where: string | readonly string[] = Object.keys(check)[0] ?? '',
+  where: readonly string[] = [Object.keys(check)[0] ?? ''],
   before: Readonly<Record<string, string>> = {},
 ): Planted & { readonly bed: string; readonly tip: string } {
-  const checkFlags = [where].flat().flatMap((path) => ['--check', path]);
+  const checkFlags = where.flatMap((path) => ['--check', path]);
   const { dir, garden } = planted(t);
   commit(dir, { 'eslint.config.mjs': eslintConfig("['src/**']", '{}'), ...before });
-  const bed = anyTypeBedFromMain(garden);
+  const bed = bedFromMain(garden, 'any-type');
   const tip = commit(bed, check);
   const base = commit(dir, { 'src/b.ts': 'export const b = 1;\n' });
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'commit:aaa1111']);

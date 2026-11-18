@@ -12,7 +12,7 @@ import { commit, git, startedCommands, startedGits } from './test-repo.ts';
 import { serve, silentServer } from './test-serve.ts';
 import { bareRemote, planted, remoteHook, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
 import type { Planted } from './test-site.ts';
-import { anyTypeBedFromMain, cli, homeAt } from './test-weeds.ts';
+import { bedFromMain, cli, homeAt } from './test-weeds.ts';
 
 interface Tended extends Planted {
   readonly bed: string;
@@ -27,7 +27,7 @@ function withBed(t: TestContext): Tended {
   const { dir, garden } = planted(t);
   const remote = bareRemote(dir);
 
-  return { dir, garden, bed: anyTypeBedFromMain(garden), remote };
+  return { dir, garden, bed: bedFromMain(garden, 'any-type'), remote };
 }
 
 function tend(
@@ -93,7 +93,7 @@ test("a tended close made in another clone is not pushed from this site's own be
   const other = planted(t);
   git(other.dir, ['remote', 'add', 'origin', place.remote]);
   git(other.dir, ['fetch', '-q', 'origin']);
-  const otherBed = anyTypeBedFromMain(other.garden);
+  const otherBed = bedFromMain(other.garden, 'any-type');
   const theirs = tend({ ...other, bed: otherBed, remote: place.remote }, { 'checks/any-type.mjs': 'export {};\n' });
   commit(place.bed, { 'src/mine.ts': 'export const mine = 1;\n' });
 
@@ -524,7 +524,7 @@ test("a bed that edits a file beside a line holding the site's path, a line orig
   const held = `built in ${realpathSync.native(garden)}\n`;
   commit(dir, { 'checks/notes.txt': `${held}old\n` });
   const remote = bareRemote(dir);
-  const place = { dir, garden, bed: anyTypeBedFromMain(garden), remote };
+  const place = { dir, garden, bed: bedFromMain(garden, 'any-type'), remote };
   git(dir, ['config', 'lzGardening.share', 'false']);
   const tip = tend(place, { 'checks/notes.txt': `${held}new\n` });
   git(dir, ['config', 'lzGardening.share', 'true']);

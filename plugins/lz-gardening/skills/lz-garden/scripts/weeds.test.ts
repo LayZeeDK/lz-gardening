@@ -11,7 +11,7 @@ import type { AddEvent, AddInput, AddOutcome, EventDraft, GardenEvent } from './
 import { commit, git, now, repo } from './test-repo.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles, writeToLogByHand } from './test-log.ts';
-import { anyTypeBedFromMain, cli, homeAt, script, tendedBy } from './test-weeds.ts';
+import { bedFromMain, cli, homeAt, script, tendedBy } from './test-weeds.ts';
 import { addStatus, parseCloseFlags, validateAdd } from './weeds.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 
@@ -524,7 +524,7 @@ test('a duplicate-function decline matches a quote across lines that open with /
 
 test("a duplicate-function decline reads the census's commit through the site, though the checkout lacks it", (t) => {
   const { dir, garden } = planted(t);
-  const bed = anyTypeBedFromMain(garden);
+  const bed = bedFromMain(garden, 'any-type');
   const onlyInSite = commit(bed, {
     'src/x.ts': 'export function foo() {}\n',
     'src/y.ts': '// Kept apart: the worker loads no shared module.\nexport function foo() {}\n',

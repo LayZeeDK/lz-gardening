@@ -26,7 +26,7 @@ import {
   writeCensus,
 } from './test-site.ts';
 import type { Planted } from './test-site.ts';
-import { addWeed, anyTypeBedFromMain, cli } from './test-weeds.ts';
+import { addWeed, bedFromMain, cli } from './test-weeds.ts';
 
 test('a site whose checkout has no origin stays local and keeps its log as it was', (t) => {
   const { dir, garden } = planted(t);
@@ -841,7 +841,7 @@ function withALogACensusAndABedToShare(t: TestContext): {
   const { first, second } = sharedPair(t);
   addWeed(first.dir, 'src/a.ts:1');
   addWeed(second.dir, 'src/b.ts:1');
-  const tip = commit(anyTypeBedFromMain(second.garden), { 'checks/any-type.mjs': 'export {};\n' });
+  const tip = commit(bedFromMain(second.garden, 'any-type'), { 'checks/any-type.mjs': 'export {};\n' });
   git(second.dir, ['config', 'lzGardening.share', 'false']);
   assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).status, 0);
   const closed = cli(second.dir, [

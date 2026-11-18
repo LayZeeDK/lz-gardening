@@ -140,7 +140,7 @@ test('a check added to a file the base already has is on the base once its bed l
 });
 
 test('a check the base already held when the bed was made is on the base, whatever the bed changed', (t) => {
-  const { dir, tip } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, 'eslint.config.mjs');
+  const { dir, tip } = tendedBed(t, { 'src/a.ts': 'export const a: number = 1;\n' }, ['eslint.config.mjs']);
 
   const back = cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'commit:ccc3333']);
 
