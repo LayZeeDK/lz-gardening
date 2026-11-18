@@ -1,7 +1,7 @@
 // The seed list as data: its lines, the census they come from, and which weeds a line asks about.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { onSeedLine, seedLines, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
+import { offSeedList, onSeedLine, seedLines, seedLinesIn, seedLinesLeft, seedPath } from './census.ts';
 import { planAdd, stamp } from './log.ts';
 import type { AddInput } from './log.ts';
 import { now } from './test-repo.ts';
@@ -93,6 +93,23 @@ test('a seed line asks about a weed of its class in one of its files, with or wi
       onSeedLine(line, 'duplicate-function', 'src/b.ts'),
     ],
     [true, true, false, false],
+  );
+});
+
+test('a weed takes census:seed only on a line of the seed list, else the refusal names its class and file', () => {
+  const seeds = [{ line: '- [any-type] src/a.ts 2', class: 'any-type', paths: ['src/a.ts'] }];
+
+  assert.deepEqual(
+    [
+      offSeedList(seeds, 'any-type', 'src/a.ts:3'),
+      offSeedList(seeds, 'ts-ignore', 'src/a.ts'),
+      offSeedList(seeds, 'any-type', 'src/b.ts:1'),
+    ],
+    [
+      null,
+      'no line of the seed list is ts-ignore in src/a.ts; census:seed is for those lines alone',
+      'no line of the seed list is any-type in src/b.ts; census:seed is for those lines alone',
+    ],
   );
 });
 

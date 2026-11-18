@@ -21,10 +21,12 @@ import {
   moveRefIfStill,
   networkGit,
   objectIds,
+  optionalGit,
   pushReport,
   refsUnder,
   refTip,
   runGit,
+  siteObjectsInput,
   treeAt,
 } from './store-git.ts';
 import { readStrategies, readStrategyVariable } from './store-git-objects.ts';
@@ -55,6 +57,29 @@ function sha256Repo(t: TestContext): string {
 
   return dir;
 }
+
+test("a read with the site's objects input sees a commit only the site holds, and never fetches a missing one", (t) => {
+  const checkout = repo(t);
+  commit(checkout, { 'a.txt': 'a\n' });
+  const site = join(dirname(checkout), 'site');
+  init(site);
+  const onlyInSite = commit(site, { 'b.txt': 'b\n' });
+
+  const [input, through, without] = inRun(process.env, () => {
+    const objects = siteObjectsInput(site);
+
+    return [
+      objects,
+      optionalGit(checkout, ['cat-file', '-t', onlyInSite], objects),
+      optionalGit(checkout, ['cat-file', '-t', onlyInSite]),
+    ] as const;
+  });
+
+  assert.deepEqual(
+    [through, without, input.readsOnly, input.env?.['GIT_NO_LAZY_FETCH']],
+    ['commit', undefined, true, '1'],
+  );
+});
 
 test('a git that ends on a bad config before it reads its input fails with its own error, not as one that could not start', (t) => {
   const dir = repo(t);
