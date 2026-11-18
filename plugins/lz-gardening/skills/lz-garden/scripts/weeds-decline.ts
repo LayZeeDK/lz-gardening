@@ -1,50 +1,59 @@
 // Which seed lines `weeds.ts decline` may leave out of the queue. A seed line of most classes is declined by its
 // class and path; a duplicate-function copy is declined one file at a time, on words the repository wrote down.
-import { offSeedList, seedPath } from './census.ts';
+import { offSeedList, seedLines, seedPath } from './census.ts';
 import type { SeedLine } from './census.ts';
-import type { AddInput } from './log.ts';
 import { optionalGit, siteObjectsInput } from './store-git.ts';
 import type { Census } from './store-census.ts';
 import type { Site } from './store-log.ts';
 
 export interface Decline {
-  readonly input: AddInput;
+  readonly weedClass: string;
+  /** The one file declined; without it, every seed line of the class not yet queued or declined. */
   readonly where: string | undefined;
   /** The record `--in` names, which holds the words that keep a duplicate-function copy. */
   readonly record: string | undefined;
-  readonly seeds: readonly SeedLine[];
+  readonly reason: string;
 }
 
 const strayIn = '--in goes with --class duplicate-function --where <path> only';
 
-/** Why a decline of a class other than duplicate-function cannot be recorded, or null. */
-export function seedDeclineRefusal({ input, where, record, seeds }: Decline): string | null {
-  if (record !== undefined) {
-    return strayIn;
-  }
-
-  return where === undefined ? null : offSeedList(seeds, input.class, where);
-}
-
-/** Why a duplicate-function decline cannot be recorded, or null. */
-export function copyDeclineRefusal(
-  checkout: string,
-  site: Site,
-  census: Census | undefined,
-  decline: Decline,
-): string | null {
-  const { input, where, record, seeds } = decline;
-
-  if (where === undefined) {
+/** Why the decline's flags cannot go together, which needs no site, or null. */
+export function declineUsageProblem({ weedClass, where, record }: Decline): string | null {
+  if (weedClass === 'duplicate-function' && where === undefined) {
     return record === undefined
       ? 'decline duplicate-function one file at a time, --where <path>, on the words that keep that copy'
       : strayIn;
   }
 
-  return (
-    offSeedList(seeds, input.class, where) ??
-    unquotedReason(checkout, site, census, input.note, record ?? seedPath(where))
-  );
+  return record === undefined || weedClass === 'duplicate-function' ? null : strayIn;
+}
+
+/** The seed lines of `weedClass` in `census`; none without a census. */
+export function seedLinesOf(census: Census | undefined, weedClass: string): readonly SeedLine[] {
+  return census === undefined ? [] : seedLines(census).filter((seed) => seed.class === weedClass);
+}
+
+/** Why `census` keeps the decline from being recorded, or null. */
+export function declineRefusal(
+  checkout: string,
+  site: Site,
+  census: Census | undefined,
+  decline: Decline,
+): string | null {
+  const { weedClass, where, record, reason } = decline;
+  const seeds = seedLinesOf(census, weedClass);
+
+  if (where === undefined) {
+    return seeds.length === 0 ? `no line of the seed list is ${weedClass}; census:seed is for those lines alone` : null;
+  }
+
+  const offList = offSeedList(seeds, weedClass, where);
+
+  if (offList !== null || census === undefined || weedClass !== 'duplicate-function') {
+    return offList;
+  }
+
+  return unquotedReason(checkout, site, census.sha, reason, record ?? seedPath(where));
 }
 
 // Text with each line's comment marker dropped and its whitespace run together, so a comment quoted on one line
@@ -57,18 +66,8 @@ function asProse(text: string): string {
 }
 
 // A duplicate copy stays only on words the repository wrote down, so the reason must be those words.
-function unquotedReason(
-  checkout: string,
-  site: Site,
-  census: Census | undefined,
-  reason: string,
-  path: string,
-): string | null {
-  const sha = census?.sha;
-  // Stryker disable next-line ConditionalExpression: with no census, git show of undefined:<path> fails as well, and the reason is refused alike
-  const text =
-    sha === undefined ? undefined : optionalGit(checkout, ['show', `${sha}:${path}`], siteObjectsInput(site.path));
-
+function unquotedReason(checkout: string, site: Site, sha: string, reason: string, path: string): string | null {
+  const text = optionalGit(checkout, ['show', `${sha}:${path}`], siteObjectsInput(site.path));
   const quote = asProse(reason);
 
   return text !== undefined && quote !== '' && asProse(text).includes(quote)

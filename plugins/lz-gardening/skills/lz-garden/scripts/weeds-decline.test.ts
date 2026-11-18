@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import type { TestContext } from 'node:test';
 import { test } from 'node:test';
 import { weedId } from './log.ts';
-import { commit, git } from './test-repo.ts';
+import { commit, git, repo } from './test-repo.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles } from './test-log.ts';
 import { bedFromMain, cli, seedListed } from './test-weeds.ts';
@@ -332,6 +332,18 @@ test('--in goes with a duplicate-function decline of one file only', (t) => {
       ]),
       0,
     ],
+  );
+});
+
+test('a stray --in in a repository with no site names the usage error, not the missing site', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'src/a.ts': 'export const a: any = 1;\n' });
+
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'r', '--in', 'docs/adr/0001.md']);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr],
+    [2, 'weeds decline: --in goes with --class duplicate-function --where <path> only\n'],
   );
 });
 

@@ -108,9 +108,9 @@ import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { catFileBatch, configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import { censusIn, offSeedList, seedLines, seedLinesIn, seedLinesLeft } from './census.ts';
+import { censusIn, offSeedList, seedLinesIn, seedLinesLeft } from './census.ts';
 import type { SeedLine } from './census.ts';
-import { copyDeclineRefusal, seedDeclineRefusal } from './weeds-decline.ts';
+import { declineRefusal, declineUsageProblem, seedLinesOf } from './weeds-decline.ts';
 import type { Decline } from './weeds-decline.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
@@ -469,7 +469,9 @@ function decline(io: Io, flags: Flags, now: Date): number {
     note: flags.reason,
     layer: null,
   };
+  const request: Decline = { weedClass: input.class, where, record: flags.in, reason: input.note };
   const problem =
+    declineUsageProblem(request) ??
     firstUnprintable({ in: flags.in }) ??
     censusProblem(flags.census) ??
     (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
@@ -482,11 +484,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
 
   const site = openSite(io.cwd);
   const census = censusIn(site.path, flags.census);
-  const request: Decline = { input, where, record: flags.in, seeds: census === undefined ? [] : seedLines(census) };
-  const refusal =
-    input.class === 'duplicate-function'
-      ? copyDeclineRefusal(io.cwd, site, census, request)
-      : seedDeclineRefusal(request);
+  const refusal = declineRefusal(io.cwd, site, census, request);
 
   if (refusal !== null) {
     io.err(`weeds decline: ${refusal}\n`);
@@ -495,7 +493,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
   }
 
   if (where === undefined) {
-    return declineClass(io, site, request.seeds, input, now);
+    return declineClass(io, site, seedLinesOf(census, input.class), input, now);
   }
 
   const { status } = append(
@@ -512,15 +510,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
-function declineClass(io: Io, site: Site, seedList: readonly SeedLine[], input: AddInput, now: Date): number {
-  const seeds = seedList.filter((seed) => seed.class === input.class);
-
-  if (seeds.length === 0) {
-    io.err(`weeds decline: no line of the seed list is ${input.class}; census:seed is for those lines alone\n`);
-
-    return 2;
-  }
-
+function declineClass(io: Io, site: Site, seeds: readonly SeedLine[], input: AddInput, now: Date): number {
   const { status } = append(
     site,
     (replica) => {
