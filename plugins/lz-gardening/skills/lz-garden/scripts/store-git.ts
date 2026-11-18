@@ -308,15 +308,10 @@ export function gitSucceeds(cwd: string, args: readonly string[], options: GitIn
 
 /** Reads in the checkout that also see the site's objects (beds, a census taken in another clone), never fetching. */
 export function siteObjectsInput(site: string): GitInput {
-  return {
-    readsOnly: true,
-    env: {
-      GIT_ALTERNATE_OBJECT_DIRECTORIES: git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], {
-        readsOnly: true,
-      }),
-      GIT_NO_LAZY_FETCH: '1',
-    },
-  };
+  // Stryker disable next-line ObjectLiteral,BooleanLiteral: rev-parse --git-path prints the same path with or without the write settings
+  const objects = git(site, ['rev-parse', '--path-format=absolute', '--git-path', 'objects'], { readsOnly: true });
+
+  return { readsOnly: true, env: { GIT_ALTERNATE_OBJECT_DIRECTORIES: objects, GIT_NO_LAZY_FETCH: '1' } };
 }
 
 /** The first line of git's message, as a reason to print. */
