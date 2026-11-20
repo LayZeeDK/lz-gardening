@@ -42,7 +42,7 @@ export function seedLinesRead(
 ): { readonly lines: readonly string[]; readonly token: string } {
   const lines = seedLinesOf(census, weedClass).flatMap((seed) => [seed.line, ...seed.hits]);
   const token = createHash('sha256')
-    .update([census.sha, ...lines].join('\n'))
+    .update(JSON.stringify([census.sha, ...lines]))
     .digest('hex')
     .slice(0, 12);
 

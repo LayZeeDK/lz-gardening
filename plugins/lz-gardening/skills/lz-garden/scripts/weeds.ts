@@ -554,6 +554,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
 }
 
 function lines(io: Io, flags: Flags): number {
+  // Stryker disable next-line StringLiteral: lines without --class fails the kebab-case check, and so does the mutant's text
   const weedClass = flags.class ?? '';
 
   const problem =

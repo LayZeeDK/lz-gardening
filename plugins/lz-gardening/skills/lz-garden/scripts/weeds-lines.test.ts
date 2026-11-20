@@ -151,6 +151,17 @@ test('lines refuses a class no seed line names and prints no token', (t) => {
   );
 });
 
+test("decline of every line of a class the census's seed list does not hold is refused, and records nothing", (t) => {
+  const dir = seedListed(t);
+
+  const declined = cli(dir, ['decline', '--class', 'ts-ignore', '--reason', 'generated code']);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr, logFiles(openSite(dir).path).size],
+    [2, 'weeds decline: no line of the seed list is ts-ignore; census:seed is for those lines alone\n', 0],
+  );
+});
+
 test('lines refuses a garden with no census and prints no token', (t) => {
   const { dir } = planted(t);
 
