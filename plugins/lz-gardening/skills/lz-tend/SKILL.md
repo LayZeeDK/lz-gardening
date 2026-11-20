@@ -31,7 +31,9 @@ Two rules hold for the whole pass:
   name it in the report and go on without that information, never fetching it another way.
 
 When the pass stops at any point after step 1's claim, its last command is `weeds release --class <class>`, so
-another clone can tend the class; the bed and its commits stay in the site for the next pass.
+another clone can tend the class; the bed and its commits stay in the site for the next pass. When you continue a pass
+that stopped (a usage limit, a restart), first renew the claim from the repository's checkout with
+`weeds claim --class <class>`; when that prints anything but `claimed`, stop and report its line.
 
 Two scripts of the `lz-garden` skill do the site's bookkeeping: `site` below is
 `node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts"`, and `weeds` is
@@ -71,7 +73,9 @@ the session's working directories (the session's environment lists any added one
   failing command's output is not, and loses its middle. When a starting command (step 4) prints more than the
   result shows, run a narrower one (one project's tests, one file's lint); a rerun after the change follows step 6.
   Write files only in the bed, with the Edit and Write tools: a rename across a file with Edit's `replace_all`,
-  never a `node -e` or `sed` rewrite. Delete a tracked file with `git -C "<bed>" rm <path>`, never `rm`.
+  never a `node -e` or `sed` rewrite. Before a `replace_all`, Grep the file for the old name with a word character
+  before or after it (`\w<old>|<old>\w`); when that matches, a longer name holds it, so rename each place with an Edit
+  of its own. Delete a tracked file with `git -C "<bed>" rm <path>`, never `rm`.
 - Run each command in the foreground and read its output in the tool result; for a long one, raise the Bash tool's
   timeout, up to its limit of 10 minutes. A command that runs longer moves to the background, and its output file
   cannot be read: run the tests of the projects the change touches instead (step 4).
@@ -104,8 +108,10 @@ kept, not removed, and the check pins the copies instead. A copy is kept only on
 one: a file's description, or a decision about something else, says neither. Your own judgement that a copy should
 stay is no reason to keep it, so fix it or baseline it (step 6). For copies in two projects, search the repository's
 records (ADRs, glossary or context maps, agent instructions, package READMEs) for both projects' names before you
-decide: a line that says one may not import the other keeps both copies, and a check's message never names an import
-the repository rules out. A class whose weeds were `regrown` had a check that did not hold: start from the bed and
+decide: a line that says one may not import the other keeps both copies. A line that says what a project imports
+today, such as a context map's "neither imports the other", is a description and keeps no copy. A check's message
+never names an import the repository rules out.
+A class whose weeds were `regrown` had a check that did not hold: start from the bed and
 check that `weeds list` shows on each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`),
 and find why (a rule too narrow, a suppression, an exception that spread, a bed not landed yet) before writing
 another. The check reads `(check: <where> not on the base)` when its bed had not landed as of the garden's last
@@ -205,15 +211,25 @@ will baseline is one), so its first output names every queued weed it will hold,
 included; the baseline comes in step 6. When the class needs two checks, add and
 prove both here, before the first fix. Run it in the bed while the code is as the base has it: it must report at
 least one queued weed by the path `weeds list` shows. Run the check alone, on the weeds' files or the projects that
-hold them (`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint), not the repository's whole
-lint: step 6 runs that once the fixes are done. A file you wrote to trip it is no weed. A check that reports none
+hold them (`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint); the run over every file it
+covers comes last in this step. A file you wrote to trip it is no weed. A check that reports none
 does not hold this class; change it until it does. Keep this first output: it lists the weeds the check holds (step
 7). Then run `git -C "<bed>" status --short`: it must show only the check's own files.
 
 Then run the check on code that does the same job the right way (the paved road, the simplest correct form): it must
 report nothing there. Code the check skips through a baseline or an exemption list is not that code. A check that
-also flags correct code teaches agents to suppress it. Quote the first output, the status and the second output in
-the report: they are the proof. Done when you have all three.
+also flags correct code teaches agents to suppress it.
+
+Then run the check over every file it covers, still before any fix: the lint or test command of each project it
+reaches, as step 6 will run it again. Each report of the check you added must be a queued weed. A report of anything
+else means the check is too wide or the queue missed a copy. When the check is too wide, narrow it, say why in the
+report, and run it again on the untouched bed and on the paved road, so the proof shows the check you keep. When the
+queue missed a copy, queue it from the repository's checkout:
+`weeds add --class <class> --where <path:line> --source commit:<sha> --note "<root cause>"`, where `<sha>` is what
+`git log -n 1 --format=%h -S '<the copy's name>' -- <path>` prints; step 6 then fixes or baselines it like the rest.
+When `add` prints `kept`, the copy was left on purpose: exempt it in the check, citing the keep's reason. Never rename
+or narrow code the queue does not hold to quiet the check. Quote the first output, the status, the second output and
+this run in the report: they are the proof. Done when you have all four.
 
 ## 6. Clear the bed
 
@@ -241,7 +257,8 @@ A rerun that exits non-zero, or whose summary lines you cannot read, has failed.
 
 1. When its own output shows a format or lint error in a file you changed, fix it and run that command again; run
    another command again only when the fix touched code or config it covers (a format fix touches no test). Do not
-   start the whole set over. When it still fails, go on to 2.
+   start the whole set over. A report of the check you added is no such error: it goes to 2. When it still fails, go
+   on to 2.
 2. Otherwise run the identical command once more, word for word and from the same directory, to tell a flaky failure
    from a real one.
 3. When that fails or is cut too, you may run each failing project's target alone to read its failures. A narrower or
@@ -284,7 +301,9 @@ weed by weed and give each exactly one of these fates, and say which:
   that keeps the shared definition included: the group closes when its last copy goes. A weed in a file the check
   cannot reach (one its tool ignores) is first widened to or fixed (below). When neither can be done (a fixture a
   test pins, step 4), name it in `--baselined` too, the only way the close leaves a weed open, and say in the report
-  that no check reaches it.
+  that no check reaches it. A check that lists names holds no weed whose name it leaves out, so that weed is in no
+  baseline: add its name to the check's list, with its copies in the baseline; otherwise the weed has no fate
+  (below).
 - **Kept**: the repository says it is deliberate, in words cited as step 2 says, even when the check names it as an
   allowed owner. `weeds close --id <id> --keep "<reason>"`, before the class close.
 - **One-off**: it has nothing to fix and shares no cause with the rest. `weeds close --id <id> --one-off "<reason>"`.
@@ -315,8 +334,8 @@ anywhere, is then queued as `regrown` and names this bed and check. Done when `c
 ## 8. Report
 
 - The class, its root cause in step 2's two sentences, and the decision.
-- The check: layer number and `checks.md` row (step 3), file, message, and step 5's three quoted outputs: the check
-  on the untouched bed, the bed's status then, and the check on the paved road.
+- The check: layer number and `checks.md` row (step 3), file, message, and step 5's four quoted outputs: the check
+  on the untouched bed, the bed's status then, the check on the paved road, and its run over every file it covers.
 - Each refused lookup the pass went on without (the rules at the top), and what it would have shown.
 - The weeds closed apart from the class (step 7), each with its id, kind and reason, and the weeds left open as
   baselined, each with its id.
