@@ -15,7 +15,12 @@
 //     --source census:seed is for a line of the seed list alone: the class and path (line dropped) must be on a line
 //     of the seed list of the census taken of <sha> and not yet recorded, else of the site's census; otherwise exit
 //     2 with `no line of the seed list is <class> in <path>; census:seed is for those lines alone`.
-//   node weeds.ts decline --class <kebab> [--where <path>] --reason <text> [--in <path>] [--census <sha>]
+//   node weeds.ts lines --class <kebab> [--census <sha>]
+//     Prints each pattern line of the class on the seed list of the census taken of <sha> and not yet recorded, else
+//     of the site's census, each followed by the hits that census holds for it, then `read <class> <token>`; prints
+//     nothing without a census.
+//   node weeds.ts decline --class <kebab> [--where <path>] --reason <text> [--in <path>] [--read <token>]
+//                         [--census <sha>]
 //     Leaves a seed line out of the queue: adds its weed with --source census:seed (so on a line of the seed list,
 //     as for add) and keeps it (as close --keep <reason> would) in one append, so no later add queues it. Prints
 //     `kept <id>`. Without --where it does this for every pattern line of the class that no add covers yet, one
@@ -25,7 +30,11 @@
 //     that keep that copy`. A seed line counts as covered once each of its paths has an add of its class. A
 //     duplicate-function decline's reason must be words that <path>, or the record --in names, holds at the census's
 //     commit (comment markers and line breaks aside), else exit 2 with `--reason must quote the words that keep this
-//     copy, as <path> holds them at the census's commit`; --in on any other decline exits 2.
+//     copy, as <path> holds them at the census's commit`; --in on any other decline exits 2. Any other class's
+//     decline needs --read, the token `lines --class <class>` printed for that census, else exit 2 with `run weeds
+//     lines --class <class>, read every line it prints, and pass the token on its last line as --read`, or with
+//     `--read <token> is not the token weeds lines --class <class> prints for this census; run it again and read every
+//     line it prints`.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives>
@@ -116,8 +125,17 @@ import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { catFileBatch, configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import { censusIn, offSeedList, seedLinesIn, seedLinesLeft, seedLinesOf } from './census.ts';
+import {
+  censusIn,
+  offSeedList,
+  seedLinesIn,
+  seedLinesLeft,
+  seedLinesOf,
+  seedLinesRead,
+  seedLinesToken,
+} from './census.ts';
 import type { SeedLine } from './census.ts';
+import type { Census } from './store-census.ts';
 import { declineRefusal, declineUsageProblem } from './weeds-decline.ts';
 import type { Decline } from './weeds-decline.ts';
 import type { Replica, Site } from './store-log.ts';
@@ -397,6 +415,7 @@ function parseFlags(argv: readonly string[]) {
       layer: { type: 'string' },
       census: { type: 'string' },
       in: { type: 'string' },
+      read: { type: 'string' },
       id: { type: 'string' },
       tended: { type: 'string' },
       'one-off': { type: 'string' },
@@ -513,7 +532,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
 
   const site = openSite(io.cwd);
   const census = censusIn(site.path, flags.census);
-  const refusal = declineRefusal(io.cwd, site, census, request);
+  const refusal = declineRefusal(io.cwd, site, census, request) ?? unreadRefusal(census, input.class, flags.read);
 
   if (refusal !== null) {
     io.err(`weeds decline: ${refusal}\n`);
@@ -535,6 +554,34 @@ function decline(io: Io, flags: Flags, now: Date): number {
     now,
   );
   writeLine(io, status);
+
+  return 0;
+}
+
+/** Why a decline of a pattern class's seed lines needs `weeds lines` first, or null when --read is its token. */
+function unreadRefusal(census: Census | undefined, weedClass: string, read: string | undefined): string | null {
+  if (weedClass === 'duplicate-function' || census === undefined) {
+    return null;
+  }
+
+  if (read === undefined) {
+    return `run weeds lines --class ${weedClass}, read every line it prints, and pass the token on its last line as --read`;
+  }
+
+  return read === seedLinesToken(census, weedClass)
+    ? null
+    : `--read ${read} is not the token weeds lines --class ${weedClass} prints for this census; run it again and read every line it prints`;
+}
+
+function lines(io: Io, flags: Flags): number {
+  const census = censusIn(openSite(io.cwd).path, flags.census);
+  const weedClass = flags.class ?? '';
+
+  if (census !== undefined) {
+    [...seedLinesRead(census, weedClass), `read ${weedClass} ${seedLinesToken(census, weedClass)}`].forEach((line) => {
+      writeLine(io, line);
+    });
+  }
 
   return 0;
 }
@@ -760,7 +807,8 @@ const closeFlags: readonly (keyof Flags)[] = ['id', 'class', 'tended', 'one-off'
 
 const commands: readonly Command[] = [
   { name: 'add', flags: ['class', 'where', 'source', 'note', 'layer', 'census'], repeatable: ['where'], run: add },
-  { name: 'decline', flags: ['class', 'where', 'reason', 'in', 'census'], repeatable: [], run: decline },
+  { name: 'decline', flags: ['class', 'where', 'reason', 'in', 'read', 'census'], repeatable: [], run: decline },
+  { name: 'lines', flags: ['class', 'census'], repeatable: [], run: lines },
   {
     name: 'close',
     flags: closeFlags,
@@ -785,7 +833,7 @@ function main(argv: readonly string[], io: Io, now: Date, seams: SyncSeams): num
 
   if (command === undefined) {
     io.err(
-      'usage: weeds.ts add|decline|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n',
+      'usage: weeds.ts add|lines|decline|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n',
     );
 
     return 2;

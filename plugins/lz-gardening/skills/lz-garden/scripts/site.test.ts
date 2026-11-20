@@ -20,7 +20,7 @@ import {
   site,
   siteProcess,
 } from './test-site.ts';
-import { cli } from './test-weeds.ts';
+import { cli, readToken } from './test-weeds.ts';
 
 // A repository with branches feature/x and main, a hosted origin with no default, nothing recorded and nothing
 // asked for.
@@ -868,7 +868,20 @@ test('sync --census --seeded logs the seed once each path of each line is queued
     '--census',
     sha,
   ]);
-  cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture', '--census', sha]);
+  const read = readToken(dir, 'any-type', ['--census', sha]);
+  cli(dir, [
+    'decline',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts',
+    '--reason',
+    'a fixture',
+    '--census',
+    sha,
+    '--read',
+    read,
+  ]);
 
   const result = site(dir, ['sync', '--census', sha, '--seeded']);
 

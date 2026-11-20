@@ -1200,7 +1200,7 @@ test('a usage error in a repository with no site names the usage error, not the 
   assert.deepEqual(
     results.map(({ status, stderr }) => [status, stderr]),
     [
-      [2, 'usage: weeds.ts add|decline|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
+      [2, 'usage: weeds.ts add|lines|decline|close|close-class|claim|release|groups|list ... (see the header of weeds.ts)\n'],
       [2, 'weeds groups: --min must be a whole number of at least 1, got 0\n'],
     ],
   );

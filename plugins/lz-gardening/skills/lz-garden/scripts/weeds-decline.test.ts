@@ -7,7 +7,7 @@ import { weedId } from './log.ts';
 import { commit, git, repo } from './test-repo.ts';
 import { censusText, planted, writeCensusText } from './test-site.ts';
 import { logFiles } from './test-log.ts';
-import { bedFromMain, cli, seedListed } from './test-weeds.ts';
+import { bedFromMain, cli, readToken, seedListed } from './test-weeds.ts';
 
 test('decline takes --where once: a second one is refused and nothing is recorded', (t) => {
   const { dir, garden } = planted(t);
@@ -40,7 +40,18 @@ test('decline keeps a seed line out of the queue, so the seed pass adding it lat
   const dir = seedListed(t);
   const id = weedId('any-type', 'src/a.ts', 'census:seed');
 
-  const declined = cli(dir, ['decline', '--class', 'any-type', '--where', 'src/a.ts', '--reason', 'a typed fixture']);
+  const read = readToken(dir, 'any-type');
+  const declined = cli(dir, [
+    'decline',
+    '--class',
+    'any-type',
+    '--where',
+    'src/a.ts',
+    '--reason',
+    'a fixture',
+    '--read',
+    read,
+  ]);
   const added = cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts', '--source', 'census:seed']);
 
   assert.deepEqual(
@@ -52,7 +63,18 @@ test('decline keeps a seed line out of the queue, so the seed pass adding it lat
 test('decline takes a --where spelled with ./ as the seed line it names, in its plain form', (t) => {
   const dir = seedListed(t);
 
-  const declined = cli(dir, ['decline', '--class', 'any-type', '--where', './src/a.ts', '--reason', 'a typed fixture']);
+  const read = readToken(dir, 'any-type');
+  const declined = cli(dir, [
+    'decline',
+    '--class',
+    'any-type',
+    '--where',
+    './src/a.ts',
+    '--reason',
+    'a fixture',
+    '--read',
+    read,
+  ]);
 
   assert.deepEqual([declined.status, declined.stdout], [0, `kept ${weedId('any-type', 'src/a.ts', 'census:seed')}\n`]);
 });
@@ -97,7 +119,15 @@ test('decline without --where keeps every seed line of its class that is neither
   );
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:seed']);
 
-  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'typed fixtures']);
+  const declined = cli(dir, [
+    'decline',
+    '--class',
+    'any-type',
+    '--reason',
+    'typed fixtures',
+    '--read',
+    readToken(dir, 'any-type'),
+  ]);
   const later = [
     ['any-type', 'src/a.ts'],
     ['any-type', 'src/c.ts'],
@@ -385,7 +415,8 @@ test('a stray --in in a repository with no site names the usage error, not the m
 test('decline without --where names one seed line in the singular', (t) => {
   const dir = seedListed(t);
 
-  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'a typed fixture']);
+  const read = readToken(dir, 'any-type');
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'a typed fixture', '--read', read]);
 
   assert.deepEqual([declined.status, declined.stdout], [0, 'declined 1 seed line of any-type\n']);
 });

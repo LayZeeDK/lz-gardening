@@ -54,6 +54,11 @@ export function seedListed(t: TestContext): string {
   return dir;
 }
 
+/** The token `weeds lines --class <weedClass>` prints, which a decline of a pattern class takes as --read. */
+export function readToken(dir: string, weedClass: string, census: readonly string[] = []): string {
+  return /read \S+ ([0-9a-f]{12})\n$/.exec(cli(dir, ['lines', '--class', weedClass, ...census]).stdout)?.[1] ?? '';
+}
+
 // A bed made by hand: a worktree of the site on bed/<class> at the checkout's main.
 export function bedFromMain(garden: string, weedClass: string): string {
   const bed = join(garden, 'beds', weedClass);

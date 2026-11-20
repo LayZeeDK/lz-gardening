@@ -12,23 +12,25 @@ after the seed list misses them.
 With `--seed`, the census output prints the seed list above its JSON line. Each `=` line is either queued or
 declined, by the rule in `weeds.md`: queue what spreads or invites copying, and decline only for one of the reasons
 it lists, naming that reason. The same suppression with the same reason in two or more files is queued, one weed per
-file. Decline with
+file. Before you decide a pattern class's lines, print them with their hits:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>" --census <sha>
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" lines --class <class> --census <sha>
 ```
 
-which keeps the line's weed out of the queue for good. `<sha>` is the census's commit, as in the tick's add command.
-When the lines of a class left after its queued weeds share one reason, decline them all in one call: leave out
-`--where`, and the command declines every line of that class that no add covers yet and prints
+It prints each `=` line of the class, each followed by the hits the census holds for it, and last
+`read <class> <token>`. Read every hit before you decide. Decline with
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>" --census <sha> --read <token>
+```
+
+which keeps the line's weed out of the queue for good. `<sha>` is the census's commit, as in the tick's add command,
+and `<token>` is the one `lines` printed: a decline of a pattern class without it, or with a token from another
+census, is refused. When the lines of a class left after its queued weeds share one reason, decline them all in one
+call: leave out `--where`, and the command declines every line of that class that no add covers yet and prints
 `declined <n> seed line(s) of <class>`. Queue a class's weeds first, then decline the rest, one call per class.
-Duplicate names are the exception: decline each file of a duplicate line on its own, with `--where`.
-Before any decline, read the hits of every line it will decline: one Grep per line, all in one message, with the
-pattern's regex (the census's `site pattern` line for a site pattern, else that id's entry in
-`${CLAUDE_SKILL_DIR}/scripts/patterns.json`, which you Read), `path` the line's `<path>`, `output_mode: "content"`
-and no `head_limit`. Each must show the line's `<count>` hits; when it shows another number, the checkout differs
-from the base, so read that file with `git show <base>:<path>`. A search of a folder, or of some of the lines, is not that
-reading.
+Duplicate names are the exception: decline each file of a duplicate line on its own, with `--where` and no `--read`.
 `add` takes `--source census:seed`, and `decline` records its weed with it, for the seed list's lines alone; both
 refuse any other weed, which takes the source of what it was found in (step 2, and `--source` in `SKILL.md`).
 `sync --seeded` in step 4 refuses to record the seed while a line is neither queued nor declined, and names the lines

@@ -16,6 +16,7 @@
 //     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
 // or, when the site has none, by the patterns the site's census carries. A pattern without paths searches sourceGlobs.
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -443,6 +444,24 @@ export function seedLines(census: Census): SeedLine[] {
     .map(([name, paths]) => ({ line: `= duplicate ${name}: ${paths.join(', ')}`, class: 'duplicate-function', paths }));
 
   return [...files, ...listed];
+}
+
+/** The hits `census` holds for a pattern line of the seed list, in the census's order; none for a duplicate line. */
+function seedLineHits(census: Census, seed: SeedLine): readonly string[] {
+  return (ownEntry(census.hits, seed.class) ?? []).filter((hit) => seed.paths.includes(splitHit(hit)?.path ?? hit));
+}
+
+/** The pattern lines of `weedClass` in `census`, each followed by its hits: what `weeds lines` prints. */
+export function seedLinesRead(census: Census, weedClass: string): readonly string[] {
+  return seedLinesOf(census, weedClass).flatMap((seed) => [seed.line, ...seedLineHits(census, seed)]);
+}
+
+/** The token `weeds lines` prints after `seedLinesRead`: it names the census, the class and every line printed. */
+export function seedLinesToken(census: Census, weedClass: string): string {
+  return createHash('sha256')
+    .update([census.sha, weedClass, ...seedLinesRead(census, weedClass)].join('\n'))
+    .digest('hex')
+    .slice(0, 12);
 }
 
 /** The census taken of `sha` and not yet recorded, else the site's census. */
