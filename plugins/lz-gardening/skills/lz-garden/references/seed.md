@@ -12,21 +12,22 @@ after the seed list misses them.
 With `--seed`, the census output prints the seed list above its JSON line. Each `=` line is either queued or
 declined, by the rule in `weeds.md`: queue what spreads or invites copying, and decline only for one of the reasons
 it lists, naming that reason. The same suppression with the same reason in two or more files is queued, one weed per
-file. Before you decide a pattern class's lines, print them with their hits:
+file. Before you decide the lines of a census pattern's class, print them with their hits:
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" lines --class <class> --census <sha>
 ```
 
 It prints each `=` line of the class, each followed by the hits the census holds for it, and last
-`read <class> <token>`. Read every hit before you decide. Decline with
+`read <class> <token>`. Run it with no pipe or filter, and read every hit before you decide; when the tool result
+says the output was saved to a file, Read that whole file. Decline with
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>" --census <sha> --read <token>
 ```
 
 which keeps the line's weed out of the queue for good. `<sha>` is the census's commit, as in the tick's add command,
-and `<token>` is the one `lines` printed: a decline of a pattern class without it, or with a token from another
+and `<token>` is the one `lines` printed: a decline of such a class without it, or with a token from another
 census, is refused. When the lines of a class left after its queued weeds share one reason, decline them all in one
 call: leave out `--where`, and the command declines every line of that class that no add covers yet and prints
 `declined <n> seed line(s) of <class>`. Queue a class's weeds first, then decline the rest, one call per class.

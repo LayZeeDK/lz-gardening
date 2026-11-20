@@ -17,8 +17,10 @@
 //     2 with `no line of the seed list is <class> in <path>; census:seed is for those lines alone`.
 //   node weeds.ts lines --class <kebab> [--census <sha>]
 //     Prints each pattern line of the class on the seed list of the census taken of <sha> and not yet recorded, else
-//     of the site's census, each followed by the hits that census holds for it, then `read <class> <token>`; prints
-//     nothing without a census.
+//     of the site's census, each followed by the hits that census holds for it (control characters escaped), then
+//     `read <class> <token>`; prints nothing without a census. Exits 2 with `--class must be kebab-case`, the
+//     --census message decline gives, or `duplicate-function takes no token; decline its files one at a time on
+//     quoted words`.
 //   node weeds.ts decline --class <kebab> [--where <path>] --reason <text> [--in <path>] [--read <token>]
 //                         [--census <sha>]
 //     Leaves a seed line out of the queue: adds its weed with --source census:seed (so on a line of the seed list,
@@ -34,7 +36,7 @@
 //     decline needs --read, the token `lines --class <class>` printed for that census, else exit 2 with `run weeds
 //     lines --class <class>, read every line it prints, and pass the token on its last line as --read`, or with
 //     `--read <token> is not the token weeds lines --class <class> prints for this census; run it again and read every
-//     line it prints`.
+//     line it prints`; --read on a duplicate-function decline exits 2.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives>
@@ -520,6 +522,9 @@ function decline(io: Io, flags: Flags, now: Date): number {
   const request: Decline = { weedClass: input.class, where, record: flags.in, reason: input.note };
   const problem =
     declineUsageProblem(request) ??
+    (input.class === 'duplicate-function' && flags.read !== undefined
+      ? '--read goes with a class other than duplicate-function only'
+      : null) ??
     firstUnprintable({ in: flags.in }) ??
     censusProblem(flags.census) ??
     (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
@@ -558,7 +563,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
-/** Why a decline of a pattern class's seed lines needs `weeds lines` first, or null when --read is its token. */
+/** Why a decline of a census pattern's class needs `weeds lines` first, or null when --read is its token. */
 function unreadRefusal(census: Census | undefined, weedClass: string, read: string | undefined): string | null {
   if (weedClass === 'duplicate-function' || census === undefined) {
     return null;
@@ -574,12 +579,26 @@ function unreadRefusal(census: Census | undefined, weedClass: string, read: stri
 }
 
 function lines(io: Io, flags: Flags): number {
-  const census = censusIn(openSite(io.cwd).path, flags.census);
   const weedClass = flags.class ?? '';
+
+  const problem =
+    (classPattern.test(weedClass) ? null : '--class must be kebab-case') ??
+    censusProblem(flags.census) ??
+    (weedClass === 'duplicate-function'
+      ? 'duplicate-function takes no token; decline its files one at a time on quoted words'
+      : null);
+
+  if (problem !== null) {
+    io.err(`weeds lines: ${problem}\n`);
+
+    return 2;
+  }
+
+  const census = censusIn(openSite(io.cwd).path, flags.census);
 
   if (census !== undefined) {
     [...seedLinesRead(census, weedClass), `read ${weedClass} ${seedLinesToken(census, weedClass)}`].forEach((line) => {
-      writeLine(io, line);
+      writeLine(io, escapeUnprintable(line));
     });
   }
 

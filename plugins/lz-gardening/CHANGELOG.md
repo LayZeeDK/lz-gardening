@@ -28,9 +28,10 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     seed list is queued or declined (`weeds.ts decline`, which keeps the weed out of the queue for good; without
     `--where` it declines every pattern line of the class not yet queued or declined, and a duplicate name's files
     are declined one at a time, each on words its file, or the record `--in` names, holds at the census's
-    commit). `weeds.ts lines --class <class>` prints the seed lines of a pattern class with the hits the census holds
-    for each, and last `read <class> <token>`; a decline of a pattern class takes that token as `--read`, and is
-    refused without it or with a token from another census. Duplicate names count only module-scope definitions, outside test files and `.d.ts` declarations.
+    commit). `weeds.ts lines --class <class>` prints the seed lines of a census pattern's class with the hits the
+    census holds for each, and last `read <class> <token>`; a decline of such a class takes that token as `--read`,
+    and is refused without it or with a token from another census. Duplicate names count only module-scope
+    definitions, outside test files and `.d.ts` declarations.
     `weeds.ts add` takes `--source census:seed`, and `decline` records its weed with it, only for a weed on a line of
     the seed list; `add` takes `--where` once per weed, so the files of one duplicate name are queued in one call. A
     path given as `./a` or `a//b` is recorded as `a` or `a/b`, so those spellings make one weed; a path must be
