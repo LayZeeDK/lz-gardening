@@ -23,7 +23,11 @@
 //                                           the base into the site and make the bed beds/<class> on bed/<class>
 //                                           from origin's bed of the class when there is one, else from the base,
 //                                           or merge origin's bed and the base into the bed that exists; start is
-//                                           the base commit fetched; prints {bed, branch, start, created, deps}, deps
+//                                           the base commit fetched; prints {bed, branch, start, created, run, tool,
+//                                           back, deps}: run and tool the forms that run a package script and a
+//                                           tool in the bed from the checkout (for this bed's package manager,
+//                                           with <script>, <tool> and <args> to fill in), back the call that
+//                                           returns to the checkout after a tool form that starts with cd, deps
 //                                           being none, linked (to the checkout's node_modules), installed or
 //                                           install, and with install the command that installs the bed's
 //                                           dependencies

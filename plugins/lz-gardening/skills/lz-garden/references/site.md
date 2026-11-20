@@ -223,7 +223,9 @@ bed that exists, it keeps the bed's work, merges `origin`'s bed of the class in 
 fetched base, so weeds that landed on the base since the bed was made are in the bed too; when the bed's folder is gone
 but its branch is not, it adds the folder again from the branch, with the work committed there, before the merge. The
 merge commit, like every git command of the site, runs no git hooks and is not signed. It prints JSON with `bed`,
-`branch`, `start`, `created` and `deps`, and `install` when `deps` is `install`. `start` is the base commit it fetched,
+`branch`, `start`, `created`, `run`, `tool`, `back` and `deps`, and `install` when `deps` is `install`. `run` and
+`tool` run a package script and a tool in the bed from the checkout, for the bed's package manager; `back` returns to
+the checkout after a `tool` form that starts with `cd`. `start` is the base commit it fetched,
 written `<start>` below, so `git diff <start>` shows the bed's own change. `bed` exits 2 on a class that is not a
 kebab-case class id; when a merge is already in progress in a bed that exists (it is left alone; finish or abort it,
 then run `bed` again); when the base, or `origin`'s bed, conflicts with the bed's commits (the bed is left as it was

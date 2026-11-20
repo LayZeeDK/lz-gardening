@@ -48,22 +48,18 @@ the session's working directories (the session's environment lists any added one
 `/add-dir <site>` (or to start the session with `--add-dir <site>`) and wait. Then:
 
 - Stay in the repository's checkout and point each command at the bed (`<bed>`, the full path
-  `<site>/beds/<class>`) with its own directory flag. Git: `git -C "<bed>" ...`. The repository's package scripts:
-  `npm --prefix "<bed>" run <script> [-- <args>]` (`pnpm -C "<bed>" run <script>`, `yarn --cwd "<bed>" <script>`),
-  which run in the bed. A tool with no script runs from the bed's root, where it finds the bed's config and ignore
-  files (Prettier's ignore files, ESLint's config and Nx's workspace are all found from the directory a tool starts
-  in): `cd "<bed>" && npx --no -- <tool> <args>`, with paths relative to the bed, such as
-  `cd "<bed>" && npx --no -- prettier --check .` or
-  `cd "<bed>" && npx --no -- nx run-many -t lint --output-style=static`. `--no` makes it fail when the tool is not
-  installed, where plain `npx` downloads a package of that name from the registry and runs it; `--` keeps npm from
-  reading the tool's options (`--check`) as its own, which npm 12 refuses. Never `npx` `node`: run a test file
-  through the project's test script, or `cd "<bed>" && node --test <file>`.
+  `<site>/beds/<class>`). Git: `git -C "<bed>" ...`. Run a package script with the `run` form and a tool with no
+  script with the `tool` form that `site bed` prints (step 4), filling in `<script>`, `<tool>` and `<args>` (an
+  empty `<args>` drops the placeholder, and a `--` before it too) and nothing else, with paths relative to the bed,
+  such as `prettier --check .` or `nx run-many -t lint --output-style=static`: the tool starts in the bed's root,
+  where it finds the bed's config and ignore files. Never run `node` as the tool: run a test file through the
+  project's test script, or `cd "<bed>" && node --test <file>`.
   Put options before file and path arguments: many tools read what follows the files as more files. In an Nx
   workspace, add `--output-style=static` to every `nx run` and `nx run-many`, so each task's output is in the tool
   result. `site` and `weeds` find the site from the checkout.
 - Learn what an installed tool does from its `--help` or its documentation, and its version from the lockfile or
   `npm --prefix "<bed>" ls <package>`; never read `node_modules`.
-- After every `cd "<bed>" && <command>`, send `cd "<checkout>"` as your very next call: the shell stays in the bed
+- After every command that starts with `cd`, send the `back` form as your very next call: the shell stays in the bed
   after a `cd`, and the other commands expect the checkout. `cd` to the bed's root, never to a folder inside it, and
   put nothing after the command. Never put git after a `cd`: Claude Code refuses such a chain, whatever the allow
   list says.
@@ -164,7 +160,8 @@ row fits, and why), where it lives, and the message it prints.
 
 ## 4. Make the bed
 
-Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and the `<start>` commit, which you keep.
+Run `site bed --class <class> --base <base>`; its JSON line names `<bed>` and the `<start>` commit, which you keep,
+and the `run`, `tool` and `back` forms the bed rules above use.
 It syncs first and makes the bed only while you hold the claim; exit 1 stops the pass, and you report its line as it
 is. On a bed that exists it merges the base in first, keeping the bed's work. When another clone tended the class
 before, the bed starts from, or merges in, the bed that clone shared.
@@ -183,10 +180,9 @@ instructions, and run in the bed:
 - the tests of the projects your change will touch (a root config counts as touching only the projects whose files
   you will edit, unless a test reads that config), one command per project even when the lint and type-check above
   run for all of them, so each summary comes back whole: each package's own test script, or in an Nx workspace
-  `cd "<bed>" && npx --no -- nx run-many -t test -p <project> --output-style=static` (Nx finds its workspace from the
-  directory it runs in, so it needs the `cd`). Run the whole suite only when the repository's done check requires
-  it (CI, `AGENTS.md`, a pre-commit rule), still one command per project, and when that suite outruns the Bash
-  tool's 10 minutes, report it as not run.
+  the `tool` form with `nx run-many -t test -p <project> --output-style=static`. Run the whole suite only when the
+  repository's done check requires it (CI, `AGENTS.md`, a pre-commit rule), still one command per project, and when
+  that suite outruns the Bash tool's 10 minutes, report it as not run.
 - the tests that load each file your change will touch, wherever they live: Grep the repository's test files for
   the file's name, and run every test file that imports it, reads it or copies it, with the command that runs that
   file (a root `node --test` suite that loads a module alone, say). A project's test script often leaves these out.
@@ -211,7 +207,7 @@ will baseline is one), so its first output names every queued weed it will hold,
 included; the baseline comes in step 6. When the class needs two checks, add and
 prove both here, before the first fix. Run it in the bed while the code is as the base has it: it must report at
 least one queued weed by the path `weeds list` shows. Run the check alone, on the weeds' files or the projects that
-hold them (`cd "<bed>" && npx --no -- eslint <path> <path>`, one Nx project's lint); the run over every file it
+hold them (the `tool` form with `eslint <path> <path>`, one Nx project's lint); the run over every file it
 covers comes last in this step. A file you wrote to trip it is no weed. A check that reports none
 does not hold this class; change it until it does. Keep this first output: it lists the weeds the check holds (step
 7). Then run `git -C "<bed>" status --short`: it must show only the check's own files.

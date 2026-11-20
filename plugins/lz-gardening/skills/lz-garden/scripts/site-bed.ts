@@ -6,22 +6,57 @@ import { git, gitReason, gitSucceeds, objectIds, optionalGit, runGit } from './s
 import { fetchedBedRef } from './store-beds.ts';
 import { isRecord } from './log-guard.ts';
 
-const installs: readonly (readonly [lockfile: string, command: (bed: string) => string])[] = [
-  ['pnpm-lock.yaml', (bed) => `pnpm -C ${bed} install --frozen-lockfile`],
-  ['yarn.lock', (bed) => `yarn --cwd ${bed} install --frozen-lockfile`],
-  ['package-lock.json', (bed) => `npm --prefix ${bed} ci`],
+/** A package manager's commands for a bed, each given the bed's path quoted for the shell. */
+interface PackageManager {
+  readonly install: (bed: string) => string;
+  readonly run: (bed: string) => string;
+  readonly tool: (bed: string) => string;
+}
+
+// npm and yarn run a tool in the directory they start in, so the tool form changes into the bed.
+const npxTool = (bed: string): string => `cd ${bed} && npx --no -- <tool> <args>`;
+const npm: PackageManager = {
+  install: (bed) => `npm --prefix ${bed} install`,
+  run: (bed) => `npm --prefix ${bed} run <script> -- <args>`,
+  tool: npxTool,
+};
+const managers: readonly (readonly [lockfile: string, manager: PackageManager])[] = [
+  [
+    'pnpm-lock.yaml',
+    {
+      install: (bed) => `pnpm -C ${bed} install --frozen-lockfile`,
+      run: (bed) => `pnpm -C ${bed} run <script> <args>`,
+      tool: (bed) => `pnpm -C ${bed} exec <tool> <args>`,
+    },
+  ],
+  [
+    'yarn.lock',
+    {
+      install: (bed) => `yarn --cwd ${bed} install --frozen-lockfile`,
+      run: (bed) => `yarn --cwd ${bed} <script> <args>`,
+      tool: npxTool,
+    },
+  ],
+  ['package-lock.json', { ...npm, install: (bed) => `npm --prefix ${bed} ci` }],
 ];
-const lockfiles = installs.map(([lockfile]) => lockfile);
+const lockfiles = managers.map(([lockfile]) => lockfile);
 
 function posixShellQuoted(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`;
 }
 
-function installCommand(bed: string): string {
-  const found = installs.find(([lockfile]) => existsSync(join(bed, lockfile)));
+function managerOf(bed: string): PackageManager {
+  return managers.find(([lockfile]) => existsSync(join(bed, lockfile)))?.[1] ?? npm;
+}
+
+/** How a pass runs a package script and a tool in the bed from the checkout, and the call that returns there. */
+type CommandForms = { readonly run: string; readonly tool: string; readonly back: string };
+
+function commandForms(checkout: string, bed: string): CommandForms {
+  const manager = managerOf(bed);
   const quoted = posixShellQuoted(bed);
 
-  return found === undefined ? `npm --prefix ${quoted} install` : found[1](quoted);
+  return { run: manager.run(quoted), tool: manager.tool(quoted), back: `cd ${posixShellQuoted(checkout)}` };
 }
 
 // The bed's lockfile comes from the base, so only a plain file is read: a link can name any file, a FIFO hangs.
@@ -70,7 +105,8 @@ export type BedSummary = {
   readonly branch: string;
   readonly start: string;
   readonly created: boolean;
-} & ({ readonly deps: Exclude<Deps, 'install'> } | { readonly deps: 'install'; readonly install: string });
+} & CommandForms &
+  ({ readonly deps: Exclude<Deps, 'install'> } | { readonly deps: 'install'; readonly install: string });
 
 export function makeBed(top: string, site: string, bedClass: string, base: string): BedSummary {
   git(site, ['fetch', '-q', 'origin', base]);
@@ -113,9 +149,11 @@ export function makeBed(top: string, site: string, bedClass: string, base: strin
   }
 
   const deps = plantDeps(top, bed);
-  const made = { bed, branch, start, created: !hasBranch };
+  const made = { bed, branch, start, created: !hasBranch, ...commandForms(top, bed) };
 
-  return deps === 'install' ? { ...made, deps, install: installCommand(bed) } : { ...made, deps };
+  return deps === 'install'
+    ? { ...made, deps, install: managerOf(bed).install(posixShellQuoted(bed)) }
+    : { ...made, deps };
 }
 
 function sharesLockfile(top: string, bed: string): boolean {

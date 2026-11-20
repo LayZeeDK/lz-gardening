@@ -472,6 +472,39 @@ test('bed names no install command for a bed linked to the checkout install', (t
   assert.equal(result.summary.has('install'), false);
 });
 
+test('bed of an npm repository prints how to run a package script and a tool there, and the way back', (t) => {
+  const dir = installed(t);
+
+  const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  const bed = bedOf(result.summary);
+
+  assert.deepEqual(
+    ['run', 'tool', 'back'].map((key) => result.summary.get(key)),
+    [
+      `npm --prefix '${bed}' run <script> -- <args>`,
+      `cd '${bed}' && npx --no -- <tool> <args>`,
+      `cd '${realpathSync.native(dir)}'`,
+    ],
+  );
+});
+
+test('bed of a pnpm or yarn repository prints the forms of that package manager', (t) => {
+  const forms = ['pnpm-lock.yaml', 'yarn.lock'].map((lockfile) => {
+    const dir = installed(t, lockfile);
+    const result = site(dir, ['bed', '--class', 'any-type', '--base', 'main']);
+    const bed = bedOf(result.summary);
+
+    return [result.summary.get('run'), result.summary.get('tool')].map((form) =>
+      typeof form === 'string' ? form.replace(`'${bed}'`, '<bed>') : form,
+    );
+  });
+
+  assert.deepEqual(forms, [
+    ['pnpm -C <bed> run <script> <args>', 'pnpm -C <bed> exec <tool> <args>'],
+    ['yarn --cwd <bed> <script> <args>', 'cd <bed> && npx --no -- <tool> <args>'],
+  ]);
+});
+
 test('bed links the checkout node_modules when the bed has the same pnpm lockfile', (t) => {
   const dir = installed(t, 'pnpm-lock.yaml');
 

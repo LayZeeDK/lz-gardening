@@ -65,8 +65,10 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     than seven hours after the reader's clock, holds nothing. A claim names its holder by `lzGardening.name`, else by
     `writer` and the first 8 characters of the site's random writer id, never by `user.name`.
   - Bed: works in a bed, a worktree of the site on branch `bed/<class>`, with the checkout's Node.js dependencies
-    linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). A class tended again before its bed
-    lands is tended in the same bed.
+    linked in or an install command named (npm, pnpm, Yarn 1, Yarn 4 or later). `site.ts bed` also prints `run` and
+    `tool`, the forms that run a package script and a tool in the bed from the checkout, and `back`, the call back to
+    the checkout. A class
+    tended again before its bed lands is tended in the same bed.
   - Close: closes the class as tended, one-off or kept. A tended close names the bed and where each of its checks
     lives (`--check` once per check file, each a file the tended bed commit holds, `./a` and `a` recorded once as
     `a`; the event's `check` field joins them with `, `), and shares the bed on `origin` as
