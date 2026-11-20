@@ -117,6 +117,7 @@ import type {
   AddOutcome,
   ClaimEvent,
   ClaimPlan,
+  CloseOutcome,
   CloseRequest,
   Garden,
   GardenEvent,
@@ -632,15 +633,23 @@ function checksAtBed(site: Site, by: string, checks: readonly string[]): string 
   return objects.find(([, object]) => object.kind !== 'blob')?.[0] ?? texts;
 }
 
-/** The first `--baselined` open weed of the class whose file no check text names, with that file: no baseline holds it. */
+/** A `--baselined` open weed whose file no check text names: no baseline holds it, so the close records nothing. */
+type Unheld = {
+  readonly said: 'in no baseline';
+  readonly id: string;
+  readonly path: string;
+  readonly drafts: readonly [];
+};
+
+/** The first `--baselined` open weed of the class whose file no check text names. */
 function baselinedInNoCheck(
   garden: Garden,
   target: { readonly class: string; readonly baselined?: readonly string[] },
   texts: readonly string[],
-): { readonly id: string; readonly path: string } | undefined {
+): Unheld | undefined {
   return garden.open
     .filter((weed) => weed.class === target.class && (target.baselined ?? []).includes(weed.id))
-    .map((weed) => ({ id: weed.id, path: seedPath(weed.where) }))
+    .map((weed) => ({ said: 'in no baseline', id: weed.id, path: seedPath(weed.where), drafts: [] }) as const)
     .find(({ path }) => !texts.some((text) => text.includes(path)));
 }
 
@@ -671,28 +680,30 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
     return 1;
   }
 
-  const unheld =
-    'class' in request.target
-      ? baselinedInNoCheck(replay(eventsReportingSkipped(io, readLog(site)), now), request.target, checks)
-      : undefined;
-
-  if (unheld !== undefined) {
-    io.err(`weeds ${command}: ${unheld.id} is in no baseline: no --check file at ${request.by} names ${unheld.path}\n`);
-
-    return 1;
-  }
-
   if (!isShared(before)) {
     io.err(`weeds ${command}: planned ${before.state}${reasonOf(before)}\n`);
   }
 
   const outcome = append(
     site,
-    (replica) => planClose(eventsReportingSkipped(io, replica), request, site.writer, now),
+    (replica): CloseOutcome | Unheld => {
+      const events = eventsReportingSkipped(io, replica);
+      const unheld =
+        'class' in request.target ? baselinedInNoCheck(replay(events, now), request.target, checks) : undefined;
+
+      return unheld ?? planClose(events, request, site.writer, now);
+    },
     now,
   );
 
   switch (outcome.said) {
+    case 'in no baseline': {
+      io.err(
+        `weeds ${command}: ${outcome.id} is in no baseline: no --check file at ${request.by} names ${outcome.path}\n`,
+      );
+
+      return 1;
+    }
     case 'claimed by another': {
       io.err(`weeds ${command}: ${claimedByLine(outcome.claim)}\n`);
 
