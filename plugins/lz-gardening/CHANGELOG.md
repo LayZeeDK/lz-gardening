@@ -30,7 +30,8 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     are declined one at a time, each on words its file, or the record `--in` names, holds at the census's
     commit). `weeds.ts lines --class <class>` prints the seed lines of a census pattern's class with the hits the
     census holds for each, and last `read <class> <token>`; a decline of such a class takes that token as `--read`,
-    and is refused without it or with a token from another census. Duplicate names count only module-scope
+    and is refused without it or with a token from another census. `lines` refuses duplicate-function, and a class
+    with no line on the seed list; a duplicate-function decline refuses `--read`. Duplicate names count only module-scope
     definitions, outside test files and `.d.ts` declarations.
     `weeds.ts add` takes `--source census:seed`, and `decline` records its weed with it, only for a weed on a line of
     the seed list; `add` takes `--where` once per weed, so the files of one duplicate name are queued in one call. A

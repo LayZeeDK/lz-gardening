@@ -20,7 +20,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" lines --class <class> --census <sha>
 
 It prints each `=` line of the class, each followed by the hits the census holds for it, and last
 `read <class> <token>`. Run it with no pipe or filter, and read every hit before you decide; when the tool result
-says the output was saved to a file, Read that whole file. Decline with
+says the output was saved to a file, Read that file in parts with an offset and a limit until you reach its last
+line. Decline with
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" decline --class <class> --where <path> --reason "<why it is no weed>" --census <sha> --read <token>

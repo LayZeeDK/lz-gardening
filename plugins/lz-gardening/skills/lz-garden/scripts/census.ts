@@ -16,7 +16,6 @@
 //     Exit 0 on success, 2 on a usage or git error, no garden site, or a site census that is not a census.
 // Patterns: patterns.json beside this script, extended or overridden (same id) by the site's .garden/patterns.json,
 // or, when the site has none, by the patterns the site's census carries. A pattern without paths searches sourceGlobs.
-import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -423,45 +422,40 @@ export function diffCensus(before: Census | null, after: Census): readonly Patte
 const seedFilesPerPattern = 20;
 const seedDuplicateNames = 30;
 
-/** A line of the seed list: the weeds of `class` it asks a seed pass to queue or decline, in `paths`. */
+/**
+ * A line of the seed list: the weeds of `class` it asks a seed pass to queue or decline, in `paths`, with the census's
+ * `hits` there in the census's order (none for a duplicate line).
+ */
 export interface SeedLine {
   readonly line: string;
   readonly class: string;
   readonly paths: readonly string[];
+  readonly hits: readonly string[];
 }
 
 export function seedLines(census: Census): SeedLine[] {
   const files = Object.entries(census.hits).flatMap(([id, hits]) =>
     [...Map.groupBy(hits, (hit) => splitHit(hit)?.path ?? hit)]
-      .map(([path, items]) => ({ path, count: items.length }))
-      .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
+      .sort(([a, aHits], [b, bHits]) => bHits.length - aHits.length || a.localeCompare(b))
       .slice(0, seedFilesPerPattern)
-      .map(({ path, count }) => ({ line: `= [${id}] ${path} ${String(count)}`, class: id, paths: [path] })),
+      .map(([path, items]) => ({
+        line: `= [${id}] ${path} ${String(items.length)}`,
+        class: id,
+        paths: [path],
+        hits: items,
+      })),
   );
   const listed = Object.entries(census.duplicates)
     .sort(([a, aPaths], [b, bPaths]) => bPaths.length - aPaths.length || a.localeCompare(b))
     .slice(0, seedDuplicateNames)
-    .map(([name, paths]) => ({ line: `= duplicate ${name}: ${paths.join(', ')}`, class: 'duplicate-function', paths }));
+    .map(([name, paths]) => ({
+      line: `= duplicate ${name}: ${paths.join(', ')}`,
+      class: 'duplicate-function',
+      paths,
+      hits: [],
+    }));
 
   return [...files, ...listed];
-}
-
-/** The hits `census` holds for a pattern line of the seed list, in the census's order; none for a duplicate line. */
-function seedLineHits(census: Census, seed: SeedLine): readonly string[] {
-  return (ownEntry(census.hits, seed.class) ?? []).filter((hit) => seed.paths.includes(splitHit(hit)?.path ?? hit));
-}
-
-/** The pattern lines of `weedClass` in `census`, each followed by its hits: what `weeds lines` prints. */
-export function seedLinesRead(census: Census, weedClass: string): readonly string[] {
-  return seedLinesOf(census, weedClass).flatMap((seed) => [seed.line, ...seedLineHits(census, seed)]);
-}
-
-/** The token `weeds lines` prints after `seedLinesRead`: it names the census, the class and every line printed. */
-export function seedLinesToken(census: Census, weedClass: string): string {
-  return createHash('sha256')
-    .update([census.sha, weedClass, ...seedLinesRead(census, weedClass)].join('\n'))
-    .digest('hex')
-    .slice(0, 12);
 }
 
 /** The census taken of `sha` and not yet recorded, else the site's census. */

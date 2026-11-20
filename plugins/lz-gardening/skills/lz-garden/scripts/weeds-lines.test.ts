@@ -56,7 +56,7 @@ test('decline refuses a token lines printed for another census, and records noth
     [declined.status, declined.stderr, logFiles(openSite(dir).path).size],
     [
       2,
-      `weeds decline: --read ${stale} is not the token weeds lines --class any-type prints for this census; run it again and read every line it prints\n`,
+      `weeds decline: --read ${stale} is not the token weeds lines --class any-type --census ${'b'.repeat(40)} prints; run it again and read every line it prints\n`,
       0,
     ],
   );
@@ -71,17 +71,17 @@ test("decline refuses another class's token from the same census", (t) => {
     }),
   );
 
-  const declined = cli(dir, [
-    'decline',
-    '--class',
-    'any-type',
-    '--reason',
-    'typed fixtures',
-    '--read',
-    readToken(dir, 'ts-ignore'),
-  ]);
+  const other = readToken(dir, 'ts-ignore');
 
-  assert.equal(declined.status, 2);
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'typed fixtures', '--read', other]);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr],
+    [
+      2,
+      `weeds decline: --read ${other} is not the token weeds lines --class any-type --census ${'a'.repeat(40)} prints; run it again and read every line it prints\n`,
+    ],
+  );
 });
 
 test('decline refuses a token printed before the census of the same commit held other hits', (t) => {
@@ -97,7 +97,13 @@ test('decline refuses a token printed before the census of the same commit held 
 
   const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'typed fixtures', '--read', stale]);
 
-  assert.equal(declined.status, 2);
+  assert.deepEqual(
+    [declined.status, declined.stderr],
+    [
+      2,
+      `weeds decline: --read ${stale} is not the token weeds lines --class any-type --census ${'a'.repeat(40)} prints; run it again and read every line it prints\n`,
+    ],
+  );
 });
 
 test('lines prints a control character in a hit escaped, as the seed list does', (t) => {
@@ -131,6 +137,39 @@ test('lines refuses a --census that is no full commit id, as decline does, and p
   assert.deepEqual(
     [listed.status, listed.stdout, listed.stderr],
     [2, '', 'weeds lines: --census must be the full commit id census.ts printed\n'],
+  );
+});
+
+test('lines refuses a class no seed line names and prints no token', (t) => {
+  const dir = seedListed(t);
+
+  const listed = cli(dir, ['lines', '--class', 'ts-ignore']);
+
+  assert.deepEqual(
+    [listed.status, listed.stdout, listed.stderr],
+    [2, '', 'weeds lines: no line of the seed list is ts-ignore; census:seed is for those lines alone\n'],
+  );
+});
+
+test('lines refuses a garden with no census and prints no token', (t) => {
+  const { dir } = planted(t);
+
+  const listed = cli(dir, ['lines', '--class', 'any-type']);
+
+  assert.deepEqual(
+    [listed.status, listed.stdout, listed.stderr],
+    [2, '', 'weeds lines: no line of the seed list is any-type; census:seed is for those lines alone\n'],
+  );
+});
+
+test('decline refuses a --read with a control character, as it does every flag it prints', (t) => {
+  const dir = seedListed(t);
+
+  const declined = cli(dir, ['decline', '--class', 'any-type', '--reason', 'r', '--read', 'x\u001b[2J']);
+
+  assert.deepEqual(
+    [declined.status, declined.stderr],
+    [2, 'weeds decline: --read must be one line of text without control characters\n'],
   );
 });
 
@@ -182,7 +221,7 @@ test('decline of a pattern class without --read is refused and records nothing',
     ],
     [
       2,
-      'weeds decline: run weeds lines --class any-type, read every line it prints, and pass the token on its last line as --read\n',
+      `weeds decline: run weeds lines --class any-type --census ${'a'.repeat(40)}, read every line it prints, and pass the token on its last line as --read\n`,
       0,
       0,
     ],

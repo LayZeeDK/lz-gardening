@@ -18,9 +18,10 @@
 //   node weeds.ts lines --class <kebab> [--census <sha>]
 //     Prints each pattern line of the class on the seed list of the census taken of <sha> and not yet recorded, else
 //     of the site's census, each followed by the hits that census holds for it (control characters escaped), then
-//     `read <class> <token>`; prints nothing without a census. Exits 2 with `--class must be kebab-case`, the
-//     --census message decline gives, or `duplicate-function takes no token; decline its files one at a time on
-//     quoted words`.
+//     `read <class> <token>`. Exits 2 with `--class must be kebab-case`, the --census message decline gives,
+//     `duplicate-function takes no token; decline its files one at a time on quoted words`, or, without a census or
+//     a line of the class on its seed list, `no line of the seed list is <class>; census:seed is for those lines
+//     alone`.
 //   node weeds.ts decline --class <kebab> [--where <path>] --reason <text> [--in <path>] [--read <token>]
 //                         [--census <sha>]
 //     Leaves a seed line out of the queue: adds its weed with --source census:seed (so on a line of the seed list,
@@ -34,9 +35,10 @@
 //     commit (comment markers and line breaks aside), else exit 2 with `--reason must quote the words that keep this
 //     copy, as <path> holds them at the census's commit`; --in on any other decline exits 2. Any other class's
 //     decline needs --read, the token `lines --class <class>` printed for that census, else exit 2 with `run weeds
-//     lines --class <class>, read every line it prints, and pass the token on its last line as --read`, or with
-//     `--read <token> is not the token weeds lines --class <class> prints for this census; run it again and read every
-//     line it prints`; --read on a duplicate-function decline exits 2.
+//     lines --class <class> --census <census>, read every line it prints, and pass the token on its last line as
+//     --read`, or with `--read <token> is not the token weeds lines --class <class> --census <census> prints; run it
+//     again and read every line it prints`, where <census> is the commit of the census the decline read; --read on a
+//     duplicate-function decline exits 2 with `--read goes with a class other than duplicate-function only`.
 //   node weeds.ts close --id <id> <kind of close>
 //   node weeds.ts close-class --class <kebab> <kind of close>
 //     The kind of close is exactly one of: --tended bed/<class>@<commit> --check <where the check lives>
@@ -127,18 +129,9 @@ import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { catFileBatch, configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import {
-  censusIn,
-  offSeedList,
-  seedLinesIn,
-  seedLinesLeft,
-  seedLinesOf,
-  seedLinesRead,
-  seedLinesToken,
-} from './census.ts';
+import { censusIn, offSeedList, seedLinesIn, seedLinesLeft, seedLinesOf } from './census.ts';
 import type { SeedLine } from './census.ts';
-import type { Census } from './store-census.ts';
-import { declineRefusal, declineUsageProblem } from './weeds-decline.ts';
+import { declineRefusal, declineUsageProblem, noSeedLine, seedLinesRead } from './weeds-decline.ts';
 import type { Decline } from './weeds-decline.ts';
 import type { Replica, Site } from './store-log.ts';
 import { isShared, sync, syncTries } from './store-sync.ts';
@@ -519,13 +512,10 @@ function decline(io: Io, flags: Flags, now: Date): number {
     note: flags.reason,
     layer: null,
   };
-  const request: Decline = { weedClass: input.class, where, record: flags.in, reason: input.note };
+  const request: Decline = { weedClass: input.class, where, record: flags.in, reason: input.note, read: flags.read };
   const problem =
     declineUsageProblem(request) ??
-    (input.class === 'duplicate-function' && flags.read !== undefined
-      ? '--read goes with a class other than duplicate-function only'
-      : null) ??
-    firstUnprintable({ in: flags.in }) ??
+    firstUnprintable({ in: flags.in, read: flags.read }) ??
     censusProblem(flags.census) ??
     (hasText(flags.reason) ? validateAdd(input) : '--reason must not be empty');
 
@@ -537,7 +527,7 @@ function decline(io: Io, flags: Flags, now: Date): number {
 
   const site = openSite(io.cwd);
   const census = censusIn(site.path, flags.census);
-  const refusal = declineRefusal(io.cwd, site, census, request) ?? unreadRefusal(census, input.class, flags.read);
+  const refusal = declineRefusal(io.cwd, site, census, request);
 
   if (refusal !== null) {
     io.err(`weeds decline: ${refusal}\n`);
@@ -563,21 +553,6 @@ function decline(io: Io, flags: Flags, now: Date): number {
   return 0;
 }
 
-/** Why a decline of a census pattern's class needs `weeds lines` first, or null when --read is its token. */
-function unreadRefusal(census: Census | undefined, weedClass: string, read: string | undefined): string | null {
-  if (weedClass === 'duplicate-function' || census === undefined) {
-    return null;
-  }
-
-  if (read === undefined) {
-    return `run weeds lines --class ${weedClass}, read every line it prints, and pass the token on its last line as --read`;
-  }
-
-  return read === seedLinesToken(census, weedClass)
-    ? null
-    : `--read ${read} is not the token weeds lines --class ${weedClass} prints for this census; run it again and read every line it prints`;
-}
-
 function lines(io: Io, flags: Flags): number {
   const weedClass = flags.class ?? '';
 
@@ -595,12 +570,17 @@ function lines(io: Io, flags: Flags): number {
   }
 
   const census = censusIn(openSite(io.cwd).path, flags.census);
+  const read = census === undefined ? undefined : seedLinesRead(census, weedClass);
 
-  if (census !== undefined) {
-    [...seedLinesRead(census, weedClass), `read ${weedClass} ${seedLinesToken(census, weedClass)}`].forEach((line) => {
-      writeLine(io, escapeUnprintable(line));
-    });
+  if (read === undefined || read.lines.length === 0) {
+    io.err(`weeds lines: ${noSeedLine(weedClass)}\n`);
+
+    return 2;
   }
+
+  [...read.lines, `read ${weedClass} ${read.token}`].forEach((line) => {
+    writeLine(io, escapeUnprintable(line));
+  });
 
   return 0;
 }

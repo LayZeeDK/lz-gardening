@@ -30,9 +30,19 @@ test('a seed line of a pattern names its class and its one file, and a duplicate
   );
 
   assert.deepEqual(lines, [
-    { line: '= [any-type] src/a.ts 2', class: 'any-type', paths: ['src/a.ts'] },
-    { line: '= [any-type] src/b.ts 1', class: 'any-type', paths: ['src/b.ts'] },
-    { line: '= duplicate parse: src/a.ts, src/c.ts', class: 'duplicate-function', paths: ['src/a.ts', 'src/c.ts'] },
+    {
+      line: '= [any-type] src/a.ts 2',
+      class: 'any-type',
+      paths: ['src/a.ts'],
+      hits: ['src/a.ts:1: x', 'src/a.ts:4: y'],
+    },
+    { line: '= [any-type] src/b.ts 1', class: 'any-type', paths: ['src/b.ts'], hits: ['src/b.ts:2: z'] },
+    {
+      line: '= duplicate parse: src/a.ts, src/c.ts',
+      class: 'duplicate-function',
+      paths: ['src/a.ts', 'src/c.ts'],
+      hits: [],
+    },
   ]);
 });
 
@@ -83,6 +93,7 @@ test('a seed line asks about a weed of its class in one of its files, with or wi
     line: '= duplicate parse: src/a.ts, src/c.ts',
     class: 'duplicate-function',
     paths: ['src/a.ts', 'src/c.ts'],
+    hits: [],
   };
 
   assert.deepEqual(
@@ -107,8 +118,8 @@ test("the seed lines of a class are its lines of the census's seed list, and non
 
 test('a weed takes census:seed only on a line of the seed list, else the refusal names its class and file', () => {
   const seeds = [
-    { line: '- [any-type] src/a.ts 2', class: 'any-type', paths: ['src/a.ts'] },
-    { line: '- [ts-ignore] src/c.ts 1', class: 'ts-ignore', paths: ['src/c.ts'] },
+    { line: '- [any-type] src/a.ts 2', class: 'any-type', paths: ['src/a.ts'], hits: [] },
+    { line: '- [ts-ignore] src/c.ts 1', class: 'ts-ignore', paths: ['src/c.ts'], hits: [] },
   ];
 
   assert.deepEqual(

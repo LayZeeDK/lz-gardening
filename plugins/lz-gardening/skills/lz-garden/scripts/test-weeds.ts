@@ -56,7 +56,11 @@ export function seedListed(t: TestContext): string {
 
 /** The token `weeds lines --class <weedClass>` prints, which a decline of a pattern class takes as --read. */
 export function readToken(dir: string, weedClass: string, census: readonly string[] = []): string {
-  return /read \S+ ([0-9a-f]{12})\n$/.exec(cli(dir, ['lines', '--class', weedClass, ...census]).stdout)?.[1] ?? '';
+  const token = /read \S+ (?<token>[0-9a-f]{12})\n$/.exec(cli(dir, ['lines', '--class', weedClass, ...census]).stdout)
+    ?.groups?.['token'];
+  assert.ok(token !== undefined, `weeds lines --class ${weedClass} printed no token`);
+
+  return token;
 }
 
 // A bed made by hand: a worktree of the site on bed/<class> at the checkout's main.
