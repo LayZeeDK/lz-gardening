@@ -48,8 +48,9 @@
 //     tended commit holds in the site (else exit 2 with `--check <path> is no file at <bed>`) and must not hold `, `,
 //     which joins them in the close's check field (else exit 2).
 //     --baselined names the weeds whose copies stay in the check's baseline: the close leaves them open. It exits 1
-//     with `<id> is no open weed of <class>`, or `every open weed of <class> is baselined; the check holds none of
-//     them`, and closes nothing. Both sync with origin before they plan and after they append, then print
+//     with `<id> is in no baseline: no --check file at <bed> names <path>` when no --check file at the tended commit
+//     holds the text of such a weed's path, `<id> is no open weed of <class>`, or `every open weed of <class> is
+//     baselined; the check holds none of them`, and closes nothing. Both sync with origin before they plan and after they append, then print
 //     `<closed|kept> <n>; <share state>`; the last sync's reason and notes (a bed origin did not take, a census it
 //     left out or kept local, a claim it gave back), as site.ts words them, go to stderr. close-class acts only when
 //     that first sync leaves the share state synced or local and this writer holds a live claim of the class, as bed
@@ -117,6 +118,7 @@ import type {
   ClaimEvent,
   ClaimPlan,
   CloseRequest,
+  Garden,
   GardenEvent,
   Group,
   OpenWeed,
@@ -129,7 +131,7 @@ import { offBaseIn } from './weeds-landed.ts';
 import type { BaseLabel } from './weeds-landed.ts';
 import { catFileBatch, configValue } from './store-git.ts';
 import { append, openSite, readLog } from './store-log.ts';
-import { censusIn, offSeedList, seedLinesIn, seedLinesLeft, seedLinesOf } from './census.ts';
+import { censusIn, offSeedList, seedLinesIn, seedLinesLeft, seedLinesOf, seedPath } from './census.ts';
 import type { SeedLine } from './census.ts';
 import { declineRefusal, declineUsageProblem, noSeedLine, seedLinesRead } from './weeds-decline.ts';
 import type { Decline } from './weeds-decline.ts';
@@ -621,13 +623,25 @@ function reportSyncNotes(io: Io, command: string, result: SyncResult): void {
   });
 }
 
-/** The first of the close's check files that the tended bed commit does not hold. */
-function checkMissingFromBed(site: Site, by: string, checks: readonly string[]): string | undefined {
+/** The close's check files as the tended bed commit holds them: the first it does not hold, else their texts. */
+function checksAtBed(site: Site, by: string, checks: readonly string[]): string | readonly string[] {
   const commit = bedCommit(by);
+  const objects = catFileBatch(site.path, checks, (path) => `${commit}:${path}`);
+  const texts = objects.flatMap(([, object]) => (object.kind === 'blob' ? [object.text] : []));
 
-  return catFileBatch(site.path, checks, (path) => `${commit}:${path}`).find(
-    ([, object]) => object.kind !== 'blob',
-  )?.[0];
+  return objects.find(([, object]) => object.kind !== 'blob')?.[0] ?? texts;
+}
+
+/** The first `--baselined` open weed of the class whose file no check text names, with that file: no baseline holds it. */
+function baselinedInNoCheck(
+  garden: Garden,
+  target: { readonly class: string; readonly baselined?: readonly string[] },
+  texts: readonly string[],
+): { readonly id: string; readonly path: string } | undefined {
+  return garden.open
+    .filter((weed) => weed.class === target.class && (target.baselined ?? []).includes(weed.id))
+    .map((weed) => ({ id: weed.id, path: seedPath(weed.where) }))
+    .find(({ path }) => !texts.some((text) => text.includes(path)));
 }
 
 function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date, seams: SyncSeams): number {
@@ -640,10 +654,10 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
   }
 
   const site = openSite(io.cwd);
-  const missingCheck = request.kind === 'tended' ? checkMissingFromBed(site, request.by, request.check) : undefined;
+  const checks = request.kind === 'tended' ? checksAtBed(site, request.by, request.check) : [];
 
-  if (missingCheck !== undefined) {
-    io.err(`weeds ${command}: --check ${missingCheck} is no file at ${request.by}\n`);
+  if (typeof checks === 'string') {
+    io.err(`weeds ${command}: --check ${checks} is no file at ${request.by}\n`);
 
     return 2;
   }
@@ -653,6 +667,17 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
 
   if (refusal !== undefined) {
     io.err(`weeds ${command}: ${refusal}\n`);
+
+    return 1;
+  }
+
+  const unheld =
+    'class' in request.target
+      ? baselinedInNoCheck(replay(eventsReportingSkipped(io, readLog(site)), now), request.target, checks)
+      : undefined;
+
+  if (unheld !== undefined) {
+    io.err(`weeds ${command}: ${unheld.id} is in no baseline: no --check file at ${request.by} names ${unheld.path}\n`);
 
     return 1;
   }

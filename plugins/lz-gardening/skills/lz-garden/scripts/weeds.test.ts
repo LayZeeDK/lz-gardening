@@ -961,7 +961,9 @@ test('a tended close-class leaves the weeds named in --baselined open and closes
     return weedId('any-type', where, 'census:any-type');
   });
   const [, b = '', c = ''] = weeds;
-  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
+  const by = tendedBy(dir, 'any-type', {
+    'eslint.config.mjs': "export default [{ files: ['src/b.ts', 'src/c.ts'], rules: {} }];\n",
+  });
 
   const closed = closeUnderClaim(dir, [
     'close-class',
@@ -980,6 +982,31 @@ test('a tended close-class leaves the weeds named in --baselined open and closes
     .map((row) => row.split(' ')[0]);
 
   assert.deepEqual([closed.status, closed.stdout, open], [0, 'closed 1; local\n', [b, c]]);
+});
+
+test('a tended close-class refuses a --baselined weed whose file no --check file names, and closes nothing', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
+  const b = weedId('any-type', 'src/b.ts:1', 'census:any-type');
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': "export default [{ ignores: ['src/c.ts'] }];\n" });
+
+  const result = closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    by,
+    '--check',
+    'eslint.config.mjs',
+    '--baselined',
+    b,
+  ]);
+
+  assert.deepEqual(
+    [result.status, result.stderr, cli(dir, ['list']).stdout.split('\n').length - 1],
+    [1, `weeds close-class: ${b} is in no baseline: no --check file at ${by} names src/b.ts\n`, 2],
+  );
 });
 
 test('a tended close-class refuses a --baselined id that is no open weed of the class, and closes nothing', (t) => {
@@ -1018,7 +1045,7 @@ test('a tended close-class refuses a --baselined id that is no open weed of the 
 test('a tended close-class that baselines every open weed is refused: its check holds none of them', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
-  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': 'export default [];\n' });
+  const by = tendedBy(dir, 'any-type', { 'eslint.config.mjs': "export default [{ ignores: ['src/a.ts'] }];\n" });
 
   const result = closeUnderClaim(dir, [
     'close-class',

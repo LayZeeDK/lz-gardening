@@ -299,11 +299,12 @@ weed by weed and give each exactly one of these fates, and say which:
 - **Baselined**: its copy stays in the check's baseline (step 6). Name it in `--baselined` below: it stays open, for
   the pass that shrinks the baseline. Every weed of a group that keeps a copy in the baseline is baselined, the file
   that keeps the shared definition included: the group closes when its last copy goes. A weed in a file the check
-  cannot reach (one its tool ignores) is first widened to or fixed (below). When neither can be done (a fixture a
-  test pins, step 4), name it in `--baselined` too, the only way the close leaves a weed open, and say in the report
-  that no check reaches it. A check that lists names holds no weed whose name it leaves out, so that weed is in no
-  baseline: add its name to the check's list, with its copies in the baseline; otherwise the weed has no fate
-  (below).
+  cannot reach (one its tool ignores) is first widened to or fixed (below); a fixture a test pins (step 4) is
+  baselined, its path named in the check's ignore list, and the report says no check reaches it. A check that lists
+  names holds no weed whose name it leaves out: add the name to the list, with its copies in the baseline, or the
+  weed has no fate (below). The close refuses a baselined weed whose file no `--check` file names. When the check
+  reads its baseline from a file of its own, pass that file as a `--check` too; otherwise the weed is in no baseline
+  and needs another fate.
 - **Kept**: the repository says it is deliberate, in words cited as step 2 says, even when the check names it as an
   allowed owner. `weeds close --id <id> --keep "<reason>"`, before the class close.
 - **One-off**: it has nothing to fix and shares no cause with the rest. `weeds close --id <id> --one-off "<reason>"`.
@@ -318,8 +319,8 @@ closed one by one, and each weed baselined, in the report. Then close the class:
 `--check` per check file from step 3 (a lint rule and a test that holds what the rule cannot are two),
 repository-relative (`eslint.config.mjs`, not a path on this machine), and
 `--baselined <id>,<id>` naming the baselined weeds when there are any. It refuses an id that is no open weed of the
-class, a close that would baseline every open weed (the check then holds none of them), and a `--check` file the
-named commit does not hold: fix the list and run it again. `<short sha>` is
+class, a baselined weed whose file no `--check` file names, a close that would baseline every open weed (the check
+then holds none of them), and a `--check` file the named commit does not hold: fix the list and run it again. `<short sha>` is
 the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your last commit: the close shares
 the bed only when it names the bed's tip; with any other commit the bed stays in the site. It exits 1 and closes
 nothing when its first sync is not `synced` or `local` or the claim is no longer this site's: stop and report its
