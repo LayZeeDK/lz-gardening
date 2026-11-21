@@ -1,0 +1,61 @@
+[
+  { "query": "tend duplicate-function", "should_trigger": true },
+  { "query": "ready to tend: lint-suppression (14 weeds). go", "should_trigger": true },
+  {
+    "query": "These eslint-disable comments for no-explicit-any keep coming back in every PR. Make this mistake impossible: add a check that rejects it and clean up all the existing ones.",
+    "should_trigger": true
+  },
+  {
+    "query": "pull the hollow-test weeds from the queue. find why they keep appearing, add a guard, and fix them on a branch I can review",
+    "should_trigger": true
+  },
+  {
+    "query": "the garden queued 9 copies of the same date-format helper. sort out the root cause and fix every instance, but on a separate branch, I'll land it myself",
+    "should_trigger": true
+  },
+  {
+    "query": "make it impossible for anyone to add console.log under src/ again, and baseline the ones in legacy/ we can't touch yet",
+    "should_trigger": true
+  },
+  { "query": "work through the ts-expect-error weeds the last tick found", "should_trigger": true },
+  {
+    "query": "we keep hand-rolling retry wrappers instead of using p-retry. add a rule against it, prove it catches the real cases from the queue, then migrate them",
+    "should_trigger": true
+  },
+  { "query": "tend console-call", "should_trigger": true },
+  {
+    "query": "take the lessons-written-twice weeds and fold them into one place, with a check so the copies can't drift apart again",
+    "should_trigger": true
+  },
+  { "query": "check the garden", "should_trigger": false },
+  {
+    "query": "go through the history and list the duplicated functions, don't change anything",
+    "should_trigger": false
+  },
+  {
+    "query": "add no-console to eslint.config.mjs as a warning, nothing else",
+    "should_trigger": false
+  },
+  {
+    "query": "remove the eslint-disable on line 42 of auth.ts and type that response properly",
+    "should_trigger": false
+  },
+  {
+    "query": "merge the bed/duplicate-function branch into main and push it",
+    "should_trigger": false
+  },
+  { "query": "fix the failing test in store-log.test.ts, it broke after the rebase", "should_trigger": false },
+  {
+    "query": "upgrade typescript-eslint to the next major and fix whatever breaks",
+    "should_trigger": false
+  },
+  { "query": "this function is 200 lines long, can you tidy it up?", "should_trigger": false },
+  {
+    "query": "create a git worktree for a new branch feature/billing next to this checkout",
+    "should_trigger": false
+  },
+  {
+    "query": "what does weeds.ts close-class print when a --baselined weed is refused?",
+    "should_trigger": false
+  }
+]

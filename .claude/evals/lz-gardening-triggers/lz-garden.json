@@ -1,0 +1,76 @@
+[
+  {
+    "query": "can you do a pass over the last couple hundred commits in this repo and flag the stuff agents keep copy-pasting? don't fix anything yet, I just want a list with evidence",
+    "should_trigger": true
+  },
+  {
+    "query": "set up a recurring check on this monorepo that notices when eslint-disable comments start piling up again",
+    "should_trigger": true
+  },
+  {
+    "query": "Three different people (and Copilot) wrote their own isRecord helper in libs/shared. Before we decide anything, catalogue every duplicated function like that across the repo with the commits that added them.",
+    "should_trigger": true
+  },
+  { "query": "check the garden", "should_trigger": true },
+  {
+    "query": "I keep seeing // @ts-expect-error creep into apps/web. watch this repo for that kind of thing and keep a queue I can work through later",
+    "should_trigger": true
+  },
+  {
+    "query": "audit the git history for tests that can't fail (expect(true).toBe(true) style) and for lessons we wrote down twice in AGENTS.md and CONTRIBUTING.md. read-only please",
+    "should_trigger": true
+  },
+  {
+    "query": "every morning, look at what landed on main overnight and note any new shortcuts the coding agents took",
+    "should_trigger": true
+  },
+  {
+    "query": "first time pointing this at our repo, seed the weed queue from history",
+    "should_trigger": true
+  },
+  {
+    "query": "what new suppressions or copied helpers came in with the merges since monday? just note them, no edits",
+    "should_trigger": true
+  },
+  {
+    "query": "run a garden tick on this checkout, the queue should be mostly empty since last week's tend",
+    "should_trigger": true
+  },
+  {
+    "query": "fix all the eslint-disable no-explicit-any comments in src/api and add a lint rule so they can't come back",
+    "should_trigger": false
+  },
+  {
+    "query": "refactor the three duplicate isRecord helpers into one in libs/shared/util and update the imports",
+    "should_trigger": false
+  },
+  {
+    "query": "run eslint on the whole repo and tell me how many warnings there are per project",
+    "should_trigger": false
+  },
+  {
+    "query": "write me a git log one-liner that shows who touched package.json in the last month",
+    "should_trigger": false
+  },
+  {
+    "query": "review the diff on this branch for code smells before I open the PR",
+    "should_trigger": false
+  },
+  {
+    "query": "set up husky and lint-staged so eslint runs on staged files at commit time",
+    "should_trigger": false
+  },
+  {
+    "query": "find unused exports and dead files in this TypeScript project with knip and delete them",
+    "should_trigger": false
+  },
+  {
+    "query": "explain what @typescript-eslint/no-explicit-any actually protects against, with an example",
+    "should_trigger": false
+  },
+  { "query": "tend duplicate-function", "should_trigger": false },
+  {
+    "query": "the weeds in my vegetable garden keep coming back after I pull them, what's a good mulch?",
+    "should_trigger": false
+  }
+]
