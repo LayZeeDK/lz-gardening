@@ -18,7 +18,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
-import { slimOutput } from './slim-output.ts';
+import { limitStopped, slimOutput } from './slim-output.ts';
 import { skillParts, splitEvalSet, withDescription, writeCases, type EvalQuery } from './trigger-cases.ts';
 import { optimize, type Recorded } from './trigger-loop.ts';
 import { queryResults } from './trigger-results.ts';
@@ -83,6 +83,23 @@ function copyPlugin(plugin: string, destination: string, skill: string, descript
 
   const skillFile = join(destination, 'skills', skill, 'SKILL.md');
   writeFileSync(skillFile, withDescription(readFileSync(skillFile, 'utf8'), description));
+}
+
+// The description an improve call wrote. A usage limit ends the call with status 0 and its limit text as the result,
+// which would otherwise be evaluated as the next description.
+export function improvedText(status: number, out: string): string {
+  const output = existsSync(out) ? slimOutput(readJson(out)) : null;
+  const text = output?.result['result'];
+
+  if (output !== null && limitStopped(output)) {
+    throw new Error(`the improve call hit a usage limit; see ${out}`);
+  }
+
+  if (status !== 0 || typeof text !== 'string') {
+    throw new Error(`the improve call exited ${String(status)} with no result; see ${out}`);
+  }
+
+  return text;
 }
 
 // A resumed run reuses recorded results, which only hold for the options and split that produced them.
@@ -265,13 +282,7 @@ if (isMainModule(import.meta.url)) {
           ],
           'the slim runner',
         );
-        const text = existsSync(out) ? slimOutput(readJson(out)).result['result'] : undefined;
-
-        if (status !== 0 || typeof text !== 'string') {
-          throw new Error(`the improve call exited ${String(status)} with no result; see ${out}`);
-        }
-
-        return Promise.resolve(text);
+        return Promise.resolve(improvedText(status, out));
       },
     },
     recorded,

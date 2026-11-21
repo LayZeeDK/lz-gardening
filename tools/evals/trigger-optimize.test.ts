@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { workspaceRefusal } from './trigger-optimize.ts';
+import { improvedText, workspaceRefusal } from './trigger-optimize.ts';
 
 const script = fileURLToPath(new URL('trigger-optimize.ts', import.meta.url));
 
@@ -79,6 +79,28 @@ test('workspaceRefusal resumes a workspace with the same options and names each 
       `nothing to resume in ${unstarted}: it has no options.json`,
     ],
   );
+});
+
+test('improvedText refuses an improve call the usage limit ended, which reports its limit text as the result', () => {
+  const out = join(mkdtempSync(join(tmpdir(), 'trigger-optimize-')), 'result.json');
+  const result = JSON.stringify({
+    type: 'result',
+    is_error: false,
+    result: "You've hit your 5-hour limit · resets 3pm",
+  });
+  writeFileSync(out, JSON.stringify({ status: 0, stdout: result }));
+
+  assert.throws(() => improvedText(0, out), /the improve call hit a usage limit; see .*result\.json/);
+});
+
+test('improvedText returns the description a finished improve call wrote and refuses a call with no result', () => {
+  const folder = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  const out = join(folder, 'result.json');
+  writeFileSync(out, JSON.stringify({ stdout: JSON.stringify({ type: 'result', result: 'Garden the repo.' }) }));
+
+  assert.equal(improvedText(0, out), 'Garden the repo.');
+  assert.throws(() => improvedText(1, out), /the improve call exited 1 with no result/);
+  assert.throws(() => improvedText(0, join(folder, 'missing.json')), /exited 0 with no result; see .*missing\.json/);
 });
 
 test('trigger-optimize refuses a holdout that leaves no training set', () => {
