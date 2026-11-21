@@ -16,7 +16,8 @@ landed, the records, the history).
 _Avoid_: category, kind (a close kind is something else), type
 
 **Planting commit**:
-The commit that introduced a weed; a weed found in the code names it as its source.
+The commit that introduced a weed; a weed found in the code names it as its source, unless it was found through a
+clean-up that did not hold.
 
 **Source**:
 What a weed was found through: a commit (the one that planted it, or a clean-up that did not hold), a line of the
@@ -34,18 +35,19 @@ A file's own definition of a duplicate function, kept on purpose: words in that 
 file cannot use the shared one (it runs alone, it cannot import), or a record says so.
 
 **Close**:
-Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
-check was written), or kept.
+Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names its
+checks), one-off (no check was written), or kept.
 
 **Open**:
 Said of a queued weed that no close has ended yet.
 
 **Seen**:
-Said of a weed a tick finds again while it is still open; it is not queued twice.
+Said of a weed found again while it is still open; it is not queued twice.
 
 **Regrown**:
 Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
-A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it.
+A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it. Its check is
+marked `not on the base` while the bed has not landed, and `base unknown` when the site cannot tell.
 
 **Kept**:
 Said of a weed taken off the queue for good with no check: a human or a tend pass judged it deliberate, or a seed
@@ -61,7 +63,7 @@ lesson). A class whose open weeds all sit in one place waits for a second.
 
 **One-off**:
 Weeds judged an isolated occurrence rather than a pattern agents copy: they share no cause, or sit in one place. A
-tick leaves a one-off out and a seed pass declines it; a queued one, or a weed that work outside a tend pass
+tick does not queue a one-off and a seed pass declines it; a queued one, or a weed that work outside a tend pass
 resolved, gets a one-off close, with no check written.
 
 ## Watching

@@ -1,12 +1,12 @@
 # The garden is shared through the repository's remote as a grow-only set of events under refs/garden/*
 
-Any clone of a repository (developers' machines, manual runs, `/loop`, CI) may garden at the same time, so the queue
-is a set of immutable event files, one per event, in a commit at `refs/garden/log`; the census and the beds sit beside
-it at `refs/garden/census` and `refs/garden/beds/<class>`. Each site keeps a full copy, merges by the union of event
-files, and pushes the log only as a fast-forward, so every copy that has synced replays the same statuses. Each add
-records what its writer saw (the closes of its weed and the latest tend pass of its class), because a replay in any
-shared order, file order or a logical clock, gives the wrong status for an add made beside a close, a tend pass or a
-keep.
+Any clone of a repository (developers' machines, manual runs, `/loop`, CI) may garden at the same time, so the garden
+log is a set of immutable event files, one per event, in a commit at `refs/garden/log`; the census and the beds sit
+beside it at `refs/garden/census` and `refs/garden/beds/<class>`. Each site keeps a full copy, merges by the union of
+event files, and pushes the log only as a fast-forward, so every copy that has synced replays the same statuses. Each
+add records what its writer saw (the closes of its weed and the latest tend pass of its class), because a replay in
+any shared order, file order or a logical clock, gives the wrong status for an add made beside a close, a tend pass or
+a keep.
 
 ## Considered Options
 
