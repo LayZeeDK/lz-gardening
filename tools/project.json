@@ -8,6 +8,11 @@
       "command": "node --test \"*.test.ts\" \"nx/*.test.ts\" \"evals/*.test.ts\"",
       "options": { "cwd": "{projectRoot}" },
       "cache": false
+    },
+    "mutate": {
+      "command": "node --conditions=@layzee/source node_modules/@stryker-mutator/core/bin/stryker.js run tools/stryker.config.mjs",
+      "cache": false,
+      "parallelism": false
     }
   }
 }

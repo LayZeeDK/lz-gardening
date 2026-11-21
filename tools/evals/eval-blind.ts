@@ -144,6 +144,7 @@ export function unblind(iterationDir: string, evalCase: string, judge: number): 
   });
 }
 
+// Stryker disable all: the command line has no unit tests; it only reads the arguments and calls the functions above
 if (isMainModule(import.meta.url)) {
   const [command, iterationDir, evalCase, judge, ...runDirs] = process.argv.slice(2);
 

@@ -64,6 +64,8 @@ changes with StrykerJS, one script at a time: `npm exec -- nx mutate-<name> lz-g
 script's name before its first hyphen, so `mutate-store` takes every `store-*.ts` (the `mutate` target takes every
 script). Stryker runs the command runner over `node --test`, or, on a machine with an
 `@layzee/stryker-node-test-runner` checkout, that runner and the checkout's mutators (`stryker.config.mjs` says how).
+The eval tooling has its own target, `MUTATE=<module> npm exec -- nx mutate tools`, with the same runner choice
+(`tools/stryker.config.mjs`); it reports a score and fails no build.
 
 Keep `npm run check` passing: type-check, lint, every test with the hygiene checks, the plugin's lockfile check and
 Prettier.

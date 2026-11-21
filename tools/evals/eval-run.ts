@@ -208,6 +208,8 @@ export function prepareRuns(
   });
 }
 
+// Stryker disable all: the heavy lock, the spawned sessions and the command line below start real processes, which
+// no unit test does
 function required(name: string): string {
   const value = process.env[name];
 

@@ -117,6 +117,8 @@ if (isMainModule(import.meta.url)) {
     throw new Error(`workspace ${workspace} is not empty; use a new one`);
   }
 
+  // Stryker disable all: from here the command line runs the slim runner and `claude plugin eval`, which no unit test
+  // starts
   const runSlim = required('LZ_EVAL_RUN_SLIM');
   const claude = process.env['LZ_EVAL_CLAUDE'] ?? 'claude';
   const queries: unknown = readJson(evalSet);

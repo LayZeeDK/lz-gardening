@@ -276,6 +276,7 @@ export function gradeRunDir(runDir: string, projects: string): void {
 }
 
 // node tools/evals/eval-grade.ts <run dir>...: grades each run folder against the transcripts in ~/.claude/projects.
+// Stryker disable all: the command line has no unit tests; it reads Claude Code's own transcript folder
 if (isMainModule(import.meta.url)) {
   for (const runDir of process.argv.slice(2)) {
     gradeRunDir(runDir, join(homedir(), '.claude', 'projects'));

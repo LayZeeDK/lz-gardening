@@ -228,6 +228,7 @@ export function stats(values: readonly number[]): Stats {
 }
 
 // node tools/evals/eval-benchmark.ts <iteration dir> <skill name>
+// Stryker disable all: the command line has no unit tests; it only reads the arguments and writes the benchmark
 if (isMainModule(import.meta.url)) {
   const [iteration = '', skillName = ''] = process.argv.slice(2);
 
