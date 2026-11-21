@@ -39,10 +39,11 @@ query passes or after the last iteration. It prints the exit reason and the best
 `<workspace>/results.json`.
 
 A usage limit or another stop leaves `results.json` unwritten. Once the limit resets, run the same command with
-`--resume` added: it refuses options that differ from the workspace's `options.json`, keeps every finished iteration's
-results and description, and runs the first unfinished one again, its old files moved to
-`iteration-<n>-stopped-<ms>`. An iteration in which any run took no turn (how a usage limit ends a session) counts as
-unfinished, so a stop is never scored as "not triggered".
+`--resume` added: it refuses options, an eval set or a `SKILL.md` that differ from the workspace's `options.json`,
+keeps every finished iteration's results and description, and runs the first unfinished one again, its old files
+moved to `iteration-<n>-stopped-<ms>`. An iteration is finished once its evaluation exited 0 with a result in which
+every run took a turn (a usage limit ends a session with no turn), so a stop is never scored as "not triggered"; an
+improve call the limit ended stops the run instead of being evaluated.
 
 Done when each model's workspace holds `results.json`.
 

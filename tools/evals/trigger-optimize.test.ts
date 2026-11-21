@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { improvedText, workspaceRefusal } from './trigger-optimize.ts';
+import { improvedText, newWorkspaceRefusal, recordedIterations, resumeRefusal } from './trigger-optimize.ts';
 
 const script = fileURLToPath(new URL('trigger-optimize.ts', import.meta.url));
 
@@ -32,46 +32,48 @@ test('trigger-optimize refuses a workspace that already holds files, whose old c
   assert.match(optimize([], workspace), /workspace .* is not empty; use a new one/);
 });
 
-test('trigger-optimize --resume refuses a workspace started with other options, naming each one', () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
-  const started = { plugin: 'p', skill: 's', evalSet: 'e.json', model: 'sonnet', runs: 3, holdout: 0.4 };
-  writeFileSync(join(workspace, 'options.json'), JSON.stringify({ ...started, threshold: 0.5, seed: 7 }));
+test('trigger-optimize --resume refuses a workspace whose eval set has changed since the run started', () => {
+  const root = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  const workspace = join(root, 'workspace');
+  const plugin = join(root, 'p');
+  const evalSet = join(root, 'e.json');
+  mkdirSync(join(plugin, 'skills', 's'), { recursive: true });
+  mkdirSync(workspace);
+  writeFileSync(join(plugin, 'skills', 's', 'SKILL.md'), '---\nname: s\ndescription: d\n---\n');
+  writeFileSync(evalSet, '[]');
+  const options = { plugin, skill: 's', evalSet, model: 'sonnet', runs: 3, holdout: 0.4, threshold: 0.5, seed: 42 };
+  writeFileSync(join(workspace, 'options.json'), JSON.stringify({ ...options, evalSetSha256: 'old' }));
+  const env = { ...process.env };
+  Reflect.deleteProperty(env, 'LZ_EVAL_RUN_SLIM');
+  const flags = ['--plugin', plugin, '--skill', 's', '--eval-set', evalSet, '--workspace', workspace, '--resume'];
 
   assert.match(
-    optimize(['--resume', '--runs', '5'], workspace),
-    /--resume needs the options the workspace started with: runs 3, not 5; seed 7, not 42/,
+    spawnSync(process.execPath, [script, ...flags], { encoding: 'utf8', env }).stderr,
+    /--resume needs the options the workspace started with: evalSetSha256 old, not [0-9a-f]{64}; skillSha256 undefined/,
   );
 });
 
-test('trigger-optimize --resume refuses a workspace no run started', () => {
-  assert.match(optimize(['--resume']), /nothing to resume in .*: it has no options.json/);
-});
-
-test('workspaceRefusal lets a new run start in a missing or empty workspace and refuses one that holds files', () => {
+test('newWorkspaceRefusal lets a new run start in a missing or empty workspace and refuses one that holds files', () => {
   const empty = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
   const used = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
   writeFileSync(join(used, 'results.json'), '{}');
 
   assert.deepEqual(
-    [
-      workspaceRefusal(join(empty, 'new'), {}, false),
-      workspaceRefusal(empty, {}, false),
-      workspaceRefusal(used, {}, false),
-    ],
+    [newWorkspaceRefusal(join(empty, 'new')), newWorkspaceRefusal(empty), newWorkspaceRefusal(used)],
     [null, null, `workspace ${used} is not empty; use a new one, or --resume to go on with it`],
   );
 });
 
-test('workspaceRefusal resumes a workspace with the same options and names each option that differs', () => {
+test('resumeRefusal resumes a workspace with the same options and names each option that differs', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
   const unstarted = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
   writeFileSync(join(workspace, 'options.json'), JSON.stringify({ runs: 3, seed: 7, model: 'sonnet' }));
 
   assert.deepEqual(
     [
-      workspaceRefusal(workspace, { runs: 3, seed: 7, model: 'sonnet' }, true),
-      workspaceRefusal(workspace, { runs: 5, seed: 7, model: 'opus' }, true),
-      workspaceRefusal(unstarted, {}, true),
+      resumeRefusal(workspace, { runs: 3, seed: 7, model: 'sonnet' }),
+      resumeRefusal(workspace, { runs: 5, seed: 7, model: 'opus' }),
+      resumeRefusal(unstarted, {}),
     ],
     [
       null,
@@ -101,6 +103,69 @@ test('improvedText returns the description a finished improve call wrote and ref
   assert.equal(improvedText(0, out), 'Garden the repo.');
   assert.throws(() => improvedText(1, out), /the improve call exited 1 with no result/);
   assert.throws(() => improvedText(0, join(folder, 'missing.json')), /exited 0 with no result; see .*missing\.json/);
+});
+
+// A workspace whose iterations evaluated these descriptions; a finished one holds its results and the marker.
+function stoppedWorkspace(iterations: readonly { description: string; finished: boolean }[]): string {
+  const workspace = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  iterations.forEach(({ description, finished }, index) => {
+    const folder = join(workspace, `iteration-${String(index + 1)}`);
+    mkdirSync(join(folder, 'plugin', 'skills', 's'), { recursive: true });
+    writeFileSync(
+      join(folder, 'plugin', 'skills', 's', 'SKILL.md'),
+      `---\nname: s\ndescription: ${description}\n---\n`,
+    );
+    writeFileSync(
+      join(folder, 'plugin-eval.json'),
+      JSON.stringify({
+        cases: [{ name: 'q01', arms: { with: [{ turns: 2, graders: [{ name: 'invoked', passed: true }] }] } }],
+      }),
+    );
+
+    if (finished) {
+      writeFileSync(join(folder, 'finished'), '');
+    }
+  });
+
+  return workspace;
+}
+
+test('recordedIterations keeps each finished iteration and sets the first unfinished one aside with its description', () => {
+  const workspace = stoppedWorkspace([
+    { description: 'A', finished: true },
+    { description: 'B', finished: false },
+    { description: 'C', finished: true },
+  ]);
+  const split = { train: [{ query: 'tend it', should_trigger: true }], test: [] };
+
+  const { recorded, aside } = recordedIterations(workspace, 's', split, 0.5, 7);
+
+  assert.deepEqual(
+    [recorded.map(({ description, all }) => [description, all?.summary.passed]), aside, readdirSync(workspace).sort()],
+    [
+      [
+        ['A', 1],
+        ['B', undefined],
+      ],
+      join(workspace, 'iteration-2-stopped-7'),
+      ['iteration-1', 'iteration-2-stopped-7', 'iteration-3'],
+    ],
+  );
+});
+
+test('recordedIterations keeps every iteration of a workspace whose evaluations all finished and moves none', () => {
+  const workspace = stoppedWorkspace([
+    { description: 'A', finished: true },
+    { description: 'B', finished: true },
+  ]);
+  const split = { train: [], test: [{ query: 'tend it', should_trigger: true }] };
+
+  const { recorded, aside } = recordedIterations(workspace, 's', split, 0.5, 7);
+
+  assert.deepEqual(
+    [recorded.map(({ description }) => description), aside, readdirSync(workspace).sort()],
+    [['A', 'B'], null, ['iteration-1', 'iteration-2']],
+  );
 });
 
 test('trigger-optimize refuses a holdout that leaves no training set', () => {
