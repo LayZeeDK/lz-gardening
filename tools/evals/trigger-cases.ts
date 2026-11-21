@@ -57,6 +57,18 @@ export function withDescription(skill: string, description: string): string {
   );
 }
 
+function taggedCases(split: Split): { name: string; query: string; tag: string }[] {
+  return [
+    ...split.train.map(({ query }) => ({ query, tag: 'train' })),
+    ...split.test.map(({ query }) => ({ query, tag: 'test' })),
+  ].map((entry, index) => ({ ...entry, name: `q${String(index + 1).padStart(2, '0')}` }));
+}
+
+// The query of each case writeCases writes, by case name.
+export function caseNames(split: Split): Record<string, string> {
+  return Object.fromEntries(taggedCases(split).map(({ name, query }) => [name, query]));
+}
+
 // One case per query, named q01, q02, ... and tagged train or test. Its one grader passes when the run invoked the
 // skill, so a case's score over its runs is the query's trigger rate, whichever way the query should go. Three turns
 // and the read-only tools are enough to reach the Skill call and keep a run short.
@@ -65,10 +77,6 @@ export function writeCases(evals: string, skill: string, split: Split): Record<s
     throw new Error(`skill name ${skill} is not lowercase letters, digits and hyphens`);
   }
 
-  const queries = [
-    ...split.train.map((query) => ({ ...query, tag: 'train' })),
-    ...split.test.map((query) => ({ ...query, tag: 'test' })),
-  ];
   const grader = [
     '---',
     'type: tool_used',
@@ -80,8 +88,7 @@ export function writeCases(evals: string, skill: string, split: Split): Record<s
   ].join('\n');
 
   return Object.fromEntries(
-    queries.map(({ query, tag }, index) => {
-      const name = `q${String(index + 1).padStart(2, '0')}`;
+    taggedCases(split).map(({ name, query, tag }) => {
       const prompt = [
         '---',
         `name: ${name}`,

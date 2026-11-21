@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { skillParts, splitEvalSet, withDescription, writeCases } from './trigger-cases.ts';
+import { caseNames, skillParts, splitEvalSet, withDescription, writeCases } from './trigger-cases.ts';
 
 test('withDescription replaces the frontmatter description with a quoted one and skillParts reads it back', () => {
   const skill = ['---', 'name: lz-tend', 'description: Tend one class.', '---', '', '# Body', ''].join('\n');
@@ -84,6 +84,22 @@ function querySet(should: number, shouldNot: number) {
     ...Array.from({ length: shouldNot }, (_, index) => ({ query: `no ${String(index)}`, should_trigger: false })),
   ];
 }
+
+test('caseNames gives the case names writeCases writes, train queries first, without writing a file', () => {
+  const split = {
+    train: [{ query: 'pull these weeds', should_trigger: true }],
+    test: [
+      { query: 'what is a worktree?', should_trigger: false },
+      { query: 'tend the any-type bed', should_trigger: true },
+    ],
+  };
+
+  assert.deepEqual(caseNames(split), {
+    q01: 'pull these weeds',
+    q02: 'what is a worktree?',
+    q03: 'tend the any-type bed',
+  });
+});
 
 test('splitEvalSet holds out a share of each kind, at least one of each, the same way for the same seed', () => {
   const set = querySet(10, 5);
