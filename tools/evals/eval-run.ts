@@ -136,6 +136,7 @@ function runOrThrow(command: string, args: readonly string[], cwd: string): void
 
 export function scaffold(sample: Sample, origin: string, patterns: string): void {
   const bare = `${sample.sample}-origin.git`;
+  mkdirSync(dirname(bare), { recursive: true });
   runOrThrow('git', ['clone', '-q', '--bare', '--single-branch', '--branch', 'main', origin, bare], dirname(bare));
   runOrThrow('git', ['clone', '-q', bare, sample.sample], dirname(sample.sample));
   runOrThrow(process.execPath, [`${sample.plugin}/skills/lz-garden/scripts/site.ts`, 'open'], sample.sample);

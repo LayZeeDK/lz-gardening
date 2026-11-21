@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { commit, git, repo } from '../../plugins/lz-gardening/skills/lz-garden/scripts/test-repo.ts';
 import {
@@ -16,6 +16,7 @@ import {
   slimArgs,
   type EvalCase,
   type PlannedRun,
+  type Sample,
 } from './eval-run.ts';
 
 function gardenCase(): EvalCase {
@@ -229,10 +230,10 @@ test('prepareRuns writes the eval metadata per model and an outputs folder per r
   );
 });
 
-test('scaffold clones main alone into a bare origin and a sample, opens its garden site and gives it the patterns', (t) => {
+// An origin with one commit on main, a patterns file and a git identity for the site, all in one temporary folder.
+function scaffoldSetup(t: TestContext): { readonly origin: string; readonly head: string; readonly root: string } {
   const origin = repo(t);
   const head = commit(origin, { 'a.ts': 'export const a = 1;\n' });
-  git(origin, ['branch', 'other']);
   const root = dirname(origin);
   writeFileSync(join(root, 'patterns.json'), '{"patterns":[]}\n');
   writeFileSync(join(root, 'gitconfig'), '[user]\n\tname = test\n\temail = test@example.com\n');
@@ -245,15 +246,25 @@ test('scaffold clones main alone into a bare origin and a sample, opens its gard
       process.env['GIT_CONFIG_GLOBAL'] = testConfig;
     }
   });
-  const sample = {
+
+  return { origin, head, root };
+}
+
+function sampleAt(path: string): Sample {
+  return {
     config: 'new_skill',
     model: 'sonnet',
     run: 1,
     plugin: fileURLToPath(new URL('../../plugins/lz-gardening', import.meta.url)),
-    sample: `${root}/sample`,
+    sample: path,
   };
+}
 
-  scaffold(sample, origin, join(root, 'patterns.json'));
+test('scaffold clones main alone into a bare origin and a sample, opens its garden site and gives it the patterns', (t) => {
+  const { origin, head, root } = scaffoldSetup(t);
+  git(origin, ['branch', 'other']);
+
+  scaffold(sampleAt(`${root}/sample`), origin, join(root, 'patterns.json'));
 
   assert.deepEqual(
     [
@@ -264,4 +275,12 @@ test('scaffold clones main alone into a bare origin and a sample, opens its gard
     ],
     ['refs/garden/log\nrefs/heads/main', head, true, '{"patterns":[]}\n'],
   );
+});
+
+test('scaffold makes the samples folder of a first run, which does not exist yet', (t) => {
+  const { origin, head, root } = scaffoldSetup(t);
+
+  scaffold(sampleAt(`${root}/samples/sample`), origin, join(root, 'patterns.json'));
+
+  assert.equal(git(`${root}/samples/sample`, ['rev-parse', 'HEAD']), head);
 });
