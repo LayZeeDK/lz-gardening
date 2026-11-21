@@ -88,7 +88,7 @@ function ran(command: string, args: readonly string[], what: string): number {
 // The plugin without node_modules (a trigger run starts no script) and without an evals folder of its own.
 // The copy is made under another name and renamed once it holds the description, so a stop in between never leaves a
 // copy with the original description for a resume to read as this iteration's.
-function copyPlugin(plugin: string, destination: string, skill: string, description: string): void {
+export function copyPlugin(plugin: string, destination: string, skill: string, description: string): void {
   const partial = `${destination}.partial`;
   rmSync(partial, { recursive: true, force: true });
   cpSync(plugin, partial, {
@@ -256,7 +256,6 @@ if (isMainModule(import.meta.url)) {
     evalSetSha256: sha256(evalSetText),
     skillSha256: sha256(skillText),
   };
-  const optionsFile = join(workspace, 'options.json');
   const resumed = values.resume ? resumeRefusal(workspace, options) : null;
 
   if (resumed !== null) {
@@ -267,6 +266,7 @@ if (isMainModule(import.meta.url)) {
   // starts
   const runSlim = required('LZ_EVAL_RUN_SLIM');
   const claude = process.env['LZ_EVAL_CLAUDE'] ?? 'claude';
+  const optionsFile = join(workspace, 'options.json');
   const queries: unknown = JSON.parse(evalSetText);
 
   if (!Array.isArray(queries) || !queries.every(isQuery)) {

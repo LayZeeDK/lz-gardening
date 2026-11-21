@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { improvedText, newWorkspaceRefusal, recordedIterations, resumeRefusal } from './trigger-optimize.ts';
+import {
+  copyPlugin,
+  improvedText,
+  newWorkspaceRefusal,
+  recordedIterations,
+  resumeRefusal,
+} from './trigger-optimize.ts';
 
 const script = fileURLToPath(new URL('trigger-optimize.ts', import.meta.url));
 
@@ -165,6 +171,39 @@ test('recordedIterations keeps every iteration of a workspace whose evaluations 
   assert.deepEqual(
     [recorded.map(({ description }) => description), aside, readdirSync(workspace).sort()],
     [['A', 'B'], null, ['iteration-1', 'iteration-2']],
+  );
+});
+
+test('resumeRefusal names an option that alone differs', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  writeFileSync(join(workspace, 'options.json'), JSON.stringify({ runs: 3, seed: 7 }));
+
+  assert.equal(
+    resumeRefusal(workspace, { runs: 3, seed: 8 }),
+    '--resume needs the options the workspace started with: seed 7, not 8',
+  );
+});
+
+test('copyPlugin copies the plugin without node_modules or evals, with the description, and leaves no partial copy', () => {
+  const root = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  const plugin = join(root, 'plugin');
+  ['skills/s', 'node_modules/x', 'evals/q01', 'scripts'].forEach((folder) => {
+    mkdirSync(join(plugin, folder), { recursive: true });
+  });
+  writeFileSync(join(plugin, 'skills', 's', 'SKILL.md'), '---\nname: s\ndescription: old\n---\nbody\n');
+  writeFileSync(join(plugin, 'scripts', 'a.ts'), 'export {};\n');
+  const copy = join(root, 'iteration-1', 'plugin');
+  mkdirSync(join(root, 'iteration-1', 'plugin.partial', 'stale'), { recursive: true });
+
+  copyPlugin(plugin, copy, 's', 'new');
+
+  assert.deepEqual(
+    [
+      readdirSync(copy).sort(),
+      readFileSync(join(copy, 'skills', 's', 'SKILL.md'), 'utf8'),
+      readdirSync(join(root, 'iteration-1')),
+    ],
+    [['scripts', 'skills'], '---\nname: s\ndescription: "new"\n---\nbody\n', ['plugin']],
   );
 });
 
