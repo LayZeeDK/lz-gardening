@@ -984,6 +984,32 @@ test('a tended close-class leaves the weeds named in --baselined open and closes
   assert.deepEqual([closed.status, closed.stdout, open], [0, 'closed 1; local\n', [b, c]]);
 });
 
+test('a tended close-class takes a --baselined weed whose file one of its --check files names', (t) => {
+  const dir = checkout(t);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);
+  cli(dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:any-type']);
+  const by = tendedBy(dir, 'any-type', {
+    'eslint.config.mjs': 'export default [];\n',
+    'checks/baseline.json': '["src/b.ts"]\n',
+  });
+
+  const closed = closeUnderClaim(dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    by,
+    '--check',
+    'eslint.config.mjs',
+    '--check',
+    'checks/baseline.json',
+    '--baselined',
+    weedId('any-type', 'src/b.ts:1', 'census:any-type'),
+  ]);
+
+  assert.deepEqual([closed.status, closed.stderr, closed.stdout], [0, '', 'closed 1; local\n']);
+});
+
 test('a tended close-class refuses a --baselined weed whose file no --check file names, and closes nothing', (t) => {
   const dir = checkout(t);
   cli(dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:any-type']);

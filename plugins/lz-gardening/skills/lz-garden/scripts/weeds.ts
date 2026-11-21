@@ -628,6 +628,7 @@ function reportSyncNotes(io: Io, command: string, result: SyncResult): void {
 function checksAtBed(site: Site, by: string, checks: readonly string[]): string | readonly string[] {
   const commit = bedCommit(by);
   const objects = catFileBatch(site.path, checks, (path) => `${commit}:${path}`);
+  // Stryker disable next-line ArrayDeclaration: the texts are returned only when every check file is a blob
   const texts = objects.flatMap(([, object]) => (object.kind === 'blob' ? [object.text] : []));
 
   return objects.find(([, object]) => object.kind !== 'blob')?.[0] ?? texts;
@@ -648,7 +649,7 @@ function baselinedInNoCheck(
   texts: readonly string[],
 ): Unheld | undefined {
   return garden.open
-    .filter((weed) => weed.class === target.class && (target.baselined ?? []).includes(weed.id))
+    .filter((weed) => weed.class === target.class && target.baselined?.includes(weed.id) === true)
     .map((weed) => ({ said: 'in no baseline', id: weed.id, path: seedPath(weed.where), drafts: [] }) as const)
     .find(({ path }) => !texts.some((text) => text.includes(path)));
 }
@@ -663,7 +664,7 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
   }
 
   const site = openSite(io.cwd);
-  const checks = request.kind === 'tended' ? checksAtBed(site, request.by, request.check) : [];
+  const checks = request.kind === 'tended' ? checksAtBed(site, request.by, request.check) : undefined;
 
   if (typeof checks === 'string') {
     io.err(`weeds ${command}: --check ${checks} is no file at ${request.by}\n`);
@@ -689,7 +690,9 @@ function close(io: Io, command: 'close' | 'close-class', flags: Flags, now: Date
     (replica): CloseOutcome | Unheld => {
       const events = eventsReportingSkipped(io, replica);
       const unheld =
-        'class' in request.target ? baselinedInNoCheck(replay(events, now), request.target, checks) : undefined;
+        'class' in request.target && checks !== undefined
+          ? baselinedInNoCheck(replay(events, now), request.target, checks)
+          : undefined;
 
       return unheld ?? planClose(events, request, site.writer, now);
     },
