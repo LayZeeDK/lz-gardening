@@ -171,6 +171,10 @@ test('evalCases reads every case of evals.json in order', () => {
   assert.deepEqual(evalCases({ evals: [gardenCase(), tend] }), [gardenCase(), tend]);
 });
 
+test('evalCases reads no case from a file with no evals list', () => {
+  assert.deepEqual([evalCases({}), evalCases({ evals: 'garden-seed' })], [[], []]);
+});
+
 test('evalCases refuses evals.json when any case is malformed, naming its place', () => {
   assert.throws(
     () => evalCases({ evals: [gardenCase(), { ...gardenCase(), after: 3 }] }),
