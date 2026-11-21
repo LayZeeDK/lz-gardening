@@ -24,3 +24,14 @@ queue then tells a tend pass from a one-off by a field, not by the text of a rea
   anything else is a one-off. They name no check.
 - The close kind is stored in every close row, so changing the set of kinds changes the queue format, and existing rows
   then need a read rule of their own.
+
+## Update, 2026-11-12: the queue is events
+
+ADR 0004 keeps the queue as events in the site's `refs/garden/log` instead of rows in one file. The decision stands,
+but three consequences above change:
+
+- There are no close rows and no read rule for closes without a kind: a close event must carry its kind, and one
+  without it is skipped as malformed. No queue had been released in the row format, so nothing needed the rule.
+- A weed is regrown when the add saw a tended close of its class, not by a search of earlier closes at read time
+  (ADR 0004).
+- A tended close names one or more checks (ADR 0003's update of 2026-11-18).
