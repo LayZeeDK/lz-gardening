@@ -8,8 +8,10 @@ import { commit, git, repo } from '../../plugins/lz-gardening/skills/lz-garden/s
 import {
   findEvalCase,
   prepareRuns,
+  resumeRun,
   runPlan,
   runRefusal,
+  samples,
   scaffold,
   slimArgs,
   type EvalCase,
@@ -43,26 +45,47 @@ test('runPlan gives each configuration, model and run its own sample and run fol
     plan.map(({ sample, runDir, plugin }) => ({ sample, runDir, plugin })),
     [
       {
-        sample: 'S:/samples/iteration-2-new_skill-sonnet-1',
+        sample: 'S:/samples/iteration-2-bf90177a8a',
         runDir: 'W:/iteration-2/eval-garden-seed-sonnet/new_skill/run-1',
         plugin: 'P:/new',
       },
       {
-        sample: 'S:/samples/iteration-2-new_skill-sonnet-2',
+        sample: 'S:/samples/iteration-2-6bc5f66122',
         runDir: 'W:/iteration-2/eval-garden-seed-sonnet/new_skill/run-2',
         plugin: 'P:/new',
       },
       {
-        sample: 'S:/samples/iteration-2-old_skill-sonnet-1',
+        sample: 'S:/samples/iteration-2-2ace49ecac',
         runDir: 'W:/iteration-2/eval-garden-seed-sonnet/old_skill/run-1',
         plugin: 'P:/old',
       },
       {
-        sample: 'S:/samples/iteration-2-old_skill-sonnet-2',
+        sample: 'S:/samples/iteration-2-499d060b65',
         runDir: 'W:/iteration-2/eval-garden-seed-sonnet/old_skill/run-2',
         plugin: 'P:/old',
       },
     ],
+  );
+});
+
+test('samples hide the configuration from the sample paths a judge sees, and give each run its own', () => {
+  const input = {
+    iterationDir: 'W:/iteration-2',
+    samplesRoot: 'S:/samples',
+    configs: { new_skill: 'P:/new', old_skill: 'P:/old' },
+    models: ['sonnet'],
+    runs: 2,
+  };
+  const names = samples(input).map(({ sample }) => sample);
+
+  assert.deepEqual(
+    [
+      names.filter((name) => /new_skill|old_skill|P:/.test(name)),
+      new Set(names).size,
+      names.every((name) => name.startsWith('S:/samples/iteration-2-')),
+      samples(input).map(({ sample }) => sample),
+    ],
+    [[], 4, true, names],
   );
 });
 
@@ -79,11 +102,11 @@ test('slimArgs runs the case prompt on the sample with its site, plugin, model, 
 
   assert.deepEqual(run === undefined ? [] : slimArgs(evalCase, 'E:/evals', run), [
     '--cwd',
-    'S:/samples/iteration-2-new_skill-opus-1',
+    'S:/samples/iteration-2-39dc3c8c34',
     '--prompt-file',
     'E:/evals/prompts/garden.md',
     '--add-dir',
-    'S:/samples/iteration-2-new_skill-opus-1.garden',
+    'S:/samples/iteration-2-39dc3c8c34.garden',
     '--out',
     'W:/iteration-2/eval-garden-seed-opus/new_skill/run-1/outputs/result.json',
     '--plugin-dir',
@@ -97,6 +120,34 @@ test('slimArgs runs the case prompt on the sample with its site, plugin, model, 
     '--rules',
     'E:/evals/rules',
   ]);
+});
+
+test('resume continues the run session with the resume prompt and the case settings, into the next resume file', () => {
+  const { iteration, plan } = iterationFor(gardenCase());
+  const [run] = plan;
+  const sample = run?.sample ?? '';
+  const outputs = `${iteration}/eval-garden-seed-sonnet/new_skill/run-1/outputs`;
+  mkdirSync(outputs, { recursive: true });
+  writeFileSync(`${outputs}/result.json`, JSON.stringify({ stdout: '{"type":"system","session_id":"s1"}' }));
+  const first = run === undefined ? null : resumeRun(gardenCase(), 'E:/evals', run);
+  writeFileSync(`${outputs}/result-resume-1.json`, JSON.stringify({ stdout: '{"type":"result","session_id":"s2"}' }));
+  const second = run === undefined ? null : resumeRun(gardenCase(), 'E:/evals', run);
+
+  assert.deepEqual(
+    [first, second?.args.slice(-2), second?.args.slice(2, 4)],
+    [
+      {
+        args: [
+          ...['--cwd', sample, '--prompt-file', 'E:/evals/prompts/resume.md', '--add-dir', `${sample}.garden`],
+          ...['--out', `${outputs}/result-resume-1.json`, '--plugin-dir', 'P:/new', '--model', 'sonnet'],
+          ...['--timeout-min', '14', '--allow', 'Edit Write', '--resume', 's1'],
+        ],
+      },
+      ['--resume', 's2'],
+      ['--prompt-file', 'E:/evals/prompts/resume.md'],
+    ],
+  );
+  assert.equal(second?.args[7], `${outputs}/result-resume-2.json`);
 });
 
 test('findEvalCase reads the named case from evals.json, with no rules unless it names some, and refuses an unknown name', () => {

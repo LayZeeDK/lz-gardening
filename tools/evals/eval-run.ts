@@ -3,13 +3,15 @@
 //
 //   node tools/evals/eval-run.ts scaffold <iteration dir>              a fresh sample and garden site per run
 //   node tools/evals/eval-run.ts run <iteration dir> <eval name> [--concurrency 4] [--evals <dir>]
+//   node tools/evals/eval-run.ts resume <iteration dir> <eval name> <run dir>... [--concurrency 4] [--evals <dir>]
 //
 // <iteration dir>/iteration.json names the configs ({name: {plugin}}), the models and the runs per configuration.
-// Environment: LZ_EVAL_SAMPLES_ROOT (where samples go, both commands), LZ_EVAL_SAMPLE_ORIGIN (the bare origin to
-// clone, scaffold), LZ_EVAL_RUN_SLIM (run-slim.ts, run); with LZ_EVAL_HEAVY_LOCK (heavy-lock.ts) and
-// LZ_EVAL_LOCK_OWNER, run waits for and holds the machine's heavy-run lock.
+// Environment: LZ_EVAL_SAMPLES_ROOT (where samples go, every command), LZ_EVAL_SAMPLE_ORIGIN (the bare origin to
+// clone, scaffold), LZ_EVAL_RUN_SLIM (run-slim.ts, run and resume); with LZ_EVAL_HEAVY_LOCK (heavy-lock.ts) and
+// LZ_EVAL_LOCK_OWNER, run and resume wait for and hold the machine's heavy-run lock.
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
@@ -23,6 +25,7 @@ import {
   type Assertion,
   type Iteration,
 } from './eval-layout.ts';
+import { slimOutput } from './slim-output.ts';
 
 export interface EvalCase {
   readonly id: number;
@@ -93,6 +96,11 @@ export function findEvalCase(evals: unknown, name: string): EvalCase {
   return parsed;
 }
 
+// A sample's name must not tell a judge its configuration: the sessions' calls and reports are full of its path.
+function opaque(...parts: readonly (string | number)[]): string {
+  return createHash('sha256').update(parts.join('\0')).digest('hex').slice(0, 10);
+}
+
 // One sample per configuration, model and run; every case of the iteration runs on the same samples, in order.
 export function samples(input: SampleInput): Sample[] {
   const label = basename(input.iterationDir);
@@ -105,7 +113,7 @@ export function samples(input: SampleInput): Sample[] {
         model,
         run,
         plugin,
-        sample: `${input.samplesRoot}/${label}-${config}-${model}-${String(run)}`,
+        sample: `${input.samplesRoot}/${label}-${opaque(input.iterationDir, config, plugin, model, run)}`,
       })),
     ),
   );
@@ -142,6 +150,26 @@ export function slimArgs(evalCase: EvalCase, evalsDir: string, run: PlannedRun):
     ...['--timeout-min', String(evalCase.timeoutMinutes), '--allow', evalCase.allow],
     ...(evalCase.rules === null ? [] : ['--rules', `${evalsDir}/${evalCase.rules}`]),
   ];
+}
+
+// A stopped run goes on in its own session, from its latest output file, into result-resume-<n>.json beside it.
+export function resumeRun(evalCase: EvalCase, evalsDir: string, run: PlannedRun): { readonly args: string[] } {
+  const outputs = `${run.runDir}/outputs`;
+  const resumes = existsSync(outputs)
+    ? readdirSync(outputs).flatMap((name) => /^result-resume-(\d+)\.json$/.exec(name)?.[1] ?? [])
+    : [];
+  const last = Math.max(0, ...resumes.map(Number));
+  const latest = `${outputs}/${last === 0 ? 'result.json' : `result-resume-${String(last)}.json`}`;
+  const { session } = existsSync(latest) ? slimOutput(readJson(latest)) : { session: null };
+
+  if (session === null) {
+    throw new Error(`${latest} names no session to resume`);
+  }
+
+  const args = slimArgs({ ...evalCase, prompt: 'prompts/resume.md' }, evalsDir, run);
+  args[args.indexOf('--out') + 1] = `${outputs}/result-resume-${String(last + 1)}.json`;
+
+  return { args: [...args, '--resume', session] };
 }
 
 // Why the planned runs cannot start: the case they follow has not run on the same samples, or they already ran.
@@ -261,10 +289,18 @@ if (isMainModule(import.meta.url)) {
       concurrency: { type: 'string', default: '4' },
     },
   });
-  const [command, iterationDir, evalName] = positionals;
+  const [command, iterationDir, evalName, ...runDirs] = positionals;
+  const usage =
+    'usage: eval-run.ts scaffold <iteration dir> | run <iteration dir> <eval name> | resume <iteration dir> <eval name> <run dir>... [--concurrency n]';
 
-  if (iterationDir === undefined || (command === 'run' ? evalName === undefined : command !== 'scaffold')) {
-    throw new Error('usage: eval-run.ts scaffold <iteration dir> | run <iteration dir> <eval name> [--concurrency n]');
+  if (
+    iterationDir === undefined ||
+    (command === 'scaffold' && evalName !== undefined) ||
+    (command === 'run' && (evalName === undefined || runDirs.length > 0)) ||
+    (command === 'resume' && runDirs.length === 0) ||
+    !['scaffold', 'run', 'resume'].includes(command ?? '')
+  ) {
+    throw new Error(usage);
   }
 
   const evalsDir = resolve(values.evals).replaceAll('\\', '/');
@@ -297,19 +333,34 @@ if (isMainModule(import.meta.url)) {
     }
 
     const evalCase = findEvalCase(readJson(`${evalsDir}/evals.json`), evalName);
-    const plan = runPlan({ ...input, evalCase });
-    const refusal = runRefusal(plan, iteration, evalCase);
+    const planned = runPlan({ ...input, evalCase });
+    const wanted = runDirs.map((runDir) => resolve(runDir).replaceAll('\\', '/'));
+    const plan = command === 'resume' ? planned.filter(({ runDir }) => wanted.includes(runDir)) : planned;
+    const unknown = wanted.filter((runDir) => !plan.some((run) => run.runDir === runDir));
 
-    if (refusal !== null) {
-      throw new Error(refusal);
+    if (unknown.length > 0) {
+      throw new Error(`not run folders of ${evalCase.name} in ${iteration}: ${unknown.join(', ')}`);
     }
 
-    prepareRuns(plan, iteration, evalCase, readFileSync(`${evalsDir}/${evalCase.prompt}`, 'utf8'));
+    if (command === 'run') {
+      const refusal = runRefusal(plan, iteration, evalCase);
+
+      if (refusal !== null) {
+        throw new Error(refusal);
+      }
+
+      prepareRuns(plan, iteration, evalCase, readFileSync(`${evalsDir}/${evalCase.prompt}`, 'utf8'));
+    }
+
+    const argsOf = (run: PlannedRun): string[] =>
+      command === 'resume' ? resumeRun(evalCase, evalsDir, run).args : slimArgs(evalCase, evalsDir, run);
+    // A run with no session to resume refuses here, before the lock is taken.
+    plan.forEach(argsOf);
     const waves = Math.ceil(plan.length / concurrency);
     const failed = await withHeavyLock(
-      `lz-gardening eval ${evalCase.name} ${basename(iteration)}: ${String(plan.length)} slim claude -p runs, ${String(concurrency)} at a time`,
+      `lz-gardening eval ${String(command)} ${evalCase.name} ${basename(iteration)}: ${String(plan.length)} slim claude -p runs, ${String(concurrency)} at a time`,
       waves * (evalCase.timeoutMinutes + 2),
-      () => runAll(plan, concurrency, (run) => slimRun(runSlim, slimArgs(evalCase, evalsDir, run))),
+      () => runAll(plan, concurrency, (run) => slimRun(runSlim, argsOf(run))),
     );
 
     if (failed.length > 0) {
