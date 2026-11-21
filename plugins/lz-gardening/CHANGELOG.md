@@ -77,9 +77,9 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     whoever commits them.
   - Proof: the check is proved on a queued weed in the untouched bed before any fix, and on paved-road code, and a
     tended close holds only the weeds that proof reported or the bed fixed. A weed whose copy stays in the check's
-    baseline stays open (`weeds.ts close-class --baselined`), and the close refuses one whose file no `--check` file
-    names at the bed commit. A copy is kept only on words the repository wrote that
-    say the copy stays, cited by path and line; a function that shares a queued name but does another job is
+    baseline stays open (`weeds.ts close-class --baselined`), and the close refuses, closing nothing, a baselined
+    weed whose file no `--check` file names at the bed commit. A copy is kept only on words the repository wrote
+    that say the copy stays, cited by path and line; a function that shares a queued name but does another job is
     renamed, not closed.
   - Stops: a refused command the pass needs ends it, and the pass releases its claim; a refused lookup it can do
     without is named in the report. A tool with no package script runs from the bed's root through `npx --no`, so it
