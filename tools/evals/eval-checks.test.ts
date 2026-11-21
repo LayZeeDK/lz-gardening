@@ -105,6 +105,25 @@ test('garden-commands counts a script call chained, piped or redirected outside 
   });
 });
 
+test('garden-commands counts a git log -S whose single-quoted text holds a backtick or ${ as in the tick', () => {
+  const calls = [
+    call('Bash', { command: "git log -n 1 --format=%h -S 'unreadable = `${name}: ${error}' aa3bc1b -- src/runner.ts" }),
+  ];
+
+  assert.deepEqual(run('garden-commands', calls), { passed: true, evidence: '0 outside the tick: ' });
+});
+
+test('garden-commands counts a command substitution inside double quotes as outside, since bash still runs it', () => {
+  const calls = [
+    call('Bash', { command: 'git show "$(git rev-parse HEAD):a.ts"' }),
+    weeds('add --class c --where a.ts --note "`rm -rf a`"'),
+  ];
+
+  const { passed, evidence } = run('garden-commands', calls);
+
+  assert.deepEqual([passed, evidence.split(':')[0]], [false, '2 outside the tick']);
+});
+
 test('every check passes on a tend tick that reads before each decline and runs only lz-garden commands', () => {
   const calls = [
     call('Bash', { command: 'node "D:/plugin/skills/lz-garden/scripts/census.ts" --rev main' }),

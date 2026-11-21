@@ -77,9 +77,10 @@ const fileWrites = new Set(['Edit', 'Write', 'NotebookEdit']);
 
 const chained = /[|;&<>`]|\$\(/;
 
-// A command's text with its quoted arguments taken out, which may hold any character.
+// A command's text with its literal quoted arguments taken out, which may hold any character. A double-quoted
+// argument with a $ or a backtick stays, since bash still substitutes inside it.
 function unquoted(text: string): string {
-  return text.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, '');
+  return text.replace(/"(?:[^"\\$`]|\\.)*"|'[^']*'/g, '');
 }
 
 // lz-garden's allowed-tools and its read-only git forms, each one command with no chain, pipe or redirect.
@@ -93,7 +94,7 @@ function inTick(call: ToolCall): boolean {
   return (
     text === 'node --version' ||
     (/^node /.test(text) && scriptRun(call) !== undefined && !chained.test(unquoted(text))) ||
-    (/^git (ls-tree|rev-parse|log|show) /.test(text) && !chained.test(text))
+    (/^git (ls-tree|rev-parse|log|show) /.test(text) && !chained.test(unquoted(text)))
   );
 }
 
