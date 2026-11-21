@@ -38,6 +38,16 @@ test('queryResults gives each query its trigger rate over the graded runs and pa
   );
 });
 
+test('queryResults refuses a result with a run that took no turn, which is how a usage limit ends a session', () => {
+  const stopped = { turns: 0, error: null, graders: [{ name: 'invoked', passed: false }] };
+  const result = { cases: [{ name: 'q01', arms: { with: [{ ...stopped, turns: 2 }, stopped] } }] };
+
+  assert.throws(
+    () => queryResults(result, { q01: 'tend it' }, [{ query: 'tend it', should_trigger: true }], 0.5),
+    /q01 \(tend it\) has a run that took no turn/,
+  );
+});
+
 test('queryResults refuses a query with no graded run, since its rate is unknown', () => {
   assert.throws(
     () =>

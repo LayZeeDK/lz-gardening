@@ -38,9 +38,14 @@ export function queryResults(
   const results = Object.entries(names).map(([name, query]) => {
     const found = cases.find((entry) => isRecord(entry) && entry['name'] === name);
     const arms = isRecord(found) ? found['arms'] : undefined;
-    const verdicts = list(isRecord(arms) ? arms['with'] : undefined)
-      .map(invoked)
-      .filter((verdict) => verdict !== undefined);
+    const runs = list(isRecord(arms) ? arms['with'] : undefined);
+
+    // A session the usage limit ends reports no turn and no error, and its run would count as not triggered.
+    if (runs.some((entry) => isRecord(entry) && entry['turns'] === 0)) {
+      throw new Error(`${name} (${query}) has a run that took no turn: a usage limit or an API stop ended it`);
+    }
+
+    const verdicts = runs.map(invoked).filter((verdict) => verdict !== undefined);
     const shouldTrigger = queries.find((entry) => entry.query === query)?.should_trigger;
 
     if (verdicts.length === 0 || shouldTrigger === undefined) {
