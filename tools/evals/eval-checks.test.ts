@@ -124,6 +124,15 @@ test('garden-commands counts a command substitution inside double quotes as outs
   assert.deepEqual([passed, evidence.split(':')[0]], [false, '2 outside the tick']);
 });
 
+test('garden-commands pairs each quote with its own close, past a double-quoted argument it keeps', () => {
+  const calls = [call('Bash', { command: 'git show "$x" | sh "y"' }), call('Bash', { command: 'git show "$x" "|"' })];
+
+  assert.deepEqual(
+    calls.map((each) => run('garden-commands', [each]).passed),
+    [false, true],
+  );
+});
+
 test('every check passes on a tend tick that reads before each decline and runs only lz-garden commands', () => {
   const calls = [
     call('Bash', { command: 'node "D:/plugin/skills/lz-garden/scripts/census.ts" --rev main' }),

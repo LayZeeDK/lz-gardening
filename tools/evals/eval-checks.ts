@@ -80,7 +80,9 @@ const chained = /[|;&<>`]|\$\(/;
 // A command's text with its literal quoted arguments taken out, which may hold any character. A double-quoted
 // argument with a $ or a backtick stays, since bash still substitutes inside it.
 function unquoted(text: string): string {
-  return text.replace(/"(?:[^"\\$`]|\\.)*"|'[^']*'/g, '');
+  return text.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (quoted) =>
+    quoted.startsWith('"') && /[$`]/.test(quoted) ? quoted : '',
+  );
 }
 
 // lz-garden's allowed-tools and its read-only git forms, each one command with no chain, pipe or redirect.
@@ -91,11 +93,10 @@ function inTick(call: ToolCall): boolean {
     return !fileWrites.has(call.name);
   }
 
-  return (
-    text === 'node --version' ||
-    (/^node /.test(text) && scriptRun(call) !== undefined && !chained.test(unquoted(text))) ||
-    (/^git (ls-tree|rev-parse|log|show) /.test(text) && !chained.test(unquoted(text)))
-  );
+  const allowed =
+    (/^node /.test(text) && scriptRun(call) !== undefined) || /^git (ls-tree|rev-parse|log|show) /.test(text);
+
+  return text === 'node --version' || (allowed && !chained.test(unquoted(text)));
 }
 
 function gardenCommands(calls: readonly ToolCall[]): CheckResult {
