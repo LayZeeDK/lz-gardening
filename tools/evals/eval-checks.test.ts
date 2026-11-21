@@ -105,6 +105,23 @@ test('garden-commands counts a script call chained, piped or redirected outside 
   });
 });
 
+test('every check passes on a tend tick that reads before each decline and runs only lz-garden commands', () => {
+  const calls = [
+    call('Bash', { command: 'node "D:/plugin/skills/lz-garden/scripts/census.ts" --rev main' }),
+    weeds('lines --class console-call --census abc'),
+    weeds('decline --class console-call --where a.ts --reason "a log" --census abc --read 0123456789ab'),
+    weeds('close-class --class console-call --bed abc1234 --check eslint.config.mjs'),
+    call('Bash', { command: 'git rev-parse HEAD' }),
+    call('Read', { file_path: 'src/a.ts' }),
+  ];
+  const tick = calls.map((each, index) => (index === 3 ? { ...each, result: 'closed 1; synced' } : each));
+
+  assert.deepEqual(
+    Object.keys(checks).filter((id) => !run(id, tick).passed),
+    [],
+  );
+});
+
 test('garden-commands fails on a command lz-garden does not run and on a file write, and names each', () => {
   const calls = [
     call('Bash', { command: 'node --version' }),
