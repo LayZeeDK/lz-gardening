@@ -94,9 +94,8 @@ weeds of one class.
 
 Read every open weed as it is on the base: run `git show <base>:<path>` for each weed's file, one call per file, and
 when the tool result says the output was saved to a file, Read that file to its end. A Read or Grep of the checkout
-does not replace this call. Read the commit each
-`commit:` source names too (`git show <commit>`): the commit that planted the weed, or a clean-up that did not hold,
-whose diff shows the fix that was tried. Then answer in two sentences, which open the report (step
+does not replace this call. Read the commit that planted each
+weed too (`git show <commit>` for a `commit:` source). Then answer in two sentences, which open the report (step
 8): what were the agents trying to do, and why was the shortcut the nearest example? For copies (a function
 defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that pins the copies
 alike can say a copy must stay (a file loaded or copied alone, which cannot import the shared one). Such a copy is
@@ -220,8 +219,7 @@ report, and run it again on the untouched bed and on the paved road, so the proo
 queue missed a copy, queue it from the repository's checkout:
 `weeds add --class <class> --where <path:line> --source commit:<sha> --note "<root cause>"`, where `<sha>` is what
 `git log -n 1 --format=%h -S '<the copy's name>' -- <path>` prints; step 6 then fixes or baselines it like the rest.
-When `add` prints `kept`, the copy was kept on purpose, by a person, a tend pass or a seed pass's decline: exempt
-it in the check, citing the reason it was kept with. Never rename
+When `add` prints `kept`, the copy was left on purpose: exempt it in the check, citing the keep's reason. Never rename
 or narrow code the queue does not hold to quiet the check. Quote the first output, the status, the second output and
 this run in the report: they are the proof. Done when you have all four.
 

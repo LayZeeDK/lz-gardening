@@ -26,8 +26,8 @@ The strongest layer that can hold a fix, strongest first. `--layer` takes the nu
 1. **Codebase**: architecture, module boundaries, one paved road, deleting the bad examples. The weed cannot be
    written.
 2. **Static analysis**: types, compiler flags, lint rules, tests, CI gates. The weed cannot land.
-3. **Agent guards**: hooks, permissions, tool settings. The weed cannot be typed by an agent. A tend pass proposes
-   these in its report; a human builds them.
+3. **Agent guards**: hooks, permissions, tool settings. The weed cannot be typed by an agent. A gardener proposes
+   these; a human builds them.
 4. **Agent instructions**: `AGENTS.md`, `CLAUDE.md`, rules files. The agent is told.
 5. **Skills and references**: loaded when a task matches. The agent is told sometimes.
 6. **Style guide and human review**: a person notices.

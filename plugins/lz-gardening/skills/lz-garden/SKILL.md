@@ -186,8 +186,8 @@ and claimed by no other clone.
 
 Done when `site.ts sync --census <sha>` exits 0. Then reply with this form, every `<slot>` filled as the list below
 says. The reply is exactly these five lines: the last character of the reply ends the `shared:` line. The reason for
-each weed is in its `--note`, what was not read is in the counts, and each documented copy left unqueued is on
-`left out:`; the reply holds nothing the form has no line for.
+each weed is in its `--note`, what was not read is in the counts, and what was not queued is on `left out:`; the
+reply holds nothing the form has no line for.
 
 ```text
 garden: <base> <short previousSha>..<short sha>, <commits> commits, <read> read, <skipped> skipped
