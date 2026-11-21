@@ -6,6 +6,7 @@ import { test, type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { commit, git, repo } from '../../plugins/lz-gardening/skills/lz-garden/scripts/test-repo.ts';
 import {
+  evalCases,
   findEvalCase,
   prepareRuns,
   resumeRun,
@@ -13,7 +14,9 @@ import {
   runRefusal,
   samples,
   scaffold,
+  setAside,
   slimArgs,
+  staleRuns,
   type EvalCase,
   type PlannedRun,
   type Sample,
@@ -162,6 +165,19 @@ test('findEvalCase reads the named case from evals.json, with no rules unless it
   assert.throws(() => findEvalCase(evals, 'prune'), /no eval case named prune/);
 });
 
+test('evalCases reads every case of evals.json in order', () => {
+  const tend = { ...gardenCase(), id: 1, name: 'tend', after: 'garden-seed' };
+
+  assert.deepEqual(evalCases({ evals: [gardenCase(), tend] }), [gardenCase(), tend]);
+});
+
+test('evalCases refuses evals.json when any case is malformed, naming its place', () => {
+  assert.throws(
+    () => evalCases({ evals: [gardenCase(), { ...gardenCase(), after: 3 }] }),
+    /eval case 1 in evals.json is malformed/,
+  );
+});
+
 test('findEvalCase refuses a named case whose fields are malformed', () => {
   const evals = { evals: [{ ...gardenCase(), timeoutMinutes: '14' }] };
 
@@ -206,6 +222,47 @@ test('runRefusal refuses runs that already have a result', () => {
     runRefusal(plan, iteration, gardenCase()),
     `move these runs aside first: ${iteration}/eval-garden-seed-sonnet/new_skill/run-1`,
   );
+});
+
+test('setAside moves the paths that exist into the first free set-aside folder of the root, keeping their place', () => {
+  const root = mkdtempSync(join(tmpdir(), 'eval-run-')).replaceAll('\\', '/');
+  mkdirSync(`${root}/set-aside-1`);
+  mkdirSync(`${root}/eval-seed-sonnet/new_skill/run-1/outputs`, { recursive: true });
+  writeFileSync(`${root}/eval-seed-sonnet/new_skill/run-1/outputs/result.json`, '{}');
+
+  setAside(root, [`${root}/eval-seed-sonnet/new_skill/run-1`, `${root}/eval-tend-sonnet/new_skill/run-1`]);
+
+  assert.deepEqual(
+    [
+      existsSync(`${root}/eval-seed-sonnet/new_skill/run-1`),
+      readFileSync(`${root}/set-aside-2/eval-seed-sonnet/new_skill/run-1/outputs/result.json`, 'utf8'),
+      existsSync(`${root}/set-aside-2/eval-tend-sonnet`),
+    ],
+    [false, '{}', false],
+  );
+});
+
+test('staleRuns gives a rerun its own run folder and those of every case that followed it on the same sample', () => {
+  const [run] = runPlan({
+    evalCase: gardenCase(),
+    iterationDir: 'W:/iteration-2',
+    samplesRoot: 'S:/samples',
+    configs: { new_skill: 'P:/new' },
+    models: ['sonnet'],
+    runs: 1,
+  });
+  const cases = [
+    { name: 'garden-seed', after: null },
+    { name: 'tend', after: 'garden-seed' },
+    { name: 'other-seed', after: null },
+    { name: 'retend', after: 'tend' },
+  ];
+
+  assert.deepEqual(run === undefined ? [] : staleRuns(cases, 'W:/iteration-2', 'garden-seed', run), [
+    'W:/iteration-2/eval-garden-seed-sonnet/new_skill/run-1',
+    'W:/iteration-2/eval-tend-sonnet/new_skill/run-1',
+    'W:/iteration-2/eval-retend-sonnet/new_skill/run-1',
+  ]);
 });
 
 test('prepareRuns writes the eval metadata per model and an outputs folder per run', () => {

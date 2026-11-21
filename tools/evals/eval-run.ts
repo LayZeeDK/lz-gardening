@@ -4,15 +4,17 @@
 //   node tools/evals/eval-run.ts scaffold <iteration dir>              a fresh sample and garden site per run
 //   node tools/evals/eval-run.ts run <iteration dir> <eval name> [--concurrency 4] [--evals <dir>]
 //   node tools/evals/eval-run.ts resume <iteration dir> <eval name> <run dir>... [--concurrency 4] [--evals <dir>]
+//   node tools/evals/eval-run.ts rerun <iteration dir> <eval name> <run dir>... [--concurrency 4] [--evals <dir>]
 //
+// rerun starts the named runs over and keeps every other run; what it replaces goes to set-aside-<n> folders.
 // <iteration dir>/iteration.json names the configs ({name: {plugin}}), the models and the runs per configuration.
 // Environment: LZ_EVAL_SAMPLES_ROOT (where samples go, every command), LZ_EVAL_SAMPLE_ORIGIN (the bare origin to
 // clone, scaffold), LZ_EVAL_RUN_SLIM (run-slim.ts, run and resume); with LZ_EVAL_HEAVY_LOCK (heavy-lock.ts) and
 // LZ_EVAL_LOCK_OWNER, run and resume wait for and hold the machine's heavy-run lock.
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { basename, dirname, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
@@ -79,9 +81,12 @@ function evalCase(value: unknown): EvalCase | null {
   return { id, name, prompt, after, timeoutMinutes, allow, rules, assertions };
 }
 
+function caseEntries(evals: unknown): unknown[] {
+  return isRecord(evals) && Array.isArray(evals['evals']) ? evals['evals'] : [];
+}
+
 export function findEvalCase(evals: unknown, name: string): EvalCase {
-  const cases: unknown[] = isRecord(evals) && Array.isArray(evals['evals']) ? evals['evals'] : [];
-  const named = cases.find((candidate) => isRecord(candidate) && candidate['name'] === name);
+  const named = caseEntries(evals).find((candidate) => isRecord(candidate) && candidate['name'] === name);
 
   if (named === undefined) {
     throw new Error(`no eval case named ${name} in evals.json`);
@@ -94,6 +99,18 @@ export function findEvalCase(evals: unknown, name: string): EvalCase {
   }
 
   return parsed;
+}
+
+export function evalCases(evals: unknown): EvalCase[] {
+  return caseEntries(evals).map((candidate, index) => {
+    const parsed = evalCase(candidate);
+
+    if (parsed === null) {
+      throw new Error(`eval case ${String(index)} in evals.json is malformed`);
+    }
+
+    return parsed;
+  });
 }
 
 // A sample's name must not tell a judge its configuration: the sessions' calls and reports are full of its path.
@@ -189,6 +206,38 @@ export function runRefusal(plan: readonly PlannedRun[], iterationDir: string, ev
   const done = plan.filter((run) => existsSync(`${run.runDir}/outputs/result.json`));
 
   return done.length > 0 ? `move these runs aside first: ${done.map((run) => run.runDir).join(', ')}` : null;
+}
+
+export function staleRuns(
+  cases: readonly Pick<EvalCase, 'name' | 'after'>[],
+  iterationDir: string,
+  name: string,
+  run: PlannedRun,
+): string[] {
+  const names = [name];
+
+  for (let index = 0; index < names.length; index += 1) {
+    names.push(...cases.filter(({ after }) => after === names[index]).map((follower) => follower.name));
+  }
+
+  return names.map((stale) => runFolder(iterationDir, stale, run.model, run.config, run.run));
+}
+
+// Moves what a rerun replaces out of the globs the grading scripts read, keeping it for a look later.
+export function setAside(root: string, paths: readonly string[]): void {
+  let number = 1;
+
+  while (existsSync(`${root}/set-aside-${String(number)}`)) {
+    number += 1;
+  }
+
+  paths
+    .filter((path) => existsSync(path))
+    .forEach((path) => {
+      const aside = `${root}/set-aside-${String(number)}/${relative(root, path)}`;
+      mkdirSync(dirname(aside), { recursive: true });
+      renameSync(path, aside);
+    });
 }
 
 // Each model's eval folder gets eval_metadata.json, and each run its outputs folder.
@@ -302,14 +351,14 @@ if (isMainModule(import.meta.url)) {
   });
   const [command, iterationDir, evalName, ...runDirs] = positionals;
   const usage =
-    'usage: eval-run.ts scaffold <iteration dir> | run <iteration dir> <eval name> | resume <iteration dir> <eval name> <run dir>... [--concurrency n]';
+    'usage: eval-run.ts scaffold <iteration dir> | run <iteration dir> <eval name> | resume|rerun <iteration dir> <eval name> <run dir>... [--concurrency n]';
 
   if (
     iterationDir === undefined ||
     (command === 'scaffold' && evalName !== undefined) ||
     (command === 'run' && (evalName === undefined || runDirs.length > 0)) ||
-    (command === 'resume' && runDirs.length === 0) ||
-    !['scaffold', 'run', 'resume'].includes(command ?? '')
+    ((command === 'resume' || command === 'rerun') && runDirs.length === 0) ||
+    !['scaffold', 'run', 'resume', 'rerun'].includes(command ?? '')
   ) {
     throw new Error(usage);
   }
@@ -343,17 +392,30 @@ if (isMainModule(import.meta.url)) {
       throw new Error(`--concurrency must be a whole number of at least 1, not ${values.concurrency}`);
     }
 
-    const evalCase = findEvalCase(readJson(`${evalsDir}/evals.json`), evalName);
+    const evals = readJson(`${evalsDir}/evals.json`);
+    const evalCase = findEvalCase(evals, evalName);
     const planned = runPlan({ ...input, evalCase });
     const wanted = runDirs.map((runDir) => resolve(runDir).replaceAll('\\', '/'));
-    const plan = command === 'resume' ? planned.filter(({ runDir }) => wanted.includes(runDir)) : planned;
+    const plan = command === 'run' ? planned : planned.filter(({ runDir }) => wanted.includes(runDir));
     const unknown = wanted.filter((runDir) => !plan.some((run) => run.runDir === runDir));
 
     if (unknown.length > 0) {
       throw new Error(`not run folders of ${evalCase.name} in ${iteration}: ${unknown.join(', ')}`);
     }
 
-    if (command === 'run') {
+    // A rerun of a case that starts a sample sets the run aside with every later case's run on that sample, and
+    // starts from a fresh sample; a rerun of a later case runs the named runs its sample's first rerun set aside.
+    if (command === 'rerun' && evalCase.after === null) {
+      const origin = required('LZ_EVAL_SAMPLE_ORIGIN');
+      const cases = evalCases(evals);
+      plan.forEach((run) => {
+        setAside(iteration, staleRuns(cases, iteration, evalCase.name, run));
+        setAside(input.samplesRoot, [run.sample, `${run.sample}.garden`, `${run.sample}-origin.git`]);
+        scaffold(run, origin, `${evalsDir}/site-patterns.json`);
+      });
+    }
+
+    if (command !== 'resume') {
       const refusal = runRefusal(plan, iteration, evalCase);
 
       if (refusal !== null) {
