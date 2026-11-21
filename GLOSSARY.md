@@ -19,14 +19,12 @@ _Avoid_: category, kind, type
 The commit that introduced a weed; a weed found in the code names it as its source.
 
 **Duplicate function**:
-A function name defined at module scope in two or more files of the codebase. A function declaration and a `const`
-bound to an arrow function or a function expression count alike; a function defined inside another does not.
+A function name defined at module scope in two or more files of the codebase.
 _Avoid_: copy, clone
 
 **Documented copy**:
 A file's own definition of a duplicate function, kept on purpose: words in that file or one beside it say why the
-file cannot use the shared one (it runs alone, it cannot import), or a record says so. A tick leaves it out of the
-queue and quotes the words.
+file cannot use the shared one (it runs alone, it cannot import), or a record says so.
 
 **Close**:
 Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
@@ -34,16 +32,14 @@ check was written), or kept.
 
 **Regrown**:
 Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
-A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it. When the
-weed reads `not on the base`, the bed's change to its check is not on the base the census was taken of: the bed has
-not landed, or one of the check's files is gone from the base. When it reads `base unknown`, the site could not tell.
+A weed of a class only ever closed as a one-off is new, not regrown: no check was written to hold it.
 
 **Kept**:
 Said of a weed taken off the queue for good with no check: a human or a tend pass judged it deliberate, or a seed
 pass declined it. It is never queued again.
 
 **Place**:
-The file a weed sits in, its `--where` without the line. Six weeds in one file are six weeds in one place.
+The file a weed sits in. Six weeds in one file are six weeds in one place.
 
 **Ready to tend**:
 Said of a weed class whose open weeds sit in two or more places: several agents took the same shortcut, and a tend
@@ -71,8 +67,7 @@ of only what is new. Every tick runs it until one has been recorded.
 
 **Census**:
 A count of every census pattern's hits, and of duplicate functions, at one commit of the base branch. Each tick
-compares its census with the garden's census, the one recorded in the site's ref `refs/garden/census` and shared
-through the repository's `origin` like the garden log.
+compares its census with the garden's census, the last one recorded, which is shared like the garden log.
 _Avoid_: scan, inventory
 
 **Census pattern**:
@@ -84,7 +79,7 @@ _Avoid_: weed marker, match
 
 **Seed list**:
 What the census shows the seed pass: for each census pattern, the files with the most hits, and the names
-defined in the most files. The seed pass is recorded only once each file of each of its lines is queued or declined.
+defined in the most files.
 _Avoid_: baseline (a baseline is what a check tolerates)
 
 **Decline**:
@@ -103,8 +98,8 @@ Together the events give the queue and each weed's status.
 _Avoid_: row, record (records are the repository's own)
 
 **Writer**:
-A garden site that adds events to the garden log, named by an id of its own in the site's git config
-(`lzGardening.writer`) that its claims carry. Two clones of one repository are two writers.
+A garden site that adds events to the garden log, named by an id of its own that its claims carry. Two clones of
+one repository are two writers.
 
 **Records**:
 What the repository writes down about its own work: plans, summaries, lessons, decisions, agent instructions and
@@ -138,10 +133,8 @@ A hook or permission that stops an agent from writing a weed or bypassing a chec
 a human.
 
 **Claim**:
-A writer's hold on one weed class for one tend pass, an event naming the class, the writer, its holder (the
-checkout's `lzGardening.name`, else `writer` and the first 8 characters of the writer id) and an end six hours on.
-The earliest live claim of a class owns it; a claim by the same writer renews it. It ends with a close of the class
-by its writer, a release, or its end time. A bed is made and a class closed only under one's own claim.
+A writer's hold on one weed class for one tend pass, for six hours unless renewed; the earliest live claim of a
+class owns it. A bed is made and a class closed only under one's own claim.
 _Avoid_: lock, lease
 
 **Paved road**:
@@ -170,7 +163,7 @@ _Avoid_: garden clone, workspace
 
 **Garden branch**:
 The site's branch, which holds only the ignore rule for the beds, never the repository's code. The garden log
-and the census are not on it: they live in the refs `refs/garden/log` and `refs/garden/census`.
+and the census are not on it: each is a ref of its own.
 
 **Garden log**:
 The site's ref `refs/garden/log`, which holds the garden's events, a set that only grows. It is a ref, not a branch
@@ -187,7 +180,6 @@ What a sync says about the shared log: `local`, `synced`, `offline`, `read-only`
 _Avoid_: sync status
 
 **Bed**:
-A tend pass's working copy and branch in the garden site, holding one proposed change for a human to land. Its
-branch is the bed branch, `bed/<class>`. A sync shares the bed of a tended close as `refs/garden/beds/<class>` on the
-repository's `origin`, the shared bed, which the next bed of the class in any clone starts from.
+A tend pass's working copy and branch in the garden site, holding one proposed change for a human to land. A sync
+shares the bed of a tended close as the shared bed, which the next bed of its class in any clone starts from.
 _Avoid_: patch, fix branch
