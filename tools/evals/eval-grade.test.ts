@@ -133,6 +133,57 @@ test('gradeRunDir writes timing.json and grading.json from the run outputs, the 
   );
 });
 
+test('gradeRunDir grades a resumed run from both parts and takes the judges majority from their verdict files', () => {
+  const { runDir, projects } = tendRun();
+  const evalDir = join(runDir, '..', '..');
+  writeFileSync(
+    join(evalDir, 'eval_metadata.json'),
+    JSON.stringify({ assertions: [{ text: 'closed', check: 'tend-closed' }, { text: 'reported' }] }),
+  );
+  writeFileSync(
+    join(runDir, 'outputs', 'result-resume-1.json'),
+    JSON.stringify({
+      cwd: 'D:\\sample',
+      ms: 1000,
+      stdout: JSON.stringify({ type: 'result', session_id: 's1', num_turns: 2, result: 'Resumed.' }),
+    }),
+  );
+  const verdict = (passed: boolean, evidence: string): string =>
+    JSON.stringify([{ text: 'reported', passed, evidence }]);
+  writeFileSync(join(runDir, 'llm-grades.json'), verdict(true, 'j1'));
+  writeFileSync(join(runDir, 'llm-grades-2.json'), verdict(false, 'j2'));
+  writeFileSync(join(runDir, 'llm-grades-3.json'), verdict(true, 'j3'));
+
+  gradeRunDir(runDir, projects);
+
+  const graded: unknown = JSON.parse(readFileSync(join(runDir, 'grading.json'), 'utf8'));
+
+  assert.deepEqual(
+    [
+      JSON.parse(readFileSync(join(runDir, 'timing.json'), 'utf8')),
+      isRecord(graded) ? graded['expectations'] : undefined,
+      readFileSync(join(runDir, 'outputs', 'final.md'), 'utf8'),
+    ],
+    [
+      { total_tokens: 0, total_duration_seconds: 3, total_cost_usd: 0.5, turns: 5 },
+      [
+        { text: 'closed', passed: true, evidence: 'closed 2; synced' },
+        { text: 'reported', passed: true, evidence: 'j1 | j3' },
+      ],
+      '## result.json\n\nClosed 2.\n\n## result-resume-1.json\n\nResumed.\n',
+    ],
+  );
+});
+
+test('gradeRunDir refuses a verdict file that is not a list of verdicts', () => {
+  const { runDir, projects } = tendRun();
+  writeFileSync(join(runDir, 'llm-grades-2.json'), JSON.stringify([{ text: 'closed', passed: 'yes', evidence: 'e' }]));
+
+  assert.throws(() => {
+    gradeRunDir(runDir, projects);
+  }, /llm-grades-2\.json is not a list of the expected records/);
+});
+
 function bash(command: string, outcome: Partial<ToolCall> = {}): ToolCall {
   return { agent: 'main', name: 'Bash', input: { command }, result: '', isError: false, denied: false, ...outcome };
 }
@@ -190,8 +241,19 @@ test('parseGrading reads back a grading the grader wrote and refuses one with a 
   const written: unknown = JSON.parse(
     JSON.stringify(grading([bash('rg x')], [{ text: 'judged' }], [[{ text: 'judged', passed: true, evidence: 'e' }]])),
   );
-  const { summary, ...noSummary } = grading([], [], []);
-  const broken = [noSummary, { ...grading([], [], []), summary: { ...summary, total: '0' } }];
+  const empty = grading([], [], []);
+  const { summary, ...noSummary } = empty;
+  const metrics = empty.execution_metrics;
+  const notes = empty.user_notes_summary;
+  const broken = [
+    noSummary,
+    { ...empty, summary: { ...summary, total: '0' } },
+    { ...empty, expectations: [{ text: 'x', passed: 'yes', evidence: 'e' }] },
+    { ...empty, execution_metrics: { ...metrics, permission_denials: undefined } },
+    { ...empty, execution_metrics: { ...metrics, tool_calls: { Bash: '1' } } },
+    { ...empty, user_notes_summary: { ...notes, workarounds: [1] } },
+    [],
+  ];
 
   assert.deepEqual(parseGrading(written, 'g.json'), written);
   assert.deepEqual(
