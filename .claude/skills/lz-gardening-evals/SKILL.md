@@ -47,10 +47,12 @@ a resume), the same with `tend`, which runs on the garden sites the seed pass fi
 pass up to 40; run them in the background.
 
 A run that did not exit 0 has its cause in its newest `outputs/result*.json`: `status`, `stderr` and the last
-`result` line of `stdout`. Resume a run a usage limit or the time limit stopped with
-`node tools/evals/eval-run.ts resume <iteration dir> <case> <run dir>...`, which continues its session into
-`outputs/result-resume-<n>.json`. A run that crashed for another reason starts the iteration over: move aside every
-run folder of the iteration and every sample with its `.garden` and `-origin.git`, then go back to step 1.3.
+`result` line of `stdout`. Resume a tend run a usage limit or the time limit stopped with
+`node tools/evals/eval-run.ts resume <iteration dir> tend <run dir>...`, which continues its session into
+`outputs/result-resume-<n>.json`. A seed run cannot resume: `lz-garden` runs forked, so its work was in a subagent
+the session cannot continue, and the resumed session's own Skill call is refused. A stopped seed run, and a run that
+crashed for another reason, start the iteration over: move aside every run folder of the iteration and every sample
+with its `.garden` and `-origin.git`, then go back to step 1.3.
 
 Done when every run exited 0, itself or through a resume.
 
