@@ -41,9 +41,11 @@ site by path. Two consequences above change:
 ## Update, 2026-11-11: the garden is shared
 
 ADR 0004 shares the garden through the repository's remote under `refs/garden/*`. The site stays a separate clone,
-and the checkout still gains no refs and no files. Three consequences above change:
+and the checkout still gains no refs and no files. Four consequences above change:
 
 - "Nothing is pushed" no longer holds: the site pushes the garden's own refs, never the repository's branches.
+- "`site.ts open` does not fetch" now holds only for the base: `open` syncs once, fetching and pushing the garden's
+  own refs.
 - Deleting a site no longer loses the queue while another clone or the remote holds it.
 - "One gardener per site" no longer holds: the site writes its refs by compare-and-swap, without a working tree, so
   runs on one site do not race.
