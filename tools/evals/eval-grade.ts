@@ -206,14 +206,15 @@ export function parseTiming(value: unknown, file: string): Timing {
   return value;
 }
 
+// Seconds and turns are each part's own; tokens and cost are running totals of the session every resume continues.
 export function timing(outputs: readonly SlimOutput[]): Timing {
   const sum = (values: readonly number[]): number => values.reduce((total, value) => total + value, 0);
   const results = outputs.map(({ result }) => result);
 
   return {
-    total_tokens: sum(results.map(tokens)),
+    total_tokens: Math.max(0, ...results.map(tokens)),
     total_duration_seconds: Math.round(sum(outputs.map(({ ms }) => ms)) / 1000),
-    total_cost_usd: Math.round(sum(results.map((result) => numberAt(result, 'total_cost_usd'))) * 100) / 100,
+    total_cost_usd: Math.round(Math.max(0, ...results.map((result) => numberAt(result, 'total_cost_usd'))) * 100) / 100,
     turns: sum(results.map((result) => numberAt(result, 'num_turns'))),
   };
 }

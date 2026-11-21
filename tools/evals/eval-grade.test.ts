@@ -286,7 +286,7 @@ function slimOut(result: Record<string, unknown>, ms: number): unknown {
   };
 }
 
-test('timing sums a run and its resume: seconds, cost, turns and every token the models processed', () => {
+test('timing sums the seconds and turns of a run and its resume, and takes tokens and cost from the session total', () => {
   const usage = (tokens: number, cost: number): unknown => ({
     'claude-sonnet-5-5': {
       inputTokens: tokens,
@@ -306,9 +306,9 @@ test('timing sums a run and its resume: seconds, cost, turns and every token the
   );
 
   assert.deepEqual(timing([first, resumed].map(slimOutput)), {
-    total_tokens: 440,
+    total_tokens: 400,
     total_duration_seconds: 1454,
-    total_cost_usd: 5.75,
+    total_cost_usd: 4.5,
     turns: 234,
   });
 });
