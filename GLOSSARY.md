@@ -16,7 +16,7 @@ what landed.
 _Avoid_: category, kind, type
 
 **Planting commit**:
-The commit that introduced a weed; a weed found by reading what landed names it as its source.
+The commit that introduced a weed; a weed found in the code names it as its source.
 
 **Duplicate function**:
 A function name defined at module scope in two or more files of the codebase. A function declaration and a `const`
@@ -46,8 +46,9 @@ pass declined it. It is never queued again.
 The file a weed sits in, its `--where` without the line. Six weeds in one file are six weeds in one place.
 
 **Ready to tend**:
-Said of a weed class whose open weeds sit in two or more places: several agents took the same shortcut. A class
-whose open weeds all sit in one place waits for a second.
+Said of a weed class whose open weeds sit in two or more places: several agents took the same shortcut, and a tend
+pass may take the class unless another writer claims it or it is tended its own way (a stale verification, a repeated
+lesson). A class whose open weeds all sit in one place waits for a second.
 
 **One-off**:
 Weeds judged an isolated occurrence rather than a pattern agents copy: they share no cause, or sit in one place. A
