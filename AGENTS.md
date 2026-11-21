@@ -34,7 +34,9 @@ user configured it (`lzGardening.name` and `lzGardening.email` name the garden's
   `agent:` field, and fails in an Agent call.
 - Point at bundled files with `${CLAUDE_SKILL_DIR}` inside a skill and `${CLAUDE_PLUGIN_ROOT}` across skills.
 - Verify a change to a skill or agent with a real run (`claude -p --plugin-dir ./plugins/lz-gardening`) on Sonnet
-  and Opus. Judge from the subagent's transcript what it received, not from the model's answer.
+  and Opus. Judge from the subagent's transcript what it received, not from the model's answer. Compare a change to
+  the text the seed or tend pass follows with the text before it through the `lz-gardening-evals` project skill, and
+  a description change through `lz-gardening-triggers`.
 
 ## Scripts
 

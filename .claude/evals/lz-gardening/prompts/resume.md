@@ -1,1 +1,1 @@
-A usage limit or the time limit stopped this session partway through its pass. Nothing else has touched the checkout, the site or the bed since. Continue the pass from where it stopped, and finish it as the skill says.
+A usage limit or the time limit stopped this session partway through its seed or tend pass. Nothing else has touched the checkout or the site since. Continue that pass from where it stopped, and finish it as the skill says.
