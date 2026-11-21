@@ -1,36 +1,5 @@
 // Pass@k and Pass^k per eval and configuration of an eval iteration, which skill-creator's aggregate_benchmark.py does
-// not report. Repository-only; nothing here ships with the plugin.
-//   node tools/evals/eval-summary.ts <iteration dir>   writes <iteration dir>/summary.md
-import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, sep } from 'node:path';
-import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
-
-// A run passes in full when it has graded expectations, every one passed, and none waits for the judge.
-function outcome(iteration: string, grading: string): RunOutcome {
-  const [evalName = '', config = ''] = grading.split(sep);
-  const parsed: unknown = JSON.parse(readFileSync(join(iteration, grading), 'utf8'));
-  const summary = isRecord(parsed) ? parsed['summary'] : undefined;
-  const notes = isRecord(parsed) ? parsed['user_notes_summary'] : undefined;
-  const pending = isRecord(notes) && Array.isArray(notes['needs_review']) ? notes['needs_review'].length : 0;
-  const fullyPassed = isRecord(summary) && summary['failed'] === 0 && Number(summary['total']) > 0 && pending === 0;
-
-  return { evalName, config, fullyPassed };
-}
-
-if (isMainModule(import.meta.url)) {
-  const iteration = process.argv[2] ?? '';
-
-  if (!existsSync(iteration)) {
-    throw new Error(`usage: eval-summary.ts <iteration dir> (${iteration} does not exist)`);
-  }
-
-  const gradings = globSync(join('eval-*', '*', 'run-*', 'grading.json'), { cwd: iteration });
-  writeFileSync(
-    join(iteration, 'summary.md'),
-    `${summaryTable(gradings.map((grading) => outcome(iteration, grading)))}\n`,
-  );
-}
+// not report. Repository-only; nothing here ships with the plugin. eval-benchmark.ts writes it as summary.md.
 
 function choose(n: number, k: number): number {
   if (k < 0 || k > n) {
