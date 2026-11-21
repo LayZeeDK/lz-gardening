@@ -94,7 +94,7 @@ weeds of one class.
 
 Read every open weed as it is on the base: run `git show <base>:<path>` for each weed's file, one call per file, and
 when the tool result says the output was saved to a file, Read that file to its end. A Read or Grep of the checkout
-does not replace this call: the checkout can be on another branch than `<base>`. Read the commit that planted each
+does not replace this call. Read the commit that planted each
 weed too (`git show <commit>` for a `commit:` source). Then answer in two sentences, which open the report (step
 8): what were the agents trying to do, and why was the shortcut the nearest example? For copies (a function
 defined twice, a block repeated), first read why each copy exists: a comment, a doc or a test that pins the copies
@@ -110,14 +110,10 @@ never names an import the repository rules out.
 A class whose weeds were `regrown` had a check that did not hold: start from the bed and
 check that `weeds list` shows on each regrown weed (`[regrown after bed/<class>@<sha> (check: <where>)]`),
 and find why (a rule too narrow, a suppression, an exception that spread, a bed not landed yet) before writing
-another. The check reads `(check: <where> not on the base)` when its bed had not landed as of the garden's last
-census, or one of its check files is gone from the base (`<where>` holds each check file, separated by `, `); a tend
-pass takes no census, so a bed that landed since still reads so. When the bed has not landed, its check never ran on
-the base: tend the class again in the same bed, which step 4 brings up to the base, and change the check only if it
-misses the new weeds. The check reads `(check: <where>, base unknown)` when the site could not judge the base (no
-readable census, the bed's or the census's commit is missing, or the bed shares no history with the base): read the
-base yourself (`git show <base>:<path>` for each path in `<where>`) to see whether the check landed before you decide
-which case it is.
+another. When the check reads `(check: <where> not on the base)` and its bed has not landed, tend the class again in
+the same bed, and change the check only if it misses the new weeds. When it reads `(check: <where>, base unknown)`,
+read the base yourself (`git show <base>:<path>` for each path in `<where>`) to see whether the check landed before
+you decide which case it is.
 
 Then decide, and say which in your reply:
 
@@ -314,19 +310,10 @@ closed one by one, and each weed baselined, in the report. Then close the class:
 `weeds close-class --class <class> --tended "bed/<class>@<short sha>" --check "<where the check lives>"`, with one
 `--check` per check file from step 3 (a lint rule and a test that holds what the rule cannot are two),
 repository-relative (`eslint.config.mjs`, not a path on this machine), and
-`--baselined <id>,<id>` naming the baselined weeds when there are any. It refuses an id that is no open weed of the
-class, a baselined weed whose file no `--check` file names, a close that would baseline every open weed (the check
-then holds none of them), and a `--check` file the named commit does not hold: fix the list and run it again. `<short sha>` is
-the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your last commit: the close shares
-the bed only when it names the bed's tip; with any other commit the bed stays in the site. It exits 1 and closes
-nothing when its first sync is not `synced` or `local` or the claim is no longer this site's: stop and report its
-line; the bed stays for the next pass. (The per-weed `close --id` closes above need no claim of this site's: when
-their first sync is not `synced` or `local` they still close, and say `planned <state>` on stderr.) It prints
-`closed <n>; <state>`: the close and the end of the claim land in the site's queue and, when the state is `synced`,
-on `origin`, followed by the bed. Any other state shares them on the next `site open`. Lines on stderr name what its
-last sync left out, kept local or gave back, such as a bed `origin` did not take. A later weed of the class,
-anywhere, is then queued as `regrown` and names this bed and check. Done when `close-class` prints
-`closed <n>; <state>`.
+`--baselined <id>,<id>` naming the baselined weeds when there are any. When it refuses the list, fix the list and
+run it again. `<short sha>` is the bed's last commit, printed by `git -C "<bed>" rev-parse --short HEAD` after your
+last commit; with any other commit the bed stays in the site. On any other non-zero exit, report its line and stop;
+the bed stays for the next pass. Done when `close-class` prints `closed <n>; <state>`.
 
 ## 8. Report
 

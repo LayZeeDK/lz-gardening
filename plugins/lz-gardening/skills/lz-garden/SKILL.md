@@ -24,20 +24,17 @@ condition; when one is not met, report the command and its output and stop.
 Two rules hold for the whole tick:
 
 - **Search with the Grep tool, list files with the Glob tool.** These two tools are the tick's only search and
-  listing; `git grep`, `rg`, `find` and `ls` are outside the tick, since a shell search can start other programs.
+  listing; `git grep`, `rg`, `find` and `ls` are outside the tick.
   Grep patterns are Rust regular expressions, with no look-around and no backreferences: search twice instead.
-- **A refused command ends the tick.** Report the command and its refusal, and stop. The refusal is the user's
-  answer, so the tick reaches the same result no other way, with a tool or with another command.
+- **A refused command ends the tick.** Report the command and its refusal, and stop. Reach the same result no other
+  way, with a tool or with another command.
 
 Stay in the repository's working directory for the whole tick and run every command as written below, quotes
-included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Read
-the repository with the git commands below and the Read, Grep and Glob tools. Claude Code runs `git log` and
-`git show` without asking only in read-only forms like the ones below; add no other options to them. Read a file as
-it is on the base with `git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often
-another branch than `<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through
-`site.ts`, `census.ts` and `weeds.ts`, which keep the queue and the census in the garden site beside the repository.
-Anything else (another command, `cd`, a file write, a redirect) falls back to the user's permission settings; a tick
-cannot stop to ask, so what those settings do not allow is refused.
+included, one command per Bash call: no shell variables, functions, loops, pipes or `&&` chains around them. Add
+no options to `git log` and `git show` beyond the ones below. Read a file as it is on the base with
+`git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often another branch than
+`<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through `site.ts`,
+`census.ts` and `weeds.ts`; run no other command, `cd`, file write or redirect.
 
 ## 1. Open the site
 
@@ -151,9 +148,7 @@ show. Take them one at a time:
 1. Run `git show <sha>:<path>` for that file, one call per file (`git show` of several files runs them together with
    nothing between them); send the calls for all the files of one line in the same message. Read each file's header
    comment and its definition of `<name>`. When the tool result says the output was saved to a file, Read that file
-   to its end. A Grep or Read of
-   the checkout does not replace this call, since the checkout can be on another branch than `<sha>`, and neither
-   does a diff page of step 3, which shows only what a commit changed.
+   to its end. A Grep or Read of the checkout does not replace this call, nor does a diff page of step 3.
 2. Look for words that say why this copy must exist: a comment in the file, or a document the repository keeps, that
    says the file cannot import the shared definition (it is loaded, injected or copied alone) or that a test pins the
    copies alike. Only such words make a documented copy; a file that merely has no imports, or looks
@@ -165,15 +160,11 @@ show. Take them one at a time:
    naming weed). A tend pass decides what happens to each. No file of a `+ duplicate` line ends neither queued nor
    on `left out:`.
 
-The script prints `added`, `seen`, `regrown` or `kept`. A `regrown` weed belongs to a class a tend pass closed, and
-the line names that bed and its check: say so in the report, because the check did not hold. When the check reads
-`(check: <where> not on the base)`, the bed's change to that check is not on the base at this tick's census: the bed
-has not landed, or one of the check's files is gone from the base. Report it that way, not as a check that failed.
-When it reads `(check: <where>, base unknown)`, the site could not judge the base: the census is missing or
-unreadable, the bed's or the census's commit is not in the site or the checkout, or the bed shares no history with
-the base. Report the check's landing as unknown. Done when every weed from steps 2 and 3 printed one of those
-words, and every file of a new duplicate had its own `git show <sha>:<path>` and is either queued or a documented
-copy.
+The script prints `added`, `seen`, `regrown` or `kept`. Report a `regrown` weed with the bed and check its line
+names. Report a `(check: <where> not on the base)` line as a check that has not landed, not one that failed, and a
+`(check: <where>, base unknown)` line as a check whose landing is unknown. Done when every weed from steps 2 and 3
+printed one of those words, and every file of a new duplicate had its own `git show <sha>:<path>` and is either
+queued or a documented copy.
 
 ## 5. Group, record, report
 
