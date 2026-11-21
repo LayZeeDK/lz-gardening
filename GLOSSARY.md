@@ -35,8 +35,8 @@ A file's own definition of a duplicate function, kept on purpose: words in that 
 file cannot use the shared one (it runs alone, it cannot import), or a record says so.
 
 **Close**:
-Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names its
-checks), one-off (no check was written), or kept.
+Taking weeds off the queue, as one of three kinds: tended (a tend pass added checks and names
+them), one-off (no check was written), or kept.
 
 **Open**:
 Said of a queued weed that no close has ended yet.
