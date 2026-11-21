@@ -87,6 +87,24 @@ test('tend-closed passes on a close-class that printed closed and fails when non
   );
 });
 
+test('garden-commands counts a script call chained, piped or redirected outside its quoted arguments as outside', () => {
+  const site = 'node "D:/plugin/skills/lz-garden/scripts/site.ts" open';
+  const calls = [
+    weeds("decline --class c --where a.ts --reason 'a | b; c > d' --census abc --read t"),
+    call('Bash', { command: `cd D:/sample && ${site}` }),
+    call('Bash', { command: `${site} | head` }),
+    call('Bash', { command: `${site} 2> err.txt` }),
+  ];
+
+  assert.deepEqual(run('garden-commands', calls), {
+    passed: false,
+    evidence: `3 outside the tick: ${calls
+      .slice(1)
+      .map((outside) => `Bash ${JSON.stringify(outside.input)}`)
+      .join('; ')}`,
+  });
+});
+
 test('garden-commands fails on a command lz-garden does not run and on a file write, and names each', () => {
   const calls = [
     call('Bash', { command: 'node --version' }),

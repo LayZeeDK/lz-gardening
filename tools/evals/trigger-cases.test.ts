@@ -19,6 +19,21 @@ test('withDescription replaces the frontmatter description with a quoted one and
   );
 });
 
+test('withDescription writes a description holding replacement patterns such as $& as it is', () => {
+  const skill = ['---', 'name: lz-tend', 'description: Old.', '---', ''].join('\n');
+
+  assert.equal(skillParts(withDescription(skill, "Costs $& or $$ or $'.")).description, "Costs $& or $$ or $'.");
+});
+
+test('splitEvalSet keeps every query for training when the holdout is 0', () => {
+  const set = [
+    { query: 'tend it', should_trigger: true },
+    { query: 'explain it', should_trigger: false },
+  ];
+
+  assert.deepEqual(splitEvalSet(set, 0, 42), { train: set, test: [] });
+});
+
 test('writeCases writes one case per query, tagged with its split, whose grader counts the skill being invoked', () => {
   const evals = join(mkdtempSync(join(tmpdir(), 'trigger-cases-')), 'evals');
 

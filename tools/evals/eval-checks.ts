@@ -75,7 +75,14 @@ function declineReadsLines(calls: readonly ToolCall[]): CheckResult {
 
 const fileWrites = new Set(['Edit', 'Write', 'NotebookEdit']);
 
-// lz-garden's allowed-tools and its read-only git forms; a script call's quoted text may hold any character.
+const chained = /[|;&<>`]|\$\(/;
+
+// A command's text with its quoted arguments taken out, which may hold any character.
+function unquoted(text: string): string {
+  return text.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, '');
+}
+
+// lz-garden's allowed-tools and its read-only git forms, each one command with no chain, pipe or redirect.
 function inTick(call: ToolCall): boolean {
   const text = command(call);
 
@@ -85,8 +92,8 @@ function inTick(call: ToolCall): boolean {
 
   return (
     text === 'node --version' ||
-    scriptRun(call) !== undefined ||
-    (/^git (ls-tree|rev-parse|log|show) /.test(text) && !/[|;&<>`]|\$\(/.test(text))
+    (/^node /.test(text) && scriptRun(call) !== undefined && !chained.test(unquoted(text))) ||
+    (/^git (ls-tree|rev-parse|log|show) /.test(text) && !chained.test(text))
   );
 }
 

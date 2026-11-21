@@ -179,18 +179,18 @@ function readIteration(iterationDir: string): Iteration {
     throw new Error(`${file} needs configs (name -> {plugin}), models and runs`);
   }
 
-  return { configs: Object.fromEntries(plugins), models, runs };
+  const absolute = plugins.map(([name, plugin]) => [name, resolve(plugin).replaceAll('\\', '/')] as const);
+
+  return { configs: Object.fromEntries(absolute), models, runs };
 }
 
 function heavyLock(args: readonly string[]): number {
   return spawnSync(process.execPath, [required('LZ_EVAL_HEAVY_LOCK'), ...args], { stdio: 'inherit' }).status ?? 1;
 }
 
-async function withHeavyLock(task: string, minutes: number, work: () => Promise<void>): Promise<void> {
+async function withHeavyLock<T>(task: string, minutes: number, work: () => Promise<T>): Promise<T> {
   if (process.env['LZ_EVAL_HEAVY_LOCK'] === undefined) {
-    await work();
-
-    return;
+    return work();
   }
 
   const owner = required('LZ_EVAL_LOCK_OWNER');
@@ -209,7 +209,7 @@ async function withHeavyLock(task: string, minutes: number, work: () => Promise<
   }
 
   try {
-    await work();
+    return await work();
   } finally {
     heavyLock(['release', '--owner', owner]);
   }
@@ -224,19 +224,27 @@ function slimRun(runSlim: string, args: readonly string[]): Promise<number> {
   });
 }
 
+// Starts the runs, `concurrency` at a time, and gives back the run folders whose session exited with a failure.
 async function runAll(
   runs: readonly PlannedRun[],
   concurrency: number,
   start: (run: PlannedRun) => Promise<number>,
-): Promise<void> {
+): Promise<string[]> {
   const queue = [...runs];
+  const failed: string[] = [];
   const worker = async (): Promise<void> => {
     for (let run = queue.shift(); run !== undefined; run = queue.shift()) {
       const status = await start(run);
       console.log(`${run.runDir} exit ${String(status)}`);
+
+      if (status !== 0) {
+        failed.push(run.runDir);
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, runs.length) }, worker));
+
+  return failed;
 }
 
 if (isMainModule(import.meta.url)) {
@@ -325,10 +333,15 @@ if (isMainModule(import.meta.url)) {
       mkdirSync(`${run.runDir}/outputs`, { recursive: true });
     });
     const waves = Math.ceil(plan.length / concurrency);
-    await withHeavyLock(
+    const failed = await withHeavyLock(
       `lz-gardening eval ${evalCase.name} ${basename(iteration)}: ${String(plan.length)} slim claude -p runs, ${String(concurrency)} at a time`,
       waves * (evalCase.timeoutMinutes + 2),
       () => runAll(plan, concurrency, (run) => slimRun(runSlim, slimArgs(evalCase, evalsDir, run))),
     );
+
+    if (failed.length > 0) {
+      console.error(`failed runs: ${failed.join(', ')}`);
+      process.exitCode = 1;
+    }
   }
 }

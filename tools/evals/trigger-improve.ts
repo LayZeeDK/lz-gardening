@@ -7,8 +7,6 @@ import type { Results } from './trigger-results.ts';
 export interface Attempt {
   readonly description: string;
   readonly train: Results;
-  readonly testPassed?: number;
-  readonly testTotal?: number;
 }
 
 export interface ImproveInput {

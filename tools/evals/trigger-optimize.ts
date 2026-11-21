@@ -7,10 +7,10 @@
 //
 // Environment: LZ_EVAL_RUN_SLIM, the slim `claude -p` runner (run-slim.ts) that writes each improved description;
 // LZ_EVAL_CLAUDE, the claude executable when `claude` on PATH is a shell shim Node.js cannot start (default: claude).
-// Writes <workspace>/iteration-N/ (the plugin copy, its cases, plugin-eval.json, the improve call) and
-// <workspace>/results.json. The plugin's own SKILL.md is never changed.
+// Writes into a new or empty <workspace>: iteration-N/ (the plugin copy, its cases, plugin-eval.json), improve-<ms>/
+// (each improve call's prompt and output) and results.json. The plugin's own SKILL.md is never changed.
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
@@ -33,6 +33,26 @@ function required(env: string): string {
 
   if (value === undefined || value === '') {
     throw new Error(`${env} is not set; see the header of trigger-optimize.ts`);
+  }
+
+  return value;
+}
+
+function wholeNumber(name: string, raw: string, least: number): number {
+  const value = Number(raw);
+
+  if (!Number.isInteger(value) || value < least) {
+    throw new Error(`--${name} must be a whole number of at least ${String(least)}, not ${raw}`);
+  }
+
+  return value;
+}
+
+function share(name: string, raw: string, upTo: 'below 1' | '1'): number {
+  const value = Number(raw);
+
+  if (raw.trim() === '' || !(value >= 0 && (upTo === '1' ? value <= 1 : value < 1))) {
+    throw new Error(`--${name} must be a number from 0 to ${upTo}, not ${raw}`);
   }
 
   return value;
@@ -86,6 +106,17 @@ if (isMainModule(import.meta.url)) {
     throw new Error('usage: trigger-optimize.ts --plugin <dir> --skill <name> --eval-set <json> --workspace <dir>');
   }
 
+  const runs = wholeNumber('runs', values.runs, 1);
+  const maxIterations = wholeNumber('max-iterations', values['max-iterations'], 1);
+  const concurrency = wholeNumber('concurrency', values.concurrency, 1);
+  const seed = wholeNumber('seed', values.seed, 0);
+  const holdout = share('holdout', values.holdout, 'below 1');
+  const threshold = share('threshold', values.threshold, '1');
+
+  if (existsSync(workspace) && readdirSync(workspace).length > 0) {
+    throw new Error(`workspace ${workspace} is not empty; use a new one`);
+  }
+
   const runSlim = required('LZ_EVAL_RUN_SLIM');
   const claude = process.env['LZ_EVAL_CLAUDE'] ?? 'claude';
   const queries: unknown = readJson(evalSet);
@@ -95,8 +126,7 @@ if (isMainModule(import.meta.url)) {
   }
 
   const { name, description, body } = skillParts(readFileSync(join(plugin, 'skills', skill, 'SKILL.md'), 'utf8'));
-  const split = splitEvalSet(queries, Number(values.holdout), Number(values.seed));
-  const threshold = Number(values.threshold);
+  const split = splitEvalSet(queries, holdout, seed);
   const result = await optimize(
     {
       skillName: name,
@@ -104,7 +134,7 @@ if (isMainModule(import.meta.url)) {
       original: description,
       train: split.train,
       test: split.test,
-      maxIterations: Number(values['max-iterations']),
+      maxIterations,
     },
     {
       evaluate: (candidate, all, iteration) => {
@@ -122,13 +152,13 @@ if (isMainModule(import.meta.url)) {
             '--json',
             json,
             '--runs',
-            values.runs,
+            String(runs),
             '--ablation',
             'none',
             '--model',
             values.model,
             '-j',
-            values.concurrency,
+            String(concurrency),
             '--threshold',
             '0',
             '--trust-plugin',

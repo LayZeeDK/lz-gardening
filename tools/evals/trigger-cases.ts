@@ -53,7 +53,7 @@ export function withDescription(skill: string, description: string): string {
   field(skill, 'description');
 
   return skill.replace(frontmatter, (block) =>
-    block.replace(/^description:.*$/m, `description: ${JSON.stringify(description)}`),
+    block.replace(/^description:.*$/m, () => `description: ${JSON.stringify(description)}`),
   );
 }
 
@@ -133,8 +133,13 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return copy;
 }
 
-// Stratified by should_trigger, as skill-creator splits: each kind gives its share, and at least one, to the test set.
+// Stratified by should_trigger, as skill-creator splits: each kind gives its share, and at least one, to the test set;
+// a holdout of 0 keeps no test set.
 export function splitEvalSet(set: readonly EvalQuery[], holdout: number, seed: number): Split {
+  if (holdout === 0) {
+    return { train: [...set], test: [] };
+  }
+
   const random = generator(seed);
   const parts = [true, false].map((kind) => {
     const own = shuffled(

@@ -203,9 +203,13 @@ export function gradeRunDir(runDir: string, projects: string): void {
     }),
   );
   const calls = [...sessions.values()].flatMap(({ cwd, session }) =>
-    sessionTranscripts(projects, cwd, session).flatMap(({ agent, file }) =>
-      existsSync(file) ? toolCalls(readFileSync(file, 'utf8').split('\n').filter(Boolean), agent) : [],
-    ),
+    sessionTranscripts(projects, cwd, session).flatMap(({ agent, file }) => {
+      if (!existsSync(file)) {
+        throw new Error(`no transcript for session ${session} at ${file}`);
+      }
+
+      return toolCalls(readFileSync(file, 'utf8').split('\n').filter(Boolean), agent);
+    }),
   );
 
   // The judge reads the calls, not the transcripts: a tend transcript runs to megabytes.
@@ -216,7 +220,13 @@ export function gradeRunDir(runDir: string, projects: string): void {
   writeFileSync(join(runDir, 'outputs', 'final.md'), finals.join('\n'));
   writeFileSync(join(runDir, 'outputs', 'calls.jsonl'), callLines.map((line) => `${line}\n`).join(''));
   writeFileSync(join(runDir, 'timing.json'), `${JSON.stringify(timing(outputs), null, 2)}\n`);
-  writeFileSync(join(runDir, 'grading.json'), `${JSON.stringify(grading(calls, assertions, judged), null, 2)}\n`);
+  const unfinished = assertions.map(({ text }) => ({
+    text,
+    passed: false,
+    evidence: 'The session printed no result: it timed out or crashed.',
+  }));
+  const graded = sessions.size === 0 ? grading([], unfinished, unfinished) : grading(calls, assertions, judged);
+  writeFileSync(join(runDir, 'grading.json'), `${JSON.stringify(graded, null, 2)}\n`);
 }
 
 // node tools/evals/eval-grade.ts <run dir>...: grades each run folder against the transcripts in ~/.claude/projects.

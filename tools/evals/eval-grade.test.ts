@@ -7,7 +7,17 @@ import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/lo
 import { gradeRunDir, grading, timing } from './eval-grade.ts';
 import type { ToolCall } from './eval-transcript.ts';
 
-test('gradeRunDir writes timing.json and grading.json from the run outputs, the eval metadata and the transcripts', () => {
+interface RunShape {
+  readonly transcript?: boolean;
+  readonly finished?: boolean;
+}
+
+// A tend run folder whose session closed a class, with its transcript under projects/ unless left out, and its result
+// line unless the session never finished.
+function tendRun({ transcript = true, finished = true }: RunShape = {}): {
+  readonly runDir: string;
+  readonly projects: string;
+} {
   const root = mkdtempSync(join(tmpdir(), 'eval-grade-'));
   const projects = join(root, 'projects');
   const evalDir = join(root, 'iteration-1', 'eval-tend-opus');
@@ -29,15 +39,22 @@ test('gradeRunDir writes timing.json and grading.json from the run outputs, the 
     JSON.stringify({
       cwd,
       ms: 2000,
-      stdout: JSON.stringify({
-        type: 'result',
-        session_id: 's1',
-        num_turns: 3,
-        total_cost_usd: 0.5,
-        result: 'Closed 2.',
-      }),
+      stdout: finished
+        ? JSON.stringify({
+            type: 'result',
+            session_id: 's1',
+            num_turns: 3,
+            total_cost_usd: 0.5,
+            result: 'Closed 2.',
+          })
+        : '',
     }),
   );
+
+  if (!transcript) {
+    return { runDir, projects };
+  }
+
   writeFileSync(
     join(projects, 'D--sample', 's1.jsonl'),
     [
@@ -60,6 +77,32 @@ test('gradeRunDir writes timing.json and grading.json from the run outputs, the 
       }),
     ].join('\n'),
   );
+
+  return { runDir, projects };
+}
+
+test('gradeRunDir refuses a run whose session transcript is missing, which would grade as a run with no calls', () => {
+  const { runDir, projects } = tendRun({ transcript: false });
+
+  assert.throws(() => {
+    gradeRunDir(runDir, projects);
+  }, /no transcript for session s1 /);
+});
+
+test('gradeRunDir fails every assertion of a run whose session never finished, as when it timed out', () => {
+  const { runDir, projects } = tendRun({ finished: false });
+
+  gradeRunDir(runDir, projects);
+
+  const graded: unknown = JSON.parse(readFileSync(join(runDir, 'grading.json'), 'utf8'));
+
+  assert.deepEqual(isRecord(graded) ? graded['expectations'] : undefined, [
+    { text: 'closed', passed: false, evidence: 'The session printed no result: it timed out or crashed.' },
+  ]);
+});
+
+test('gradeRunDir writes timing.json and grading.json from the run outputs, the eval metadata and the transcripts', () => {
+  const { runDir, projects } = tendRun();
 
   gradeRunDir(runDir, projects);
 

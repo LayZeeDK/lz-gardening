@@ -118,7 +118,11 @@ test('scaffold clones main alone into a bare origin and a sample, opens its gard
   const testConfig = process.env['GIT_CONFIG_GLOBAL'];
   process.env['GIT_CONFIG_GLOBAL'] = join(root, 'gitconfig');
   t.after(() => {
-    process.env['GIT_CONFIG_GLOBAL'] = testConfig;
+    if (testConfig === undefined) {
+      Reflect.deleteProperty(process.env, 'GIT_CONFIG_GLOBAL');
+    } else {
+      process.env['GIT_CONFIG_GLOBAL'] = testConfig;
+    }
   });
   const run = {
     config: 'new_skill',

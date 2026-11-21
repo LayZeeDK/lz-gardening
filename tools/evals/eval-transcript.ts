@@ -31,6 +31,10 @@ function blocks(lines: readonly string[]): Block[] {
 }
 
 function text(content: unknown): string {
+  if (content === undefined) {
+    return '';
+  }
+
   return typeof content === 'string' ? content : JSON.stringify(content);
 }
 

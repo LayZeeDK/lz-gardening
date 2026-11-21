@@ -16,24 +16,23 @@ test('improvePrompt lists the misses, the false triggers and earlier attempts by
     skillContent: 'BODY OF THE SKILL',
     current: 'Tend one class.',
     train,
-    history: [{ description: 'Old try.', train, testPassed: 1, testTotal: 2 }],
+    history: [{ description: 'Old try.', train }],
   });
+  const fragments = [
+    '<current_description>\n"Tend one class."\n</current_description>',
+    'Current scores (Train: 0/2):',
+    'FAILED TO TRIGGER (should have triggered but didn\'t):\n  - "tend the suppressions" (triggered 0/3 times)',
+    'FALSE TRIGGERS (triggered but shouldn\'t have):\n  - "explain worktrees" (triggered 2/3 times)',
+    '<attempt train=0/2>\nDescription: "Old try."',
+    '<skill_content>\nBODY OF THE SKILL\n</skill_content>',
+  ];
 
   assert.deepEqual(
-    [
-      prompt.includes('<current_description>\n"Tend one class."\n</current_description>'),
-      prompt.includes('Current scores (Train: 0/2):'),
-      prompt.includes(
-        'FAILED TO TRIGGER (should have triggered but didn\'t):\n  - "tend the suppressions" (triggered 0/3 times)',
-      ),
-      prompt.includes('FALSE TRIGGERS (triggered but shouldn\'t have):\n  - "explain worktrees" (triggered 2/3 times)'),
-      prompt.includes('<attempt train=0/2>\nDescription: "Old try."'),
-      prompt.includes('test='),
-      prompt.includes('<skill_content>\nBODY OF THE SKILL\n</skill_content>'),
-      prompt.endsWith('Respond with only the new description text in <new_description> tags, nothing else.'),
-    ],
-    [true, true, true, true, true, false, true, true],
+    fragments.filter((fragment) => !prompt.includes(fragment)),
+    [],
   );
+  assert.doesNotMatch(prompt, /test=/);
+  assert.ok(prompt.endsWith('Respond with only the new description text in <new_description> tags, nothing else.'));
 });
 
 test('parseDescription takes the tagged text without quotes, or the whole reply when it has no tags', () => {

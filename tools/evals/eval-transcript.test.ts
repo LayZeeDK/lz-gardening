@@ -76,3 +76,16 @@ test("a session's transcripts are its own file and each subagent's, named by age
     { agent: 'lz-gardening:lz-gardener', file: join(folder, 's1', 'subagents', 'agent-a1.jsonl') },
   ]);
 });
+
+test('a tool call the session never got a result for, as when it was stopped, has an empty result', () => {
+  const [call] = toolCalls([toolUse('t1', 'Bash', { command: 'node --test' })], 'main');
+
+  assert.deepEqual(call, {
+    agent: 'main',
+    name: 'Bash',
+    input: { command: 'node --test' },
+    result: '',
+    isError: false,
+    denied: false,
+  });
+});
