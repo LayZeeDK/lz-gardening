@@ -90,18 +90,17 @@ recorded as kept, so no later tick queues it.
 _Avoid_: skip, dismiss
 
 **Queue**:
-The grow-only set of events (adds, closes, claims, releases and seeds) that a replay turns into the weeds and their
-statuses, each weed with its file and line, its source and the root cause it points to. Weeds leave the queue only
-by being closed, never by being edited.
+The weeds waiting to be tended, each with its file and line, its source and the root cause it points to. Weeds leave
+the queue only by being closed, never by being edited.
 _Avoid_: ledger, backlog, weeds file
 
 **Event**:
-One entry in the queue: an add, close, claim, release or seed, written once by one writer and never edited. Its
-clock orders it against the others only where "earliest" or "latest" matters.
+One entry in the garden log: an add, close, claim, release or seed, written once by one writer and never edited.
+Together the events give the queue and each weed's status.
 _Avoid_: row, record (records are the repository's own)
 
 **Writer**:
-A garden site that adds events to the queue, named by an id of its own in the site's git config
+A garden site that adds events to the garden log, named by an id of its own in the site's git config
 (`lzGardening.writer`) that its claims carry. Two clones of one repository are two writers.
 
 **Records**:
@@ -162,17 +161,17 @@ The branch work lands on, which a tick watches and a bed starts from. Short form
 _Avoid_: target branch
 
 **Garden site**:
-A clone of the repository beside it that holds the queue, the census and the beds, so the gardener's own work stays
+A clone of the repository beside it that holds the garden log, the census and the beds, so the gardener's own work stays
 out of the repository's checkout.
 _Avoid_: garden clone, workspace
 
 **Garden branch**:
-The site's branch, which holds only the ignore rule for the beds, never the repository's code. The queue and the
-census are not on it: they live in the refs `refs/garden/log` and `refs/garden/census`.
+The site's branch, which holds only the ignore rule for the beds, never the repository's code. The garden log
+and the census are not on it: they live in the refs `refs/garden/log` and `refs/garden/census`.
 
 **Garden log**:
-The site's ref `refs/garden/log`, whose commits hold the queue's events, one file each, and the format file
-`garden.json`. It is a ref, not a branch or a folder, so nothing checks it out.
+The site's ref `refs/garden/log`, which holds the garden's events, a set that only grows. It is a ref, not a branch
+or a folder, so nothing checks it out.
 _Avoid_: weeds file, queue branch
 
 **Shared log**:
