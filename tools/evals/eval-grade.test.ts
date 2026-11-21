@@ -151,7 +151,7 @@ test('grading scores script checks and judged assertions, lists unjudged ones fo
   ];
   const judged = [{ text: 'The report names the root cause', passed: true, evidence: 'line 3' }];
 
-  assert.deepEqual(grading(calls, assertions, judged), {
+  assert.deepEqual(grading(calls, assertions, [judged]), {
     expectations: [
       { text: 'The census was taken', passed: true, evidence: '1 of 1 census.ts --rev runs exited 0' },
       { text: 'No call was denied', passed: false, evidence: '1 denied: Read {}' },
@@ -172,9 +172,23 @@ test('grading scores script checks and judged assertions, lists unjudged ones fo
   });
 });
 
+test('grading takes the majority of the judges per assertion and sends a split to review for another judge', () => {
+  const assertions = [{ text: 'agreed' }, { text: 'split' }, { text: 'outvoted' }];
+  const verdict = (text: string, passed: boolean, evidence: string) => ({ text, passed, evidence });
+  const first = [verdict('agreed', true, 'a1'), verdict('split', true, 's1'), verdict('outvoted', true, 'o1')];
+  const second = [verdict('agreed', true, 'a2'), verdict('split', false, 's2'), verdict('outvoted', false, 'o2')];
+  const third = [verdict('outvoted', false, 'o3')];
+  const graded = grading([], assertions, [first, second, third]);
+
+  assert.deepEqual(
+    [graded.expectations, graded.user_notes_summary.needs_review],
+    [[verdict('agreed', true, 'a1 | a2'), verdict('outvoted', false, 'o2 | o3')], ['judges split: split']],
+  );
+});
+
 test('parseGrading reads back a grading the grader wrote and refuses one with a field missing or of the wrong kind', () => {
   const written: unknown = JSON.parse(
-    JSON.stringify(grading([bash('rg x')], [{ text: 'judged' }], [{ text: 'judged', passed: true, evidence: 'e' }])),
+    JSON.stringify(grading([bash('rg x')], [{ text: 'judged' }], [[{ text: 'judged', passed: true, evidence: 'e' }]])),
   );
   const { summary, ...noSummary } = grading([], [], []);
   const broken = [noSummary, { ...grading([], [], []), summary: { ...summary, total: '0' } }];

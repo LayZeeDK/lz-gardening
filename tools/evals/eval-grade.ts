@@ -80,17 +80,34 @@ function scripted(calls: readonly ToolCall[], { text, check }: Assertion): Expec
   return { text, ...run(calls) };
 }
 
+// The judges' majority on one assertion, with the agreeing judges' evidence; 'split' when they divide evenly.
+function judgedVerdict(text: string, judges: readonly (readonly Expectation[])[]): Expectation | 'split' | undefined {
+  const verdicts = judges.flatMap((verdictsOfJudge) => verdictsOfJudge.filter((verdict) => verdict.text === text));
+  const passed = verdicts.filter((verdict) => verdict.passed);
+  const failed = verdicts.filter((verdict) => !verdict.passed);
+
+  if (verdicts.length === 0) {
+    return undefined;
+  }
+
+  if (passed.length === failed.length) {
+    return 'split';
+  }
+
+  const majority = passed.length > failed.length ? passed : failed;
+
+  return { text, passed: majority === passed, evidence: majority.map(({ evidence }) => evidence).join(' | ') };
+}
+
 // skill-creator's aggregate_benchmark.py takes tokens from timing.json only when grading.json has no `timing`, so
-// grading.json carries none.
+// grading.json carries none. `judges` holds each judge's verdicts; an assertion goes to the judges' majority.
 export function grading(
   calls: readonly ToolCall[],
   assertions: readonly Assertion[],
-  judged: readonly Expectation[],
+  judges: readonly (readonly Expectation[])[],
 ): Grading {
-  const graded = assertions.map(
-    (assertion) => scripted(calls, assertion) ?? judged.find(({ text }) => text === assertion.text),
-  );
-  const expectations = graded.filter((expectation) => expectation !== undefined);
+  const graded = assertions.map((assertion) => scripted(calls, assertion) ?? judgedVerdict(assertion.text, judges));
+  const expectations = graded.filter((expectation) => expectation !== undefined && expectation !== 'split');
   const passed = expectations.filter((expectation) => expectation.passed).length;
   const toolCalls: Record<string, number> = {};
 
@@ -114,9 +131,11 @@ export function grading(
     },
     user_notes_summary: {
       uncertainties: [],
-      needs_review: assertions
-        .filter((_, index) => graded[index] === undefined)
-        .map(({ text }) => `not judged: ${text}`),
+      needs_review: assertions.flatMap(({ text }, index) => {
+        const verdict = graded[index];
+
+        return verdict === undefined ? [`not judged: ${text}`] : verdict === 'split' ? [`judges split: ${text}`] : [];
+      }),
       workarounds: [],
     },
   };
@@ -199,8 +218,11 @@ export function timing(outputs: readonly SlimOutput[]): Timing {
   };
 }
 
-// A run folder holds `outputs/*.json` (run-slim `--out` files: the run and each resume), `llm-grades.json` when the
-// judge has graded it, and sits in its eval folder beside `eval_metadata.json`.
+// The verdict files of the first, second and third judge of a run.
+export const judgeFiles = ['llm-grades.json', 'llm-grades-2.json', 'llm-grades-3.json'] as const;
+
+// A run folder holds `outputs/*.json` (run-slim `--out` files: the run and each resume), a verdict file per judge
+// that has graded it, and sits in its eval folder beside `eval_metadata.json`.
 export function gradeRunDir(runDir: string, projects: string): void {
   const names = readdirSync(join(runDir, 'outputs'))
     .filter((name) => name.endsWith('.json'))
@@ -215,8 +237,10 @@ export function gradeRunDir(runDir: string, projects: string): void {
     isAssertion,
     'eval_metadata.json assertions',
   );
-  const grades = join(runDir, 'llm-grades.json');
-  const judged = existsSync(grades) ? listed(readJson(grades), isExpectation, 'llm-grades.json') : [];
+  const judges = judgeFiles
+    .map((name) => join(runDir, name))
+    .filter((file) => existsSync(file))
+    .map((file) => listed(readJson(file), isExpectation, file));
   const sessions = new Map(
     outputs.flatMap(({ cwd, result }) => {
       const session = result['session_id'];
@@ -247,7 +271,7 @@ export function gradeRunDir(runDir: string, projects: string): void {
     passed: false,
     evidence: 'The session printed no result: it timed out or crashed.',
   }));
-  const graded = sessions.size === 0 ? grading([], unfinished, unfinished) : grading(calls, assertions, judged);
+  const graded = sessions.size === 0 ? grading([], unfinished, [unfinished]) : grading(calls, assertions, judges);
   writeFileSync(join(runDir, 'grading.json'), `${JSON.stringify(graded, null, 2)}\n`);
 }
 
