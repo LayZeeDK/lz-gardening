@@ -33,3 +33,10 @@ export function slimOutput(value: unknown): SlimOutput {
     session: sessions.at(-1) ?? null,
   };
 }
+
+// A usage limit ends the session at once with status 0 and is_error false; only its result text says so.
+export function limitStopped(output: SlimOutput): boolean {
+  const text = output.result['result'];
+
+  return typeof text === 'string' && /^You've hit your .*limit/.test(text);
+}

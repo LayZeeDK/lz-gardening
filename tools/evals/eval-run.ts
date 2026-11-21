@@ -25,7 +25,7 @@ import {
   type Assertion,
   type Iteration,
 } from './eval-layout.ts';
-import { slimOutput } from './slim-output.ts';
+import { limitStopped, slimOutput } from './slim-output.ts';
 
 export interface EvalCase {
   readonly id: number;
@@ -252,11 +252,19 @@ async function withHeavyLock<T>(task: string, minutes: number, work: () => Promi
   }
 }
 
+// A session the usage limit ended still exits 0, so its output file decides: such a run counts as failed.
 function slimRun(runSlim: string, args: readonly string[]): Promise<number> {
+  const out = args[args.indexOf('--out') + 1] ?? '';
+
   return new Promise((done) => {
     const child = spawn(process.execPath, [runSlim, ...args], { stdio: 'inherit' });
     child.on('close', (status) => {
-      done(status ?? 1);
+      if (status === 0 && existsSync(out) && limitStopped(slimOutput(readJson(out)))) {
+        console.error(`${out}: the usage limit ended the session; start the run again once the limit resets`);
+        done(1);
+      } else {
+        done(status ?? 1);
+      }
     });
   });
 }
