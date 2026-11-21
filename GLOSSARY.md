@@ -39,7 +39,8 @@ weed reads `not on the base`, the bed's change to its check is not on the base t
 not landed, or one of the check's files is gone from the base. When it reads `base unknown`, the site could not tell.
 
 **Kept**:
-Said of a weed a human or a tend pass judged deliberate; it is never queued again.
+Said of a weed taken off the queue for good with no check: a human or a tend pass judged it deliberate, or a seed
+pass declined it. It is never queued again.
 
 **Place**:
 The file a weed sits in, its `--where` without the line. Six weeds in one file are six weeds in one place.
@@ -50,7 +51,8 @@ whose open weeds all sit in one place waits for a second.
 
 **One-off**:
 Weeds judged an isolated occurrence rather than a pattern agents copy: they share no cause, or sit in one place. A
-one-off is closed with no check written.
+tick leaves a one-off out and a seed pass declines it; a queued one, or a weed that work outside a tend pass
+resolved, gets a one-off close, with no check written.
 
 ## Watching
 
