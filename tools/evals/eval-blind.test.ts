@@ -99,18 +99,29 @@ test('blind gives the judge each run under a letter with its calls, report, meta
   );
 });
 
-test('blind refuses a judge other than 1, 2 or 3, an ungraded run, and a judge folder made before', () => {
+test('blind refuses a judge other than 1, 2 or 3, ungraded runs, a case without runs, and a judge folder made before', () => {
   const iteration = gradedIteration();
-  const ungraded = `${iteration}/eval-garden-seed-sonnet/new_skill/run-2`;
-  mkdirSync(`${ungraded}/outputs`, { recursive: true });
+  const ungraded = ['run-2', 'run-3'].map((run) => `${iteration}/eval-garden-seed-sonnet/new_skill/${run}`);
+  ungraded.forEach((runDir) => {
+    mkdirSync(`${runDir}/outputs`, { recursive: true });
+  });
   blind(iteration, 'garden-seed', 1, [`${iteration}/eval-garden-seed-sonnet/old_skill/run-1`]);
+  blind(iteration, 'garden-seed', 3, [`${iteration}/eval-garden-seed-sonnet/old_skill/run-1`]);
 
+  [0, 1.5, 4].forEach((judge) => {
+    assert.throws(
+      () => {
+        blind(iteration, 'garden-seed', judge, []);
+      },
+      new RegExp(`the judge is 1, 2 or 3, not ${String(judge)}`),
+    );
+  });
   assert.throws(() => {
-    blind(iteration, 'garden-seed', 4, []);
-  }, /the judge is 1, 2 or 3, not 4/);
+    blind(iteration, 'garden-seed', 2, ungraded);
+  }, /grade these runs with eval-grade.ts first: \S*run-2, \S*run-3$/);
   assert.throws(() => {
-    blind(iteration, 'garden-seed', 2, [ungraded]);
-  }, /grade these runs with eval-grade.ts first: .*run-2/);
+    blind(iteration, 'tend', 2, []);
+  }, /grade these runs with eval-grade.ts first: no runs of tend$/);
   assert.throws(() => {
     blind(iteration, 'garden-seed', 1, []);
   }, /judge-garden-seed-1 exists/);
@@ -150,4 +161,30 @@ test('unblind refuses verdicts whose texts are not exactly the judged assertions
   assert.throws(() => {
     unblind(iteration, 'garden-seed', 1);
   }, /a: the verdicts are not the judged assertions/);
+});
+
+test('unblind takes the verdicts in any order and refuses a key that is empty or maps a letter to no run', () => {
+  const iteration = gradedIteration();
+  const runDir = `${iteration}/eval-garden-seed-sonnet/new_skill/run-1`;
+  blind(iteration, 'garden-seed', 1, [runDir]);
+  const letter = `${iteration}/judge-garden-seed-1/a`;
+  writeFileSync(`${letter}/eval_metadata.json`, JSON.stringify({ assertions: [{ text: 'One.' }, { text: 'Two.' }] }));
+  const reversed = JSON.stringify(['Two.', 'One.'].map((text) => ({ text, passed: true, evidence: 'e' })));
+  writeFileSync(`${letter}/llm-grades.json`, reversed);
+  unblind(iteration, 'garden-seed', 1);
+  const refusals = [{}, { a: runDir, b: 2 }].filter((key) => {
+    writeFileSync(`${iteration}/judge-garden-seed-1.key.json`, JSON.stringify(key));
+
+    try {
+      unblind(iteration, 'garden-seed', 1);
+
+      return false;
+    } catch (error) {
+      return (
+        error instanceof Error && error.message.endsWith('judge-garden-seed-1.key.json is not a letter-to-run key')
+      );
+    }
+  });
+
+  assert.deepEqual([readFileSync(`${runDir}/llm-grades.json`, 'utf8'), refusals.length], [reversed, 2]);
 });
