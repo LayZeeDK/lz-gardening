@@ -85,6 +85,33 @@ function copyPlugin(plugin: string, destination: string, skill: string, descript
   writeFileSync(skillFile, withDescription(readFileSync(skillFile, 'utf8'), description));
 }
 
+// A resumed run reuses recorded results, which only hold for the options and split that produced them.
+export function workspaceRefusal(
+  workspace: string,
+  options: Readonly<Record<string, unknown>>,
+  resume: boolean,
+): string | null {
+  const optionsFile = join(workspace, 'options.json');
+
+  if (!resume) {
+    return existsSync(workspace) && readdirSync(workspace).length > 0
+      ? `workspace ${workspace} is not empty; use a new one, or --resume to go on with it`
+      : null;
+  }
+
+  const started: unknown = existsSync(optionsFile) ? readJson(optionsFile) : null;
+
+  if (!isRecord(started)) {
+    return `nothing to resume in ${workspace}: it has no options.json`;
+  }
+
+  const differing = Object.entries(options)
+    .filter(([key, value]) => started[key] !== value)
+    .map(([key, value]) => `${key} ${String(started[key])}, not ${String(value)}`);
+
+  return differing.length > 0 ? `--resume needs the options the workspace started with: ${differing.join('; ')}` : null;
+}
+
 if (isMainModule(import.meta.url)) {
   const { values } = parseArgs({
     options: {
@@ -117,26 +144,12 @@ if (isMainModule(import.meta.url)) {
   const holdout = share('holdout', values.holdout, 'below 1');
   const threshold = share('threshold', values.threshold, '1');
 
-  // A resumed run reuses recorded results, which only hold for the options and split that produced them.
   const options = { plugin, skill, evalSet, model: values.model, runs, holdout, threshold, seed };
   const optionsFile = join(workspace, 'options.json');
+  const refusal = workspaceRefusal(workspace, options, values.resume);
 
-  if (values.resume) {
-    const started: unknown = existsSync(optionsFile) ? readJson(optionsFile) : null;
-
-    if (!isRecord(started)) {
-      throw new Error(`nothing to resume in ${workspace}: it has no options.json`);
-    }
-
-    const differing = Object.entries(options)
-      .filter(([key, value]) => started[key] !== value)
-      .map(([key, value]) => `${key} ${String(started[key])}, not ${String(value)}`);
-
-    if (differing.length > 0) {
-      throw new Error(`--resume needs the options the workspace started with: ${differing.join('; ')}`);
-    }
-  } else if (existsSync(workspace) && readdirSync(workspace).length > 0) {
-    throw new Error(`workspace ${workspace} is not empty; use a new one, or --resume to go on with it`);
+  if (refusal !== null) {
+    throw new Error(refusal);
   }
 
   // Stryker disable all: from here the command line runs the slim runner and `claude plugin eval`, which no unit test

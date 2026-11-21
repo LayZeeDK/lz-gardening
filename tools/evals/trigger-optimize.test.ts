@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { workspaceRefusal } from './trigger-optimize.ts';
 
 const script = fileURLToPath(new URL('trigger-optimize.ts', import.meta.url));
 
@@ -44,6 +45,40 @@ test('trigger-optimize --resume refuses a workspace started with other options, 
 
 test('trigger-optimize --resume refuses a workspace no run started', () => {
   assert.match(optimize(['--resume']), /nothing to resume in .*: it has no options.json/);
+});
+
+test('workspaceRefusal lets a new run start in a missing or empty workspace and refuses one that holds files', () => {
+  const empty = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  const used = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  writeFileSync(join(used, 'results.json'), '{}');
+
+  assert.deepEqual(
+    [
+      workspaceRefusal(join(empty, 'new'), {}, false),
+      workspaceRefusal(empty, {}, false),
+      workspaceRefusal(used, {}, false),
+    ],
+    [null, null, `workspace ${used} is not empty; use a new one, or --resume to go on with it`],
+  );
+});
+
+test('workspaceRefusal resumes a workspace with the same options and names each option that differs', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  const unstarted = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  writeFileSync(join(workspace, 'options.json'), JSON.stringify({ runs: 3, seed: 7, model: 'sonnet' }));
+
+  assert.deepEqual(
+    [
+      workspaceRefusal(workspace, { runs: 3, seed: 7, model: 'sonnet' }, true),
+      workspaceRefusal(workspace, { runs: 5, seed: 7, model: 'opus' }, true),
+      workspaceRefusal(unstarted, {}, true),
+    ],
+    [
+      null,
+      '--resume needs the options the workspace started with: runs 3, not 5; model sonnet, not opus',
+      `nothing to resume in ${unstarted}: it has no options.json`,
+    ],
+  );
 });
 
 test('trigger-optimize refuses a holdout that leaves no training set', () => {
