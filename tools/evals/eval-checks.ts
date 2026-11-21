@@ -80,9 +80,14 @@ const chained = /[|;&<>`]|\$\(/;
 // A command's text with its literal quoted arguments taken out, which may hold any character. A double-quoted
 // argument with a $ or a backtick stays, since bash still substitutes inside it.
 function unquoted(text: string): string {
-  return text.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (quoted) =>
-    quoted.startsWith('"') && /[$`]/.test(quoted) ? quoted : '',
-  );
+  return text.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (quoted) => {
+    // Stryker disable next-line MethodExpression: every match ends with the quote it starts with
+    const substituted = quoted.startsWith('"') && /[$`]/.test(quoted);
+
+    // Stryker disable StringLiteral: only the chain test reads the result, and no text without a chain character trips it
+    return substituted ? quoted : '';
+    // Stryker restore StringLiteral
+  });
 }
 
 // lz-garden's allowed-tools and its read-only git forms, each one command with no chain, pipe or redirect.

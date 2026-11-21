@@ -133,6 +133,19 @@ test('garden-commands pairs each quote with its own close, past a double-quoted 
   );
 });
 
+test('garden-commands counts node with no garden script, and node or git not at the start, as outside', () => {
+  const commands = [
+    'node -e "1"',
+    'env node "D:/plugin/skills/lz-garden/scripts/weeds.ts" lines --class c',
+    'echo git show main',
+  ];
+
+  assert.deepEqual(
+    commands.map((each) => run('garden-commands', [call('Bash', { command: each })]).passed),
+    [false, false, false],
+  );
+});
+
 test('every check passes on a tend tick that reads before each decline and runs only lz-garden commands', () => {
   const calls = [
     call('Bash', { command: 'node "D:/plugin/skills/lz-garden/scripts/census.ts" --rev main' }),
