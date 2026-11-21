@@ -84,9 +84,10 @@ function unquoted(text: string): string {
     // Stryker disable next-line MethodExpression: every match ends with the quote it starts with
     const substituted = quoted.startsWith('"') && /[$`]/.test(quoted);
 
-    // Stryker disable StringLiteral: only the chain test reads the result, and no text without a chain character trips it
-    return substituted ? quoted : '';
-    // Stryker restore StringLiteral
+    // Stryker disable next-line StringLiteral: only the chain test reads the result, which no text without a chain character trips
+    const literal = '';
+
+    return substituted ? quoted : literal;
   });
 }
 
