@@ -18,9 +18,16 @@ _Avoid_: category, kind, type
 **Planting commit**:
 The commit that introduced a weed; a weed found in the code names it as its source.
 
+**Source**:
+What a weed was found through: a commit (the one that planted it, or a clean-up that did not hold), a line of the
+records, or a line of the seed list.
+
 **Duplicate function**:
 A function name defined at module scope in two or more files of the codebase.
 _Avoid_: copy, clone
+
+**Naming weed**:
+A function that shares a duplicate function's name but does another job; a rename that says its job fixes it.
 
 **Documented copy**:
 A file's own definition of a duplicate function, kept on purpose: words in that file or one beside it say why the
@@ -29,6 +36,12 @@ file cannot use the shared one (it runs alone, it cannot import), or a record sa
 **Close**:
 Taking weeds off the queue, as one of three kinds: tended (a tend pass added a check and names it), one-off (no
 check was written), or kept.
+
+**Open**:
+Said of a queued weed that no close has ended yet.
+
+**Seen**:
+Said of a weed a tick finds again while it is still open; it is not queued twice.
 
 **Regrown**:
 Said of a weed of a class a tend pass closed, wherever it comes back; the check that was meant to hold it did not.
@@ -144,6 +157,13 @@ _Avoid_: golden path, happy path
 **Baseline**:
 The recorded weed instances, or their count, that a check tolerates for now. It may only shrink.
 _Avoid_: allowlist, exceptions file
+
+**Held**:
+Said of a weed a tend pass's check now rejects; the tended close closes it. Unlike a class held by hand, a check
+holds it.
+
+**Baselined**:
+Said of a weed whose copy a check's baseline tolerates; it stays open for the pass that shrinks the baseline.
 
 **Starting results**:
 The summary lines of the repository's lint, type-check and test commands, run in a bed before its first edit, so a
