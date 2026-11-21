@@ -207,6 +207,17 @@ test('copyPlugin copies the plugin without node_modules or evals, with the descr
   );
 });
 
+test('copyPlugin makes a first copy where no partial copy was left', () => {
+  const root = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  const plugin = join(root, 'plugin');
+  mkdirSync(join(plugin, 'skills', 's'), { recursive: true });
+  writeFileSync(join(plugin, 'skills', 's', 'SKILL.md'), '---\nname: s\ndescription: old\n---\n');
+
+  copyPlugin(plugin, join(root, 'copy'), 's', 'new');
+
+  assert.deepEqual(readdirSync(join(root, 'copy')), ['skills']);
+});
+
 test('trigger-optimize refuses a holdout that leaves no training set', () => {
   assert.match(optimize(['--holdout', '1']), /--holdout must be a number from 0 to below 1, not 1/);
 });
