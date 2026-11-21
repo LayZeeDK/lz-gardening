@@ -9,8 +9,9 @@
 // rerun starts the named runs over and keeps every other run; what it replaces goes to set-aside-<n> folders.
 // <iteration dir>/iteration.json names the configs ({name: {plugin}}), the models and the runs per configuration.
 // Environment: LZ_EVAL_SAMPLES_ROOT (where samples go, every command), LZ_EVAL_SAMPLE_ORIGIN (the bare origin to
-// clone, scaffold), LZ_EVAL_RUN_SLIM (run-slim.ts, run and resume); with LZ_EVAL_HEAVY_LOCK (heavy-lock.ts) and
-// LZ_EVAL_LOCK_OWNER, run and resume wait for and hold the machine's heavy-run lock.
+// clone: scaffold, and rerun of a case that starts a sample), LZ_EVAL_RUN_SLIM (run-slim.ts: run, resume and rerun);
+// with LZ_EVAL_HEAVY_LOCK (heavy-lock.ts) and LZ_EVAL_LOCK_OWNER, run, resume and rerun wait for and hold the
+// machine's heavy-run lock.
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -151,14 +152,19 @@ function runOrThrow(command: string, args: readonly string[], cwd: string): void
   }
 }
 
+// A sample is its clone, its garden site and the bare origin it was cloned from.
+export function sampleFolders(sample: string): readonly [clone: string, site: string, origin: string] {
+  return [sample, `${sample}.garden`, `${sample}-origin.git`];
+}
+
 export function scaffold(sample: Sample, origin: string, patterns: string): void {
-  const bare = `${sample.sample}-origin.git`;
+  const [clone, site, bare] = sampleFolders(sample.sample);
   mkdirSync(dirname(bare), { recursive: true });
   runOrThrow('git', ['clone', '-q', '--bare', '--single-branch', '--branch', 'main', origin, bare], dirname(bare));
-  runOrThrow('git', ['clone', '-q', bare, sample.sample], dirname(sample.sample));
-  runOrThrow(process.execPath, [`${sample.plugin}/skills/lz-garden/scripts/site.ts`, 'open'], sample.sample);
-  mkdirSync(`${sample.sample}.garden/.garden`, { recursive: true });
-  copyFileSync(patterns, `${sample.sample}.garden/.garden/patterns.json`);
+  runOrThrow('git', ['clone', '-q', bare, clone], dirname(clone));
+  runOrThrow(process.execPath, [`${sample.plugin}/skills/lz-garden/scripts/site.ts`, 'open'], clone);
+  mkdirSync(`${site}/.garden`, { recursive: true });
+  copyFileSync(patterns, `${site}/.garden/patterns.json`);
 }
 
 export function slimArgs(evalCase: EvalCase, evalsDir: string, run: PlannedRun): string[] {
@@ -205,14 +211,16 @@ export function runRefusal(plan: readonly PlannedRun[], iterationDir: string, ev
 
   const done = plan.filter((run) => existsSync(`${run.runDir}/outputs/result.json`));
 
-  return done.length > 0 ? `move these runs aside first: ${done.map((run) => run.runDir).join(', ')}` : null;
+  return done.length > 0
+    ? `these runs have results; start them over with rerun on the case their sample starts with: ${done.map((run) => run.runDir).join(', ')}`
+    : null;
 }
 
 export function staleRuns(
   cases: readonly Pick<EvalCase, 'name' | 'after'>[],
   iterationDir: string,
   name: string,
-  run: PlannedRun,
+  run: Pick<Sample, 'model' | 'config' | 'run'>,
 ): string[] {
   const names = [name];
 
@@ -374,7 +382,7 @@ if (isMainModule(import.meta.url)) {
   if (evalName === undefined) {
     const origin = required('LZ_EVAL_SAMPLE_ORIGIN');
     const all = samples(input);
-    const refused = all.filter(({ sample }) => existsSync(sample) || existsSync(`${sample}.garden`));
+    const refused = all.filter(({ sample }) => sampleFolders(sample).some((folder) => existsSync(folder)));
 
     if (refused.length > 0) {
       throw new Error(`samples exist; move them aside first: ${refused.map(({ sample }) => sample).join(', ')}`);
@@ -408,9 +416,15 @@ if (isMainModule(import.meta.url)) {
     if (command === 'rerun' && evalCase.after === null) {
       const origin = required('LZ_EVAL_SAMPLE_ORIGIN');
       const cases = evalCases(evals);
+      setAside(
+        iteration,
+        plan.flatMap((run) => staleRuns(cases, iteration, evalCase.name, run)),
+      );
+      setAside(
+        input.samplesRoot,
+        plan.flatMap((run) => sampleFolders(run.sample)),
+      );
       plan.forEach((run) => {
-        setAside(iteration, staleRuns(cases, iteration, evalCase.name, run));
-        setAside(input.samplesRoot, [run.sample, `${run.sample}.garden`, `${run.sample}-origin.git`]);
         scaffold(run, origin, `${evalsDir}/site-patterns.json`);
       });
     }

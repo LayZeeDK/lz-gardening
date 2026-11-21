@@ -52,9 +52,10 @@ A run that did not exit 0 has its cause in its newest `outputs/result*.json`: `s
 `outputs/result-resume-<n>.json`. A seed run cannot resume: `lz-garden` runs forked, so its work was in a subagent
 the session cannot continue, and the resumed session's own Skill call is refused. Start a stopped seed run, or a run
 that crashed for another reason, over on its own and keep every other run:
-`node tools/evals/eval-run.ts rerun <iteration dir> garden-seed <seed run dir>...` moves each named run and that
-sample's later runs (its tend run) into `<iteration dir>/set-aside-<n>/`, moves its sample with `.garden` and
-`-origin.git` into `<samples root>/set-aside-<n>/`, scaffolds a fresh sample and runs the seed pass. Then
+`node tools/evals/eval-run.ts rerun <iteration dir> garden-seed <seed run dir>...` moves the named runs and their
+samples' later runs (their tend runs) into the first free `<iteration dir>/set-aside-<n>/`, moves their samples with
+`.garden` and `-origin.git` into the first free `<samples root>/set-aside-<n>/` (the two numbers can differ),
+scaffolds fresh samples and runs the seed pass. Once every seed rerun exited 0,
 `node tools/evals/eval-run.ts rerun <iteration dir> tend <tend run dir>...` runs the tend runs it set aside. A tend run
 that crashed starts over the same way, from its seed run. Delete the `set-aside-<n>` folders once nothing in them is
 wanted.

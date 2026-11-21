@@ -224,7 +224,7 @@ test('runRefusal refuses runs that already have a result', () => {
 
   assert.equal(
     runRefusal(plan, iteration, gardenCase()),
-    `move these runs aside first: ${iteration}/eval-garden-seed-sonnet/new_skill/run-1`,
+    `these runs have results; start them over with rerun on the case their sample starts with: ${iteration}/eval-garden-seed-sonnet/new_skill/run-1`,
   );
 });
 
