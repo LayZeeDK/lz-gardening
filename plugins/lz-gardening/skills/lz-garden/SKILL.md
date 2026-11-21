@@ -1,6 +1,6 @@
 ---
 name: lz-garden
-description: Watch a repository for weeds (copied shortcuts, creeping suppressions, duplicate functions, hollow tests, lessons written down twice) and queue them with evidence, changing no code. Use for a garden tick, "watch this repo for weeds", "check the garden", or `/loop /lz-gardening:lz-garden`. The first tick seeds the queue from the repository's history.
+description: Use this skill to find and record the shortcuts that coding agents or people leave in a repository, changing no code - duplicated functions, copied workarounds, eslint-disable or @ts-expect-error suppressions piling up, hollow tests that can't fail, lessons written down twice in the docs. It covers a read-only audit of the git history, a look at what recent merges brought in, and a recurring watch ("garden tick", "check the garden", `/loop /lz-gardening:lz-garden`). Each finding, a weed, goes into a queue with the commit that planted it, for a later fix; the first run seeds the queue from history. Use it even when the request never says weed or garden. Fixing, refactoring, adding a lint rule or reviewing one branch's diff is other work; pulling queued weeds is lz-tend.
 argument-hint: '[--base <branch>]'
 context: fork
 agent: lz-gardening:lz-gardener
