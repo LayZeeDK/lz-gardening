@@ -286,6 +286,10 @@ function slimOut(result: Record<string, unknown>, ms: number): unknown {
   };
 }
 
+test('timing of a run with no output parts is zero throughout', () => {
+  assert.deepEqual(timing([]), { total_tokens: 0, total_duration_seconds: 0, total_cost_usd: 0, turns: 0 });
+});
+
 test('timing sums the seconds and turns of a run and its resume, and takes tokens and cost from the session total', () => {
   const usage = (tokens: number, cost: number): unknown => ({
     'claude-sonnet-5-5': {
