@@ -40,6 +40,11 @@ another way (`stale-verification`, `repeated-lesson`). Two or more files means s
 shortcut. A class whose open weeds all sit in one file waits for a second. Recurring `/loop` tasks expire after
 seven days; start the loop again after that.
 
+Pick the interval so that fewer commits land between two ticks than one tick reads: a tick reads at most the newest
+200 commits, and of those the smallest diffs first, up to 400,000 characters in all; a commit it skips is never read
+later. Every tick costs tokens, so take the longest interval that keeps the first line of each tick's reply at
+`0 skipped`, and shorten it when a tick reports more.
+
 ## How it stays out of the way
 
 The gardener never works in your checkout. Other agents may be writing there around the clock. It keeps a **garden
