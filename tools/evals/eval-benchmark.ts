@@ -84,8 +84,8 @@ export function benchmark(runs: readonly GradedRun[], options: BenchmarkOptions)
   const [primary, baseline] = options.configs.map((config) => configSummary(entries, config));
   const counts = new Map<string, number>();
 
-  for (const { evalId, config } of runs) {
-    const key = `${String(evalId)}\0${config}`;
+  for (const { evalName, config } of runs) {
+    const key = `${evalName}\0${config}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 

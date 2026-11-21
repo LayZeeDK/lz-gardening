@@ -204,6 +204,28 @@ test('benchmark summarises each configuration, gives the first minus the second 
   });
 });
 
+test('benchmark counts the runs per configuration in each eval folder, so the models that share an eval id count apart', () => {
+  const options = {
+    configs: ['new_skill', 'old_skill'] as const,
+    skillName: 'lz-gardening',
+    skillPath: 'p',
+    executorModel: 'sonnet, opus',
+    timestamp: 't',
+  };
+  const result = benchmark(
+    ['eval-tend-sonnet', 'eval-tend-opus'].map((evalName) => ({
+      evalName,
+      evalId: 1,
+      config: 'new_skill',
+      runNumber: 1,
+      ...graded(1, 1, 10, 100),
+    })),
+    options,
+  );
+
+  assert.equal(result.metadata.runs_per_configuration, 1);
+});
+
 test('stats gives the mean, the sample standard deviation, the minimum and the maximum, and zeros for no values', () => {
   assert.deepEqual(
     [stats([1, 2, 4]), stats([0.5]), stats([])],
