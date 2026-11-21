@@ -50,6 +50,21 @@ test('a tool call is paired with its result', () => {
   ]);
 });
 
+test('a call is read once, not again from the request blob that repeats its message', () => {
+  const block = { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'node --version' } };
+  const message = { role: 'assistant', content: [block] };
+  const lines = [
+    line({ type: 'assistant', message }),
+    line({ type: 'api-request-blob', message }),
+    toolResult('t1', 'v26.13.0'),
+  ];
+
+  assert.deepEqual(
+    toolCalls(lines, 'main').map(({ name, result }) => [name, result]),
+    [['Bash', 'v26.13.0']],
+  );
+});
+
 test('a call the permission rules rejected is denied and an error', () => {
   const lines = [
     toolUse('t1', 'Read', { file_path: 'D:/elsewhere/weeds.ts' }),

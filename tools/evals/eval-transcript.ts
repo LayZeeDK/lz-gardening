@@ -18,13 +18,16 @@ interface Block {
   readonly entry: Readonly<Record<string, unknown>>;
 }
 
+// The conversation's own entries; others, such as an api-request-blob, repeat its messages.
+const conversation = new Set<unknown>(['assistant', 'user']);
+
 function blocks(lines: readonly string[]): Block[] {
   return lines.flatMap((line) => {
     const entry: unknown = JSON.parse(line);
     const message = isRecord(entry) ? entry['message'] : undefined;
     const content = isRecord(message) ? message['content'] : undefined;
 
-    return isRecord(entry) && Array.isArray(content)
+    return isRecord(entry) && conversation.has(entry['type']) && Array.isArray(content)
       ? content.filter((block) => isRecord(block)).map((block) => ({ block, entry }))
       : [];
   });
