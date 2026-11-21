@@ -1,9 +1,9 @@
 // The diffs a tick reads, a page at a time:
 //   node diffs.ts <commit>..<commit> | <commit> [--page <n>] [--chars <n>]
 // One commit id alone reads that commit's own diff, from its parent; a commit with no parent is refused.
-// Takes the newest 30 commits of the range, merges left out, and reads their diffs smallest first up to 400,000
+// Takes the newest 200 commits of the range, merges left out, and reads their diffs smallest first up to 400,000
 // characters in all, or the `--chars` given; the rest are skipped. Page 1 opens with one line per commit, `read` or `skip`, its short id, its
-// diff's length in characters and its subject, then `skip <n> commits past the newest 30` when there are more. The
+// diff's length in characters and its subject, then `skip <n> commits past the newest 200` when there are more. The
 // diffs of the read commits follow, newest first, cut into pages of at most 24,000 characters, so a page comes back
 // whole in a tool result. Each page starts `diffs <range>: page <n> of <pages>` and ends with a JSON line: `page`,
 // `pages`, `commits` (all of the range), `read` and `skipped`. Exit 2 with the usage, `no page <n>` or the refused `--chars` on bad input.
@@ -59,7 +59,7 @@ export function planReading(commits: readonly CommitDiff[], budget: number): Rea
   return { read: commits.filter((commit) => fits.has(commit)), skipped: commits.filter((commit) => !fits.has(commit)) };
 }
 
-const newestCommits = 30;
+const newestCommits = 200;
 const budget = 400_000;
 const pageSize = 24_000;
 

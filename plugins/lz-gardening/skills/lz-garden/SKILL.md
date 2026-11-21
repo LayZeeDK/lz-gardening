@@ -97,7 +97,7 @@ Read the catalogue, `${CLAUDE_SKILL_DIR}/references/weeds.md`, first. Then read 
 node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" <previousSha>..<sha>
 ```
 
-The script picks what a tick reads: of the newest 30 commits, the smallest diffs first up to 400,000 characters in
+The script picks what a tick reads: of the newest 200 commits, the smallest diffs first up to 400,000 characters in
 all, shown newest first. Page 1 opens with one line per commit, `read` or `skip`, with its diff's size and its subject; the diffs of the
 `read` commits follow. Each page ends with a JSON line: `page`, `pages`, `commits`, `read`, `skipped`. Run it with
 `--page 2`, `--page 3` and on, one call per page, until `page` equals `pages`, and read each page for weeds before

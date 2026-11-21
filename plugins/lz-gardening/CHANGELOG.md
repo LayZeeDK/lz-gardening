@@ -17,7 +17,7 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
 - `lz-garden` skill (`/lz-gardening:lz-garden [--base <branch>]`): one tick over the repository, recorded in
   a garden site beside it at `../<repo>.garden`.
   - Watch: counts the hits of each census pattern on the base branch, reads what landed since the last tick (the
-    diffs of the newest 30 commits, chosen smallest first up to 400,000 characters), and queues each weed with its
+    diffs of the newest 200 commits, chosen smallest first up to 400,000 characters), and queues each weed with its
     evidence. A weed of a class a tend pass closed is queued as `regrown`, naming the bed and the check that should
     have held it.
   - Seed: the first tick seeds the queue from the census, the repository's records and its history (up to 72,000

@@ -1,5 +1,6 @@
 // Run: node --test diffs.test.ts
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { pagesOf, planReading, run } from './diffs.ts';
@@ -34,6 +35,29 @@ function oneLineCommit(dir: string, base: string, name: string, size: number): s
   git(dir, ['checkout', '-q', '--detach', base]);
 
   return `${base}..${commit(dir, { [name]: `${'y'.repeat(size)}\n` })}`;
+}
+
+// `count` commits onto `from` on main, each setting a.ts to a new line, written by one git fast-import: one commit at a
+// time, 201 of them take 24 s on Windows. Returns the last.
+function commitsOnto(dir: string, from: string, count: number): string {
+  const stream = Array.from({ length: count }, (_, n) => {
+    const content = `export const a = ${String(n + 1)};\n`;
+
+    return [
+      'commit refs/heads/main',
+      `committer test <test@example.com> ${String(1_700_000_000 + n)} +0000`,
+      'data 1',
+      'x',
+      ...(n === 0 ? [`from ${from}`] : []),
+      'M 100644 inline a.ts',
+      `data ${String(content.length)}`,
+      content,
+    ].join('\n');
+  });
+  const result = spawnSync('git', ['fast-import', '--quiet'], { cwd: dir, input: stream.join(''), encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+
+  return git(dir, ['rev-parse', 'main']);
 }
 
 test('a reading plan reads every commit when their diffs fit the budget together', () => {
@@ -354,15 +378,15 @@ test('a commit whose diff alone passes 400,000 characters is skipped, and a smal
   assert.deepEqual([summaryOf(stdout()).get('read'), summaryOf(stdout()).get('skipped')], [1, 1]);
 });
 
-test('a commit past the newest 30 is skipped, and the first page says so', (t) => {
+test('a commit past the newest 200 is skipped, and the first page says so', (t) => {
   const dir = repo(t);
   const from = commit(dir, { 'a.ts': 'export const a = 0;\n' });
-  const shas = Array.from({ length: 31 }, (_, n) => commit(dir, { 'a.ts': `export const a = ${String(n + 1)};\n` }));
+  const to = commitsOnto(dir, from, 201);
   const { io, stdout } = capturingIo(dir, process.env);
 
-  const status = run([`${from}..${shas.at(-1) ?? ''}`], io);
+  const status = run([`${from}..${to}`], io);
 
   assert.equal(status, 0);
-  assert.match(stdout(), /^skip 1 commits past the newest 30$/m);
-  assert.deepEqual([summaryOf(stdout()).get('read'), summaryOf(stdout()).get('skipped')], [30, 1]);
+  assert.match(stdout(), /^skip 1 commits past the newest 200$/m);
+  assert.deepEqual([summaryOf(stdout()).get('read'), summaryOf(stdout()).get('skipped')], [200, 1]);
 });
