@@ -35,6 +35,7 @@
       "prompt": "prompts/tend.md",
       "after": "garden-seed",
       "timeoutMinutes": 40,
+      "rules": "rules",
       "allow": "Edit Write Bash(npm --prefix *) Bash(npx --no *) Bash(node --test *) Bash(git -C * add *) Bash(git -C * commit *) Bash(git -C * rm *)",
       "assertions": [
         { "text": "The pass closed the class: weeds.ts close-class printed closed <n>;.", "check": "tend-closed" },
