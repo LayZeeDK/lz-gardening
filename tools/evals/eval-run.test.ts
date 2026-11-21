@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { commit, git, repo } from '../../plugins/lz-gardening/skills/lz-garden/scripts/test-repo.ts';
-import { findEvalCase, runPlan, scaffold, slimArgs, type EvalCase } from './eval-run.ts';
+import {
+  findEvalCase,
+  prepareRuns,
+  runPlan,
+  runRefusal,
+  scaffold,
+  slimArgs,
+  type EvalCase,
+  type PlannedRun,
+} from './eval-run.ts';
 
 function gardenCase(): EvalCase {
   return {
@@ -22,7 +32,6 @@ function gardenCase(): EvalCase {
 test('runPlan gives each configuration, model and run its own sample and run folder', () => {
   const plan = runPlan({
     evalCase: gardenCase(),
-    evalsDir: 'E:/evals',
     iterationDir: 'W:/iteration-2',
     samplesRoot: 'S:/samples',
     configs: { new_skill: 'P:/new', old_skill: 'P:/old' },
@@ -61,7 +70,6 @@ test('slimArgs runs the case prompt on the sample with its site, plugin, model, 
   const evalCase = { ...gardenCase(), rules: 'rules' };
   const [run] = runPlan({
     evalCase,
-    evalsDir: 'E:/evals',
     iterationDir: 'W:/iteration-2',
     samplesRoot: 'S:/samples',
     configs: { new_skill: 'P:/new' },
@@ -108,6 +116,68 @@ test('findEvalCase refuses a named case whose fields are malformed', () => {
   assert.throws(() => findEvalCase(evals, 'garden-seed'), /eval case garden-seed in evals.json is malformed/);
 });
 
+function iterationFor(evalCase: EvalCase): { iteration: string; plan: PlannedRun[] } {
+  const iteration = mkdtempSync(join(tmpdir(), 'eval-run-')).replaceAll('\\', '/');
+  const plan = runPlan({
+    evalCase,
+    iterationDir: iteration,
+    samplesRoot: 'S:/samples',
+    configs: { new_skill: 'P:/new' },
+    models: ['sonnet'],
+    runs: 1,
+  });
+
+  return { iteration, plan };
+}
+
+test('runRefusal sends a case to the case it follows until that case has a result on every sample', () => {
+  const tend = { ...gardenCase(), id: 1, name: 'tend', after: 'garden-seed' };
+  const { iteration, plan } = iterationFor(tend);
+  const seed = `${iteration}/eval-garden-seed-sonnet/new_skill/run-1/outputs`;
+  const before = runRefusal(plan, iteration, tend);
+  mkdirSync(seed, { recursive: true });
+  writeFileSync(`${seed}/result.json`, '{}');
+
+  assert.deepEqual(
+    [before, runRefusal(plan, iteration, tend)],
+    [`run garden-seed first: ${iteration}/eval-tend-sonnet/new_skill/run-1`, null],
+  );
+});
+
+test('runRefusal refuses runs that already have a result', () => {
+  const { iteration, plan } = iterationFor(gardenCase());
+  const outputs = `${iteration}/eval-garden-seed-sonnet/new_skill/run-1/outputs`;
+  mkdirSync(outputs, { recursive: true });
+  writeFileSync(`${outputs}/result.json`, '{}');
+
+  assert.equal(
+    runRefusal(plan, iteration, gardenCase()),
+    `move these runs aside first: ${iteration}/eval-garden-seed-sonnet/new_skill/run-1`,
+  );
+});
+
+test('prepareRuns writes the eval metadata per model and an outputs folder per run', () => {
+  const { iteration, plan } = iterationFor(gardenCase());
+
+  prepareRuns(plan, iteration, gardenCase(), 'Seed the garden.\n');
+
+  assert.deepEqual(
+    [
+      JSON.parse(readFileSync(`${iteration}/eval-garden-seed-sonnet/eval_metadata.json`, 'utf8')),
+      existsSync(`${iteration}/eval-garden-seed-sonnet/new_skill/run-1/outputs`),
+    ],
+    [
+      {
+        eval_id: 0,
+        eval_name: 'garden-seed',
+        prompt: 'Seed the garden.\n',
+        assertions: [{ text: 'A census ran.', check: 'census-taken' }],
+      },
+      true,
+    ],
+  );
+});
+
 test('scaffold clones main alone into a bare origin and a sample, opens its garden site and gives it the patterns', (t) => {
   const origin = repo(t);
   const head = commit(origin, { 'a.ts': 'export const a = 1;\n' });
@@ -124,16 +194,15 @@ test('scaffold clones main alone into a bare origin and a sample, opens its gard
       process.env['GIT_CONFIG_GLOBAL'] = testConfig;
     }
   });
-  const run = {
+  const sample = {
     config: 'new_skill',
     model: 'sonnet',
     run: 1,
     plugin: fileURLToPath(new URL('../../plugins/lz-gardening', import.meta.url)),
     sample: `${root}/sample`,
-    runDir: `${root}/run-1`,
   };
 
-  scaffold(run, origin, join(root, 'patterns.json'));
+  scaffold(sample, origin, join(root, 'patterns.json'));
 
   assert.deepEqual(
     [

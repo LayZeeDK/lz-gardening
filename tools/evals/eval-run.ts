@@ -5,20 +5,24 @@
 //   node tools/evals/eval-run.ts run <iteration dir> <eval name> [--concurrency 4] [--evals <dir>]
 //
 // <iteration dir>/iteration.json names the configs ({name: {plugin}}), the models and the runs per configuration.
-// Environment: LZ_EVAL_SAMPLES_ROOT (where samples go), LZ_EVAL_SAMPLE_ORIGIN (the bare origin to clone, scaffold),
-// LZ_EVAL_RUN_SLIM (run-slim.ts, run); with LZ_EVAL_HEAVY_LOCK (heavy-lock.ts) and LZ_EVAL_LOCK_OWNER, run waits for
-// and holds the machine's heavy-run lock.
+// Environment: LZ_EVAL_SAMPLES_ROOT (where samples go, both commands), LZ_EVAL_SAMPLE_ORIGIN (the bare origin to
+// clone, scaffold), LZ_EVAL_RUN_SLIM (run-slim.ts, run); with LZ_EVAL_HEAVY_LOCK (heavy-lock.ts) and
+// LZ_EVAL_LOCK_OWNER, run waits for and holds the machine's heavy-run lock.
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
-
-export interface Assertion {
-  readonly text: string;
-  readonly check?: string;
-}
+import {
+  evalFolder,
+  isAssertion,
+  readIteration,
+  readJson,
+  runFolder,
+  type Assertion,
+  type Iteration,
+} from './eval-layout.ts';
 
 export interface EvalCase {
   readonly id: number;
@@ -31,31 +35,21 @@ export interface EvalCase {
   readonly assertions: readonly Assertion[];
 }
 
-export interface PlanInput {
-  readonly evalCase: EvalCase;
-  readonly evalsDir: string;
+export interface SampleInput extends Iteration {
   readonly iterationDir: string;
   readonly samplesRoot: string;
-  readonly configs: Readonly<Record<string, string>>;
-  readonly models: readonly string[];
-  readonly runs: number;
 }
 
-export interface PlannedRun {
+export interface Sample {
   readonly config: string;
   readonly model: string;
   readonly run: number;
   readonly plugin: string;
   readonly sample: string;
-  readonly runDir: string;
 }
 
-function isAssertion(value: unknown): value is Assertion {
-  return (
-    isRecord(value) &&
-    typeof value['text'] === 'string' &&
-    (value['check'] === undefined || typeof value['check'] === 'string')
-  );
+export interface PlannedRun extends Sample {
+  readonly runDir: string;
 }
 
 function evalCase(value: unknown): EvalCase | null {
@@ -99,33 +93,8 @@ export function findEvalCase(evals: unknown, name: string): EvalCase {
   return parsed;
 }
 
-function runOrThrow(command: string, args: readonly string[], cwd: string): void {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
-
-  if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} failed in ${cwd}: ${result.stderr}`);
-  }
-}
-
-export function scaffold(run: PlannedRun, origin: string, patterns: string): void {
-  const bare = `${run.sample}-origin.git`;
-  runOrThrow('git', ['clone', '-q', '--bare', '--single-branch', '--branch', 'main', origin, bare], dirname(bare));
-  runOrThrow('git', ['clone', '-q', bare, run.sample], dirname(run.sample));
-  runOrThrow(process.execPath, [`${run.plugin}/skills/lz-garden/scripts/site.ts`, 'open'], run.sample);
-  mkdirSync(`${run.sample}.garden/.garden`, { recursive: true });
-  copyFileSync(patterns, `${run.sample}.garden/.garden/patterns.json`);
-}
-
-export function slimArgs(evalCase: EvalCase, evalsDir: string, run: PlannedRun): string[] {
-  return [
-    ...['--cwd', run.sample, '--prompt-file', `${evalsDir}/${evalCase.prompt}`, '--add-dir', `${run.sample}.garden`],
-    ...['--out', `${run.runDir}/outputs/result.json`, '--plugin-dir', run.plugin, '--model', run.model],
-    ...['--timeout-min', String(evalCase.timeoutMinutes), '--allow', evalCase.allow],
-    ...(evalCase.rules === null ? [] : ['--rules', `${evalsDir}/${evalCase.rules}`]),
-  ];
-}
-
-export function runPlan(input: PlanInput): PlannedRun[] {
+// One sample per configuration, model and run; every case of the iteration runs on the same samples, in order.
+export function samples(input: SampleInput): Sample[] {
   const label = basename(input.iterationDir);
   const runs = Array.from({ length: input.runs }, (_, index) => index + 1);
 
@@ -137,10 +106,78 @@ export function runPlan(input: PlanInput): PlannedRun[] {
         run,
         plugin,
         sample: `${input.samplesRoot}/${label}-${config}-${model}-${String(run)}`,
-        runDir: `${input.iterationDir}/eval-${input.evalCase.name}-${model}/${config}/run-${String(run)}`,
       })),
     ),
   );
+}
+
+export function runPlan(input: SampleInput & { readonly evalCase: EvalCase }): PlannedRun[] {
+  return samples(input).map((sample) => ({
+    ...sample,
+    runDir: runFolder(input.iterationDir, input.evalCase.name, sample.model, sample.config, sample.run),
+  }));
+}
+
+function runOrThrow(command: string, args: readonly string[], cwd: string): void {
+  const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
+
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(' ')} failed in ${cwd}: ${result.stderr}`);
+  }
+}
+
+export function scaffold(sample: Sample, origin: string, patterns: string): void {
+  const bare = `${sample.sample}-origin.git`;
+  runOrThrow('git', ['clone', '-q', '--bare', '--single-branch', '--branch', 'main', origin, bare], dirname(bare));
+  runOrThrow('git', ['clone', '-q', bare, sample.sample], dirname(sample.sample));
+  runOrThrow(process.execPath, [`${sample.plugin}/skills/lz-garden/scripts/site.ts`, 'open'], sample.sample);
+  mkdirSync(`${sample.sample}.garden/.garden`, { recursive: true });
+  copyFileSync(patterns, `${sample.sample}.garden/.garden/patterns.json`);
+}
+
+export function slimArgs(evalCase: EvalCase, evalsDir: string, run: PlannedRun): string[] {
+  return [
+    ...['--cwd', run.sample, '--prompt-file', `${evalsDir}/${evalCase.prompt}`, '--add-dir', `${run.sample}.garden`],
+    ...['--out', `${run.runDir}/outputs/result.json`, '--plugin-dir', run.plugin, '--model', run.model],
+    ...['--timeout-min', String(evalCase.timeoutMinutes), '--allow', evalCase.allow],
+    ...(evalCase.rules === null ? [] : ['--rules', `${evalsDir}/${evalCase.rules}`]),
+  ];
+}
+
+// Why the planned runs cannot start: the case they follow has not run on the same samples, or they already ran.
+export function runRefusal(plan: readonly PlannedRun[], iterationDir: string, evalCase: EvalCase): string | null {
+  const { after } = evalCase;
+  const unseeded = plan.filter(
+    (run) =>
+      after !== null &&
+      !existsSync(`${runFolder(iterationDir, after, run.model, run.config, run.run)}/outputs/result.json`),
+  );
+
+  if (unseeded.length > 0) {
+    return `run ${String(after)} first: ${unseeded.map((run) => run.runDir).join(', ')}`;
+  }
+
+  const done = plan.filter((run) => existsSync(`${run.runDir}/outputs/result.json`));
+
+  return done.length > 0 ? `move these runs aside first: ${done.map((run) => run.runDir).join(', ')}` : null;
+}
+
+// Each model's eval folder gets eval_metadata.json, and each run its outputs folder.
+export function prepareRuns(
+  plan: readonly PlannedRun[],
+  iterationDir: string,
+  evalCase: EvalCase,
+  prompt: string,
+): void {
+  new Set(plan.map((run) => run.model)).forEach((model) => {
+    const folder = evalFolder(iterationDir, evalCase.name, model);
+    const metadata = { eval_id: evalCase.id, eval_name: evalCase.name, prompt, assertions: evalCase.assertions };
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(`${folder}/eval_metadata.json`, `${JSON.stringify(metadata, null, 2)}\n`);
+  });
+  plan.forEach((run) => {
+    mkdirSync(`${run.runDir}/outputs`, { recursive: true });
+  });
 }
 
 function required(name: string): string {
@@ -151,37 +188,6 @@ function required(name: string): string {
   }
 
   return value;
-}
-
-interface Iteration {
-  readonly configs: Readonly<Record<string, string>>;
-  readonly models: readonly string[];
-  readonly runs: number;
-}
-
-function readIteration(iterationDir: string): Iteration {
-  const file = `${iterationDir}/iteration.json`;
-  const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
-  const configs = isRecord(parsed) && isRecord(parsed['configs']) ? Object.entries(parsed['configs']) : [];
-  const plugins = configs.flatMap(([name, config]) =>
-    isRecord(config) && typeof config['plugin'] === 'string' ? [[name, config['plugin']] as const] : [],
-  );
-  const models = isRecord(parsed) && Array.isArray(parsed['models']) ? parsed['models'] : [];
-  const runs = isRecord(parsed) ? parsed['runs'] : undefined;
-
-  if (
-    plugins.length === 0 ||
-    plugins.length !== configs.length ||
-    models.length === 0 ||
-    !models.every((model) => typeof model === 'string') ||
-    typeof runs !== 'number'
-  ) {
-    throw new Error(`${file} needs configs (name -> {plugin}), models and runs`);
-  }
-
-  const absolute = plugins.map(([name, plugin]) => [name, resolve(plugin).replaceAll('\\', '/')] as const);
-
-  return { configs: Object.fromEntries(absolute), models, runs };
 }
 
 function heavyLock(args: readonly string[]): number {
@@ -256,36 +262,31 @@ if (isMainModule(import.meta.url)) {
     },
   });
   const [command, iterationDir, evalName] = positionals;
-  const evalsDir = resolve(values.evals).replaceAll('\\', '/');
 
   if (iterationDir === undefined || (command === 'run' ? evalName === undefined : command !== 'scaffold')) {
     throw new Error('usage: eval-run.ts scaffold <iteration dir> | run <iteration dir> <eval name> [--concurrency n]');
   }
 
+  const evalsDir = resolve(values.evals).replaceAll('\\', '/');
   const iteration = resolve(iterationDir).replaceAll('\\', '/');
-  const evals: unknown = JSON.parse(readFileSync(`${evalsDir}/evals.json`, 'utf8'));
-  const cases: unknown[] = isRecord(evals) && Array.isArray(evals['evals']) ? evals['evals'] : [];
-  const [first] = cases;
-  const evalCase = findEvalCase(evals, evalName ?? (isRecord(first) ? String(first['name']) : ''));
-  const plan = runPlan({
-    evalCase,
-    evalsDir,
+  const input = {
     iterationDir: iteration,
     samplesRoot: required('LZ_EVAL_SAMPLES_ROOT').replaceAll('\\', '/'),
     ...readIteration(iteration),
-  });
+  };
 
-  if (command === 'scaffold') {
+  if (evalName === undefined) {
     const origin = required('LZ_EVAL_SAMPLE_ORIGIN');
-    const refused = plan.filter((run) => existsSync(run.sample) || existsSync(`${run.sample}.garden`));
+    const all = samples(input);
+    const refused = all.filter(({ sample }) => existsSync(sample) || existsSync(`${sample}.garden`));
 
     if (refused.length > 0) {
-      throw new Error(`samples exist; move them aside first: ${refused.map((run) => run.sample).join(', ')}`);
+      throw new Error(`samples exist; move them aside first: ${refused.map(({ sample }) => sample).join(', ')}`);
     }
 
-    plan.forEach((run) => {
-      scaffold(run, origin, `${evalsDir}/site-patterns.json`);
-      console.log(`scaffolded ${run.sample}`);
+    all.forEach((sample) => {
+      scaffold(sample, origin, `${evalsDir}/site-patterns.json`);
+      console.log(`scaffolded ${sample.sample}`);
     });
   } else {
     const runSlim = required('LZ_EVAL_RUN_SLIM');
@@ -295,43 +296,15 @@ if (isMainModule(import.meta.url)) {
       throw new Error(`--concurrency must be a whole number of at least 1, not ${values.concurrency}`);
     }
 
-    const { after } = evalCase;
-    const unseeded = plan.filter(
-      (run) =>
-        after !== null &&
-        !existsSync(`${iteration}/eval-${after}-${run.model}/${run.config}/run-${String(run.run)}/outputs/result.json`),
-    );
+    const evalCase = findEvalCase(readJson(`${evalsDir}/evals.json`), evalName);
+    const plan = runPlan({ ...input, evalCase });
+    const refusal = runRefusal(plan, iteration, evalCase);
 
-    if (unseeded.length > 0) {
-      throw new Error(`run ${String(after)} first: ${unseeded.map((run) => run.runDir).join(', ')}`);
+    if (refusal !== null) {
+      throw new Error(refusal);
     }
 
-    const done = plan.filter((run) => existsSync(`${run.runDir}/outputs/result.json`));
-
-    if (done.length > 0) {
-      throw new Error(`move these runs aside first: ${done.map((run) => run.runDir).join(', ')}`);
-    }
-
-    const evalFolders = new Set(plan.map((run) => dirname(dirname(run.runDir))));
-    evalFolders.forEach((folder) => {
-      mkdirSync(folder, { recursive: true });
-      writeFileSync(
-        `${folder}/eval_metadata.json`,
-        `${JSON.stringify(
-          {
-            eval_id: evalCase.id,
-            eval_name: evalCase.name,
-            prompt: readFileSync(`${evalsDir}/${evalCase.prompt}`, 'utf8'),
-            assertions: evalCase.assertions,
-          },
-          null,
-          2,
-        )}\n`,
-      );
-    });
-    plan.forEach((run) => {
-      mkdirSync(`${run.runDir}/outputs`, { recursive: true });
-    });
+    prepareRuns(plan, iteration, evalCase, readFileSync(`${evalsDir}/${evalCase.prompt}`, 'utf8'));
     const waves = Math.ceil(plan.length / concurrency);
     const failed = await withHeavyLock(
       `lz-gardening eval ${evalCase.name} ${basename(iteration)}: ${String(plan.length)} slim claude -p runs, ${String(concurrency)} at a time`,
