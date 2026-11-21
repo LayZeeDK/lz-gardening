@@ -20,8 +20,9 @@ test('limitStopped tells a session the usage limit ended at once from one that r
     [
       limitStopped(ended("You've hit your 5-hour limit · resets 3:30pm (Europe/Copenhagen)")),
       limitStopped(ended('garden: seeded main at aa3bc1b')),
+      limitStopped(ended("Resumed: You've hit your 5-hour limit stopped the first part; the pass is done.")),
     ],
-    [true, false],
+    [true, false, false],
   );
 });
 
