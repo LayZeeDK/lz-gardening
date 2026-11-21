@@ -25,6 +25,12 @@ export interface Iteration {
   readonly test: Results | undefined;
 }
 
+// What a stopped run left of an iteration: the description it evaluated, and its results once the evaluation finished.
+export interface Recorded {
+  readonly description: string;
+  readonly all?: Results;
+}
+
 export interface LoopResult {
   readonly exit_reason: string;
   readonly original_description: string;
@@ -53,13 +59,24 @@ function score(results: Results | undefined): string {
 
 // Train and test queries run in one evaluation; the model that writes the next description sees train results only.
 // The best iteration is the one with the most test queries passed (train, with no test set); the earliest wins a tie.
-export async function optimize(input: LoopInput, deps: LoopDeps): Promise<LoopResult> {
+export async function optimize(
+  input: LoopInput,
+  deps: LoopDeps,
+  recorded: readonly Recorded[] = [],
+): Promise<LoopResult> {
   const history: Iteration[] = [];
   let description = input.original;
   let exit = '';
 
   for (let iteration = 1; exit === ''; iteration += 1) {
-    const all = await deps.evaluate(description, [...input.train, ...input.test], iteration);
+    const current = recorded[iteration - 1];
+    const next = recorded[iteration];
+
+    if (current !== undefined && current.description !== description) {
+      throw new Error(`iteration ${String(iteration)} evaluated "${current.description}", not "${description}"`);
+    }
+
+    const all = current?.all ?? (await deps.evaluate(description, [...input.train, ...input.test], iteration));
     const train = subset(all, input.train);
     const test = input.test.length === 0 ? undefined : subset(all, input.test);
     history.push({ iteration, description, train, test });
@@ -68,6 +85,8 @@ export async function optimize(input: LoopInput, deps: LoopDeps): Promise<LoopRe
       exit = `all_passed (iteration ${String(iteration)})`;
     } else if (iteration >= input.maxIterations) {
       exit = `max_iterations (${String(input.maxIterations)})`;
+    } else if (next !== undefined) {
+      description = next.description;
     } else {
       const prompt = improvePrompt({
         skillName: input.skillName,

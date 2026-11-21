@@ -3,21 +3,24 @@
 //
 //   node tools/evals/trigger-optimize.ts --plugin <dir> --skill <name> --eval-set <json> --workspace <dir>
 //     [--model sonnet] [--improve-model opus] [--runs 3] [--max-iterations 5] [--holdout 0.4] [--threshold 0.5]
-//     [--concurrency 4] [--seed 42]
+//     [--concurrency 4] [--seed 42] [--resume]
+//
+// --resume goes on with a stopped run in the same workspace and options: it keeps each finished iteration's results
+// and description, and runs the first unfinished iteration again.
 //
 // Environment: LZ_EVAL_RUN_SLIM, the slim `claude -p` runner (run-slim.ts) that writes each improved description;
 // LZ_EVAL_CLAUDE, the claude executable when `claude` on PATH is a shell shim Node.js cannot start (default: claude).
-// Writes into a new or empty <workspace>: iteration-N/ (the plugin copy, its cases, plugin-eval.json), improve-<ms>/
-// (each improve call's prompt and output) and results.json. The plugin's own SKILL.md is never changed.
+// Writes into a new or empty <workspace>: options.json, iteration-N/ (the plugin copy, its cases, plugin-eval.json),
+// improve-<ms>/ (each improve call's prompt and output) and results.json. The plugin's own SKILL.md is never changed.
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
 import { slimOutput } from './slim-output.ts';
 import { skillParts, splitEvalSet, withDescription, writeCases, type EvalQuery } from './trigger-cases.ts';
-import { optimize } from './trigger-loop.ts';
+import { optimize, type Recorded } from './trigger-loop.ts';
 import { queryResults } from './trigger-results.ts';
 
 function readJson(path: string): unknown {
@@ -97,6 +100,7 @@ if (isMainModule(import.meta.url)) {
       threshold: { type: 'string', default: '0.5' },
       concurrency: { type: 'string', default: '4' },
       seed: { type: 'string', default: '42' },
+      resume: { type: 'boolean', default: false },
     },
   });
   const { plugin, skill, workspace } = values;
@@ -113,8 +117,26 @@ if (isMainModule(import.meta.url)) {
   const holdout = share('holdout', values.holdout, 'below 1');
   const threshold = share('threshold', values.threshold, '1');
 
-  if (existsSync(workspace) && readdirSync(workspace).length > 0) {
-    throw new Error(`workspace ${workspace} is not empty; use a new one`);
+  // A resumed run reuses recorded results, which only hold for the options and split that produced them.
+  const options = { plugin, skill, evalSet, model: values.model, runs, holdout, threshold, seed };
+  const optionsFile = join(workspace, 'options.json');
+
+  if (values.resume) {
+    const started: unknown = existsSync(optionsFile) ? readJson(optionsFile) : null;
+
+    if (!isRecord(started)) {
+      throw new Error(`nothing to resume in ${workspace}: it has no options.json`);
+    }
+
+    const differing = Object.entries(options)
+      .filter(([key, value]) => started[key] !== value)
+      .map(([key, value]) => `${key} ${String(started[key])}, not ${String(value)}`);
+
+    if (differing.length > 0) {
+      throw new Error(`--resume needs the options the workspace started with: ${differing.join('; ')}`);
+    }
+  } else if (existsSync(workspace) && readdirSync(workspace).length > 0) {
+    throw new Error(`workspace ${workspace} is not empty; use a new one, or --resume to go on with it`);
   }
 
   // Stryker disable all: from here the command line runs the slim runner and `claude plugin eval`, which no unit test
@@ -129,6 +151,36 @@ if (isMainModule(import.meta.url)) {
 
   const { name, description, body } = skillParts(readFileSync(join(plugin, 'skills', skill, 'SKILL.md'), 'utf8'));
   const split = splitEvalSet(queries, holdout, seed);
+  mkdirSync(workspace, { recursive: true });
+  writeFileSync(optionsFile, `${JSON.stringify(options, null, 2)}\n`);
+  // Each finished iteration keeps its results; the first unfinished one keeps only its description and moves aside,
+  // so its evaluation runs again.
+  const recorded: Recorded[] = [];
+
+  for (let iteration = 1; ; iteration += 1) {
+    const folder = resolve(workspace, `iteration-${String(iteration)}`);
+    const copy = join(folder, 'plugin');
+    const skillFile = join(copy, 'skills', skill, 'SKILL.md');
+
+    if (!existsSync(skillFile)) {
+      break;
+    }
+
+    const evaluated = skillParts(readFileSync(skillFile, 'utf8')).description;
+    const json = join(folder, 'plugin-eval.json');
+
+    try {
+      const names = writeCases(join(copy, 'evals'), skill, split);
+      recorded.push({ description: evaluated, all: queryResults(readJson(json), names, queries, threshold) });
+    } catch (error) {
+      const aside = `${folder}-stopped-${String(Date.now())}`;
+      renameSync(folder, aside);
+      process.stderr.write(`iteration ${String(iteration)} runs again (${String(error)}); its files are in ${aside}\n`);
+      recorded.push({ description: evaluated });
+      break;
+    }
+  }
+
   const result = await optimize(
     {
       skillName: name,
@@ -209,6 +261,7 @@ if (isMainModule(import.meta.url)) {
         return Promise.resolve(text);
       },
     },
+    recorded,
   );
 
   writeFileSync(join(workspace, 'results.json'), `${JSON.stringify(result, null, 2)}\n`);

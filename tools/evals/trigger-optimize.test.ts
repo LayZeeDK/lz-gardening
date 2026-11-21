@@ -31,6 +31,21 @@ test('trigger-optimize refuses a workspace that already holds files, whose old c
   assert.match(optimize([], workspace), /workspace .* is not empty; use a new one/);
 });
 
+test('trigger-optimize --resume refuses a workspace started with other options, naming each one', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'trigger-optimize-'));
+  const started = { plugin: 'p', skill: 's', evalSet: 'e.json', model: 'sonnet', runs: 3, holdout: 0.4 };
+  writeFileSync(join(workspace, 'options.json'), JSON.stringify({ ...started, threshold: 0.5, seed: 7 }));
+
+  assert.match(
+    optimize(['--resume', '--runs', '5'], workspace),
+    /--resume needs the options the workspace started with: runs 3, not 5; seed 7, not 42/,
+  );
+});
+
+test('trigger-optimize --resume refuses a workspace no run started', () => {
+  assert.match(optimize(['--resume']), /nothing to resume in .*: it has no options.json/);
+});
+
 test('trigger-optimize refuses a holdout that leaves no training set', () => {
   assert.match(optimize(['--holdout', '1']), /--holdout must be a number from 0 to below 1, not 1/);
 });

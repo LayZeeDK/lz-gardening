@@ -38,6 +38,12 @@ together, then asks the slim runner for a better description from the train resu
 query passes or after the last iteration. It prints the exit reason and the best description's scores, and writes
 `<workspace>/results.json`.
 
+A usage limit or another stop leaves `results.json` unwritten. Once the limit resets, run the same command with
+`--resume` added: it refuses options that differ from the workspace's `options.json`, keeps every finished iteration's
+results and description, and runs the first unfinished one again, its old files moved to
+`iteration-<n>-stopped-<ms>`. An iteration in which any run took no turn (how a usage limit ends a session) counts as
+unfinished, so a stop is never scored as "not triggered".
+
 Done when each model's workspace holds `results.json`.
 
 ## 3. Apply

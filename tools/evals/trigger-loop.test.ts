@@ -31,6 +31,53 @@ function evaluator(triggering: Readonly<Record<string, readonly string[]>>) {
   };
 }
 
+test('optimize takes the results of a recorded iteration instead of evaluating its description again', async () => {
+  const all = await evaluator({ 'A.': ['tend the suppressions'] })('A.', [...train, ...testSet]);
+  const result = await optimize(
+    { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 1 },
+    {
+      evaluate: () => Promise.reject(new Error('evaluated a recorded iteration')),
+      improve: () => Promise.reject(new Error('improved after the last iteration')),
+    },
+    [{ description: 'A.', all }],
+  );
+
+  assert.deepEqual([result.best_train_score, result.best_test_score], ['2/2', '0/1']);
+});
+
+test('optimize evaluates the description a recorded iteration holds instead of asking for a new one', async () => {
+  const all = await evaluator({})('A.', [...train, ...testSet]);
+  const result = await optimize(
+    { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 2 },
+    {
+      evaluate: evaluator({ 'B.': ['tend the suppressions'] }),
+      improve: () => Promise.reject(new Error('asked for a description a recorded iteration holds')),
+    },
+    [{ description: 'A.', all }, { description: 'B.' }],
+  );
+
+  assert.deepEqual(
+    result.history.map(({ description, train: { summary } }) => [description, summary.passed]),
+    [
+      ['A.', 1],
+      ['B.', 2],
+    ],
+  );
+});
+
+test('optimize refuses recorded iterations that started from another description than the skill has now', async () => {
+  const all = await evaluator({})('Z.', [...train, ...testSet]);
+
+  await assert.rejects(
+    optimize(
+      { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 1 },
+      { evaluate: evaluator({}), improve: () => Promise.resolve('') },
+      [{ description: 'Z.', all }],
+    ),
+    /iteration 1 evaluated "Z\.", not "A\."/,
+  );
+});
+
 test('optimize asks once for a shorter rewrite when a description passes 1024 characters', async () => {
   const long = 'x'.repeat(1100);
   const prompts: string[] = [];
