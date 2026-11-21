@@ -14,7 +14,7 @@ existing site, queue or census unreadable is a major change.
 
 First release. The scripts use one npm package, Zod, which Claude Code installs with the plugin.
 
-- `lz-garden` skill (`/lz-gardening:lz-garden [--base <branch>]`): one watch tick over the repository, recorded in
+- `lz-garden` skill (`/lz-gardening:lz-garden [--base <branch>]`): one tick over the repository, recorded in
   a garden site beside it at `../<repo>.garden`.
   - Watch: counts the hits of each census pattern on the base branch, reads what landed since the last tick (the
     diffs of the newest 30 commits, chosen smallest first up to 400,000 characters), and queues each weed with its

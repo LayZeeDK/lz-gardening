@@ -23,12 +23,12 @@ macOS. The scripts use one npm package, Zod, which Claude Code installs with the
 
 ## Use
 
-| Command                                             | What it does                                                                                                                                                                                                                          |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/lz-gardening:lz-garden [--base <branch>]`         | One watch tick: take a census of the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the census, the repository's records and its history. |
-| `/lz-gardening:lz-tend [<class>] [--base <branch>]` | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                                                 |
+| Command                                             | What it does                                                                                                                                                                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/lz-gardening:lz-garden [--base <branch>]`         | One tick: take a census of the base branch, read what landed since the last tick, queue each weed with its evidence. Changes no code. The first tick seeds the queue from the census, the repository's records and its history. |
+| `/lz-gardening:lz-tend [<class>] [--base <branch>]` | Take one class of queued weeds, add the strongest check that rejects it, prove the check on a real weed, then fix or baseline every instance, on a branch for you to review and land.                                           |
 
-Run the watch on a loop and tend by hand:
+Run ticks on a loop and tend by hand:
 
 ```text
 /loop 2h /lz-gardening:lz-garden
@@ -87,12 +87,12 @@ git fetch origin refs/garden/beds/<class>
 A bed that was not shared is only in the site: fetch it with `git fetch ../<repo>.garden bed/<class>`. The tend
 pass's report says when this applies: its close did not end `synced`, or the close named the bed on stderr.
 
-The watch runs in the `lz-gardener` agent. It reads the repository with read-only git commands and writes only
+A tick runs in the `lz-gardener` agent. It reads the repository with read-only git commands and writes only
 through its three scripts, which keep the queue and the census in the site. It never edits planning records, agent
 instructions, hooks or settings. Tend passes propose hooks and permission rules in their report; they never build
 them.
 
-The agent runs on your session's model. To run every subagent, the watch included, on one model, set
+The agent runs on your session's model. To run every subagent, the gardener included, on one model, set
 `CLAUDE_CODE_SUBAGENT_MODEL` with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`.
 
 ## Permissions
@@ -145,9 +145,9 @@ Use `pnpm -C *` or `yarn --cwd *` in place of `npm --prefix *` in a repository t
 tests run with Node.js flags, such as `node --conditions=<condition> --test`, needs that form allowed as well. These
 rules allow any installed tool and any package script to run, so grant them only in a session that tends.
 
-## Run the watch in CI
+## Run ticks in CI
 
-To run one watch tick on GitHub Actions, add this workflow as `.github/workflows/garden.yml`. It runs the tick with
+To run one tick on GitHub Actions, add this workflow as `.github/workflows/garden.yml`. It runs the tick with
 [claude-code-action](https://github.com/anthropics/claude-code-action). Start it from the repository's **Actions**
 tab or with `gh workflow run garden.yml`.
 

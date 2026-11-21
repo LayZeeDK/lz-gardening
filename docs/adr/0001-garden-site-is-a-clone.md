@@ -38,7 +38,7 @@ site by path. Two consequences above change:
   has it. In a clone of a local path, `origin/HEAD` only records what the source had checked out at clone time, so
   there it is passed over.
 
-## Update, 2026-11-11: the garden is shared
+## Update, 2026-11-13: the garden is shared
 
 ADR 0004 shares the garden through the repository's remote under `refs/garden/*`. The site stays a separate clone,
 and the checkout still gains no refs and no files. Four consequences above change:

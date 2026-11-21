@@ -10,10 +10,10 @@ A pattern in the codebase that agents will copy and that makes the codebase wors
 _Avoid_: smell, finding, issue, slop
 
 **Weed class**:
-The named kind a weed belongs to, such as a duplicate function or a hollow test; weeds are grouped, counted and
-tended by class. Each class has a kebab-case class id, and is found either by a census pattern or only by reading
-what landed.
-_Avoid_: category, kind, type
+The named group a weed belongs to, such as a duplicate function or a hollow test; weeds are grouped, counted and
+tended by class. Each class has a kebab-case class id, and is found either by the census or only by reading (what
+landed, the records, the history).
+_Avoid_: category, kind (a close kind is something else), type
 
 **Planting commit**:
 The commit that introduced a weed; a weed found in the code names it as its source.
@@ -24,7 +24,7 @@ records, or a line of the seed list.
 
 **Duplicate function**:
 A function name defined at module scope in two or more files of the codebase.
-_Avoid_: copy, clone
+_Avoid_: copy (a copy is one file's definition of it), clone (a clone is of the repository)
 
 **Naming weed**:
 A function that shares a duplicate function's name but does another job; a rename that says its job fixes it.
@@ -72,7 +72,7 @@ _Avoid_: sampler, reviewer, janitor
 
 **Tick**:
 One run of watching: a census, a reading of what landed since the last tick, and the weeds queued from both.
-_Avoid_: scan, pass, garden pass
+_Avoid_: scan, pass (a pass is a tend pass, or the seed pass, which is a tick), garden pass
 
 **Seed pass**:
 The tick that queues the weeds already present in a codebase, from the census, the records and the history, instead
@@ -98,7 +98,7 @@ _Avoid_: baseline (a baseline is what a check tolerates)
 **Decline**:
 To leave a seed line, or one file of a duplicate name's line, out of the queue on purpose, with a reason. Its weed is
 recorded as kept, so no later tick queues it.
-_Avoid_: skip, dismiss
+_Avoid_: skip (a tick skips the commits it leaves unread), dismiss
 
 **Queue**:
 The weeds waiting to be tended, each with its file and line, its source and the root cause it points to. Weeds leave
@@ -130,7 +130,7 @@ Reading a share of what landed rather than all of it, and judging the whole by i
 **Tend pass**:
 The work of taking one weed class, adding the check that rejects it, proving the check on a real weed, and fixing
 or baselining every instance.
-_Avoid_: fix pass, clean-up, weeding
+_Avoid_: fix pass, clean-up (a clean-up is a fix by hand in the history), weeding
 
 **Check**:
 Anything that rejects a weed mechanically: code structure, a type, a compiler flag, a lint rule, a test.
@@ -138,7 +138,8 @@ _Avoid_: guard (that is an agent guard), fence
 
 **Layer**:
 Where a correction lives, one of six, strongest first: codebase, static analysis, agent guards, agent
-instructions, skills, and style guide. A tend pass uses the strongest layer that can hold the weed class.
+instructions, skills and references, and style guide and human review. A tend pass uses the strongest layer that can
+hold the weed class.
 _Avoid_: level, tier
 
 **Agent guard**:

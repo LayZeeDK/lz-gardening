@@ -1,9 +1,9 @@
 # A regrown weed's check is labelled when it is not on the base, judged by patch ids in the checkout
 
-A weed that comes back before its tend pass's bed lands is regrown. It read as if the bed's check had failed, though
-that check never ran on the base. So `weeds add` and `weeds list` end the check with ` not on the base` when the
-bed's change to its check is missing from the census commit. A base with no file at the check's path is missing it
-too. The weed stays regrown, because the remedy is still to tend the class again in the same bed.
+A weed that comes back before its tend pass's bed lands is regrown, and it read as if the bed's check had failed,
+though that check never ran on the base. So `weeds add` and `weeds list` end the check with ` not on the base` when
+the bed's change to its check is missing from the census commit, or the base has no file at the check's path. The
+weed stays regrown, because the remedy is still to tend the class again in the same bed.
 
 The bed's change is on the base in any of these cases:
 
@@ -33,15 +33,18 @@ lazy fetch off, so git writes to neither.
 - The label is advisory. No label means either that the change landed or that the label could not tell from the
   check: a check the command line would refuse, or a check that names no file at the bed's commit. The weed is queued
   and listed either way.
-- Update 2026-11-14: when the site cannot judge the base at all, the check ends with `, base unknown` instead of no
-  label: no readable census, a bed or census commit missing from the site and the checkout, or a bed that shares no
-  history with the base. Before, such a weed read as if its check had landed, and the tick reported a check that
-  never reached the base as one that failed.
 - A check file the bed created reads as on the base as soon as the base has a file at that path, whatever it holds.
 - A bed change that exists only in a merge commit, such as a merge resolved or edited by hand in the bed, is not seen,
   so its weeds get no label even when the base lacks the change. The clean merges `site.ts bed` makes cannot cause
   this.
 - A change the base took split or combined differently from the bed's commits reads as not on the base.
+
+## Update, 2026-11-14: base unknown when the site cannot judge
+
+When the site cannot judge the base at all, the check ends with `, base unknown` instead of no label: no readable
+census, a bed or census commit missing from the site and the checkout, or a bed that shares no history with the base.
+Before, such a weed read as if its check had landed, and the tick reported a check that never reached the base as one
+that failed.
 
 ## Update, 2026-11-18: a close holds several check files
 

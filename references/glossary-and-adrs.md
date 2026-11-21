@@ -41,8 +41,8 @@ Write an ADR only when a decision passes all three tests:
 3. **A real trade-off.** There were other options, and they lost for reasons someone stated.
 
 A decision that fails one test gets no ADR. If a commit body or a skill's doc already gives its reason, that is
-enough. Examples: the garden site runs no user hooks (one setting, explained in the site's reference and the
-CHANGELOG), and a bed links `node_modules` only from a matching plain lockfile.
+enough. Examples: the garden site runs no user hooks (explained in the site's reference), and a bed links
+`node_modules` only from a matching plain lockfile.
 
 Check the ADRs whenever a change touches what one covers. When the change reverses part of it, add a dated
 `## Update, <YYYY-MM-DD>: <what changed>` section to that ADR, as ADR 0001 does. When it reverses all of it, write a
