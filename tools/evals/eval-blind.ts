@@ -8,7 +8,7 @@
 // run.json with the model, checkout and site), in a random order, with the plugin paths and configuration names
 // replaced; the letter key goes beside the folder, where the judge's brief keeps it out of reach. unblind copies each
 // letter's llm-grades.json back to its run as that judge's verdict file.
-import { randomInt } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
@@ -25,14 +25,7 @@ function escaped(text: string): string {
 // Git Bash's /d/ form, in any letter case.
 export function blindText(text: string, plugins: readonly string[], configs: readonly string[]): string {
   const spellings = plugins.flatMap((plugin) => {
-    const drive = /^([A-Za-z]):\/(.*)$/.exec(plugin);
-
-    return [
-      plugin.replaceAll('/', '\\\\'),
-      plugin.replaceAll('/', '\\'),
-      plugin,
-      ...(drive === null ? [] : [`/${(drive[1] ?? '').toLowerCase()}/${drive[2] ?? ''}`]),
-    ];
+    return [plugin.replaceAll('/', '\\\\'), plugin.replaceAll('/', '\\'), plugin, plugin.replace(/^(\w):/, '/$1')];
   });
   const withoutPlugins = spellings.reduce(
     (blinded, spelling) => blinded.replace(new RegExp(escaped(spelling), 'gi'), '<plugin>'),
@@ -42,27 +35,18 @@ export function blindText(text: string, plugins: readonly string[], configs: rea
   return configs.reduce((blinded, config) => blinded.replaceAll(config, '<config>'), withoutPlugins);
 }
 
-function letter(index: number): string {
-  const rest = Math.floor(index / 26);
+const letters = 'abcdefghijklmnopqrstuvwxyz';
 
-  return `${rest === 0 ? '' : letter(rest - 1)}${String.fromCharCode(97 + (index % 26))}`;
-}
-
-function shuffled<T>(items: readonly T[]): T[] {
-  const result = [...items];
-
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const other = randomInt(index + 1);
-    const item = result[index];
-    const swapped = result[other];
-
-    if (item !== undefined && swapped !== undefined) {
-      result[index] = swapped;
-      result[other] = item;
-    }
+// The runs in a random order, each under its letter.
+function lettered(runDirs: readonly string[]): (readonly [string, string])[] {
+  if (runDirs.length > letters.length) {
+    throw new Error(`blind takes at most ${String(letters.length)} runs at once, not ${String(runDirs.length)}`);
   }
 
-  return result;
+  return runDirs
+    .map((runDir) => ({ runDir, order: randomUUID() }))
+    .sort((left, right) => left.order.localeCompare(right.order))
+    .map(({ runDir }, index) => [letters.charAt(index), runDir] as const);
 }
 
 function judgeName(iterationDir: string, evalCase: string, judge: number): string {
@@ -97,7 +81,7 @@ export function blind(iterationDir: string, evalCase: string, judge: number, run
   }
 
   const hide = (text: string): string => blindText(text, Object.values(configs), Object.keys(configs));
-  const key = shuffled(runs).map((runDir, index) => [letter(index), runDir] as const);
+  const key = lettered(runs);
 
   key.forEach(([name, runDir]) => {
     const target = `${folder}/${name}`;
@@ -116,6 +100,22 @@ export function blind(iterationDir: string, evalCase: string, judge: number, run
   writeFileSync(`${folder}.key.json`, `${JSON.stringify(Object.fromEntries(key), null, 2)}\n`);
 }
 
+function texts(value: unknown): string[] {
+  const items: unknown[] = Array.isArray(value) ? value : [];
+
+  return items.flatMap((item) => (isRecord(item) && typeof item['text'] === 'string' ? [item['text']] : [])).sort();
+}
+
+// A judge's verdict file holds one verdict per judged assertion (one without a script `check`), with its exact text.
+function judgedInFull(letterFolder: string): boolean {
+  const metadata = readJson(`${letterFolder}/eval_metadata.json`);
+  const assertions: unknown[] =
+    isRecord(metadata) && Array.isArray(metadata['assertions']) ? metadata['assertions'] : [];
+  const judged = texts(assertions.filter((assertion) => isRecord(assertion) && assertion['check'] === undefined));
+
+  return JSON.stringify(texts(readJson(`${letterFolder}/llm-grades.json`))) === JSON.stringify(judged);
+}
+
 export function unblind(iterationDir: string, evalCase: string, judge: number): void {
   const folder = judgeName(iterationDir, evalCase, judge);
   const key = readJson(`${folder}.key.json`);
@@ -129,6 +129,14 @@ export function unblind(iterationDir: string, evalCase: string, judge: number): 
 
   if (missing.length > 0) {
     throw new Error(`no llm-grades.json for ${missing.map(([name]) => name).join(', ')} in ${folder}`);
+  }
+
+  const unmatched = runs.filter(([name]) => !judgedInFull(`${folder}/${name}`));
+
+  if (unmatched.length > 0) {
+    throw new Error(
+      `${unmatched.map(([name]) => name).join(', ')}: the verdicts are not the judged assertions of eval_metadata.json, one each with its exact text`,
+    );
   }
 
   runs.forEach(([name, runDir]) => {
