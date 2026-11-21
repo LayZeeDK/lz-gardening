@@ -15,7 +15,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
-import { resultLine } from './eval-grade.ts';
+import { slimOutput } from './slim-output.ts';
 import { skillParts, splitEvalSet, withDescription, writeCases, type EvalQuery } from './trigger-cases.ts';
 import { optimize } from './trigger-loop.ts';
 import { queryResults } from './trigger-results.ts';
@@ -198,7 +198,7 @@ if (isMainModule(import.meta.url)) {
           ],
           'the slim runner',
         );
-        const text = existsSync(out) ? resultLine(readJson(out))['result'] : undefined;
+        const text = existsSync(out) ? slimOutput(readJson(out)).result['result'] : undefined;
 
         if (status !== 0 || typeof text !== 'string') {
           throw new Error(`the improve call exited ${String(status)} with no result; see ${out}`);

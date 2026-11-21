@@ -5,8 +5,8 @@
 //   <iteration>/eval-<case>-<model>/<config>/run-<k>/outputs/result.json, grading.json, timing.json
 //
 // Repository-only; nothing here ships with the plugin.
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { globSync, readFileSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
 
 export interface Iteration {
@@ -70,4 +70,27 @@ export function runFolder(iterationDir: string, evalCase: string, model: string,
 // A run folder's eval folder, two levels up.
 export function evalFolderOf(runDir: string): string {
   return resolve(runDir, '..', '..');
+}
+
+export interface GradedRunFolder {
+  readonly evalName: string;
+  readonly config: string;
+  readonly run: number;
+  readonly runDir: string;
+}
+
+// Every run folder of the iteration that holds a grading.json, in path order.
+export function gradedRuns(iterationDir: string): GradedRunFolder[] {
+  return globSync(join('eval-*', '*', 'run-*', 'grading.json'), { cwd: iterationDir })
+    .sort()
+    .map((path) => {
+      const [evalName = '', config = '', run = ''] = path.split(sep);
+
+      return {
+        evalName,
+        config,
+        run: Number(run.replace('run-', '')),
+        runDir: join(iterationDir, evalName, config, run),
+      };
+    });
 }

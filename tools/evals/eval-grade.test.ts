@@ -4,8 +4,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
-import { gradeRunDir, grading, timing } from './eval-grade.ts';
+import { gradeRunDir, grading, parseGrading, parseTiming, timing } from './eval-grade.ts';
 import type { ToolCall } from './eval-transcript.ts';
+import { slimOutput } from './slim-output.ts';
 
 interface RunShape {
   readonly transcript?: boolean;
@@ -171,6 +172,35 @@ test('grading scores script checks and judged assertions, lists unjudged ones fo
   });
 });
 
+test('parseGrading reads back a grading the grader wrote and refuses one with a field missing or of the wrong kind', () => {
+  const written: unknown = JSON.parse(
+    JSON.stringify(grading([bash('rg x')], [{ text: 'judged' }], [{ text: 'judged', passed: true, evidence: 'e' }])),
+  );
+  const { summary, ...noSummary } = grading([], [], []);
+  const broken = [noSummary, { ...grading([], [], []), summary: { ...summary, total: '0' } }];
+
+  assert.deepEqual(parseGrading(written, 'g.json'), written);
+  assert.deepEqual(
+    broken.filter((value) => {
+      try {
+        parseGrading(value, 'g.json');
+
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+    [],
+  );
+});
+
+test('parseTiming reads back a timing the grader wrote and refuses one with a field missing', () => {
+  const { turns, ...noTurns } = timing([]);
+
+  assert.deepEqual([parseTiming(timing([]), 't.json'), turns], [timing([]), 0]);
+  assert.throws(() => parseTiming(noTurns, 't.json'), /t\.json is not a timing/);
+});
+
 function slimOut(result: Record<string, unknown>, ms: number): unknown {
   return {
     cwd: 'D:\\sample',
@@ -199,7 +229,7 @@ test('timing sums a run and its resume: seconds, cost, turns and every token the
     1_154_000,
   );
 
-  assert.deepEqual(timing([first, resumed]), {
+  assert.deepEqual(timing([first, resumed].map(slimOutput)), {
     total_tokens: 440,
     total_duration_seconds: 1454,
     total_cost_usd: 5.75,

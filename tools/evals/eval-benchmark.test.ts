@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
 import { benchmark, benchmarkMarkdown, stats, writeBenchmark } from './eval-benchmark.ts';
+import type { Grading, Timing } from './eval-grade.ts';
 
 function iterationWith(runs: readonly { config: string; passed: number }[]): string {
   const iteration = mkdtempSync(join(tmpdir(), 'eval-benchmark-'));
@@ -12,7 +13,7 @@ function iterationWith(runs: readonly { config: string; passed: number }[]): str
   mkdirSync(evalDir);
   writeFileSync(
     join(iteration, 'iteration.json'),
-    JSON.stringify({ configs: { new_skill: { plugin: 'b' }, old_skill: { plugin: 'a' } }, models: ['opus'] }),
+    JSON.stringify({ configs: { new_skill: { plugin: 'b' }, old_skill: { plugin: 'a' } }, models: ['opus'], runs: 1 }),
   );
   writeFileSync(join(evalDir, 'eval_metadata.json'), JSON.stringify({ eval_id: 11, assertions: [] }));
 
@@ -20,7 +21,10 @@ function iterationWith(runs: readonly { config: string; passed: number }[]): str
     const runDir = join(evalDir, config, `run-${String(index + 1)}`);
     mkdirSync(runDir, { recursive: true });
     const { grading, timing } = graded(passed, 1, 60, 1000);
-    writeFileSync(join(runDir, 'grading.json'), JSON.stringify({ ...grading, user_notes_summary: {} }));
+    writeFileSync(
+      join(runDir, 'grading.json'),
+      JSON.stringify({ ...grading, user_notes_summary: { uncertainties: [], needs_review: [], workarounds: [] } }),
+    );
     writeFileSync(join(runDir, 'timing.json'), JSON.stringify(timing));
   }
 
@@ -59,8 +63,8 @@ test('writeBenchmark writes benchmark.json, benchmark.md and summary.md, configu
 test('benchmarkMarkdown tables the two configurations and their delta', () => {
   const result = benchmark(
     [
-      { evalId: 2, config: 'new_skill', runNumber: 1, ...graded(1, 2, 10, 100) },
-      { evalId: 1, config: 'old_skill', runNumber: 1, ...graded(2, 2, 30.25, 400) },
+      { evalName: 'eval-b', evalId: 2, config: 'new_skill', runNumber: 1, ...graded(1, 2, 10, 100) },
+      { evalName: 'eval-a', evalId: 1, config: 'old_skill', runNumber: 1, ...graded(2, 2, 30.25, 400) },
     ],
     {
       configs: ['new_skill', 'old_skill'],
@@ -92,24 +96,24 @@ test('benchmarkMarkdown tables the two configurations and their delta', () => {
   );
 });
 
-function graded(passed: number, total: number, seconds: number, tokens: number) {
+function graded(passed: number, total: number, seconds: number, tokens: number): { grading: Grading; timing: Timing } {
   return {
     grading: {
       expectations: [{ text: 'closed', passed: passed > 0, evidence: 'closed 2;' }],
       summary: { passed, failed: total - passed, total, pass_rate: passed / total },
-      execution_metrics: { total_tool_calls: 7, errors_encountered: 1 },
+      execution_metrics: { tool_calls: {}, total_tool_calls: 7, errors_encountered: 1, permission_denials: 0 },
       user_notes_summary: { uncertainties: [], needs_review: ['not judged: x'], workarounds: [] },
     },
-    timing: { total_tokens: tokens, total_duration_seconds: seconds },
+    timing: { total_tokens: tokens, total_duration_seconds: seconds, total_cost_usd: 0, turns: 0 },
   };
 }
 
 test('benchmark summarises each configuration, gives the first minus the second as the delta, and lists every run', () => {
   const result = benchmark(
     [
-      { evalId: 1, config: 'new_skill', runNumber: 1, ...graded(2, 2, 10, 100) },
-      { evalId: 1, config: 'new_skill', runNumber: 2, ...graded(1, 2, 20, 300) },
-      { evalId: 1, config: 'old_skill', runNumber: 1, ...graded(0, 2, 30, 100) },
+      { evalName: 'eval-a', evalId: 1, config: 'new_skill', runNumber: 1, ...graded(2, 2, 10, 100) },
+      { evalName: 'eval-a', evalId: 1, config: 'new_skill', runNumber: 2, ...graded(1, 2, 20, 300) },
+      { evalName: 'eval-a', evalId: 1, config: 'old_skill', runNumber: 1, ...graded(0, 2, 30, 100) },
     ],
     {
       configs: ['new_skill', 'old_skill'],

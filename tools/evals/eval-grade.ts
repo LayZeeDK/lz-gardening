@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
 import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
 import { checks } from './eval-checks.ts';
+import { evalFolderOf, isAssertion, readJson, type Assertion } from './eval-layout.ts';
 import { sessionTranscripts, toolCalls, type ToolCall } from './eval-transcript.ts';
+import { slimOutput, type SlimOutput } from './slim-output.ts';
 
 export interface Timing {
   readonly total_tokens: number;
@@ -20,24 +22,6 @@ function numberAt(record: Readonly<Record<string, unknown>>, key: string): numbe
   const value = record[key];
 
   return typeof value === 'number' ? value : 0;
-}
-
-// The session's last `result` line of a run-slim `--out` file, or an empty record when the session printed none.
-export function resultLine(output: unknown): Readonly<Record<string, unknown>> {
-  const stdout = isRecord(output) && typeof output['stdout'] === 'string' ? output['stdout'] : '';
-  const results = stdout
-    .split('\n')
-    .flatMap((line): unknown[] => {
-      try {
-        return [JSON.parse(line)];
-      } catch {
-        return [];
-      }
-    })
-    .filter((entry) => isRecord(entry) && entry['type'] === 'result');
-  const last: unknown = results.at(-1);
-
-  return isRecord(last) ? last : {};
 }
 
 // Every token the session's models processed: input, output and both cache kinds, summed over the models it used.
@@ -59,11 +43,6 @@ export interface Expectation {
   readonly text: string;
   readonly passed: boolean;
   readonly evidence: string;
-}
-
-export interface Assertion {
-  readonly text: string;
-  readonly check?: string;
 }
 
 export interface Grading {
@@ -143,24 +122,12 @@ export function grading(
   };
 }
 
-function readJson(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf8'));
-}
-
 function isExpectation(value: unknown): value is Expectation {
   return (
     isRecord(value) &&
     typeof value['text'] === 'string' &&
     typeof value['passed'] === 'boolean' &&
     typeof value['evidence'] === 'string'
-  );
-}
-
-function isAssertion(value: unknown): value is Assertion {
-  return (
-    isRecord(value) &&
-    typeof value['text'] === 'string' &&
-    (value['check'] === undefined || typeof value['check'] === 'string')
   );
 }
 
@@ -172,19 +139,77 @@ function listed<T>(value: unknown, guard: (item: unknown) => item is T, what: st
   return value;
 }
 
+function numbers(value: unknown, keys: readonly string[]): boolean {
+  return isRecord(value) && keys.every((key) => typeof value[key] === 'number');
+}
+
+function strings(value: unknown): boolean {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isGrading(value: unknown): value is Grading {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { expectations, summary, execution_metrics: metrics, user_notes_summary: notes } = value;
+
+  return (
+    Array.isArray(expectations) &&
+    expectations.every(isExpectation) &&
+    numbers(summary, ['passed', 'failed', 'total', 'pass_rate']) &&
+    numbers(metrics, ['total_tool_calls', 'errors_encountered', 'permission_denials']) &&
+    isRecord(metrics) &&
+    isRecord(metrics['tool_calls']) &&
+    Object.values(metrics['tool_calls']).every((count) => typeof count === 'number') &&
+    isRecord(notes) &&
+    ['uncertainties', 'needs_review', 'workarounds'].every((key) => strings(notes[key]))
+  );
+}
+
+function isTiming(value: unknown): value is Timing {
+  return numbers(value, ['total_tokens', 'total_duration_seconds', 'total_cost_usd', 'turns']);
+}
+
+export function parseGrading(value: unknown, file: string): Grading {
+  if (!isGrading(value)) {
+    throw new Error(`${file} is not a grading in the grader's schema; grade the run again`);
+  }
+
+  return value;
+}
+
+export function parseTiming(value: unknown, file: string): Timing {
+  if (!isTiming(value)) {
+    throw new Error(`${file} is not a timing in the grader's schema; grade the run again`);
+  }
+
+  return value;
+}
+
+export function timing(outputs: readonly SlimOutput[]): Timing {
+  const sum = (values: readonly number[]): number => values.reduce((total, value) => total + value, 0);
+  const results = outputs.map(({ result }) => result);
+
+  return {
+    total_tokens: sum(results.map(tokens)),
+    total_duration_seconds: Math.round(sum(outputs.map(({ ms }) => ms)) / 1000),
+    total_cost_usd: Math.round(sum(results.map((result) => numberAt(result, 'total_cost_usd'))) * 100) / 100,
+    turns: sum(results.map((result) => numberAt(result, 'num_turns'))),
+  };
+}
+
 // A run folder holds `outputs/*.json` (run-slim `--out` files: the run and each resume), `llm-grades.json` when the
-// judge has graded it, and sits two levels below its eval folder's `eval_metadata.json`.
+// judge has graded it, and sits in its eval folder beside `eval_metadata.json`.
 export function gradeRunDir(runDir: string, projects: string): void {
   const names = readdirSync(join(runDir, 'outputs'))
     .filter((name) => name.endsWith('.json'))
     .sort((left, right) => (left === 'result.json' ? -1 : right === 'result.json' ? 1 : left.localeCompare(right)));
-  const outputs = names.map((name) => readJson(join(runDir, 'outputs', name)));
-  const finals = outputs.map((output, index) => {
-    const result = resultLine(output)['result'];
-
+  const outputs = names.map((name) => slimOutput(readJson(join(runDir, 'outputs', name))));
+  const finals = outputs.map(({ result: { result } }, index) => {
     return `## ${names[index] ?? ''}\n\n${typeof result === 'string' ? result : '(no result: the session printed none)'}\n`;
   });
-  const metadata = readJson(join(runDir, '..', '..', 'eval_metadata.json'));
+  const metadata = readJson(join(evalFolderOf(runDir), 'eval_metadata.json'));
   const assertions = listed(
     isRecord(metadata) ? metadata['assertions'] : undefined,
     isAssertion,
@@ -193,13 +218,10 @@ export function gradeRunDir(runDir: string, projects: string): void {
   const grades = join(runDir, 'llm-grades.json');
   const judged = existsSync(grades) ? listed(readJson(grades), isExpectation, 'llm-grades.json') : [];
   const sessions = new Map(
-    outputs.flatMap((output) => {
-      const session = resultLine(output)['session_id'];
-      const cwd = isRecord(output) ? output['cwd'] : undefined;
+    outputs.flatMap(({ cwd, result }) => {
+      const session = result['session_id'];
 
-      return typeof session === 'string' && typeof cwd === 'string'
-        ? [[`${cwd}\0${session}`, { cwd, session }] as const]
-        : [];
+      return typeof session === 'string' && cwd !== null ? [[`${cwd}\0${session}`, { cwd, session }] as const] : [];
     }),
   );
   const calls = [...sessions.values()].flatMap(({ cwd, session }) =>
@@ -234,18 +256,4 @@ if (isMainModule(import.meta.url)) {
   for (const runDir of process.argv.slice(2)) {
     gradeRunDir(runDir, join(homedir(), '.claude', 'projects'));
   }
-}
-
-export function timing(outputs: readonly unknown[]): Timing {
-  const results = outputs.map(resultLine);
-  const sum = (values: readonly number[]): number => values.reduce((total, value) => total + value, 0);
-
-  return {
-    total_tokens: sum(results.map(tokens)),
-    total_duration_seconds: Math.round(
-      sum(outputs.map((output) => (isRecord(output) ? numberAt(output, 'ms') : 0))) / 1000,
-    ),
-    total_cost_usd: Math.round(sum(results.map((result) => numberAt(result, 'total_cost_usd'))) * 100) / 100,
-    turns: sum(results.map((result) => numberAt(result, 'num_turns'))),
-  };
 }
