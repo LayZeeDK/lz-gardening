@@ -1,0 +1,9 @@
+{
+  "patterns": [
+    {
+      "id": "console-call",
+      "regex": "console\\.(log|debug)\\(",
+      "note": "Output left in code; a CLI's own output belongs behind its io."
+    }
+  ]
+}

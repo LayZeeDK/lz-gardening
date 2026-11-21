@@ -1,0 +1,1 @@
+A usage limit stopped this session partway through the tend pass. Nothing else has touched the checkout, the site or the bed since. Continue the tend pass from where it stopped, and finish it as the skill says.
