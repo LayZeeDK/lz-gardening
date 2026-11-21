@@ -31,7 +31,9 @@ which keeps the line's weed out of the queue for good. `<sha>` is the census's c
 and `<token>` is the one `lines` printed: a decline of such a class without it, or with a token from another
 census, is refused. When the lines of a class left after its queued weeds share one reason, decline them all in one
 call: leave out `--where`, and the command declines every line of that class that no add covers yet and prints
-`declined <n> seed line(s) of <class>`. Queue a class's weeds first, then decline the rest, one call per class.
+`declined <n> seed line(s) of <class>`. A one-off is particular to its line, so it is no reason lines share: decline
+each one-off on its own, with `--where` and the reason its hits give, and queue a line whose reason you queued in
+another file. Queue a class's weeds first, then decline the rest.
 Duplicate names are the exception: decline each file of a duplicate line on its own, with `--where` and no `--read`.
 `add` takes `--source census:seed`, and `decline` records its weed with it, for the seed list's lines alone; both
 refuse any other weed, which takes the source of what it was found in (step 2, and `--source` in `SKILL.md`).
