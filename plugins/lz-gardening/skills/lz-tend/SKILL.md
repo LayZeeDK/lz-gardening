@@ -157,7 +157,10 @@ lists, per stack, the checks that hold common classes. Find the rows for this cl
 Take the strongest layer that can hold the class. Prefer, in order: change the code so the weed cannot be written
 (one shared function, one paved road, delete the bad examples); a type or compiler flag; a lint rule whose message
 names the fix; a test. Layer 3 (hooks, permissions) is proposed in the report, never built.
-Layers 4 to 6 (instructions, skills, style guide) only when nothing stronger can hold it; say why.
+Layers 4 to 6 (instructions, skills, style guide) only when nothing stronger can hold it; say why. When the check is
+layer 2 or weaker, say in one line why a layer 1 change cannot hold the class. When most of its weeds sit on one
+interface or module (casts or suppressions around one type, say), name it and say whether changing it would remove
+them.
 
 When the paved road needs a shared home that does not exist yet (a module every copy can import), make it in the bed,
 with the decision record the repository's instructions ask for (an ADR, say): a human reviews the bed before it
@@ -338,8 +341,10 @@ the bed stays for the next pass. Done when `close-class` prints `closed <n>; <st
 ## 8. Report
 
 - The class, its root cause in step 2's two sentences, and the decision.
-- The check: layer number and `checks.md` row (step 3), file, message, and step 5's four quoted outputs: the check
-  on the untouched bed, the bed's status then, the check on the paved road, and its run over every file it covers.
+- The check: layer number and `checks.md` row (step 3), why layer 1 cannot hold the class when the check is weaker
+  (and the interface or module its weeds sit on, if most do), file, message, and step 5's four quoted outputs: the
+  check on the untouched bed, the bed's status then, the check on the paved road, and its run over every file it
+  covers.
 - Each refused lookup the pass went on without (the rules at the top), and what it would have shown.
 - The weeds closed apart from the class (step 7), each with its id, kind and reason, and the weeds left open as
   baselined, each with its id.
