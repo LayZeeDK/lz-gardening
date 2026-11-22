@@ -160,8 +160,6 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: '40 16 * * *'
 
 permissions:
   # The garden scripts push refs/garden/log, refs/garden/census and refs/garden/beds/* with this job's token.
@@ -197,6 +195,8 @@ jobs:
           # The checkout may have no origin/HEAD, so the tick is told the base.
           prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
           claude_args: --permission-mode dontAsk
+          # The tick's reply, in the run's summary; the step's log hides it.
+          display_report: true
 ```
 
 The workflow needs a `CLAUDE_CODE_OAUTH_TOKEN` repository secret. To use an API key instead, replace
