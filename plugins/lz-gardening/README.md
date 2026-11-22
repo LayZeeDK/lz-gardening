@@ -195,7 +195,8 @@ jobs:
           plugins: lz-gardening@lz-gardening
           # The checkout may have no origin/HEAD, so the tick is told the base.
           prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
-          claude_args: --permission-mode dontAsk
+          # Linux builds of Claude Code drop the Grep and Glob tools, a tick's only search, unless --tools names them.
+          claude_args: --permission-mode dontAsk --tools Bash,Read,Grep,Glob,Skill,Task
           # The tick's reply, in the run's summary; the step's log hides it.
           display_report: true
 ```
