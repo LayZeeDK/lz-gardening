@@ -155,26 +155,22 @@ tab or with `gh workflow run garden.yml`.
 name: garden
 
 on:
-  workflow_run:
-    workflows: [check]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
+  # Scheduled runs are not supported: GitHub can delay or drop them and switches them off in a quiet public
+  # repository. Uncomment only to try one.
+  # schedule:
+  #   - cron: '17 6 * * 1-5'
 
 permissions:
   # The garden scripts push refs/garden/log, refs/garden/census and refs/garden/beds/* with this job's token.
   contents: write
 
+concurrency:
+  group: lz-gardening
+  cancel-in-progress: false
+
 jobs:
   garden:
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_repository.full_name == github.repository)
-    concurrency:
-      group: lz-gardening
-      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -195,8 +191,6 @@ jobs:
           # The checkout may have no origin/HEAD, so the tick is told the base.
           prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
           claude_args: --permission-mode dontAsk
-          # The tick's reply, in the run's summary; the step's log hides it.
-          display_report: true
 ```
 
 The workflow needs a `CLAUDE_CODE_OAUTH_TOKEN` repository secret. To use an API key instead, replace
