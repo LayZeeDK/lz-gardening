@@ -1,0 +1,1 @@
+{"op":"close","ids":["54639afb26"],"class":"stryker-disable","kind":"kept","by":"a one-off with a visible reason: each Stryker line names an equivalent mutant or worker source text particular to its own line","check":null,"uuid":"cd0bbecf-73da-49ec-8a22-5141866a5d3e","clock":13,"at":"2026-11-22T21:34:42.559Z"}
