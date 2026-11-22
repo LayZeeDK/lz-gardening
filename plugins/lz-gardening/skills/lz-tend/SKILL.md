@@ -4,7 +4,9 @@ description: Tend one class of queued weeds - find the root cause, add the stron
 argument-hint: '[<class>] [--base <branch>]'
 allowed-tools:
   - Read(${CLAUDE_SKILL_DIR}/**)
+  - Read(/${CLAUDE_SKILL_DIR}/**)
   - Read(${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/**)
+  - Read(/${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/**)
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts" *)
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/weeds.ts" *)
 ---

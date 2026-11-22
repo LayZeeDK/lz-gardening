@@ -6,6 +6,7 @@ context: fork
 agent: lz-gardening:lz-gardener
 allowed-tools:
   - Read(${CLAUDE_SKILL_DIR}/**)
+  - Read(/${CLAUDE_SKILL_DIR}/**)
   - Bash(node --version)
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/site.ts" *)
   - Bash(node "${CLAUDE_SKILL_DIR}/scripts/census.ts" *)
