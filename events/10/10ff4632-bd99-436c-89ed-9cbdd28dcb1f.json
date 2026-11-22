@@ -1,0 +1,1 @@
+{"op":"close","ids":["8fd7ddd7f0"],"class":"eslint-disable","kind":"kept","by":"not the class: the hits are fixture text and pattern strings in the census tests and an example id in a usage message, not lint suppressions","check":null,"uuid":"10ff4632-bd99-436c-89ed-9cbdd28dcb1f","clock":27,"at":"2026-11-22T21:34:44.158Z"}
