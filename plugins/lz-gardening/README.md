@@ -45,6 +45,23 @@ Pick the interval so that fewer commits land between two ticks than one tick rea
 later. Every tick costs tokens, so take the longest interval that keeps the first line of each tick's reply at
 `0 skipped`, and shorten it when a tick reports more.
 
+## Choose how ticks run
+
+Every tick costs Claude Code tokens. The ways to run ticks differ in who starts a tick and where it runs:
+
+| Way              | Start                                                             | Runs                                                              | Costs a tick                                  |
+| ---------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| Local, by hand   | `/lz-gardening:lz-garden` in Claude Code                          | on your machine                                                   | each time you run it                          |
+| Local, on a loop | `/loop 2h /lz-gardening:lz-garden`                                | on your machine, while the session stays open, up to 7 days       | each interval                                 |
+| CI, by hand      | the **Actions** tab or `gh workflow run garden.yml`               | in a GitHub Actions job ([Run ticks in CI](#run-ticks-in-ci))     | each time you start it                        |
+| CI, automatic    | `workflow_run` after each passing push to the base, or `schedule` | in a GitHub Actions job ([When CI ticks run](#when-ci-ticks-run)) | at most one per passing push, or one per slot |
+
+Unless `lzGardening.share` is `false`, all of them share one garden through `origin`, so you can mix them: a tick on
+your machine and a CI tick compare against the same census. A CI tick with sharing off keeps nothing, because its site
+lasts one job. Start by hand or on a loop while you learn what the gardener queues. To keep watching with no session
+open, tick in CI after each passing push, which reads what landed and costs nothing while nothing lands.
+Tend by hand in every case: a tend pass changes code on a branch for you to review.
+
 ## How it stays out of the way
 
 The gardener never works in your checkout. Other agents may be writing there around the clock. It keeps a **garden
@@ -161,8 +178,7 @@ name: garden
 
 on:
   workflow_dispatch:
-  # Scheduled runs are not supported: GitHub can delay or drop them and switches them off in a quiet public
-  # repository. Uncomment only to try one.
+  # To tick on a schedule as well, uncomment these lines (see "When CI ticks run").
   # schedule:
   #   - cron: '17 6 * * 1-5'
 
@@ -170,12 +186,12 @@ permissions:
   # The garden scripts push refs/garden/log, refs/garden/census and refs/garden/beds/* with this job's token.
   contents: write
 
-concurrency:
-  group: lz-gardening
-  cancel-in-progress: false
-
 jobs:
   garden:
+    # On the job, not the workflow, so that a run whose job is skipped never takes a waiting run's place.
+    concurrency:
+      group: lz-gardening
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -237,9 +253,53 @@ past the base. A census that was recorded but not shared is lost with the job's 
 Name the marketplace by its URL, as the recipe does. With a local path such as `plugin_marketplaces: ./`, Claude Code
 reads the plugin from that folder, where its npm packages are not installed, and the tick stops on its first script.
 
-Start the workflow by hand. A schedule is not supported: GitHub can delay or drop scheduled runs when it is busy, and
-it switches them off after 60 days without activity in a public repository. `lz-tend` does not run in CI yet: a tend
-pass needs the site added as a working directory before the session starts, and the repository's own checks allowed.
+### When CI ticks run
+
+The workflow above starts only by hand, so a tick costs tokens only when you start one. To tick without being asked,
+add one of two triggers beside `workflow_dispatch`.
+
+**After each push that passed the checks.** This fits the gardener's job best: each tick reads what one push landed.
+claude-code-action refuses `push` events but runs on `workflow_run`, so name the workflow that already runs on each
+push to the default branch (`check` here):
+
+```yaml
+on:
+  workflow_run:
+    # Name that workflow and your default branch here.
+    workflows: [check]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+```
+
+and add this condition to the `garden` job, so that only a passing push to the base starts a tick:
+
+```yaml
+jobs:
+  garden:
+    # Runs of check for pull requests and failed pushes start this workflow too; only a passing push ticks.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+```
+
+GitHub reads a `workflow_run` trigger from the default branch only, so it works once `garden.yml` is merged there.
+Each passing push costs one tick, and a repository where nothing lands costs nothing. The `concurrency` group keeps
+one run going and one waiting, and a newer run replaces the waiting one, so a burst of pushes costs at most two
+ticks, the second reading the rest of the burst.
+
+**On a schedule.** Uncomment the `schedule` lines of the recipe. Each slot costs one tick, even when nothing landed;
+such a tick replies with one line. Pick the interval as for `/loop`: fewer commits than one tick reads should land
+between two slots. GitHub can start a scheduled run late or drop it when it is busy, and in a public repository it
+turns scheduled workflows off after 60 days with no activity; a dropped slot makes the next tick read more.
+
+Each CI tick also costs the job's Actions minutes in a private repository; standard GitHub-hosted runners are free
+for public repositories.
+
+`lz-tend` does not run in CI yet: a tend pass needs the site added as a working directory before the session starts,
+and the repository's own checks allowed.
 
 ## Where a fix goes
 

@@ -2,8 +2,7 @@ name: garden
 
 on:
   workflow_dispatch:
-  # Scheduled runs are not supported: GitHub can delay or drop them and switches them off in a quiet public
-  # repository. Uncomment only to try one.
+  # To tick on a schedule as well, uncomment these lines (see "When CI ticks run").
   # schedule:
   #   - cron: '17 6 * * 1-5'
 
@@ -11,12 +10,12 @@ permissions:
   # The garden scripts push refs/garden/log, refs/garden/census and refs/garden/beds/* with this job's token.
   contents: write
 
-concurrency:
-  group: lz-gardening
-  cancel-in-progress: false
-
 jobs:
   garden:
+    # On the job, not the workflow, so that a run whose job is skipped never takes a waiting run's place.
+    concurrency:
+      group: lz-gardening
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
