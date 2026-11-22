@@ -196,6 +196,8 @@ jobs:
           # The checkout may have no origin/HEAD, so the tick is told the base.
           prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
           claude_args: --permission-mode dontAsk
+          # The tick's reply, in the run's summary; the step's log hides it.
+          display_report: true
 ```
 
 The workflow needs a `CLAUDE_CODE_OAUTH_TOKEN` repository secret. To use an API key instead, replace
@@ -226,10 +228,13 @@ push sits in the `origin` URL.
 
 A green run does not mean the tick worked. The job fails only when the Claude Code run itself fails. A tick whose
 script stops, for example on a damaged queue or a repository with no identity, ends with a reply that says so, and
-the run still shows green. Read the reply in the log of the claude-code-action step: a tick that worked ends with
-`shared: synced`, on a line of its own or at the end of the `garden: census` line, or is one `garden:` line when nothing new
-landed or another run already read past the base. A census that was recorded but not shared is lost with the job's
-site.
+the run still shows green. Read the reply in the run's summary, under **Claude Code Report** (`display_report`
+puts it there; the step's log hides it): a tick that worked ends with `shared: synced`, on a line of its own or at
+the end of the `garden: census` line, or is one `garden:` line when nothing new landed or another run already read
+past the base. A census that was recorded but not shared is lost with the job's site.
+
+Name the marketplace by its URL, as the recipe does. With a local path such as `plugin_marketplaces: ./`, Claude Code
+reads the plugin from that folder, where its npm packages are not installed, and the tick stops on its first script.
 
 Start the workflow by hand. A schedule is not supported: GitHub can delay or drop scheduled runs when it is busy, and
 it switches them off after 60 days without activity in a public repository. `lz-tend` does not run in CI yet: a tend
