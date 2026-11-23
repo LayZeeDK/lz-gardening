@@ -52,7 +52,7 @@ Every tick costs Claude Code tokens. The ways to run ticks differ in who starts 
 | Way              | Start                                                             | Runs                                                              | Costs a tick                                  |
 | ---------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
 | Local, by hand   | `/lz-gardening:lz-garden` in Claude Code                          | on your machine                                                   | each time you run it                          |
-| Local, on a loop | `/loop 2h /lz-gardening:lz-garden`                                | on your machine, while the session stays open, up to 7 days       | each interval                                 |
+| Local, on a loop | `/loop 2h /lz-gardening:lz-garden`                                | on your machine, while the session stays open, up to seven days   | each interval                                 |
 | CI, by hand      | the **Actions** tab or `gh workflow run garden.yml`               | in a GitHub Actions job ([Run ticks in CI](#run-ticks-in-ci))     | each time you start it                        |
 | CI, automatic    | `workflow_run` after each passing push to the base, or `schedule` | in a GitHub Actions job ([When CI ticks run](#when-ci-ticks-run)) | at most one per passing push, or one per slot |
 
@@ -61,6 +61,12 @@ your machine and a CI tick compare against the same census. A CI tick with shari
 lasts one job. Start by hand or on a loop while you learn what the gardener queues. To keep watching with no session
 open, tick in CI after each passing push, which reads what landed and costs nothing while nothing lands.
 Tend by hand in every case: a tend pass changes code on a branch for you to review.
+
+On macOS and Linux, Claude Code's native builds replace the Grep and Glob tools with `grep` and `find` through Bash,
+which a tick does not run, so a tick there has no search of its own: it reads the files that carry each hit instead
+and covers less. Only a `--tools` list that names Grep and Glob brings them back, and such a list also leaves out
+every tool it does not name, so start a session for ticks with one, such as
+`claude --tools Bash,Read,Grep,Glob,Skill,Task`. The CI recipe below does this.
 
 ## How it stays out of the way
 
@@ -188,7 +194,7 @@ permissions:
 
 jobs:
   garden:
-    # On the job, not the workflow, so that a run whose job is skipped never takes a waiting run's place.
+    # On the job, not the workflow, so that a workflow_run whose job its if: skips never takes a waiting run's place.
     concurrency:
       group: lz-gardening
       cancel-in-progress: false
@@ -213,7 +219,7 @@ jobs:
           prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
           # Linux builds of Claude Code drop the Grep and Glob tools, a tick's only search, unless --tools names them.
           claude_args: --permission-mode dontAsk --tools Bash,Read,Grep,Glob,Skill,Task
-          # The tick's reply, in the run's summary; the step's log hides it.
+          # The session, its tool calls and the tick's reply, in the run's summary; the step's log hides them.
           display_report: true
 ```
 
@@ -245,8 +251,7 @@ push sits in the `origin` URL.
 
 A green run does not mean the tick worked. The job fails only when the Claude Code run itself fails. A tick whose
 script stops, for example on a damaged queue or a repository with no identity, ends with a reply that says so, and
-the run still shows green. Read the reply in the run's summary, under **Claude Code Report** (`display_report`
-puts it there; the step's log hides it): a tick that worked ends with `shared: synced`, on a line of its own or at
+the run still shows green. Read the reply at the end of the run's summary, under **Claude Code Report**: a tick that worked ends with `shared: synced`, on a line of its own or at
 the end of the `garden: census` line, or is one `garden:` line when nothing new landed or another run already read
 past the base. A census that was recorded but not shared is lost with the job's site.
 
@@ -277,7 +282,7 @@ and add this condition to the `garden` job, so that only a passing push to the b
 ```yaml
 jobs:
   garden:
-    # Runs of check for pull requests and failed pushes start this workflow too; only a passing push ticks.
+    # A failed push, or a pull request from a branch named like the base, starts this workflow too; only a passing push ticks.
     if: >-
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.event == 'push' &&
