@@ -138,7 +138,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   takes the `commit:` of the commit that planted it, found as below with `<sha>` as the range. For a census hit, the
   planting commit is
   `git log -n 1 --format=%h -S '<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`, with a space
-  after `-S`; for a duplicate, the piece is the name, and for a file after `already`, the range is `<sha>`.
+  after `-S`; for a duplicate, the piece is the name, and for a file after `already`, the range is `<sha>`. A plain
+  piece holds no backtick, `$`, quote or backslash, even inside the single quotes: Claude Code refuses such a
+  command, which ends the tick. Take the words beside those characters instead.
   `repeated-lesson` takes a `lesson:` source only, and `weeds.ts` refuses any other: a clean-up in the code that did
   not hold is queued under the class of the mistake it cleaned up.
 - `--note`: the root cause in one sentence (what the agent was trying to do and which shortcut it took), not the
