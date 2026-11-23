@@ -13,9 +13,11 @@ test('every Read rule on a plugin path in a skill comes in both forms', () => {
   const rules = readdirSync(skills, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .flatMap(({ name }) =>
-      [...readFileSync(join(skills, name, 'SKILL.md'), 'utf8').matchAll(/Read\(\/?\$\{CLAUDE_[A-Z_]+\}[^)]*\)/g)].map(
-        ([rule]) => `${name}: ${rule}`,
-      ),
+      [
+        ...(/^---\n([\s\S]*?)\n---$/m.exec(readFileSync(join(skills, name, 'SKILL.md'), 'utf8'))?.[1] ?? '').matchAll(
+          /Read\(\/?\$\{CLAUDE_[A-Z_]+\}[^)]*\)/g,
+        ),
+      ].map(([rule]) => `${name}: ${rule}`),
     );
   const missing = rules
     .map((rule) => (rule.includes('Read(/') ? rule.replace('Read(/', 'Read(') : rule.replace('Read(', 'Read(/')))
