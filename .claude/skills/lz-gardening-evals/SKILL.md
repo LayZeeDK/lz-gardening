@@ -22,7 +22,7 @@ of the sample repository), `LZ_EVAL_RUN_SLIM` (the path of the slim runner, `run
    that fresh worktree.
 2. Write `.claude/evals/lz-gardening-workspace/iteration-<n>/iteration.json`, `new_skill` (the change) first and
    `old_skill` (the text before it) second: the benchmark's delta is the first minus the second, and the judges and
-   step 5 use these names.
+   step 5 use these names. Take three runs per configuration and model; step 5 says when to raise them to ten.
 
    ```json
    {
@@ -31,11 +31,12 @@ of the sample repository), `LZ_EVAL_RUN_SLIM` (the path of the slim runner, `run
        "old_skill": { "plugin": "<dir>/plugins/lz-gardening", "commit": "<sha>", "text": "<the text before it>" }
      },
      "models": ["sonnet", "opus"],
-     "runs": 1
+     "runs": 3
    }
    ```
 
-3. `node tools/evals/eval-run.ts scaffold <iteration dir>`.
+3. `node tools/evals/eval-run.ts scaffold <iteration dir>`. It keeps every sample that exists and makes the missing
+   ones, so after raising `runs` it scaffolds only the new runs' samples.
 
 Done when every configuration, model and run has a sample with a `.garden` site beside it.
 
@@ -43,8 +44,8 @@ Done when every configuration, model and run has a sample with a `.garden` site 
 
 `node tools/evals/eval-run.ts run <iteration dir> garden-seed`, then, once every seed run exited 0 (itself or through
 a resume), the same with `tend`, which runs on the garden sites the seed pass filled. Each prints one
-`<run dir> exit <status>` line per run and exits 1 when any run failed. A seed pass takes up to 14 minutes and a tend
-pass up to 40; run them in the background.
+`<run dir> exit <status>` line per run and exits 1 when any run failed. `run` starts only the runs that have no result
+yet. A seed pass takes up to 14 minutes and a tend pass up to 40; run them in the background.
 
 A run that did not exit 0 has its cause in its newest `outputs/result*.json`: `status`, `stderr` and the last
 `result` line of `stdout`. Resume a tend run a usage limit or the time limit stopped with
@@ -76,6 +77,12 @@ Done when every run exited 0, itself or through a resume.
    `eval-grade.ts` takes the judges' majority; a split leaves `judges split: <assertion>` under `needs_review`.
 4. Third judge: blind each run with a split for judge 3 the same way, judge, unblind and grade again.
 
+After raising `runs` (step 5), judge only the new runs and keep the verdicts of the runs judged before. First move each
+`judge-<case>-<n>/` folder and `judge-<case>-<n>.md` aside to `judge-<case>-<n>-runs-1-<old runs>`, because `blind`
+refuses a judge folder that exists; then name the new run folders to `blind`, for judge 1 too. For judges 2 and 3,
+count the pass counts over every run, and blind only runs without that judge's verdict file. `blind` takes at most as
+many runs as it has letters; past that, judge one model's runs at a time.
+
 Done when no `grading.json` holds a `needs_review` entry.
 
 ## 4. Benchmark and analyse
@@ -91,8 +98,15 @@ Done when `benchmark.md`, `summary.md` and `analysis.md` exist.
 
 Read `benchmark.md`, `summary.md`, `analysis.md` and the judges' `judge-<case>-<n>.md` files. Name every assertion
 where `new_skill` did worse for a model, and trace each to text that differs or call it one sample. Unless the request
-names another rule, keep the change only where no judged or script assertion got worse for any model. Record the
-decision with its evidence in the plan or log the round belongs to. Then remove each sample, its `.garden` site and
+names another rule, keep the change only where no judged or script assertion got worse for any model.
+
+When the results are not clear, raise `runs` from three to ten instead of deciding, and keep the runs already done:
+Lars's rule (2026-11-23), "When eval results aren't clear, raise n from 3 to 10, keeping existing 3 runs in the 10
+group instead of a full re-run when possible." Results are not clear when a worse assertion traces to no text that
+differs, or when the gain the change targets rests on one run per model. Set `runs` in `iteration.json` and go back to
+step 1.3; steps 2 to 4 then run and judge only the new runs, and the benchmark covers every run.
+
+Record the decision with its evidence in the plan or log the round belongs to. Then remove each sample, its `.garden` site and
 its `-origin.git` (all under `LZ_EVAL_SAMPLES_ROOT`), and `git worktree remove` the worktrees of step 1.
 
 Done when the decision and every worse assertion with its cause are recorded and the samples and worktrees are gone.

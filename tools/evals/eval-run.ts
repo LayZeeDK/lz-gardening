@@ -1,7 +1,7 @@
 // Runs one eval case of an iteration: each configuration and model on its own sample, through the slim `claude -p`
 // runner. Repository-only; nothing here ships with the plugin.
 //
-//   node tools/evals/eval-run.ts scaffold <iteration dir>              a fresh sample and garden site per run
+//   node tools/evals/eval-run.ts scaffold <iteration dir>              a fresh sample and garden site per new run
 //   node tools/evals/eval-run.ts run <iteration dir> <eval name> [--concurrency 4] [--evals <dir>]
 //   node tools/evals/eval-run.ts resume <iteration dir> <eval name> <run dir>... [--concurrency 4] [--evals <dir>]
 //   node tools/evals/eval-run.ts rerun <iteration dir> <eval name> <run dir>... [--concurrency 4] [--evals <dir>]
@@ -157,6 +157,21 @@ export function sampleFolders(sample: string): readonly [clone: string, site: st
   return [sample, `${sample}.garden`, `${sample}-origin.git`];
 }
 
+// A sample whose folders all exist is kept, so raising an iteration's runs scaffolds only the new runs' samples.
+export function unscaffolded(all: readonly Sample[]): Sample[] {
+  const present = (sample: Sample): number =>
+    sampleFolders(sample.sample).filter((folder) => existsSync(folder)).length;
+  const partial = all.filter((sample) => present(sample) > 0 && present(sample) < 3);
+
+  if (partial.length > 0) {
+    throw new Error(
+      `samples are partly there; move them aside first: ${partial.map(({ sample }) => sample).join(', ')}`,
+    );
+  }
+
+  return all.filter((sample) => present(sample) === 0);
+}
+
 export function scaffold(sample: Sample, origin: string, patterns: string): void {
   const [clone, site, bare] = sampleFolders(sample.sample);
   mkdirSync(dirname(bare), { recursive: true });
@@ -194,6 +209,11 @@ export function resumeRun(evalCase: EvalCase, evalsDir: string, run: PlannedRun)
   args[args.indexOf('--out') + 1] = `${outputs}/result-resume-${String(last + 1)}.json`;
 
   return { args: [...args, '--resume', session] };
+}
+
+// A run with a result is done; `run` starts the others, so raising an iteration's runs keeps the runs done.
+export function newRuns(plan: readonly PlannedRun[]): PlannedRun[] {
+  return plan.filter((run) => !existsSync(`${run.runDir}/outputs/result.json`));
 }
 
 // Why the planned runs cannot start: the case they follow has not run on the same samples, or they already ran.
@@ -381,14 +401,7 @@ if (isMainModule(import.meta.url)) {
 
   if (evalName === undefined) {
     const origin = required('LZ_EVAL_SAMPLE_ORIGIN');
-    const all = samples(input);
-    const refused = all.filter(({ sample }) => sampleFolders(sample).some((folder) => existsSync(folder)));
-
-    if (refused.length > 0) {
-      throw new Error(`samples exist; move them aside first: ${refused.map(({ sample }) => sample).join(', ')}`);
-    }
-
-    all.forEach((sample) => {
+    unscaffolded(samples(input)).forEach((sample) => {
       scaffold(sample, origin, `${evalsDir}/site-patterns.json`);
       console.log(`scaffolded ${sample.sample}`);
     });
@@ -404,7 +417,13 @@ if (isMainModule(import.meta.url)) {
     const evalCase = findEvalCase(evals, evalName);
     const planned = runPlan({ ...input, evalCase });
     const wanted = runDirs.map((runDir) => resolve(runDir).replaceAll('\\', '/'));
-    const plan = command === 'run' ? planned : planned.filter(({ runDir }) => wanted.includes(runDir));
+    const plan = command === 'run' ? newRuns(planned) : planned.filter(({ runDir }) => wanted.includes(runDir));
+
+    if (command === 'run' && plan.length === 0) {
+      throw new Error(
+        `every run of ${evalCase.name} in ${iteration} has a result; raise runs in iteration.json for more`,
+      );
+    }
     const unknown = wanted.filter((runDir) => !plan.some((run) => run.runDir === runDir));
 
     if (unknown.length > 0) {

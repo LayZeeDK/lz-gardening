@@ -8,12 +8,15 @@ import { commit, git, repo } from '../../plugins/lz-gardening/skills/lz-garden/s
 import {
   evalCases,
   findEvalCase,
+  newRuns,
   prepareRuns,
   resumeRun,
   runPlan,
   runRefusal,
+  sampleFolders,
   samples,
   scaffold,
+  unscaffolded,
   setAside,
   slimArgs,
   staleRuns,
@@ -226,6 +229,46 @@ test('runRefusal refuses runs that already have a result', () => {
     runRefusal(plan, iteration, gardenCase()),
     `these runs have results; start them over with rerun on the case their sample starts with: ${iteration}/eval-garden-seed-sonnet/new_skill/run-1`,
   );
+});
+
+test('newRuns keeps the planned runs with no result, so raising the runs of an iteration keeps the runs done', () => {
+  const iteration = mkdtempSync(join(tmpdir(), 'eval-run-')).replaceAll('\\', '/');
+  const plan = runPlan({
+    evalCase: gardenCase(),
+    iterationDir: iteration,
+    samplesRoot: 'S:/samples',
+    configs: { new_skill: 'P:/new' },
+    models: ['sonnet'],
+    runs: 2,
+  });
+  const outputs = `${iteration}/eval-garden-seed-sonnet/new_skill/run-1/outputs`;
+  mkdirSync(outputs, { recursive: true });
+  writeFileSync(`${outputs}/result.json`, '{}');
+
+  assert.deepEqual(
+    newRuns(plan).map((run) => run.runDir),
+    [`${iteration}/eval-garden-seed-sonnet/new_skill/run-2`],
+  );
+});
+
+test('unscaffolded gives the samples that do not exist yet and keeps every sample that does', () => {
+  const root = mkdtempSync(join(tmpdir(), 'eval-run-')).replaceAll('\\', '/');
+  const [kept, fresh] = [sampleAt(`${root}/kept`), sampleAt(`${root}/fresh`)];
+  sampleFolders(kept.sample).forEach((folder) => {
+    mkdirSync(folder);
+  });
+
+  assert.deepEqual(unscaffolded([kept, fresh]), [fresh]);
+});
+
+test('unscaffolded refuses a sample of which only some folders exist, naming it', () => {
+  const root = mkdtempSync(join(tmpdir(), 'eval-run-')).replaceAll('\\', '/');
+  const partial = sampleAt(`${root}/partial`);
+  mkdirSync(partial.sample);
+
+  assert.throws(() => unscaffolded([partial]), {
+    message: `samples are partly there; move them aside first: ${root}/partial`,
+  });
 });
 
 test('setAside moves the paths that exist into the first free set-aside folder of the root, keeping their place', () => {
