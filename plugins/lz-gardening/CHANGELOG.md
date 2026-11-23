@@ -93,3 +93,6 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   long-lived `git cat-file --batch-command` per folder and ends it before the command exits. Other platforms start
   a git process per read. The scripts' own fetches, merges and commits start no auto maintenance
   (`maintenance.auto=false`), as its packing of refs can go unseen by a long-lived reader.
+- Search: a tick and a tend pass search with the Grep tool and list files with the Glob tool. On macOS and Linux,
+  where Claude Code's native builds have neither tool, they search with read-only `grep` and `find` through Bash,
+  which Claude Code runs without asking, so the plugin needs no setup on Windows, macOS or Linux.

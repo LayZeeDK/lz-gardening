@@ -24,10 +24,15 @@ output and stop.
 Two rules hold for the whole pass:
 
 - **Read with the Read tool, search with the Grep tool, list files with the Glob tool**, in the checkout and in the
-  bed alike. `rg`, `grep`, `find`, `ls`, `cat`, `head` and `tail` through Bash are outside the pass: many users'
-  rules refuse them, and a refused command ends the pass.
+  bed alike. Where Claude Code has no Grep or Glob tool (its native macOS and Linux builds), search with
+  `grep -rnE '<pattern>' --exclude-dir=node_modules --exclude-dir=.git <path>` and list files with
+  `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` through Bash: no other
+  `find` action and no redirect. Where this text says Grep or Glob, that command does the same there, with POSIX
+  extended regular expressions. A Grep or Glob call that answers `No such tool available` means you are on such a
+  build: run the command instead and go on, and leave no search undone for the missing tool. Otherwise `rg`, `grep`, `find`, `ls`, `cat`, `head` and `tail` through Bash are
+  outside the pass: many users' rules refuse them, and a refused command ends the pass.
 - **A refused command the pass needs ends the pass.** A command the pass needs is one of the forms below, a step's
-  own command, or a command of the check or the repository's checks. Report it with its refusal, and stop. The
+  own command, the `grep` or `find` search above, or a command of the check or the repository's checks. Report it with its refusal, and stop. The
   refusal is the user's answer to the command in every form, so the pass reaches the same result no other way. A
   refused lookup the pass can do without (the source of a dependency, a log outside the workspace) does not end it:
   name it in the report and go on without that information, never fetching it another way.

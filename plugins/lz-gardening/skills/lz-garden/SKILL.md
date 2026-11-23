@@ -24,8 +24,14 @@ condition; when one is not met, report the command and its output and stop.
 
 Two rules hold for the whole tick:
 
-- **Search with the Grep tool, list files with the Glob tool.** These two tools are the tick's only search and
-  listing; `git grep`, `rg`, `find` and `ls` are outside the tick.
+- **Search with the Grep tool, list files with the Glob tool.** Where Claude Code has no Grep or Glob tool (its
+  native macOS and Linux builds), search with
+  `grep -rnE '<pattern>' --exclude-dir=node_modules --exclude-dir=.git <path>` and list files with
+  `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` through Bash: no other
+  `find` action and no redirect. Where this text says Grep or Glob, that command does the same there, with POSIX
+  extended regular expressions. A Grep or Glob call that answers `No such tool available` means you are on such a
+  build: run the command instead and go on, and leave no search undone for the missing tool. Otherwise these two
+  tools are the tick's only search and listing; `git grep`, `rg`, `find` and `ls` are outside the tick.
   Grep patterns are Rust regular expressions, with no look-around and no backreferences: search twice instead.
 - **A refused command ends the tick.** Report the command and its refusal, and stop. Reach the same result no other
   way, with a tool or with another command.
@@ -35,7 +41,7 @@ included, one command per Bash call: no shell variables, functions, loops, pipes
 no options to `git log` and `git show` beyond the ones below. Read a file as it is on the base with
 `git show <base>:<path>`. The Read, Grep and Glob tools see the checkout, which is often another branch than
 `<base>`, so confirm a hit with `git show <base>:<path>` before queueing it. Write only through `site.ts`,
-`census.ts` and `weeds.ts`; run no other command, `cd`, file write or redirect.
+`census.ts` and `weeds.ts`; run no other command but those searches, and no `cd`, file write or redirect.
 
 ## 1. Open the site
 
