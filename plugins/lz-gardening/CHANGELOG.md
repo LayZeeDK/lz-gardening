@@ -95,4 +95,5 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   (`maintenance.auto=false`), as its packing of refs can go unseen by a long-lived reader.
 - Search: a tick and a tend pass search with the Grep tool and list files with the Glob tool. On macOS and Linux,
   where Claude Code's native builds have neither tool, they search with read-only `grep` and `find` through Bash,
-  which Claude Code runs without asking, so the plugin needs no setup on Windows, macOS or Linux.
+  which Claude Code runs as read-only commands without asking unless your permission rules refuse them, so the
+  plugin needs no setup on Windows, macOS or Linux.

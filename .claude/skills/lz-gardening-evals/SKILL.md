@@ -82,10 +82,12 @@ Done when every run exited 0, itself or through a resume.
 4. Third judge: blind each run with a split for judge 3 the same way, judge, unblind and grade again.
 
 After raising `runs` (step 5), judge only the new runs and keep the verdicts of the runs judged before. First move each
-`judge-<case>-<n>/` folder and `judge-<case>-<n>.md` aside to `judge-<case>-<n>-runs-1-<old runs>`, because `blind`
-refuses a judge folder that exists; then name the new run folders to `blind`, for judge 1 too. For judges 2 and 3,
-count the pass counts over every run, and blind only runs without that judge's verdict file. `blind` takes at most as
-many runs as it has letters; past that, judge one model's runs at a time.
+`judge-<case>-<n>/` folder, its `judge-<case>-<n>.key.json` and its `judge-<case>-<n>.md` aside to
+`judge-<case>-<n>-runs-1-<old runs>` (keeping each suffix), because `blind` refuses a judge folder that exists; then
+name the new run folders to `blind`, for judge 1 too. For judges 2 and 3, count the pass counts over every run, and
+blind only runs that have no `llm-grades-2.json` (judge 2) or `llm-grades-3.json` (judge 3) yet. `blind` takes at most
+26 runs at once, and raising `runs` from three to ten gives 28 new runs per case, so blind one model's runs at a time:
+blind, judge and unblind one model, move its judge files aside as above (with the model in the name), then the next.
 
 Done when no `grading.json` holds a `needs_review` entry.
 
