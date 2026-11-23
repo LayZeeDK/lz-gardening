@@ -14,6 +14,7 @@
 import { parseArgs } from 'node:util';
 import { isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
+import { escapeUnprintable } from './log-fields.ts';
 import { git, gitReason, gitSucceeds, runGit } from './store-git.ts';
 
 export interface CommitDiff {
@@ -112,7 +113,9 @@ function planted(args: readonly string[], io: Io): number {
   });
 
   if (blame.status !== 0) {
-    io.err(`diffs: ${commit} holds no ${where}: ${gitReason(blame.stderr).replace(/^fatal: /, '')}\n`);
+    io.err(
+      `${escapeUnprintable(`diffs: ${commit} holds no ${where}: ${gitReason(blame.stderr).replace(/^fatal: /, '')}`)}\n`,
+    );
 
     return 2;
   }

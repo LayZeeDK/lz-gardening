@@ -241,6 +241,19 @@ test('planted refuses a line or a file the commit does not hold with exit 2, nam
   ]);
 });
 
+test('planted refuses a path it cannot find with its control bytes escaped, as the other scripts print them', (t) => {
+  const dir = repo(t);
+  const tip = commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const { io, stdout, stderr } = capturingIo(dir, process.env);
+
+  const status = run(['planted', tip, 'b\u001b[31m.ts:1'], io);
+
+  assert.deepEqual(
+    [status, stdout(), stderr().includes('\u001b'), stderr().startsWith(`diffs: ${tip} holds no b\\u{1b}[31m.ts:1: `)],
+    [2, '', false, true],
+  );
+});
+
 test("a page lists the range's commits, then a blank line, then each diff under its id and message, trimmed", (t) => {
   const dir = repo(t);
   const from = commit(dir, { 'a.ts': 'export const a = 1;\n' });
