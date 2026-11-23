@@ -54,6 +54,9 @@
         },
         {
           "text": "The final report names the bed, what closed, what stays open and why, without claiming a check it did not run."
+        },
+        {
+          "text": "When the check is layer 2 or weaker, the report says why a layer 1 change cannot hold the class, and names the interface or module most of the class's weeds sit on when most do; a layer 1 check makes this hold."
         }
       ]
     }
