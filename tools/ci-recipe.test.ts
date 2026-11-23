@@ -6,8 +6,6 @@ import { test } from 'node:test';
 
 const root = join(import.meta.dirname, '..');
 
-// The workflow names the marketplace by its URL, as the recipe does: with `./` Claude Code reads the plugin from the
-// checkout, where its npm packages are not installed.
 test("the README's CI recipe is the workflow this repository runs", () => {
   const workflow = readFileSync(join(root, '.github/workflows/garden.yml'), 'utf8');
   const readme = readFileSync(join(root, 'plugins/lz-gardening/README.md'), 'utf8');
@@ -15,4 +13,18 @@ test("the README's CI recipe is the workflow this repository runs", () => {
   const recipe = /^```yaml\n(name: garden\n[\s\S]*?)^```$/m.exec(readme)?.[1];
 
   assert.equal(recipe, workflow);
+});
+
+test("the workflow's --tools names every tool the gardener agent uses", () => {
+  const workflow = readFileSync(join(root, '.github/workflows/garden.yml'), 'utf8');
+  const agent = readFileSync(join(root, 'plugins/lz-gardening/agents/lz-gardener.md'), 'utf8');
+
+  const tools = /^ +claude_args: .*--tools (\S+)/m.exec(workflow)?.[1]?.split(',') ?? [];
+  const agentTools = /^tools: (.+)$/m.exec(agent)?.[1]?.split(', ') ?? [];
+
+  assert.notDeepEqual(agentTools, []);
+  assert.deepEqual(
+    agentTools.filter((tool) => !tools.includes(tool)),
+    [],
+  );
 });
