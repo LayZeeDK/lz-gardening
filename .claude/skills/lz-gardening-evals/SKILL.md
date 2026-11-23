@@ -58,7 +58,11 @@ samples' later runs (their tend runs) into the first free `<iteration dir>/set-a
 `.garden` and `-origin.git` into the first free `<samples root>/set-aside-<n>/` (the two numbers can differ),
 scaffolds fresh samples and runs the seed pass. Once every seed rerun exited 0,
 `node tools/evals/eval-run.ts rerun <iteration dir> tend <tend run dir>...` runs the tend runs it set aside. A tend run
-that crashed starts over the same way, from its seed run. Delete the `set-aside-<n>` folders once nothing in them is
+that crashed starts over the same way, from its seed run, and so do two more: one the time limit killed, whose
+`result.json` names no session, and one the usage limit stopped before it read the skill's references, because a
+resumed session keeps none of the skill's permissions and its first reference read is refused (iteration 9, two
+runs). A killed tend run can leave an Nx daemon running in its bed, and `rerun` then fails to move the site; stop the
+process whose command line names the sample first. Delete the `set-aside-<n>` folders once nothing in them is
 wanted.
 
 Done when every run exited 0, itself or through a resume.
