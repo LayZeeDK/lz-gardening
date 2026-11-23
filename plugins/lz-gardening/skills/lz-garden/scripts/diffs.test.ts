@@ -213,6 +213,7 @@ test('planted refuses anything but a commit and a <path>:<line> with exit 2 and 
     ['planted', tip, 'a.ts'],
     ['planted', tip, 'a.ts:0'],
     ['planted', tip, 'a.ts:1', 'b.ts:1'],
+    ['planted', tip, 'a.ts:1', '--page', '3'],
   ].map((args) => {
     const { io, stdout, stderr } = capturingIo(dir, process.env);
 
@@ -221,7 +222,7 @@ test('planted refuses anything but a commit and a <path>:<line> with exit 2 and 
 
   assert.deepEqual(
     refused,
-    Array.from({ length: 6 }, () => [2, '', usage]),
+    Array.from({ length: 7 }, () => [2, '', usage]),
   );
 });
 

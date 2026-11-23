@@ -124,6 +124,10 @@ function planted(args: readonly string[], io: Io): number {
 }
 
 function main(argv: readonly string[], io: Io): number {
+  if (argv[0] === 'planted') {
+    return planted(argv.slice(1), io);
+  }
+
   const { positionals, values } = parseArgs({
     args: [...argv],
     strict: true,
@@ -132,11 +136,6 @@ function main(argv: readonly string[], io: Io): number {
   });
   // Stryker disable next-line StringLiteral: with no range given, the default and the mutant's text both fail the check below
   const [given = ''] = positionals;
-
-  if (given === 'planted') {
-    return planted(positionals.slice(1), io);
-  }
-
   const alone = /^[0-9a-f]{4,64}$/.test(given);
   const range = alone ? `${given}^..${given}` : given;
 
