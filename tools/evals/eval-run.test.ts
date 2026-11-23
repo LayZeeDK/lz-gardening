@@ -331,7 +331,7 @@ test('staleRuns gives a rerun its own run folder and those of every case that fo
   ]);
 });
 
-test('prepareRuns writes the eval metadata per model and an outputs folder per run', () => {
+test('prepareRuns writes the eval metadata per model and leaves the outputs folder to the session', () => {
   const { iteration, plan } = iterationFor(gardenCase());
 
   prepareRuns(plan, iteration, gardenCase(), 'Seed the garden.\n');
@@ -348,7 +348,7 @@ test('prepareRuns writes the eval metadata per model and an outputs folder per r
         prompt: 'Seed the garden.\n',
         assertions: [{ text: 'A census ran.', check: 'census-taken' }],
       },
-      true,
+      false,
     ],
   );
 });

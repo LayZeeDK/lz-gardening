@@ -226,6 +226,7 @@ export function runRefusal(plan: readonly PlannedRun[], iterationDir: string, ev
   if (plan.length === 0) {
     return `every run of ${evalCase.name} in ${iterationDir} has a result; resume or rerun a stopped one, or raise runs in iteration.json for more`;
   }
+
   const unseeded = plan.filter(
     (run) =>
       after !== null &&
@@ -242,7 +243,7 @@ export function runRefusal(plan: readonly PlannedRun[], iterationDir: string, ev
     return `these runs have results; start them over with rerun on the case their sample starts with: ${done.map((run) => run.runDir).join(', ')}`;
   }
 
-  // prepareRuns makes the outputs folder as a run starts, so one without a result is a run that died on its sample.
+  // slimRun makes the outputs folder as a session starts, so one without a result is a run that died on its sample.
   const started = plan.filter((run) => existsSync(`${run.runDir}/outputs`));
 
   return started.length > 0
@@ -282,7 +283,7 @@ export function setAside(root: string, paths: readonly string[]): void {
     });
 }
 
-// Each model's eval folder gets eval_metadata.json, and each run its outputs folder.
+// Each model's eval folder gets eval_metadata.json; a run's outputs folder waits for its session (slimRun).
 export function prepareRuns(
   plan: readonly PlannedRun[],
   iterationDir: string,
@@ -294,9 +295,6 @@ export function prepareRuns(
     const metadata = { eval_id: evalCase.id, eval_name: evalCase.name, prompt, assertions: evalCase.assertions };
     mkdirSync(folder, { recursive: true });
     writeFileSync(`${folder}/eval_metadata.json`, `${JSON.stringify(metadata, null, 2)}\n`);
-  });
-  plan.forEach((run) => {
-    mkdirSync(`${run.runDir}/outputs`, { recursive: true });
   });
 }
 
@@ -346,6 +344,7 @@ async function withHeavyLock<T>(task: string, minutes: number, work: () => Promi
 // A session the usage limit ended still exits 0, so its output file decides: such a run counts as failed.
 function slimRun(runSlim: string, args: readonly string[]): Promise<number> {
   const out = args[args.indexOf('--out') + 1] ?? '';
+  mkdirSync(dirname(out), { recursive: true });
 
   return new Promise((done) => {
     const child = spawn(process.execPath, [runSlim, ...args], { stdio: 'inherit' });
