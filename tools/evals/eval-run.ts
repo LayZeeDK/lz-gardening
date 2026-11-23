@@ -159,17 +159,19 @@ export function sampleFolders(sample: string): readonly [clone: string, site: st
 
 // A sample whose folders all exist is kept, so raising an iteration's runs scaffolds only the new runs' samples.
 export function unscaffolded(all: readonly Sample[]): Sample[] {
-  const present = (sample: Sample): number =>
-    sampleFolders(sample.sample).filter((folder) => existsSync(folder)).length;
-  const partial = all.filter((sample) => present(sample) > 0 && present(sample) < 3);
+  const found = all.map((sample) => ({
+    sample,
+    exists: sampleFolders(sample.sample).map((folder) => existsSync(folder)),
+  }));
+  const partial = found.filter(({ exists }) => exists.some(Boolean) && !exists.every(Boolean));
 
   if (partial.length > 0) {
     throw new Error(
-      `samples are partly there; move them aside first: ${partial.map(({ sample }) => sample).join(', ')}`,
+      `samples are partly there; move them aside first: ${partial.map(({ sample }) => sample.sample).join(', ')}`,
     );
   }
 
-  return all.filter((sample) => present(sample) === 0);
+  return found.filter(({ exists }) => !exists.some(Boolean)).map(({ sample }) => sample);
 }
 
 export function scaffold(sample: Sample, origin: string, patterns: string): void {
@@ -216,9 +218,14 @@ export function newRuns(plan: readonly PlannedRun[]): PlannedRun[] {
   return plan.filter((run) => !existsSync(`${run.runDir}/outputs/result.json`));
 }
 
-// Why the planned runs cannot start: the case they follow has not run on the same samples, or they already ran.
+// Why the planned runs cannot start: none is left, the case they follow has not run on the same samples, or they
+// already ran or started.
 export function runRefusal(plan: readonly PlannedRun[], iterationDir: string, evalCase: EvalCase): string | null {
   const { after } = evalCase;
+
+  if (plan.length === 0) {
+    return `every run of ${evalCase.name} in ${iterationDir} has a result; resume or rerun a stopped one, or raise runs in iteration.json for more`;
+  }
   const unseeded = plan.filter(
     (run) =>
       after !== null &&
@@ -231,8 +238,15 @@ export function runRefusal(plan: readonly PlannedRun[], iterationDir: string, ev
 
   const done = plan.filter((run) => existsSync(`${run.runDir}/outputs/result.json`));
 
-  return done.length > 0
-    ? `these runs have results; start them over with rerun on the case their sample starts with: ${done.map((run) => run.runDir).join(', ')}`
+  if (done.length > 0) {
+    return `these runs have results; start them over with rerun on the case their sample starts with: ${done.map((run) => run.runDir).join(', ')}`;
+  }
+
+  // prepareRuns makes the outputs folder as a run starts, so one without a result is a run that died on its sample.
+  const started = plan.filter((run) => existsSync(`${run.runDir}/outputs`));
+
+  return started.length > 0
+    ? `these runs started and left no result; start them over with rerun on the case their sample starts with: ${started.map((run) => run.runDir).join(', ')}`
     : null;
 }
 
@@ -418,12 +432,6 @@ if (isMainModule(import.meta.url)) {
     const planned = runPlan({ ...input, evalCase });
     const wanted = runDirs.map((runDir) => resolve(runDir).replaceAll('\\', '/'));
     const plan = command === 'run' ? newRuns(planned) : planned.filter(({ runDir }) => wanted.includes(runDir));
-
-    if (command === 'run' && plan.length === 0) {
-      throw new Error(
-        `every run of ${evalCase.name} in ${iteration} has a result; raise runs in iteration.json for more`,
-      );
-    }
     const unknown = wanted.filter((runDir) => !plan.some((run) => run.runDir === runDir));
 
     if (unknown.length > 0) {

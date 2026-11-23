@@ -231,6 +231,25 @@ test('runRefusal refuses runs that already have a result', () => {
   );
 });
 
+test('runRefusal refuses a run that started and left no result, whose sample the session may have changed', () => {
+  const { iteration, plan } = iterationFor(gardenCase());
+  mkdirSync(`${iteration}/eval-garden-seed-sonnet/new_skill/run-1/outputs`, { recursive: true });
+
+  assert.equal(
+    runRefusal(plan, iteration, gardenCase()),
+    `these runs started and left no result; start them over with rerun on the case their sample starts with: ${iteration}/eval-garden-seed-sonnet/new_skill/run-1`,
+  );
+});
+
+test('runRefusal refuses a plan with no run left, saying how to add runs', () => {
+  const { iteration } = iterationFor(gardenCase());
+
+  assert.equal(
+    runRefusal([], iteration, gardenCase()),
+    `every run of garden-seed in ${iteration} has a result; resume or rerun a stopped one, or raise runs in iteration.json for more`,
+  );
+});
+
 test('newRuns keeps the planned runs with no result, so raising the runs of an iteration keeps the runs done', () => {
   const iteration = mkdtempSync(join(tmpdir(), 'eval-run-')).replaceAll('\\', '/');
   const plan = runPlan({
