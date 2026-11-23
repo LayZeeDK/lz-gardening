@@ -63,9 +63,11 @@ open, tick in CI after each passing push, which reads what landed and costs noth
 Tend by hand in every case: a tend pass changes code on a branch for you to review.
 
 The plugin works the same on Windows, macOS and Linux. On macOS and Linux, Claude Code's native builds replace the
-Grep and Glob tools with `grep` and `find` through Bash, and the gardener searches with those there. Claude Code runs
-them as read-only commands without asking, unless your own permission rules refuse them; a refused search ends a
-tick or a tend pass. A `--tools` list that names Grep and Glob brings the two tools back, as the CI recipe below does.
+Grep and Glob tools with search commands through Bash, and the gardener searches there with `git grep --untracked`,
+which skips the files git ignores as the Grep tool does, and lists files with `find` (a tend pass searches its bed
+with `grep`). Claude Code runs them as read-only commands without asking, unless your own permission rules refuse
+them; a refused search ends a tick or a tend pass. A `--tools` list that names Grep and Glob brings the two tools
+back, as the CI recipe below does.
 
 ## How it stays out of the way
 
@@ -216,7 +218,7 @@ jobs:
           plugins: lz-gardening@lz-gardening
           # The checkout may have no origin/HEAD, so the tick is told the base.
           prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
-          # Linux builds of Claude Code search with grep and find through Bash; --tools brings back the Grep and Glob tools.
+          # Linux builds of Claude Code search through Bash; --tools brings back the Grep and Glob tools.
           claude_args: --permission-mode dontAsk --tools Bash,Read,Grep,Glob,Skill,Task
           # The session, its tool calls and the tick's reply, in the run's summary; the step's log hides them.
           display_report: true

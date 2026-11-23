@@ -94,6 +94,7 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
   a git process per read. The scripts' own fetches, merges and commits start no auto maintenance
   (`maintenance.auto=false`), as its packing of refs can go unseen by a long-lived reader.
 - Search: a tick and a tend pass search with the Grep tool and list files with the Glob tool. On macOS and Linux,
-  where Claude Code's native builds have neither tool, they search with read-only `grep` and `find` through Bash,
-  which Claude Code runs as read-only commands without asking unless your permission rules refuse them, so the
-  plugin needs no setup on Windows, macOS or Linux.
+  where Claude Code's native builds have neither tool, they search with `git grep --untracked`, which skips the files
+  git ignores, and list files with `find` through Bash (a tend pass searches its bed with `grep`). Claude Code runs
+  these as read-only commands without asking unless your permission rules refuse them, so the plugin needs no setup
+  on Windows, macOS or Linux.
