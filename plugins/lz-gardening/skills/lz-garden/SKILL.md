@@ -28,10 +28,11 @@ Two rules hold for the whole tick:
   native macOS and Linux builds), search with `git grep --untracked -nE '<pattern>' -- <path>` and list files with
   `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` through Bash: no other
   `find` action and no redirect. Where this text says Grep or Glob, that command does the same there, with POSIX
-  extended regular expressions; like Grep, `git grep` skips the files git ignores. A Grep or Glob call that answers
-  `No such tool available` means you are on such a build: run the command instead and go on, and leave no search
-  undone for the missing tool. Otherwise these two tools are the tick's only search and listing, and no search or
-  listing command (`git grep`, `rg`, `find`, `ls`) runs through Bash.
+  extended regular expressions; like Grep, `git grep` skips the files git ignores, and its exit 1 with no output
+  means no match, not a failure. A Grep or Glob call that answers `No such tool available` means you are on such a
+  build: run the command instead and go on, and leave no search undone for the missing tool. Where Claude Code has
+  the two tools, they are the tick's only search and listing, and no search or listing command (`git grep`, `rg`,
+  `find`, `ls`) runs through Bash.
   Grep patterns are Rust regular expressions, with no look-around and no backreferences: search twice instead.
 - **A refused command ends the tick.** Report the command and its refusal, and stop. Reach the same result no other
   way, with a tool or with another command.
