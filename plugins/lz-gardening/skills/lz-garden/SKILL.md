@@ -25,11 +25,12 @@ condition; when one is not met, report the command and its output and stop.
 Two rules hold for the whole tick:
 
 - **Search with the Grep tool, list files with the Glob tool.** Where Claude Code has no Grep or Glob tool (its
-  native macOS and Linux builds), search with `git grep --untracked -nE '<pattern>' -- <path>` (the base with
-  `git grep -nE '<pattern>' <base> -- <path>`; a path that holds `*` goes in single quotes, as Claude Code refuses
-  an unquoted one, and a pattern holds no `$` or backtick, not even as an end-of-line anchor or inside `[...]`, as
-  Claude Code refuses those even in single quotes: match either character with `.`) and list files with
-  `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` through Bash: no other
+  native macOS and Linux builds), search with `git grep --untracked -nE -e '<pattern>' -- '<path>'` (the base with
+  `git grep -nE -e '<pattern>' <base> -- '<path>'`; `-e` keeps a pattern that starts with `-` from reading as an
+  option, a path goes in single quotes, as Claude Code refuses an unquoted glob, and a pattern holds no `$` or
+  backtick, not even as an end-of-line anchor or inside `[...]`, as Claude Code refuses those even in single quotes:
+  match either character with `.`) and list files with
+  `find '<path>' -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` through Bash: no other
   `find` action and no redirect. Where this text says Grep or Glob, that command does the same there, with POSIX
   extended regular expressions; like Grep, `git grep` skips the files git ignores, and its exit 1 with no output
   means no match, not a failure. A Grep or Glob call that answers `No such tool available` means you are on such a
@@ -141,7 +142,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   `census:seed` for a line of the seed list and nothing else: a weed the seed pass finds by reading code or history
   takes the `commit:` of the commit that planted it, found as below. The planting commit of a weed at a line is
   printed, as the `--source` value `commit:<short sha>`, by
-  `node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" planted <sha> <path>:<line>`, with the line numbered as
+  `node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" planted <sha> '<path>:<line>'`, with the line numbered as
   `git show <sha>:<path>` numbers it; for a duplicate, the line of the definition. It names the commit that last
   wrote the line, passing over changes to its whitespace and moves within its file. An exit 2 that says `<sha>` holds
   no `<path>:<line>` means the line was numbered from another version of the file: number it from

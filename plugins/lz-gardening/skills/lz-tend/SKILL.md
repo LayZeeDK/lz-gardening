@@ -26,12 +26,12 @@ Two rules hold for the whole pass:
 
 - **Read with the Read tool, search with the Grep tool, list files with the Glob tool**, in the checkout and in the
   bed alike. Where Claude Code has no Grep or Glob tool (its native macOS and Linux builds), search the checkout
-  with `git grep --untracked -nE '<pattern>' -- <path>` (a path that holds `*` in single quotes, as Claude Code
-  refuses an unquoted one; in either command a pattern holds no `$` or backtick, not even as an end-of-line anchor
-  or inside `[...]`, as Claude Code refuses those even in single quotes: match either character with `.`), search
-  the bed with
-  `grep -rnE '<pattern>' --exclude-dir=node_modules --exclude-dir=.git "<bed>/<path>"`, and list files with
-  `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` (`"<bed>/<path>"` in the
+  with `git grep --untracked -nE -e '<pattern>' -- '<path>'`, search the bed with
+  `grep -rnE -e '<pattern>' --exclude-dir=node_modules --exclude-dir=.git '<bed>/<path>'` (in either command `-e`
+  keeps a pattern that starts with `-` from reading as an option, a path goes in single quotes, as Claude Code
+  refuses an unquoted glob, and a pattern holds no `$` or backtick, not even as an end-of-line anchor or inside
+  `[...]`, as Claude Code refuses those even in single quotes: match either character with `.`), and list files with
+  `find '<path>' -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` (`'<bed>/<path>'` in the
   bed) through Bash: no other `find` action and no redirect. Where this text says Grep or Glob, that command does the
   same there, with POSIX extended regular expressions; an exit 1 with no output from `git grep` or `grep` means no
   match, not a failure. Like Grep, `git grep` skips the files git ignores; in the bed, `grep` reads them too, so pass
@@ -235,7 +235,7 @@ else means the check is too wide or the queue missed a copy. When the check is t
 report, and run it again on the untouched bed and on the paved road, so the proof shows the check you keep. When the
 queue missed a copy, queue it from the repository's checkout:
 `weeds add --class <class> --where <path:line> --source <source> --note "<root cause>"`, where `<source>` is what
-`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/diffs.ts" planted <base> <path>:<line>` prints, the line
+`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/diffs.ts" planted <base> '<path>:<line>'` prints, the line
 numbered as `git show <base>:<path>` numbers it (an exit 2 that says `<base>` holds no `<path>:<line>` means the
 line was numbered from another version: number it from there and run it again); step 6 then fixes or baselines it
 like the rest.
