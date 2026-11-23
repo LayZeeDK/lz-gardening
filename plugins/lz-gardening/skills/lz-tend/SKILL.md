@@ -233,8 +233,10 @@ else means the check is too wide or the queue missed a copy. When the check is t
 report, and run it again on the untouched bed and on the paved road, so the proof shows the check you keep. When the
 queue missed a copy, queue it from the repository's checkout:
 `weeds add --class <class> --where <path:line> --source <source> --note "<root cause>"`, where `<source>` is what
-`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/diffs.ts" planted <base> <path:line>` prints, the line
-numbered as `git show <base>:<path>` numbers it; step 6 then fixes or baselines it like the rest.
+`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/diffs.ts" planted <base> <path>:<line>` prints, the line
+numbered as `git show <base>:<path>` numbers it (an exit 2 that says `<base>` holds no `<path>:<line>` means the
+line was numbered from another version: number it from there and run it again); step 6 then fixes or baselines it
+like the rest.
 When `add` prints `kept`, the copy was left on purpose: exempt it in the check, citing the keep's reason. Never rename
 or narrow code the queue does not hold to quiet the check. Quote the first output, the status, the second output and
 this run in the report: they are the proof. Done when you have all four.

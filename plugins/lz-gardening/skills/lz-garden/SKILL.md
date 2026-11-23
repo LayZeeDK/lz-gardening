@@ -133,7 +133,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   (see "New duplicates" below).
 - `--where`: the path repository-relative, as git prints it (`src/a.ts:12`). An absolute path, one starting with
   `~` or one through `..` is refused with exit 2. Give `--where` once per weed to add several weeds that share the
-  class, source and note in one call, such as the files of one duplicate name; the script prints a line for each.
+  class, source and note in one call, such as the files of one duplicate name that one commit planted; the script
+  prints a line for each.
 - `--source`: what the weed was found in. `commit:<short sha>` of the commit that planted it for a weed in the code,
   `lesson:<path>:<line>` for a weed in a record (the path repository-relative, as for `--where`), and
   `census:seed` for a line of the seed list and nothing else: a weed the seed pass finds by reading code or history
@@ -141,7 +142,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
   printed, as the `--source` value `commit:<short sha>`, by
   `node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" planted <sha> <path>:<line>`, with the line numbered as
   `git show <sha>:<path>` numbers it; for a duplicate, the line of the definition. It names the commit that last
-  wrote the line, passing over changes to its whitespace and moves within its file. Find the commit this way only:
+  wrote the line, passing over changes to its whitespace and moves within its file. An exit 2 that says `<sha>` holds
+  no `<path>:<line>` means the line was numbered from another version of the file: number it from
+  `git show <sha>:<path>` and run the command again. Find the commit this way only:
   a `git log -S` of your own puts the hit's text in the command, and Claude Code refuses one that holds a backtick
   or `$`, which ends the tick.
   `repeated-lesson` takes a `lesson:` source only, and `weeds.ts` refuses any other: a clean-up in the code that did
@@ -168,7 +171,8 @@ show. Take them one at a time:
    self-contained, is not one.
 3. A documented copy goes on the reply's `left out:` line, its reason the words you found, copied as they stand
    (`...` where you cut some out), and the file they are in when it is not the copy itself. Every other file
-   is queued, one weed per file (one `add` with a `--where` per file), with a note naming the definition to keep:
+   is queued, one weed per file (one `add` per planting commit, with a `--where` per file), with a note naming the
+   definition to keep:
    the file that holds that definition is queued too, and so is a file whose `<name>` does a different job (a
    naming weed). A tend pass decides what happens to each. No file of a `+ duplicate` line ends neither queued nor
    on `left out:`.
