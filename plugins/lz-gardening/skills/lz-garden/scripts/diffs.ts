@@ -99,7 +99,9 @@ function commitDiffs(cwd: string, range: string): readonly CommitDiff[] {
 }
 
 function planted(args: readonly string[], io: Io): number {
+  // Stryker disable next-line StringLiteral: a missing commit or <path>:<line> leaves no path, refused below either way
   const [commit = '', where = '', ...rest] = args;
+  // Stryker disable next-line StringLiteral,ArrayDeclaration: no match leaves no path, refused below either way
   const [, path = '', line = ''] = /^(.+):([1-9]\d*)$/.exec(where) ?? [];
 
   if (commit === '' || commit.startsWith('-') || path === '' || rest.length > 0) {
@@ -114,12 +116,13 @@ function planted(args: readonly string[], io: Io): number {
 
   if (blame.status !== 0) {
     io.err(
-      `${escapeUnprintable(`diffs: ${commit} holds no ${where}: ${gitReason(blame.stderr).replace(/^fatal: /, '')}`)}\n`,
+      `${escapeUnprintable(`diffs: ${commit} holds no ${where}: ${gitReason(blame.stderr).replace('fatal: ', '')}`)}\n`,
     );
 
     return 2;
   }
 
+  // Stryker disable next-line StringLiteral: a blame that exits 0 prints its sha first, so the default never applies
   const [blamed = ''] = blame.stdout.split(' ');
   io.out(`commit:${git(io.cwd, ['rev-parse', '--short', blamed], { readsOnly: true })}\n`);
 

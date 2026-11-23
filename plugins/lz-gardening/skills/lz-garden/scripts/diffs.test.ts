@@ -214,6 +214,10 @@ test('planted refuses anything but a commit and a <path>:<line> with exit 2 and 
     ['planted', tip, 'a.ts:0'],
     ['planted', tip, 'a.ts:1', 'b.ts:1'],
     ['planted', tip, 'a.ts:1', '--page', '3'],
+    ['planted', '', 'a.ts:1'],
+    ['planted', '--contents=x', 'a.ts:1'],
+    ['planted', tip, 'a.ts:1x'],
+    ['planted', tip, 'x\na.ts:1'],
   ].map((args) => {
     const { io, stdout, stderr } = capturingIo(dir, process.env);
 
@@ -222,7 +226,30 @@ test('planted refuses anything but a commit and a <path>:<line> with exit 2 and 
 
   assert.deepEqual(
     refused,
-    Array.from({ length: 7 }, () => [2, '', usage]),
+    Array.from({ length: 11 }, () => [2, '', usage]),
+  );
+});
+
+test('planted reads a line of two or more digits', (t) => {
+  const dir = repo(t);
+  const lines = Array.from({ length: 12 }, (_, n) => `export const v${String(n)} = ${String(n)};\n`);
+  const planter = commit(dir, { 'a.ts': lines.join('') });
+
+  const stdout = printed(dir, ['planted', planter, 'a.ts:12']);
+
+  assert.equal(stdout, `commit:${git(dir, ['rev-parse', '--short', planter])}\n`);
+});
+
+test('planted finds the commit with plain git reads, none of the settings or config reads a write takes', (t) => {
+  const dir = repo(t);
+  const tip = commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const started = startedGits(t);
+
+  printed(dir, ['planted', tip, 'a.ts:1']);
+
+  assert.deepEqual(
+    started().map(({ args }) => args[0]),
+    ['blame', 'rev-parse'],
   );
 });
 
