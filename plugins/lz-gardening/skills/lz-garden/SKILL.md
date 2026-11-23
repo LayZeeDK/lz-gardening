@@ -27,7 +27,8 @@ Two rules hold for the whole tick:
 - **Search with the Grep tool, list files with the Glob tool.** Where Claude Code has no Grep or Glob tool (its
   native macOS and Linux builds), search with `git grep --untracked -nE '<pattern>' -- <path>` (the base with
   `git grep -nE '<pattern>' <base> -- <path>`; a path that holds `*` goes in single quotes, as Claude Code refuses
-  an unquoted one) and list files with
+  an unquoted one, and a pattern holds no `$` or backtick, not even as an end-of-line anchor or inside `[...]`, as
+  Claude Code refuses those even in single quotes: match either character with `.`) and list files with
   `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` through Bash: no other
   `find` action and no redirect. Where this text says Grep or Glob, that command does the same there, with POSIX
   extended regular expressions; like Grep, `git grep` skips the files git ignores, and its exit 1 with no output

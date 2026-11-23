@@ -27,7 +27,9 @@ Two rules hold for the whole pass:
 - **Read with the Read tool, search with the Grep tool, list files with the Glob tool**, in the checkout and in the
   bed alike. Where Claude Code has no Grep or Glob tool (its native macOS and Linux builds), search the checkout
   with `git grep --untracked -nE '<pattern>' -- <path>` (a path that holds `*` in single quotes, as Claude Code
-  refuses an unquoted one), search the bed with
+  refuses an unquoted one; in either command a pattern holds no `$` or backtick, not even as an end-of-line anchor
+  or inside `[...]`, as Claude Code refuses those even in single quotes: match either character with `.`), search
+  the bed with
   `grep -rnE '<pattern>' --exclude-dir=node_modules --exclude-dir=.git "<bed>/<path>"`, and list files with
   `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` (`"<bed>/<path>"` in the
   bed) through Bash: no other `find` action and no redirect. Where this text says Grep or Glob, that command does the
