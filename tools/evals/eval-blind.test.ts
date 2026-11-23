@@ -30,7 +30,11 @@ test('blindText replaces each plugin path, however a call spelled it, and the co
 // An iteration with one graded garden-seed run per configuration on Sonnet.
 function gradedIteration(): string {
   const iteration = mkdtempSync(join(tmpdir(), 'eval-blind-')).replaceAll('\\', '/');
-  const plugins = { new_skill: 'D:/wt-1/plugins/lz-gardening', old_skill: 'D:/wt-2/plugins/lz-gardening' };
+  // Absolute on every platform: readIteration resolves the plugin paths.
+  const plugins = {
+    new_skill: `${iteration}/wt-1/plugins/lz-gardening`,
+    old_skill: `${iteration}/wt-2/plugins/lz-gardening`,
+  };
   writeFileSync(
     `${iteration}/iteration.json`,
     JSON.stringify({
