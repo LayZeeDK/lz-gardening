@@ -1,4 +1,4 @@
-// The diffs a tick reads, a page at a time:
+// The diffs a tick reads, a page at a time, and the commit that planted a line. The diffs:
 //   node diffs.ts <commit>..<commit> | <commit> [--page <n>] [--chars <n>]
 // One commit id alone reads that commit's own diff, from its parent; a commit with no parent is refused.
 // Takes the newest 200 commits of the range, merges left out, and reads their diffs smallest first up to 400,000
