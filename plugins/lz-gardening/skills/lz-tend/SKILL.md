@@ -9,6 +9,7 @@ allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/references/**)
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/site.ts" *)
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/weeds.ts" *)
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/diffs.ts" planted *)
 ---
 
 Tend one class of weeds from the garden queue. Arguments: $ARGUMENTS
@@ -25,7 +26,8 @@ Two rules hold for the whole pass:
 
 - **Read with the Read tool, search with the Grep tool, list files with the Glob tool**, in the checkout and in the
   bed alike. Where Claude Code has no Grep or Glob tool (its native macOS and Linux builds), search the checkout
-  with `git grep --untracked -nE '<pattern>' -- <path>`, search the bed with
+  with `git grep --untracked -nE '<pattern>' -- <path>` (a path that holds `*` in single quotes, as Claude Code
+  refuses an unquoted one), search the bed with
   `grep -rnE '<pattern>' --exclude-dir=node_modules --exclude-dir=.git "<bed>/<path>"`, and list files with
   `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` (`"<bed>/<path>"` in the
   bed) through Bash: no other `find` action and no redirect. Where this text says Grep or Glob, that command does the
@@ -230,8 +232,9 @@ reaches, as step 6 will run it again. Each report of the check you added must be
 else means the check is too wide or the queue missed a copy. When the check is too wide, narrow it, say why in the
 report, and run it again on the untouched bed and on the paved road, so the proof shows the check you keep. When the
 queue missed a copy, queue it from the repository's checkout:
-`weeds add --class <class> --where <path:line> --source commit:<sha> --note "<root cause>"`, where `<sha>` is what
-`git log -n 1 --format=%h -S '<the copy's name>' -- <path>` prints; step 6 then fixes or baselines it like the rest.
+`weeds add --class <class> --where <path:line> --source <source> --note "<root cause>"`, where `<source>` is what
+`node "${CLAUDE_PLUGIN_ROOT}/skills/lz-garden/scripts/diffs.ts" planted <base> <path:line>` prints, the line
+numbered as `git show <base>:<path>` numbers it; step 6 then fixes or baselines it like the rest.
 When `add` prints `kept`, the copy was left on purpose: exempt it in the check, citing the keep's reason. Never rename
 or narrow code the queue does not hold to quiet the check. Quote the first output, the status, the second output and
 this run in the report: they are the proof. Done when you have all four.

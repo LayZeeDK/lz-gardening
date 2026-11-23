@@ -158,6 +158,88 @@ test('a first commit given alone is refused with exit 2, as it has no parent to 
   );
 });
 
+test('planted prints the --source of the commit that added the line, ready for weeds.ts add', (t) => {
+  const dir = repo(t);
+  commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const planter = commit(dir, { 'a.ts': 'export const a = 1;\nexport const b = `${a}`;\n' });
+  const tip = commit(dir, { 'c.ts': 'export const c = 3;\n' });
+
+  const stdout = printed(dir, ['planted', tip, 'a.ts:2']);
+
+  assert.equal(stdout, `commit:${git(dir, ['rev-parse', '--short', planter])}\n`);
+});
+
+test('planted names the commit that added the line, not a later one that only changed its whitespace', (t) => {
+  const dir = repo(t);
+  const planter = commit(dir, { 'a.ts': 'if (a) {\nreturn `${a}`;\n}\n' });
+  const tip = commit(dir, { 'a.ts': 'if (a) {\n  return `${a}`;\n}\n' });
+
+  const stdout = printed(dir, ['planted', tip, 'a.ts:2']);
+
+  assert.equal(stdout, `commit:${git(dir, ['rev-parse', '--short', planter])}\n`);
+});
+
+test('planted names the commit that added the line, not a later one that only moved it within its file', (t) => {
+  const dir = repo(t);
+  const lines = Array.from({ length: 30 }, (_, n) => `export const v${String(n)} = ${String(n)};\n`);
+  // git follows a moved line of 20 letters or digits or more, as a census hit's line is.
+  const hit = '// eslint-disable-next-line no-console -- prints `${v1}` for the planted check\n';
+  const planter = commit(dir, { 'a.ts': [...lines, hit].join('') });
+  const tip = commit(dir, { 'a.ts': [hit, ...lines].join('') });
+
+  const stdout = printed(dir, ['planted', tip, 'a.ts:1']);
+
+  assert.equal(stdout, `commit:${git(dir, ['rev-parse', '--short', planter])}\n`);
+});
+
+test('planted takes a branch name for the commit, as a tend pass names its base', (t) => {
+  const dir = repo(t);
+  const planter = commit(dir, { 'a.ts': 'export const b = `${a}`;\n' });
+  git(dir, ['branch', '-f', 'base']);
+
+  const stdout = printed(dir, ['planted', 'base', 'a.ts:1']);
+
+  assert.equal(stdout, `commit:${git(dir, ['rev-parse', '--short', planter])}\n`);
+});
+
+test('planted refuses anything but a commit and a <path>:<line> with exit 2 and its usage', (t) => {
+  const dir = repo(t);
+  const tip = commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const usage = 'usage: diffs.ts planted <commit> <path>:<line>\n';
+  const refused = [
+    ['planted'],
+    ['planted', tip],
+    ['planted', '--', '--output=x', 'a.ts:1'],
+    ['planted', tip, 'a.ts'],
+    ['planted', tip, 'a.ts:0'],
+    ['planted', tip, 'a.ts:1', 'b.ts:1'],
+  ].map((args) => {
+    const { io, stdout, stderr } = capturingIo(dir, process.env);
+
+    return [run(args, io), stdout(), stderr()];
+  });
+
+  assert.deepEqual(
+    refused,
+    Array.from({ length: 6 }, () => [2, '', usage]),
+  );
+});
+
+test('planted refuses a line or a file the commit does not hold with exit 2, naming it and git reason', (t) => {
+  const dir = repo(t);
+  const tip = commit(dir, { 'a.ts': 'export const a = 1;\n' });
+  const refused = ['a.ts:2', 'b.ts:1'].map((where) => {
+    const { io, stdout, stderr } = capturingIo(dir, process.env);
+
+    return [run(['planted', tip, where], io), stdout(), stderr()];
+  });
+
+  assert.deepEqual(refused, [
+    [2, '', `diffs: ${tip} holds no a.ts:2: file a.ts has only 1 line\n`],
+    [2, '', `diffs: ${tip} holds no b.ts:1: no such path b.ts in ${tip}\n`],
+  ]);
+});
+
 test("a page lists the range's commits, then a blank line, then each diff under its id and message, trimmed", (t) => {
   const dir = repo(t);
   const from = commit(dir, { 'a.ts': 'export const a = 1;\n' });

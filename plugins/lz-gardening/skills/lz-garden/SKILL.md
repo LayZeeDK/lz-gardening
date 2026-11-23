@@ -25,7 +25,9 @@ condition; when one is not met, report the command and its output and stop.
 Two rules hold for the whole tick:
 
 - **Search with the Grep tool, list files with the Glob tool.** Where Claude Code has no Grep or Glob tool (its
-  native macOS and Linux builds), search with `git grep --untracked -nE '<pattern>' -- <path>` and list files with
+  native macOS and Linux builds), search with `git grep --untracked -nE '<pattern>' -- <path>` (the base with
+  `git grep -nE '<pattern>' <base> -- <path>`; a path that holds `*` goes in single quotes, as Claude Code refuses
+  an unquoted one) and list files with
   `find <path> -not -path '*/node_modules/*' -not -path '*/.git/*' -name '<glob>' -print` through Bash: no other
   `find` action and no redirect. Where this text says Grep or Glob, that command does the same there, with POSIX
   extended regular expressions; like Grep, `git grep` skips the files git ignores, and its exit 1 with no output
@@ -135,12 +137,13 @@ node "${CLAUDE_SKILL_DIR}/scripts/weeds.ts" add --class <class> --where <path[:l
 - `--source`: what the weed was found in. `commit:<short sha>` of the commit that planted it for a weed in the code,
   `lesson:<path>:<line>` for a weed in a record (the path repository-relative, as for `--where`), and
   `census:seed` for a line of the seed list and nothing else: a weed the seed pass finds by reading code or history
-  takes the `commit:` of the commit that planted it, found as below with `<sha>` as the range. For a census hit, the
-  planting commit is
-  `git log -n 1 --format=%h -S '<a plain piece of the hit text>' <previousSha>..<sha> -- <path>`, with a space
-  after `-S`; for a duplicate, the piece is the name, and for a file after `already`, the range is `<sha>`. A plain
-  piece holds no backtick, `$`, quote or backslash, even inside the single quotes: Claude Code refuses such a
-  command, which ends the tick. Take the words beside those characters instead.
+  takes the `commit:` of the commit that planted it, found as below. The planting commit of a weed at a line is
+  printed, as the `--source` value `commit:<short sha>`, by
+  `node "${CLAUDE_SKILL_DIR}/scripts/diffs.ts" planted <sha> <path>:<line>`, with the line numbered as
+  `git show <sha>:<path>` numbers it; for a duplicate, the line of the definition. It names the commit that last
+  wrote the line, passing over changes to its whitespace and moves within its file. Find the commit this way only:
+  a `git log -S` of your own puts the hit's text in the command, and Claude Code refuses one that holds a backtick
+  or `$`, which ends the tick.
   `repeated-lesson` takes a `lesson:` source only, and `weeds.ts` refuses any other: a clean-up in the code that did
   not hold is queued under the class of the mistake it cleaned up.
 - `--note`: the root cause in one sentence (what the agent was trying to do and which shortcut it took), not the

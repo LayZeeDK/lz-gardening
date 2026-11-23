@@ -39,6 +39,10 @@ First release. The scripts use one npm package, Zod, which Claude Code installs 
     repository-relative both as given and in that form, with `\` read as `/` (`.\d:\a` is refused). Every other
     `weeds.ts` flag goes once, except `--check` of `close-class`: given twice, it is refused (exit 2), not read as its
     last value.
+  - Planting commit: `diffs.ts planted <commit> <path>:<line>` prints `commit:<short sha>` of the commit that planted
+    a line as it is at `<commit>` (a commit or a branch), for `weeds.ts add --source`: git blame of that line, where a
+    change to its whitespace or a move within its file plants nothing, so no hit's text goes into a shell command. A
+    tick and a tend pass find a weed's planting commit with it.
   - Census patterns: the bundled patterns, extended or overridden by id in the site's `.garden/patterns.json`,
     which the census prints as `site pattern <id>: <regex>` lines. A
     pattern without `paths` searches the JavaScript and TypeScript source files (`.ts`, `.tsx`, `.mts`, `.cts`,

@@ -7,10 +7,14 @@
 // diffs of the read commits follow, newest first, cut into pages of at most 24,000 characters, so a page comes back
 // whole in a tool result. Each page starts `diffs <range>: page <n> of <pages>` and ends with a JSON line: `page`,
 // `pages`, `commits` (all of the range), `read` and `skipped`. Exit 2 with the usage, `no page <n>` or the refused `--chars` on bad input.
+//   node diffs.ts planted <commit> <path>:<line>
+// Prints `commit:<short sha>` of the commit that planted the line as it is at <commit>, for `weeds.ts add --source`:
+// git blame of that one line, where a change to the line's whitespace or a move within its file plants nothing. Git
+// reads the hit itself, so no shell sees its text. Exit 2 with its usage, or naming a file or line the commit lacks.
 import { parseArgs } from 'node:util';
 import { isMainModule, processIo, runCommand } from './cli.ts';
 import type { Io } from './cli.ts';
-import { git, gitSucceeds } from './store-git.ts';
+import { git, gitReason, gitSucceeds, runGit } from './store-git.ts';
 
 export interface CommitDiff {
   readonly sha: string;
@@ -93,6 +97,32 @@ function commitDiffs(cwd: string, range: string): readonly CommitDiff[] {
     });
 }
 
+function planted(args: readonly string[], io: Io): number {
+  const [commit = '', where = '', ...rest] = args;
+  const [, path = '', line = ''] = /^(.+):([1-9]\d*)$/.exec(where) ?? [];
+
+  if (commit === '' || commit.startsWith('-') || path === '' || rest.length > 0) {
+    io.err('usage: diffs.ts planted <commit> <path>:<line>\n');
+
+    return 2;
+  }
+
+  const blame = runGit(io.cwd, ['blame', '-w', '-M', '--porcelain', '-L', `${line},${line}`, commit, '--', path], {
+    readsOnly: true,
+  });
+
+  if (blame.status !== 0) {
+    io.err(`diffs: ${commit} holds no ${where}: ${gitReason(blame.stderr).replace(/^fatal: /, '')}\n`);
+
+    return 2;
+  }
+
+  const [blamed = ''] = blame.stdout.split(' ');
+  io.out(`commit:${git(io.cwd, ['rev-parse', '--short', blamed], { readsOnly: true })}\n`);
+
+  return 0;
+}
+
 function main(argv: readonly string[], io: Io): number {
   const { positionals, values } = parseArgs({
     args: [...argv],
@@ -102,6 +132,11 @@ function main(argv: readonly string[], io: Io): number {
   });
   // Stryker disable next-line StringLiteral: with no range given, the default and the mutant's text both fail the check below
   const [given = ''] = positionals;
+
+  if (given === 'planted') {
+    return planted(positionals.slice(1), io);
+  }
+
   const alone = /^[0-9a-f]{4,64}$/.test(given);
   const range = alone ? `${given}^..${given}` : given;
 
