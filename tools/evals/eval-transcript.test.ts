@@ -83,12 +83,12 @@ test('a call the permission rules rejected is denied and an error', () => {
 
 test("a session's transcripts are its own file and each subagent's, named by agent type", () => {
   const cwd = 'D:\\projects\\sandbox\\lz-node-test-seed8-a-sonnet-sample';
-  const projects = projectsWith(cwd, 's1', [{ id: 'a1', agentType: 'lz-gardening:lz-gardener' }]);
+  const projects = projectsWith(cwd, 's1', [{ id: 'a1', agentType: 'tometo:gardener' }]);
   const folder = join(projects, 'D--projects-sandbox-lz-node-test-seed8-a-sonnet-sample');
 
   assert.deepEqual(sessionTranscripts(projects, cwd, 's1'), [
     { agent: 'main', file: join(folder, 's1.jsonl') },
-    { agent: 'lz-gardening:lz-gardener', file: join(folder, 's1', 'subagents', 'agent-a1.jsonl') },
+    { agent: 'tometo:gardener', file: join(folder, 's1', 'subagents', 'agent-a1.jsonl') },
   ]);
 });
 

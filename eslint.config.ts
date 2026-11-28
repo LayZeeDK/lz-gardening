@@ -2,7 +2,7 @@ import nx from '@nx/eslint-plugin';
 import * as jsoncParser from 'jsonc-eslint-parser';
 import tseslint from 'typescript-eslint';
 
-const scriptsAndTools = ['plugins/lz-gardening/skills/*/scripts/**/*.ts', 'tools/**/*.ts'];
+const scriptsAndTools = ['plugins/tometo/skills/*/scripts/**/*.ts', 'tools/**/*.ts'];
 
 export default tseslint.config(
   { ignores: ['node_modules/**', '.claude/worktrees/**', '.scratch/**', '.stryker-tmp/**', 'reports/**'] },
@@ -26,19 +26,19 @@ export default tseslint.config(
   },
   {
     files: scriptsAndTools,
-    ignores: ['plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts'],
+    ignores: ['plugins/tometo/skills/garden/scripts/log-guard.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
           selector: 'FunctionDeclaration[id.name="isRecord"], VariableDeclarator[id.name="isRecord"]',
-          message: 'isRecord is defined once, in lz-garden/scripts/log-guard.ts: import it instead of redefining it.',
+          message: 'isRecord is defined once, in garden/scripts/log-guard.ts: import it instead of redefining it.',
         },
       ],
     },
   },
   {
-    files: ['plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts'],
+    files: ['plugins/tometo/skills/garden/scripts/log-guard.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

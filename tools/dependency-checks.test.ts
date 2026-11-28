@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { createProjectGraphAsync } from '@nx/devkit';
 import { ESLint } from 'eslint';
-import { isRecord } from '../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../plugins/tometo/skills/garden/scripts/log-guard.ts';
 
 const root = join(import.meta.dirname, '..');
-const pluginPackageJson = join(root, 'plugins/lz-gardening/package.json');
-const unused = ['@nx/dependency-checks', 'The "lz-canary" package is not used by "lz-gardening" project.'];
+const pluginPackageJson = join(root, 'plugins/tometo/package.json');
+const unused = ['@nx/dependency-checks', 'The "lz-canary" package is not used by "tometo" project.'];
 
 async function lintWithCanary(version: string): Promise<readonly (readonly [string | null, string])[]> {
   // The rule reads only the cached project graph; building it here keeps a bare run from reading a stale one.

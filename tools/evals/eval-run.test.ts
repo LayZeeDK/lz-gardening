@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test, type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { commit, git, repo } from '../../plugins/lz-gardening/skills/lz-garden/scripts/test-repo.ts';
+import { commit, git, repo } from '../../plugins/tometo/skills/garden/scripts/test-repo.ts';
 import {
   evalCases,
   findEvalCase,
@@ -159,7 +159,7 @@ test('resume continues the run session with the resume prompt and the case setti
 
 test('findEvalCase reads the named case from evals.json, with no rules unless it names some, and refuses an unknown name', () => {
   const { rules, ...garden } = gardenCase();
-  const evals = { plugin: 'lz-gardening', evals: [garden, { ...garden, id: 1, name: 'tend', rules: 'rules' }] };
+  const evals = { plugin: 'tometo', evals: [garden, { ...garden, id: 1, name: 'tend', rules: 'rules' }] };
 
   assert.deepEqual(
     [findEvalCase(evals, 'garden-seed'), findEvalCase(evals, 'tend').rules, rules],
@@ -378,7 +378,7 @@ function sampleAt(path: string): Sample {
     config: 'new_skill',
     model: 'sonnet',
     run: 1,
-    plugin: fileURLToPath(new URL('../../plugins/lz-gardening', import.meta.url)),
+    plugin: fileURLToPath(new URL('../../plugins/tometo', import.meta.url)),
     sample: path,
   };
 }

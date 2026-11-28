@@ -12,7 +12,7 @@ test('improvePrompt lists the misses, the false triggers and earlier attempts by
     summary: { passed: 0, failed: 2, total: 2 },
   };
   const prompt = improvePrompt({
-    skillName: 'lz-tend',
+    skillName: 'tend',
     skillContent: 'BODY OF THE SKILL',
     current: 'Tend one class.',
     train,

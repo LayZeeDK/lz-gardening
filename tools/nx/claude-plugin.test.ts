@@ -83,7 +83,7 @@ test('a range the locked version satisfies still drifts, named with both lists',
 });
 
 test('an empty dependency list matches a lockfile root that lists none, as npm writes it', () => {
-  assert.deepEqual(lockfileDrift({ dependencies: {} }, lockfile({ '': { name: 'lz-gardening' } })), []);
+  assert.deepEqual(lockfileDrift({ dependencies: {} }, lockfile({ '': { name: 'tometo' } })), []);
 });
 
 test('optional and peer dependencies drift each in their own section', () => {
@@ -141,7 +141,7 @@ test('a lockfile of another version than 3 is refused, naming its path', () => {
 });
 
 test('a lockfile of version 3 gives its root entry and its installed packages', () => {
-  const root = { name: 'lz-gardening', version: '0.1.0' };
+  const root = { name: 'tometo', version: '0.1.0' };
   const packages = { '': root, 'node_modules/ms': { version: '2.1.3', integrity: 'sha512-x' } };
 
   assert.deepEqual(parseLockfile({ lockfileVersion: 3, requires: true, packages }, 'package-lock.json'), {
@@ -249,7 +249,7 @@ test("a plugin's lockfile target checks its package.json against its lockfile, c
         '{projectRoot}/package.json',
         '{projectRoot}/package-lock.json',
         '{workspaceRoot}/tools/nx/claude-plugin.ts',
-        '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts',
+        '{workspaceRoot}/plugins/tometo/skills/garden/scripts/log-guard.ts',
         { runtime: 'npm --version' },
       ],
       outputs: [],

@@ -2,8 +2,8 @@
 // its analyst instructions (agents/analyzer.md) apply unchanged. Repository-only; nothing here ships with the plugin.
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isMainModule } from '../../plugins/tometo/skills/garden/scripts/cli.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import { parseGrading, parseTiming, type Grading, type Timing } from './eval-grade.ts';
 import { evalFolderOf, gradedRuns, readIteration, readJson } from './eval-layout.ts';
 import { summaryTable } from './eval-summary.ts';

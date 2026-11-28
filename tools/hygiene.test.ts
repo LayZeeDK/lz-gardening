@@ -241,18 +241,15 @@ test("the maintainer's commits carry only the public address", (t) => {
 });
 
 test('the plugin ships the same license as the repository', () => {
-  assert.equal(
-    readFileSync(join(root, 'plugins/lz-gardening/LICENSE'), 'utf8'),
-    readFileSync(join(root, 'LICENSE'), 'utf8'),
-  );
+  assert.equal(readFileSync(join(root, 'plugins/tometo/LICENSE'), 'utf8'), readFileSync(join(root, 'LICENSE'), 'utf8'));
 });
 
 const variableName = /(?<!\w)_?LZ_[A-Z0-9_]+/g;
 
-test("the plugin's environment variables start with LZ_GARDENING_ when public and _LZ_GARDENING_INTERNAL_ when internal", () => {
-  const misnamed = textFiles('plugins/lz-gardening/').flatMap(({ path, text }) =>
+test("the plugin's environment variables start with TOMETO_ when public and _TOMETO_INTERNAL_ when internal", () => {
+  const misnamed = textFiles('plugins/tometo/').flatMap(({ path, text }) =>
     (text.match(variableName) ?? [])
-      .filter((name) => !/^(?:LZ_GARDENING_|_LZ_GARDENING_INTERNAL_)/.test(name))
+      .filter((name) => !/^(?:TOMETO_|_TOMETO_INTERNAL_)/.test(name))
       .map((name) => `${path}: ${name}`),
   );
 
@@ -290,7 +287,7 @@ test("the own-tools scan finds the maintainer's other lz plugins", () => {
 });
 
 test("shipped plugin files name none of the maintainer's own plugins or skills", () => {
-  const found = textFiles('plugins/lz-gardening/').flatMap((file) =>
+  const found = textFiles('plugins/tometo/').flatMap((file) =>
     file.text
       .split('\n')
       .flatMap((line, index) =>

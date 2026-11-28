@@ -34,7 +34,7 @@ function evaluator(triggering: Readonly<Record<string, readonly string[]>>) {
 test('optimize takes the results of a recorded iteration instead of evaluating its description again', async () => {
   const all = await evaluator({ 'A.': ['tend the suppressions'] })('A.', [...train, ...testSet]);
   const result = await optimize(
-    { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 1 },
+    { skillName: 'tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 1 },
     {
       evaluate: () => Promise.reject(new Error('evaluated a recorded iteration')),
       improve: () => Promise.reject(new Error('improved after the last iteration')),
@@ -48,7 +48,7 @@ test('optimize takes the results of a recorded iteration instead of evaluating i
 test('optimize evaluates the description a recorded iteration holds instead of asking for a new one', async () => {
   const all = await evaluator({})('A.', [...train, ...testSet]);
   const result = await optimize(
-    { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 2 },
+    { skillName: 'tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 2 },
     {
       evaluate: evaluator({ 'B.': ['tend the suppressions'] }),
       improve: () => Promise.reject(new Error('asked for a description a recorded iteration holds')),
@@ -70,7 +70,7 @@ test('optimize refuses recorded iterations that started from another description
 
   await assert.rejects(
     optimize(
-      { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 1 },
+      { skillName: 'tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 1 },
       { evaluate: evaluator({}), improve: () => Promise.resolve('') },
       [{ description: 'Z.', all }],
     ),
@@ -83,7 +83,7 @@ test('optimize asks once for a shorter rewrite when a description passes 1024 ch
   const prompts: string[] = [];
   const replies = [`<new_description>${long}</new_description>`, '<new_description>Short.</new_description>'];
   const result = await optimize(
-    { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: [], maxIterations: 2 },
+    { skillName: 'tend', skillContent: 'BODY', original: 'A.', train, test: [], maxIterations: 2 },
     {
       evaluate: evaluator({}),
       improve: (prompt) => {
@@ -107,7 +107,7 @@ test('optimize asks once for a shorter rewrite when a description passes 1024 ch
 test('optimize stops at the iteration limit and keeps the description with the most test queries passed', async () => {
   const replies = ['<new_description>B.</new_description>', '<new_description>C.</new_description>'];
   const result = await optimize(
-    { skillName: 'lz-tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 3 },
+    { skillName: 'tend', skillContent: 'BODY', original: 'A.', train, test: testSet, maxIterations: 3 },
     {
       evaluate: evaluator({ 'A.': ['make this mistake impossible'], 'B.': [], 'C.': ['explain worktrees'] }),
       improve: () => Promise.resolve(replies.shift() ?? ''),
@@ -123,7 +123,7 @@ test('optimize stops at the iteration limit and keeps the description with the m
 test('optimize improves from the train failures until every train query passes, and keeps the best test score', async () => {
   const prompts: string[] = [];
   const result = await optimize(
-    { skillName: 'lz-tend', skillContent: 'BODY', original: 'First.', train, test: testSet, maxIterations: 5 },
+    { skillName: 'tend', skillContent: 'BODY', original: 'First.', train, test: testSet, maxIterations: 5 },
     {
       evaluate: evaluator({ 'First.': [], 'Second.': ['tend the suppressions', 'make this mistake impossible'] }),
       improve: (prompt) => {

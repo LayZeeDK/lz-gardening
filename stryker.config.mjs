@@ -1,7 +1,7 @@
 // @ts-check
 // The site and census tests build git repositories (about a minute a run each), so mutate one script at a time
 // against its own tests:
-//   npm exec -- nx mutate-weeds lz-gardening      (one mutate-<script> target per script; mutate runs them all)
+//   npm exec -- nx mutate-weeds tometo      (one mutate-<script> target per script; mutate runs them all)
 // A script split into modules mutates each of them: MUTATE=store mutates store-git.ts, store-log.ts and the rest.
 // The command runner reruns every test of the script for every mutant. With LZ_NODE_TEST_RUNNER set to the source
 // entry of an @layzee/stryker-node-test-runner checkout, Stryker runs per mutant only the tests that cover it, and
@@ -15,7 +15,7 @@ import { globSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const { MUTATE: script = '*', LZ_NODE_TEST_RUNNER: nodeTestRunner } = process.env;
-const scripts = 'plugins/lz-gardening/skills/*/scripts';
+const scripts = 'plugins/tometo/skills/*/scripts';
 const testFiles = `${scripts}/${script}*.test.ts`;
 const mutated = [`${scripts}/${script}.ts`, `${scripts}/${script}-*.ts`];
 const notMutated = [`${scripts}/*.test.ts`, `${scripts}/test-*.ts`];
@@ -50,7 +50,7 @@ const runner =
 const config = {
   ...runner,
   checkers: ['typescript'],
-  tsconfigFile: 'plugins/lz-gardening/tsconfig.json',
+  tsconfigFile: 'plugins/tometo/tsconfig.json',
   reporters: ['clear-text', 'progress', 'html'],
   thresholds: { high: 100, low: 100, break: 100 },
   mutate: [...mutated, ...notMutated.map((glob) => `!${glob}`)],

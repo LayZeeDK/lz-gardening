@@ -29,7 +29,7 @@ a keep.
 
 - Something is pushed: the garden's own refs, never the repository's branches. No argument names a remote, a URL or
   a ref to push: the scripts push only their fixed `refs/garden/*` refs, so a skill's existing rule for them cannot
-  push anything else. `git config lzGardening.share false` keeps a repository's garden local.
+  push anything else. `git config tometo.share false` keeps a repository's garden local.
 - Nothing on GitHub can protect `refs/garden/*` from deletion; every site holds a full copy, and the next sync of any
   clone puts a deleted ref back. Resetting a garden therefore means deleting it in every site too.
 - A mistaken event is never removed, only answered by a later one, as a close answers an add. Sync depends on it:
@@ -76,10 +76,10 @@ a keep.
   (such as a workflow file a CI token may not push) or that is not a fast-forward is named and left out; it never
   blocks the log. Which bed to push comes from the latest tended close of its class in the merged log. A shared bed
   that is gone while its close is already shared stays gone: someone deleted it after landing it.
-- The garden is as public as the repository, and its events are never removed. A claim's holder is `lzGardening.name`
+- The garden is as public as the repository, and its events are never removed. A claim's holder is `tometo.name`
   when the checkout sets it, else `writer` and the first 8 characters of the site's random writer id; never
   `user.name`, which the user did not set for the garden, and never a hostname. Log and census commits are authored
-  `lz-gardening <>` unless the checkout sets both `lzGardening.name` and `lzGardening.email`; bed commits keep the
+  `tometo <>` unless the checkout sets both `tometo.name` and `tometo.email`; bed commits keep the
   user's identity, as they are code for review. An event field holding this machine's home folder, the checkout's
   path or the site's path is refused, and `--check`, `--where` and a lesson's path take repository-relative paths
   only. Paths match in any case, with runs of slashes or backslashes as one, and with a drive in Git Bash's `/d/`

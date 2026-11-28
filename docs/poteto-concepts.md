@@ -1,19 +1,19 @@
-# Lauren Tan's concepts and lz-gardening
+# Lauren Tan's concepts and tometo
 
 Barnaby Robson's [On pstack](https://barnabyrobson.org/on-pstack/) collects Lauren "poteto" Tan's ideas about
-building with agents. This page goes through each one and records whether lz-gardening uses it, how, or why not.
+building with agents. This page goes through each one and records whether tometo uses it, how, or why not.
 Quotes are Lauren's, from her posts and her interview with Matt Pocock
 ([MN9dGgmLyso](https://www.youtube.com/watch?v=MN9dGgmLyso)).
 
 ## The Gardener (the plugin's core)
 
-| Concept                                                                                                                              | In lz-gardening                                                                                                                                                                                                                                                                                                   |
+| Concept                                                                                                                              | In tometo                                                                                                                                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Watch**: an agent scans for bad patterns all the time                                                                              | The `garden` tick, run by `/loop`. A census counts textual weeds; reading the diffs finds the rest.                                                                                                                                                                                                               |
 | **Queue**: "I don't actually tell it to fix the issue first. I tell it to append it to a document."                                  | The weed log in `refs/garden/log`, append-only, deduplicated by class, place and source. The tick never fixes.                                                                                                                                                                                                    |
 | **Group**: "every couple of days I look at it and I see actually these are all the same thing"                                       | `weeds.ts groups`; a class with open weeds in two or more files is reported `ready to tend`. Grouping by root cause is the tend pass's step 2.                                                                                                                                                                    |
 | **Sample** merged pull requests daily                                                                                                | The tick takes the newest 200 commits since the last tick and reads their diffs smallest first, up to 400,000 characters; it counts the rest as skipped, and the next tick starts after them. Lauren samples because one person cannot read everything; the character budget keeps a tick cheap after a long gap. |
-| **Change the bed** when "multiple agents are having the same issue"; "if it was a one-off incident, it's fine"                       | The `lz-tend` skill, triggered by a class reaching two open weeds. One-offs are closed as such. The glossary uses **bed** for the tend pass's worktree, so the plugin says "turn the weed into a check" for this step.                                                                                            |
+| **Change the bed** when "multiple agents are having the same issue"; "if it was a one-off incident, it's fine"                       | The `tend` skill, triggered by a class reaching two open weeds. One-offs are closed as such. The glossary uses **bed** for the tend pass's worktree, so the plugin says "turn the weed into a check" for this step.                                                                                               |
 | "every weed you pull becomes a rule, so it can't grow back"                                                                          | Tend writes the check first, proves it fails on a real weed, then clears the instances. A weed that comes back is marked `regrown`, which shows the check did not hold.                                                                                                                                           |
 | "the third isRecord this week"                                                                                                       | The census's duplicate-definition count and the `duplicate-function` class.                                                                                                                                                                                                                                       |
 | "the lint suppressions creeping like ivy"                                                                                            | Census patterns for every kind of suppression; a rising count shows up as `grew` in the tick summary.                                                                                                                                                                                                             |
@@ -24,7 +24,7 @@ Quotes are Lauren's, from her posts and her interview with Matt Pocock
 
 ## The Michelin kitchen
 
-| Concept                                                                                                                    | In lz-gardening                                                                                                                    |
+| Concept                                                                                                                    | In tometo                                                                                                                          |
 | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | **Tasting**: "you cannot be tasting every single dish"; when the same fault shows up in several dishes, change the kitchen | The tick (sampling) and the tend pass (changing the kitchen). The plugin README uses the image.                                    |
 | **Kitchen layout and prep**: the codebase, types and lint rules put each cook on a narrow path                             | What a tend pass builds.                                                                                                           |
@@ -36,7 +36,7 @@ Quotes are Lauren's, from her posts and her interview with Matt Pocock
 
 ## The Trust Ladder
 
-| Concept                                                                                    | In lz-gardening                                                                                                                         |
+| Concept                                                                                    | In tometo                                                                                                                               |
 | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Trust grows with tools that let agents prove their work                                    | `missing-check` queues a kind of check the repository lacks; each check a tend pass adds is one more thing agents can prove.            |
 | **Caution: stuck low**, too busy micromanaging to sharpen knives                           | The gardener does the noticing so a human only reads `ready to tend` lines.                                                             |
@@ -45,7 +45,7 @@ Quotes are Lauren's, from her posts and her interview with Matt Pocock
 
 ## Inner and outer loops
 
-| Concept                                                                           | In lz-gardening                                                                                                                                                                     |
+| Concept                                                                           | In tometo                                                                                                                                                                           |
 | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Outer loop** watches channels and routes work                                   | Not used. The gardener's only input is the repository: its commits, census and records. Bug reports are not weeds.                                                                  |
 | **The join**: related reports go to one project so the shared cause is fixed once | The same instinct as grouping: weeds of one class go to one tend pass.                                                                                                              |
@@ -54,7 +54,7 @@ Quotes are Lauren's, from her posts and her interview with Matt Pocock
 
 ## Hands, eyes and a map
 
-| Concept                                                                                                                                      | In lz-gardening                                                                                                                                                                                 |
+| Concept                                                                                                                                      | In tometo                                                                                                                                                                                       |
 | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Verification skill, small CLI, Feature Map**                                                                                               | Not built here; a repository's own verification is a separate job. The gardener queues `stale-verification` when a change to features does not update them, and leaves the refresh to that job. |
 | **A stack the agent can see**                                                                                                                | Not used.                                                                                                                                                                                       |
@@ -63,7 +63,7 @@ Quotes are Lauren's, from her posts and her interview with Matt Pocock
 
 ## Measure a hundred times, cut once
 
-| Concept                                                                           | In lz-gardening                                                                                                                     |
+| Concept                                                                           | In tometo                                                                                                                           |
 | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | **Restate in your own words**                                                     | Tend step 2: the root cause in two sentences before choosing a check.                                                               |
 | **README first**                                                                  | The plugin README and glossary were written before the first practice run.                                                          |

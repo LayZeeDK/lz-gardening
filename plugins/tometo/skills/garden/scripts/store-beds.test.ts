@@ -1,0 +1,715 @@
+// Run: node --test store-beds.test.ts
+import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
+import { existsSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import type { TestContext } from 'node:test';
+import { test } from 'node:test';
+import { logRef, openSite } from './store-log.ts';
+import { sync } from './store-sync.ts';
+import { commit, git, startedCommands, startedGits } from './test-repo.ts';
+import { serve, silentServer } from './test-serve.ts';
+import { bareRemote, planted, remoteHook, sharedPair, site, siteScript, writeCensus } from './test-site.ts';
+import type { Planted } from './test-site.ts';
+import { bedFromMain, cli, homeAt } from './test-weeds.ts';
+
+interface Tended extends Planted {
+  readonly bed: string;
+  readonly remote: string;
+}
+
+function bedRef(remote: string, weedClass = 'any-type'): string {
+  return git(remote, ['for-each-ref', '--format=%(objectname)', `refs/garden/beds/${weedClass}`]);
+}
+
+function withBed(t: TestContext): Tended {
+  const { dir, garden } = planted(t);
+  const remote = bareRemote(dir);
+
+  return { dir, garden, bed: bedFromMain(garden, 'any-type'), remote };
+}
+
+function tend(
+  place: Tended,
+  files: Readonly<Record<string, string>>,
+  where = 'src/a.ts:1',
+  weedClass = 'any-type',
+): string {
+  const tip = commit(place.bed, files);
+  const added = cli(place.dir, ['add', '--class', weedClass, '--where', where, '--source', 'census:x']);
+  assert.equal(added.status, 0, added.stderr);
+  const claimed = cli(place.dir, ['claim', '--class', weedClass]);
+  assert.equal(claimed.status, 0, claimed.stderr);
+  const closed = cli(place.dir, [
+    'close-class',
+    '--class',
+    weedClass,
+    '--tended',
+    `bed/${weedClass}@${tip.slice(0, 7)}`,
+    '--check',
+    Object.keys(files)[0] ?? '',
+  ]);
+  assert.equal(closed.status, 0, closed.stderr);
+
+  return tip;
+}
+
+// A tended close and its bed that no sync has shared yet.
+function tendedWhileLocal(
+  t: TestContext,
+  files: Readonly<Record<string, string>> = { 'checks/any-type.mjs': 'export {};\n' },
+): Tended & { readonly tip: string } {
+  const place = withBed(t);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  const tip = tend(place, files);
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  return { ...place, tip };
+}
+
+test("a sync that shares a tended close puts its bed commit on the origin's refs/garden/beds/<class>", (t) => {
+  const place = withBed(t);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, bedRef(place.remote)], ['synced', tip]);
+});
+
+test("a tended close whose bed descends from the origin's bed moves that bed forward", (t) => {
+  const place = withBed(t);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  const later = tend(place, { 'checks/any-type.mjs': 'export const later = 1;\n' }, 'src/b.ts:1');
+
+  sync(openSite(place.dir), { attempts: 1 });
+
+  assert.equal(bedRef(place.remote), later);
+});
+
+test("a tended close made in another clone is not pushed from this site's own bed of the class", (t) => {
+  const place = withBed(t);
+  const other = planted(t);
+  git(other.dir, ['remote', 'add', 'origin', place.remote]);
+  git(other.dir, ['fetch', '-q', 'origin']);
+  const otherBed = bedFromMain(other.garden, 'any-type');
+  const theirs = tend({ ...other, bed: otherBed, remote: place.remote }, { 'checks/any-type.mjs': 'export {};\n' });
+  commit(place.bed, { 'src/mine.ts': 'export const mine = 1;\n' });
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], theirs]);
+});
+
+test('a bed branch moved past the commit its close names pushes nothing', (t) => {
+  const place = withBed(t);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.remote, ['update-ref', '-d', 'refs/garden/beds/any-type']);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  tend(place, { 'checks/any-type.mjs': 'export const again = 1;\n' }, 'src/b.ts:1');
+  commit(place.bed, { 'src/later.ts': 'export const later = 1;\n' });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], '']);
+});
+
+test('a bed ref deleted on the origin after its close was shared is not pushed back', (t) => {
+  const place = withBed(t);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.remote, ['update-ref', '-d', 'refs/garden/beds/any-type']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], '']);
+});
+
+test('a bed whose ref on origin is not a commit stays local and is named, and the log still lands', (t) => {
+  const place = withBed(t);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.remote, ['update-ref', 'refs/garden/beds/any-type', `${logRef}^{tree}`]);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  tend(place, { 'checks/any-type.mjs': 'export const later = 1;\n' }, 'src/b.ts:1');
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.notes, git(place.remote, ['rev-parse', logRef])],
+    [
+      'synced',
+      ["any-type: bed/any-type stays local: origin's refs/garden/beds/any-type is not a commit"],
+      git(place.garden, ['rev-parse', logRef]),
+    ],
+  );
+});
+
+test('site sync names a bed it left out on stderr', (t) => {
+  const place = withBed(t);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.bed, ['reset', '-q', '--hard', 'HEAD~1']);
+  tend(place, { 'checks/any-type.mjs': 'export const other = 1;\n' }, 'src/b.ts:1');
+
+  const synced = site(place.dir, ['sync']);
+
+  assert.deepEqual(
+    [synced.status, synced.stderr],
+    [0, "site: any-type: bed/any-type does not descend from origin's bed\n"],
+  );
+});
+
+test("a bed the origin refuses leaves the log synced and is named with git's reason", (t) => {
+  const place = withBed(t);
+  remoteHook(
+    place.remote,
+    'pre-receive',
+    'while read old new ref; do\n  case "$ref" in refs/garden/beds/*) echo "no beds here"; exit 1;; esac\ndone',
+  );
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.notes, bedRef(place.remote), git(place.remote, ['rev-parse', logRef])],
+    [
+      'synced',
+      ['any-type: [remote rejected] (pre-receive hook declined)'],
+      '',
+      git(place.garden, ['rev-parse', logRef]),
+    ],
+  );
+});
+
+// The log's push lands and leaves origin no repository, so the bed's push fails before git prints a line for its ref.
+function bedPushFails(t: TestContext): Tended & { readonly tip: string } {
+  const place = withBed(t);
+  remoteHook(place.remote, 'post-receive', 'rm HEAD');
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  return { ...place, tip };
+}
+
+function originBack(place: Tended): void {
+  writeFileSync(join(place.remote, 'HEAD'), 'ref: refs/heads/main\n');
+  rmSync(join(place.remote, 'hooks', 'post-receive'));
+}
+
+test("a bed whose push fails before git names its ref is named with git's reason", (t) => {
+  const place = bedPushFails(t);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+
+  assert.deepEqual(
+    [result.state, result.notes.map((bed) => /^any-type: fatal: .+/.test(bed)), bedRef(place.remote)],
+    ['synced', [true], ''],
+    result.notes.join('\n'),
+  );
+});
+
+test('a later sync pushes a bed whose push failed, though its close is already on origin', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], place.tip]);
+});
+
+test('a bed a later sync pushed is not pushed back once origin deletes it', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.remote, ['update-ref', '-d', 'refs/garden/beds/any-type']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, result.notes, bedRef(place.remote)], ['synced', [], '']);
+});
+
+test('a bed that landed unseen is not pushed back once origin deletes it', (t) => {
+  const place = withBed(t);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.garden, ['update-ref', 'refs/garden-unpushed/beds/any-type', tip]);
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.remote, ['update-ref', '-d', 'refs/garden/beds/any-type']);
+
+  sync(openSite(place.dir), { attempts: 1 });
+
+  assert.equal(bedRef(place.remote), '');
+});
+
+test('a bed that lands keeps a mark another sync moved to another commit while it pushed', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  const moved = git(place.bed, ['rev-parse', 'HEAD~1']);
+  remoteHook(
+    place.remote,
+    'post-receive',
+    `unset GIT_DIR GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES\ngit -C '${place.garden}' update-ref refs/garden-unpushed/beds/any-type ${moved}`,
+  );
+
+  sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [bedRef(place.remote), git(place.garden, ['for-each-ref', '--format=%(objectname)', 'refs/garden-unpushed/'])],
+    [place.tip, moved],
+  );
+});
+
+test('a bed whose push takes longer than the time allowed is named as timed out', async (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  const port = await serve(t, silentServer);
+  git(place.dir, ['remote', 'set-url', '--push', 'origin', `git://127.0.0.1:${port}/repo.git`]);
+
+  const result = sync(openSite(place.dir), { attempts: 1, timeoutMs: 5000 });
+
+  assert.deepEqual([result.state, result.notes], ['synced', ['any-type: timed out']]);
+});
+
+function stopOnReceive(pidFile: string): string {
+  const stop = `const { existsSync, readFileSync, rmSync } = require("node:fs"); const file = process.argv[1]; if (existsSync(file)) { const pid = Number(readFileSync(file, "utf8")); rmSync(file); process.kill(pid, "SIGKILL"); }`;
+
+  return `'${process.execPath}' -e '${stop}' '${pidFile}'`;
+}
+
+test('a later sync pushes the bed of a close whose sync process stopped once its log landed', async (t) => {
+  const place = withBed(t);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+  const pidFile = join(place.remote, 'sync.pid');
+  remoteHook(place.remote, 'post-receive', stopOnReceive(pidFile));
+  const stopped = spawn(process.execPath, [siteScript, 'sync'], { cwd: place.dir, stdio: 'ignore' });
+  writeFileSync(pidFile, String(stopped.pid));
+  await once(stopped, 'exit');
+  const landed = git(place.remote, ['rev-parse', logRef]) === git(place.garden, ['rev-parse', logRef]);
+  const before = bedRef(place.remote);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([landed, before, result.state, bedRef(place.remote)], [true, '', 'synced', tip]);
+});
+
+test('a bed made from a commit no branch fetched from origin holds stays local and is named', (t) => {
+  const place = withBed(t);
+  const unpushed = commit(place.dir, { 'src/private.ts': 'export const unpushed = 1;\n' });
+  git(place.garden, ['fetch', '-q', 'origin', 'main']);
+  git(place.bed, ['merge', '-q', '--ff-only', unpushed]);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.notes, bedRef(place.remote)],
+    ['synced', ['any-type: bed/any-type stays local: its base is on no branch fetched from origin'], ''],
+  );
+});
+
+test('a bed made from a commit only a tag holds stays local and is named', (t) => {
+  const place = withBed(t);
+  commit(place.dir, { 'src/private.ts': 'export const unpushed = 1;\n' });
+  git(place.dir, ['tag', 'private']);
+  git(place.dir, ['reset', '-q', '--hard', 'HEAD~1']);
+  git(place.bed, ['fetch', '-q', 'origin', 'refs/tags/private']);
+  git(place.bed, ['merge', '-q', '--ff-only', 'FETCH_HEAD']);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.notes, bedRef(place.remote)],
+    ['synced', ['any-type: bed/any-type stays local: its base is on no branch fetched from origin'], ''],
+  );
+});
+
+function signTipByHand(bed: string): void {
+  const text = git(bed, ['cat-file', 'commit', 'HEAD']);
+  const signed = spawnSync('git', ['hash-object', '-t', 'commit', '-w', '--stdin'], {
+    cwd: bed,
+    encoding: 'utf8',
+    input: `${text.replace(/^(committer .*)$/m, '$1\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n fake\n -----END PGP SIGNATURE-----')}\n`,
+  });
+  git(bed, ['update-ref', 'refs/heads/bed/any-type', signed.stdout.trim()]);
+}
+
+test("a sync reads a signed bed's commits without starting the program that checks signatures", (t) => {
+  const place = withBed(t);
+  const checked = join(dirname(place.dir), 'signature-checked');
+  const gpg = join(dirname(place.dir), 'gpg.sh');
+  writeFileSync(gpg, `#!/bin/sh\necho checked > '${checked}'\nexit 1\n`, { mode: 0o755 });
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  commit(place.bed, { 'checks/notes.txt': 'notes\n' });
+  signTipByHand(place.bed);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+  git(place.dir, ['config', 'log.showSignature', 'true']);
+  git(place.dir, ['config', 'gpg.program', gpg]);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, bedRef(place.remote), existsSync(checked)], ['synced', tip, false]);
+});
+
+test("a bed that adds a line holding the site's path stays local and is named", (t) => {
+  const place = withBed(t);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  tend(place, { 'checks/any-type.mjs': `// made in ${realpathSync.native(place.garden)}\nexport {};\n` });
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.notes, bedRef(place.remote)],
+    ['synced', ['any-type: bed/any-type stays local: it holds a path on this machine'], ''],
+  );
+});
+
+function keptLocalForAPath(t: TestContext, make: (place: Tended) => void): readonly unknown[] {
+  const place = withBed(t);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  make(place);
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  return [result.state, result.notes, bedRef(place.remote)];
+}
+
+const keptForAPath = ['synced', ['any-type: bed/any-type stays local: it holds a path on this machine'], ''] as const;
+
+test("a bed that adds a line starting with ++ and holding the site's path stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      tend(place, { 'checks/notes.txt': `++ built in ${realpathSync.native(place.garden)}\n` });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that edits a file with no final newline, adding the site's path as the hunk's last line, stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      commit(place.bed, { 'checks/notes.txt': 'old' });
+      tend(place, { 'checks/notes.txt': `new\nbuilt in ${realpathSync.native(place.garden)}\n` });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that adds a file git reads as binary, holding the site's path, stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      tend(place, { 'checks/built.bin': `\0\0built in ${realpathSync.native(place.garden)}\0` });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed whose merge adds, in its resolution only, a line holding the site's path stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      git(place.bed, ['switch', '-q', '-c', 'side']);
+      commit(place.bed, { 'checks/side.txt': 'side\n' });
+      git(place.bed, ['switch', '-q', 'bed/any-type']);
+      commit(place.bed, { 'checks/main.txt': 'main\n' });
+      git(place.bed, ['merge', '-q', '--no-commit', 'side']);
+      writeFileSync(join(place.bed, 'checks', 'merged.txt'), `built in ${realpathSync.native(place.garden)}\n`);
+      git(place.bed, ['add', '-A']);
+      git(place.bed, ['commit', '-q', '--no-edit']);
+      tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+    }),
+    keptForAPath,
+  );
+});
+
+function notesNamingTheSite(place: Tended, notes = 'notes\n'): void {
+  writeFileSync(join(place.bed, 'notes.txt'), notes);
+  git(place.bed, ['add', 'notes.txt']);
+  git(place.bed, ['commit', '-q', '-m', 'notes', '-m', `built in ${realpathSync.native(place.garden)}`]);
+}
+
+test("a bed whose commit message holds the site's path stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      notesNamingTheSite(place);
+      tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+    }),
+    keptForAPath,
+  );
+});
+
+function endTipMessageWithNoLineBreak(bed: string, lastLine: string): void {
+  const text = git(bed, ['cat-file', 'commit', 'HEAD']);
+  const ended = spawnSync('git', ['hash-object', '-t', 'commit', '-w', '--stdin'], {
+    cwd: bed,
+    encoding: 'utf8',
+    input: `${text.slice(0, text.indexOf('\n\n'))}\n\nnotes\n\n${lastLine}`,
+  });
+  git(bed, ['update-ref', 'refs/heads/bed/any-type', ended.stdout.trim()]);
+}
+
+test("a bed whose commit message ends, with no line break, in a line that is the site's path stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      commit(place.bed, { 'checks/notes.txt': 'notes\n' });
+      endTipMessageWithNoLineBreak(place.bed, realpathSync.native(place.garden));
+      tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed whose commit message holds the site's path stays local under a later commit that ends by adding an empty file", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      notesNamingTheSite(place);
+      tend(place, { 'checks/any-type.mjs': 'export {};\n', 'empty.txt': '' });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed whose commit message holds the site's path stays local under a later commit that ends by removing a line that reads as a hunk header", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      notesNamingTheSite(place, 'keep\n@@ -1 +1,3 @@\n');
+      tend(place, { 'checks/any-type.mjs': 'export {};\n', 'notes.txt': 'keep\n' });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that adds a line holding the site's path past a file's ninth line, in a hunk of ten lines or more, stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      const lines = Array.from({ length: 30 }, (_, index) => `line ${String(index + 1)}`);
+      commit(place.bed, { 'checks/notes.txt': `${lines.join('\n')}\n` });
+      const edited = lines.with(14, `built in ${realpathSync.native(place.garden)}`).with(20, 'edited');
+      tend(place, { 'checks/notes.txt': `${edited.join('\n')}\n` });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that adds a line starting with the site's path stays local", (t) => {
+  assert.deepEqual(
+    keptLocalForAPath(t, (place) => {
+      tend(place, { 'checks/notes.txt': `${realpathSync.native(place.garden)}\n` });
+    }),
+    keptForAPath,
+  );
+});
+
+test("a bed that edits a file beside a line holding the site's path, a line origin's main holds already, is pushed", (t) => {
+  const { dir, garden } = planted(t);
+  const held = `built in ${realpathSync.native(garden)}\n`;
+  commit(dir, { 'checks/notes.txt': `${held}old\n` });
+  const remote = bareRemote(dir);
+  const place = { dir, garden, bed: bedFromMain(garden, 'any-type'), remote };
+  git(dir, ['config', 'tometo.share', 'false']);
+  const tip = tend(place, { 'checks/notes.txt': `${held}new\n` });
+  git(dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(dir), { attempts: 1 });
+
+  assert.deepEqual([result.notes, bedRef(remote)], [[], tip]);
+});
+
+test('a bed with no line holding the home folder is pushed when the home folder is the relative path here', (t) => {
+  const place = tendedWhileLocal(t);
+  homeAt(t, 'here');
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.notes, bedRef(place.remote)], [[], place.tip]);
+});
+
+test('a bed that adds the line here is pushed when the home folder is the relative path +here, as the + before an added line is no part of it', (t) => {
+  const place = tendedWhileLocal(t, { 'checks/notes.txt': 'here\n' });
+  homeAt(t, '+here');
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.notes, bedRef(place.remote)], [[], place.tip]);
+});
+
+test("a sync looks in the checkout for the bed's own commits and for no other name", (t) => {
+  const place = tendedWhileLocal(t);
+  const site = openSite(place.dir);
+  const started = startedGits(t);
+
+  sync(site, { attempts: 1 });
+
+  assert.deepEqual(
+    started()
+      .filter(({ args, cwd }) => cwd === site.checkout && args.includes('cat-file'))
+      .map(({ input }) => input),
+    [`${place.tip}\n`],
+  );
+});
+
+test("a sync reads a bed's commits, and looks for them in the checkout, without fetching what a partial clone lacks", (t) => {
+  const place = tendedWhileLocal(t);
+  const site = openSite(place.dir);
+  const started = startedGits(t);
+
+  sync(site, { attempts: 1 });
+
+  assert.deepEqual(
+    started()
+      .filter(({ args, cwd }) => cwd === site.checkout && (args.includes('log') || args.includes('cat-file')))
+      .map(({ args, env }) => [args.includes('log') ? 'log' : 'cat-file', env?.['GIT_NO_LAZY_FETCH']]),
+    [
+      ['log', '1'],
+      ['cat-file', '1'],
+    ],
+  );
+});
+
+test('a bed the origin already holds is not pushed again', (t) => {
+  const place = withBed(t);
+  const tip = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  const started = startedCommands(t);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.state, started.includes('push'), bedRef(place.remote)], ['synced', false, tip]);
+});
+
+test('a bed whose push failed is pushed by a later sync, though a sync between them found its branch past the close', (t) => {
+  const place = bedPushFails(t);
+  sync(openSite(place.dir), { attempts: 1 });
+  originBack(place);
+  commit(place.bed, { 'src/later.ts': 'export const later = 1;\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.bed, ['reset', '-q', '--hard', place.tip]);
+
+  sync(openSite(place.dir), { attempts: 1 });
+
+  assert.equal(bedRef(place.remote), place.tip);
+});
+
+test('a sync that shares the tended closes of two classes puts both beds on the origin', (t) => {
+  const place = withBed(t);
+  git(place.dir, ['config', 'tometo.share', 'false']);
+  const anyType = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  const otherBed = join(place.garden, 'beds', 'other');
+  git(place.garden, ['worktree', 'add', '-q', '-b', 'bed/other', otherBed, 'FETCH_HEAD']);
+  const other = tend({ ...place, bed: otherBed }, { 'checks/other.mjs': 'export {};\n' }, 'src/b.ts:1', 'other');
+  git(place.dir, ['config', 'tometo.share', 'true']);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual([result.notes, bedRef(place.remote), bedRef(place.remote, 'other')], [[], anyType, other]);
+});
+
+function tendedInFirstClone(
+  t: TestContext,
+  files: Readonly<Record<string, string>> = {},
+): {
+  readonly second: Planted;
+  readonly tip: string;
+  readonly remote: string;
+} {
+  const { first, second, remote } = sharedPair(t);
+  const added = cli(first.dir, ['add', '--class', 'any-type', '--where', 'src/a.ts:1', '--source', 'census:x']);
+  const claimed = cli(first.dir, ['claim', '--class', 'any-type']);
+  const made = site(first.dir, ['bed', '--class', 'any-type', '--base', 'main']);
+  assert.deepEqual([added.status, claimed.status, made.status], [0, 0, 0], made.stderr);
+  const tip = commit(join(first.garden, 'beds', 'any-type'), { 'checks/any-type.mjs': 'export {};\n', ...files });
+  const closed = cli(first.dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    `bed/any-type@${tip.slice(0, 7)}`,
+    '--check',
+    'checks/any-type.mjs',
+  ]);
+  assert.equal(closed.stdout, 'closed 1; synced\n', closed.stderr);
+
+  return { second, tip, remote };
+}
+
+test("a bed continued from origin's bed reads only the commits origin lacks for a path on this machine", (t) => {
+  const home = 'Q:\\gardener-home';
+  const { second, remote } = tendedInFirstClone(t, { 'checks/notes.txt': `built in ${home}\\src\n` });
+  homeAt(t, home);
+  cli(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:y']);
+  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).status, 0);
+  assert.equal(site(second.dir, ['bed', '--class', 'any-type', '--base', 'main']).status, 0);
+  const tip = commit(join(second.garden, 'beds', 'any-type'), { 'checks/any-type.mjs': 'export const later = 1;\n' });
+
+  const closed = cli(second.dir, [
+    'close-class',
+    '--class',
+    'any-type',
+    '--tended',
+    `bed/any-type@${tip.slice(0, 7)}`,
+    '--check',
+    'checks/any-type.mjs',
+  ]);
+
+  assert.deepEqual([closed.stdout, closed.stderr, bedRef(remote)], ['closed 1; synced\n', '', tip]);
+});
+
+test("a class tended in one clone and claimed in another continues the same bed from the first clone's bed", (t) => {
+  const { second, tip } = tendedInFirstClone(t);
+  cli(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:y']);
+  assert.equal(cli(second.dir, ['claim', '--class', 'any-type']).status, 0);
+
+  const made = site(second.dir, ['bed', '--class', 'any-type', '--base', 'main']);
+
+  assert.equal(made.status, 0, made.stderr);
+  assert.equal(git(join(second.garden, 'beds', 'any-type'), ['rev-parse', 'HEAD']), tip);
+});
+
+test("a regrown weed in a second clone reads not on the base from the first clone's shared bed", (t) => {
+  const { second, tip } = tendedInFirstClone(t);
+  assert.equal(site(second.dir, ['open']).status, 0);
+  writeCensus(second.garden, git(second.dir, ['rev-parse', 'main']));
+
+  const back = cli(second.dir, ['add', '--class', 'any-type', '--where', 'src/b.ts:1', '--source', 'census:y']);
+
+  assert.match(
+    back.stdout,
+    new RegExp(
+      `^regrown \\S+ after bed/any-type@${tip.slice(0, 7)} \\(check: checks/any-type\\.mjs not on the base\\)\\n$`,
+    ),
+  );
+});
+
+test("a bed that does not descend from the origin's bed is left out and named, and the log is still synced", (t) => {
+  const place = withBed(t);
+  const shared = tend(place, { 'checks/any-type.mjs': 'export {};\n' });
+  sync(openSite(place.dir), { attempts: 1 });
+  git(place.bed, ['reset', '-q', '--hard', 'HEAD~1']);
+  const rewritten = tend(place, { 'checks/any-type.mjs': 'export const other = 1;\n' }, 'src/b.ts:1');
+  assert.notEqual(rewritten, shared);
+
+  const result = sync(openSite(place.dir), { attempts: 1 });
+
+  assert.deepEqual(
+    [result.state, result.notes, bedRef(place.remote)],
+    ['synced', ["any-type: bed/any-type does not descend from origin's bed"], shared],
+  );
+});

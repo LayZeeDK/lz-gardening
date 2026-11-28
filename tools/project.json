@@ -1,7 +1,7 @@
 {
   "name": "tools",
   "$schema": "../node_modules/nx/schemas/project-schema.json",
-  "implicitDependencies": ["lz-gardening"],
+  "implicitDependencies": ["tometo"],
   "namedInputs": { "default": ["{projectRoot}/**/*", "sharedGlobals", "{workspaceRoot}/eslint.config.ts"] },
   "targets": {
     "test": {

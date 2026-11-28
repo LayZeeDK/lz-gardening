@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import { benchmark, benchmarkMarkdown, stats, writeBenchmark } from './eval-benchmark.ts';
 import type { Grading, Timing } from './eval-grade.ts';
 
@@ -37,7 +37,7 @@ test('writeBenchmark writes benchmark.json, benchmark.md and summary.md, configu
     { config: 'new_skill', passed: 1 },
   ]);
 
-  writeBenchmark(iteration, 'lz-gardening', 't');
+  writeBenchmark(iteration, 'tometo', 't');
 
   const written: unknown = JSON.parse(readFileSync(join(iteration, 'benchmark.json'), 'utf8'));
   const summary = isRecord(written) ? written['run_summary'] : undefined;
@@ -68,7 +68,7 @@ test('benchmarkMarkdown tables the two configurations and their delta', () => {
     ],
     {
       configs: ['new_skill', 'old_skill'],
-      skillName: 'lz-gardening',
+      skillName: 'tometo',
       skillPath: 'p',
       executorModel: 'opus',
       timestamp: 't',
@@ -78,7 +78,7 @@ test('benchmarkMarkdown tables the two configurations and their delta', () => {
   assert.equal(
     benchmarkMarkdown(result),
     [
-      '# Skill Benchmark: lz-gardening',
+      '# Skill Benchmark: tometo',
       '',
       '**Model**: opus',
       '**Date**: t',
@@ -117,7 +117,7 @@ test('benchmark summarises each configuration, gives the first minus the second 
     ],
     {
       configs: ['new_skill', 'old_skill'],
-      skillName: 'lz-gardening',
+      skillName: 'tometo',
       skillPath: 'p',
       executorModel: 'opus',
       timestamp: 't',
@@ -126,7 +126,7 @@ test('benchmark summarises each configuration, gives the first minus the second 
 
   assert.deepEqual(result, {
     metadata: {
-      skill_name: 'lz-gardening',
+      skill_name: 'tometo',
       skill_path: 'p',
       executor_model: 'opus',
       analyzer_model: '<model-name>',
@@ -207,7 +207,7 @@ test('benchmark summarises each configuration, gives the first minus the second 
 test('benchmark counts the runs per configuration in each eval folder, so the models that share an eval id count apart', () => {
   const options = {
     configs: ['new_skill', 'old_skill'] as const,
-    skillName: 'lz-gardening',
+    skillName: 'tometo',
     skillPath: 'p',
     executorModel: 'sonnet, opus',
     timestamp: 't',

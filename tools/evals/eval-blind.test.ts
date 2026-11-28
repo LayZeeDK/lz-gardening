@@ -3,22 +3,22 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import { blind, blindText, unblind } from './eval-blind.ts';
 
 test('blindText replaces each plugin path, however a call spelled it, and the configuration names', () => {
   const text = [
-    'node "D:/wt-x/plugins/lz-gardening/skills/lz-garden/scripts/census.ts"',
-    '{"command":"node D:\\\\wt-x\\\\plugins\\\\lz-gardening\\\\x.ts"}',
-    'node d:\\wt-x\\plugins\\lz-gardening\\y.ts',
-    'cd /d/wt-x/plugins/lz-gardening',
+    'node "D:/wt-x/plugins/tometo/skills/garden/scripts/census.ts"',
+    '{"command":"node D:\\\\wt-x\\\\plugins\\\\tometo\\\\x.ts"}',
+    'node d:\\wt-x\\plugins\\tometo\\y.ts',
+    'cd /d/wt-x/plugins/tometo',
     'the old_skill and new_skill text',
   ].join('\n');
 
   assert.equal(
-    blindText(text, ['D:/wt-x/plugins/lz-gardening'], ['new_skill', 'old_skill']),
+    blindText(text, ['D:/wt-x/plugins/tometo'], ['new_skill', 'old_skill']),
     [
-      'node "<plugin>/skills/lz-garden/scripts/census.ts"',
+      'node "<plugin>/skills/garden/scripts/census.ts"',
       '{"command":"node <plugin>\\\\x.ts"}',
       'node <plugin>\\y.ts',
       'cd <plugin>',
@@ -32,8 +32,8 @@ function gradedIteration(): string {
   const iteration = mkdtempSync(join(tmpdir(), 'eval-blind-')).replaceAll('\\', '/');
   // Absolute on every platform: readIteration resolves the plugin paths.
   const plugins = {
-    new_skill: `${iteration}/wt-1/plugins/lz-gardening`,
-    old_skill: `${iteration}/wt-2/plugins/lz-gardening`,
+    new_skill: `${iteration}/wt-1/plugins/tometo`,
+    old_skill: `${iteration}/wt-2/plugins/tometo`,
   };
   writeFileSync(
     `${iteration}/iteration.json`,

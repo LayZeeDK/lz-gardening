@@ -1,13 +1,13 @@
 {
-  "name": "lz-gardening-tooling",
+  "name": "tometo-tooling",
   "private": true,
   "type": "module",
-  "description": "Maintainer tooling for the lz-gardening repository: type-check, lint and test the scripts the plugin ships. Not part of the plugin.",
+  "description": "Maintainer tooling for the tometo repository: type-check, lint and test the scripts the plugin ships. Not part of the plugin.",
   "engines": {
     "node": ">=22.18.0"
   },
   "scripts": {
-    "postinstall": "npm ci --prefix plugins/lz-gardening --ignore-scripts --no-audit --no-fund",
+    "postinstall": "npm ci --prefix plugins/tometo --ignore-scripts --no-audit --no-fund",
     "check": "nx run-many -t lint typecheck test lockfile && prettier --check --cache ."
   },
   "devDependencies": {

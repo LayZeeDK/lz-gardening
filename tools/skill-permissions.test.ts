@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-const skills = join(import.meta.dirname, '../plugins/lz-gardening/skills');
+const skills = join(import.meta.dirname, '../plugins/tometo/skills');
 
 // A Read rule's single leading slash anchors at the working directory, so on Linux and macOS
 // Read(${CLAUDE_SKILL_DIR}/**) expands to a path under the checkout and the skill cannot read its own files. The

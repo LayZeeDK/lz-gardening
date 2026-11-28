@@ -11,8 +11,8 @@
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isMainModule } from '../../plugins/tometo/skills/garden/scripts/cli.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import { judgeFiles } from './eval-grade.ts';
 import { evalFolder, evalFolderOf, readIteration, readJson } from './eval-layout.ts';
 import { slimOutput } from './slim-output.ts';

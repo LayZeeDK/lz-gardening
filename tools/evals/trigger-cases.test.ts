@@ -6,21 +6,21 @@ import { join } from 'node:path';
 import { caseNames, skillParts, splitEvalSet, withDescription, writeCases } from './trigger-cases.ts';
 
 test('withDescription replaces the frontmatter description with a quoted one and skillParts reads it back', () => {
-  const skill = ['---', 'name: lz-tend', 'description: Tend one class.', '---', '', '# Body', ''].join('\n');
+  const skill = ['---', 'name: tend', 'description: Tend one class.', '---', '', '# Body', ''].join('\n');
   const changed = withDescription(skill, 'Use for "tend <class>": weeds.');
 
   assert.deepEqual(
     [changed.split('\n')[2], skillParts(changed), skillParts(skill).description],
     [
       'description: "Use for \\"tend <class>\\": weeds."',
-      { name: 'lz-tend', description: 'Use for "tend <class>": weeds.', body: '# Body\n' },
+      { name: 'tend', description: 'Use for "tend <class>": weeds.', body: '# Body\n' },
       'Tend one class.',
     ],
   );
 });
 
 test('withDescription writes a description holding replacement patterns such as $& as it is', () => {
-  const skill = ['---', 'name: lz-tend', 'description: Old.', '---', ''].join('\n');
+  const skill = ['---', 'name: tend', 'description: Old.', '---', ''].join('\n');
 
   assert.equal(skillParts(withDescription(skill, "Costs $& or $$ or $'.")).description, "Costs $& or $$ or $'.");
 });
@@ -37,7 +37,7 @@ test('splitEvalSet keeps every query for training when the holdout is 0', () => 
 test('writeCases writes one case per query, tagged with its split, whose grader counts the skill being invoked', () => {
   const evals = join(mkdtempSync(join(tmpdir(), 'trigger-cases-')), 'evals');
 
-  const names = writeCases(evals, 'lz-tend', {
+  const names = writeCases(evals, 'tend', {
     train: [{ query: 'pull these "weeds"', should_trigger: true }],
     test: [{ query: 'what is a worktree?', should_trigger: false }],
   });
@@ -69,7 +69,7 @@ test('writeCases writes one case per query, tagged with its split, whose grader 
         '---',
         'type: tool_used',
         'tool: Skill',
-        `input_match: '"skill"\\s*:\\s*"(?:[\\w-]+:)?lz-tend"'`,
+        `input_match: '"skill"\\s*:\\s*"(?:[\\w-]+:)?tend"'`,
         'arm: both',
         '---',
         '',

@@ -1,4 +1,4 @@
-# lz-gardening
+# tometo
 
 Gardening a codebase that agents write: noticing the patterns agents copy, and turning each recurring one into a
 check so it cannot come back.

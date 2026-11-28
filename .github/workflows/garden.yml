@@ -14,7 +14,7 @@ jobs:
   garden:
     # On the job, not the workflow, so that a workflow_run whose job its if: skips never takes a waiting run's place.
     concurrency:
-      group: lz-gardening
+      group: tometo
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -31,10 +31,10 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
-          plugin_marketplaces: https://github.com/LayZeeDK/lz-gardening.git
-          plugins: lz-gardening@lz-gardening
+          plugin_marketplaces: https://github.com/tometo-tub/tometo.git
+          plugins: tometo@tometo
           # The checkout may have no origin/HEAD, so the tick is told the base.
-          prompt: /lz-gardening:lz-garden --base ${{ github.event.repository.default_branch }}
+          prompt: /tometo:garden --base ${{ github.event.repository.default_branch }}
           # Linux builds of Claude Code search through Bash; --tools brings back the Grep and Glob tools.
           claude_args: --permission-mode dontAsk --tools Bash,Read,Grep,Glob,Skill,Task
           # The session, its tool calls and the tick's reply, in the run's summary; the step's log hides them.

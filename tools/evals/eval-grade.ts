@@ -4,8 +4,8 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isMainModule } from '../../plugins/tometo/skills/garden/scripts/cli.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import { checks } from './eval-checks.ts';
 import { evalFolderOf, isAssertion, readJson, type Assertion } from './eval-layout.ts';
 import { sessionTranscripts, toolCalls, type ToolCall } from './eval-transcript.ts';

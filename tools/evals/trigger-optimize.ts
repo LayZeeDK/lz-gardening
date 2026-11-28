@@ -18,8 +18,8 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isMainModule } from '../../plugins/tometo/skills/garden/scripts/cli.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import { limitStopped, slimOutput } from './slim-output.ts';
 import {
   caseNames,

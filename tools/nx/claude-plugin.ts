@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { CreateDependencies, CreateNodes, ProjectGraphExternalNode, TargetConfiguration } from '@nx/devkit';
 import { DependencyType } from '@nx/devkit';
 import ts from 'typescript';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 
 interface InstalledPackage {
   readonly version: string;
@@ -143,7 +143,7 @@ function pluginTargets(root: string, scripts: readonly string[]): Record<string,
         '{projectRoot}/package.json',
         '{projectRoot}/package-lock.json',
         '{workspaceRoot}/tools/nx/claude-plugin.ts',
-        '{workspaceRoot}/plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts',
+        '{workspaceRoot}/plugins/tometo/skills/garden/scripts/log-guard.ts',
         { runtime: 'npm --version' },
       ],
       outputs: [],

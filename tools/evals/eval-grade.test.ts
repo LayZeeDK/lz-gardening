@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import { gradeRunDir, grading, parseGrading, parseTiming, timing } from './eval-grade.ts';
 import type { ToolCall } from './eval-transcript.ts';
 import { slimOutput } from './slim-output.ts';

@@ -1,6 +1,6 @@
 // Per-query trigger results, in skill-creator's run_eval.py schema, from a `claude plugin eval --json` result.
 // Repository-only; nothing here ships with the plugin.
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import type { EvalQuery } from './trigger-cases.ts';
 
 export interface QueryResult extends EvalQuery {

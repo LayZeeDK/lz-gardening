@@ -1,6 +1,6 @@
 // The `--out` file of the slim `claude -p` runner: `{cwd, status, ms, stdout}`, with the session's stream-json lines in
 // `stdout`. Repository-only; nothing here ships with the plugin.
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 
 export interface SlimOutput {
   readonly cwd: string | null;

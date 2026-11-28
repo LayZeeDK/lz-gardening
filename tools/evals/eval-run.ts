@@ -17,8 +17,8 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { isMainModule } from '../../plugins/lz-gardening/skills/lz-garden/scripts/cli.ts';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isMainModule } from '../../plugins/tometo/skills/garden/scripts/cli.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import {
   evalFolder,
   isAssertion,
@@ -179,7 +179,7 @@ export function scaffold(sample: Sample, origin: string, patterns: string): void
   mkdirSync(dirname(bare), { recursive: true });
   runOrThrow('git', ['clone', '-q', '--bare', '--single-branch', '--branch', 'main', origin, bare], dirname(bare));
   runOrThrow('git', ['clone', '-q', bare, clone], dirname(clone));
-  runOrThrow(process.execPath, [`${sample.plugin}/skills/lz-garden/scripts/site.ts`, 'open'], clone);
+  runOrThrow(process.execPath, [`${sample.plugin}/skills/garden/scripts/site.ts`, 'open'], clone);
   mkdirSync(`${site}/.garden`, { recursive: true });
   copyFileSync(patterns, `${site}/.garden/patterns.json`);
 }
@@ -386,7 +386,7 @@ if (isMainModule(import.meta.url)) {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
-      evals: { type: 'string', default: '.claude/evals/lz-gardening' },
+      evals: { type: 'string', default: '.claude/evals/tometo' },
       concurrency: { type: 'string', default: '4' },
     },
   });
@@ -471,7 +471,7 @@ if (isMainModule(import.meta.url)) {
     plan.forEach(argsOf);
     const waves = Math.ceil(plan.length / concurrency);
     const failed = await withHeavyLock(
-      `lz-gardening eval ${String(command)} ${evalCase.name} ${basename(iteration)}: ${String(plan.length)} slim claude -p runs, ${String(concurrency)} at a time`,
+      `tometo eval ${String(command)} ${evalCase.name} ${basename(iteration)}: ${String(plan.length)} slim claude -p runs, ${String(concurrency)} at a time`,
       waves * (evalCase.timeoutMinutes + 2),
       () => runAll(plan, concurrency, (run) => slimRun(runSlim, argsOf(run))),
     );

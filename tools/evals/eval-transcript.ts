@@ -2,7 +2,7 @@
 // grader. Repository-only; nothing here ships with the plugin.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 
 export interface ToolCall {
   readonly agent: string;

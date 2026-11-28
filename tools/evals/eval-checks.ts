@@ -1,6 +1,6 @@
 // The eval cases' script assertions: each reads a run's tool calls (every agent of the session) and returns whether it
 // held, with the calls that show it. Repository-only; nothing here ships with the plugin.
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 import type { ToolCall } from './eval-transcript.ts';
 
 export interface CheckResult {
@@ -91,7 +91,7 @@ function unquoted(text: string): string {
   });
 }
 
-// lz-garden's allowed-tools and its read-only git forms, each one command with no chain, pipe or redirect.
+// The garden skill's allowed-tools and its read-only git forms, each one command with no chain, pipe or redirect.
 function inTick(call: ToolCall): boolean {
   const text = command(call);
 

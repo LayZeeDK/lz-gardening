@@ -4,7 +4,7 @@ import { checks } from './eval-checks.ts';
 import type { ToolCall } from './eval-transcript.ts';
 
 function call(name: string, input: unknown, outcome: Partial<ToolCall> = {}): ToolCall {
-  return { agent: 'lz-gardening:lz-gardener', name, input, result: '', isError: false, denied: false, ...outcome };
+  return { agent: 'tometo:gardener', name, input, result: '', isError: false, denied: false, ...outcome };
 }
 
 function run(id: string, calls: readonly ToolCall[]): { passed: boolean; evidence: string } {
@@ -27,7 +27,7 @@ test('no-denials fails on a call the permission rules rejected and names it', ()
 });
 
 function weeds(args: string): ToolCall {
-  return call('Bash', { command: `node "D:/plugin/skills/lz-garden/scripts/weeds.ts" ${args}` });
+  return call('Bash', { command: `node "D:/plugin/skills/garden/scripts/weeds.ts" ${args}` });
 }
 
 test('decline-reads-lines fails on a decline of a pattern class no weeds lines of that class came before', () => {
@@ -57,7 +57,7 @@ test('decline-reads-lines fails on a decline without --read and passes one read 
 });
 
 test('census-taken passes on a census.ts --rev that exited 0 and fails when each one failed', () => {
-  const census = call('Bash', { command: 'node "D:/plugin/skills/lz-garden/scripts/census.ts" --rev main' });
+  const census = call('Bash', { command: 'node "D:/plugin/skills/garden/scripts/census.ts" --rev main' });
 
   assert.deepEqual(
     [
@@ -88,7 +88,7 @@ test('tend-closed passes on a close-class that printed closed and fails when non
 });
 
 test('garden-commands counts a script call chained, piped or redirected outside its quoted arguments as outside', () => {
-  const site = 'node "D:/plugin/skills/lz-garden/scripts/site.ts" open';
+  const site = 'node "D:/plugin/skills/garden/scripts/site.ts" open';
   const calls = [
     weeds("decline --class c --where a.ts --reason 'a | b; c > d' --census abc --read t"),
     call('Bash', { command: `cd D:/sample && ${site}` }),
@@ -136,7 +136,7 @@ test('garden-commands pairs each quote with its own close, past a double-quoted 
 test('garden-commands counts node with no garden script, and node or git not at the start, as outside', () => {
   const commands = [
     'node -e "1"',
-    'env node "D:/plugin/skills/lz-garden/scripts/weeds.ts" lines --class c',
+    'env node "D:/plugin/skills/garden/scripts/weeds.ts" lines --class c',
     'echo git show main',
   ];
 
@@ -146,9 +146,9 @@ test('garden-commands counts node with no garden script, and node or git not at 
   );
 });
 
-test('every check passes on a tend tick that reads before each decline and runs only lz-garden commands', () => {
+test('every check passes on a tend tick that reads before each decline and runs only garden commands', () => {
   const calls = [
-    call('Bash', { command: 'node "D:/plugin/skills/lz-garden/scripts/census.ts" --rev main' }),
+    call('Bash', { command: 'node "D:/plugin/skills/garden/scripts/census.ts" --rev main' }),
     weeds('lines --class console-call --census abc'),
     weeds('decline --class console-call --where a.ts --reason "a log" --census abc --read 0123456789ab'),
     weeds('close-class --class console-call --bed abc1234 --check eslint.config.mjs'),
@@ -163,7 +163,7 @@ test('every check passes on a tend tick that reads before each decline and runs 
   );
 });
 
-test('garden-commands fails on a command lz-garden does not run and on a file write, and names each', () => {
+test('garden-commands fails on a command the garden skill does not run and on a file write, and names each', () => {
   const calls = [
     call('Bash', { command: 'node --version' }),
     weeds('decline --class console-call --where a.ts --reason "logs; then | more" --census abc --read t'),

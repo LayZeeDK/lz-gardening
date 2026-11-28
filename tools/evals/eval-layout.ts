@@ -7,7 +7,7 @@
 // Repository-only; nothing here ships with the plugin.
 import { globSync, readFileSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { isRecord } from '../../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../../plugins/tometo/skills/garden/scripts/log-guard.ts';
 
 export interface Iteration {
   readonly configs: Readonly<Record<string, string>>;

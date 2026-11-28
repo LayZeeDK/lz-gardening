@@ -1,6 +1,6 @@
 # Agent instructions
 
-This repository is the `lz-gardening` Claude Code plugin marketplace. The plugin lives in `plugins/lz-gardening/`;
+This repository is the `tometo` Claude Code plugin marketplace. The plugin lives in `plugins/tometo/`;
 everything else (`tools/`, `package.json`, the lint and type configs) is maintainer tooling and does not ship.
 
 ## The plugin stands alone
@@ -13,7 +13,7 @@ rejects. Describe an idea in its own words instead of pointing at another tool. 
 The plugin must be safe in open-source repositories. Everything the garden shares (`refs/garden/*` on `origin`) is
 readable by anyone who can read the repository, and its events are never removed: put no hostname, local path, user
 name or email, or other machine or personal data into an event, a census, a garden commit or a shared bed, unless the
-user configured it (`lzGardening.name` and `lzGardening.email` name the garden's commits).
+user configured it (`tometo.name` and `tometo.email` name the garden's commits).
 
 ## Words and decisions
 
@@ -29,26 +29,26 @@ user configured it (`lzGardening.name` and `lzGardening.email` name the garden's
 
 - No skill sets `disable-model-invocation: true`. In Claude Code it also makes the Skill tool refuse the skill,
   stops `skills:` preloading, and keeps `/loop` and autonomous sessions from running it.
-- Name plugin agents with the plugin prefix wherever a caller names them (`agent: lz-gardening:lz-gardener`,
-  `subagent_type: "lz-gardening:lz-gardener"`). A bare name silently falls back to the default agent in a skill's
+- Name plugin agents with the plugin prefix wherever a caller names them (`agent: tometo:gardener`,
+  `subagent_type: "tometo:gardener"`). A bare name silently falls back to the default agent in a skill's
   `agent:` field, and fails in an Agent call.
 - Point at bundled files with `${CLAUDE_SKILL_DIR}` inside a skill and `${CLAUDE_PLUGIN_ROOT}` across skills.
-- Verify a change to a skill or agent with a real run (`claude -p --plugin-dir ./plugins/lz-gardening`) on Sonnet
+- Verify a change to a skill or agent with a real run (`claude -p --plugin-dir ./plugins/tometo`) on Sonnet
   and Opus. Judge from the subagent's transcript what it received, not from the model's answer. Compare a change to
-  the text the seed or tend pass follows with the text before it through the `lz-gardening-evals` project skill, and
-  a description change through `lz-gardening-triggers`.
+  the text the seed or tend pass follows with the text before it through the `tometo-evals` project skill, and
+  a description change through `tometo-triggers`.
 
 ## Scripts
 
-The scripts under `plugins/lz-gardening/skills/*/scripts/` are TypeScript in erasable syntax that Node.js 22.18+
-runs directly, with no build step. They may import npm packages that `plugins/lz-gardening/package.json` lists at an
+The scripts under `plugins/tometo/skills/*/scripts/` are TypeScript in erasable syntax that Node.js 22.18+
+runs directly, with no build step. They may import npm packages that `plugins/tometo/package.json` lists at an
 exact version, with the npm-written `package-lock.json` beside it to match: Claude Code installs a marketplace
 plugin's packages from those two files when it installs or updates the plugin. When the two disagree it installs
 nothing, and the scripts fail when they import a package.
 
 - Add, bump or remove a package of the plugin in its folder only, and commit both files:
-  `npm install <pkg>@<version> --save-exact --prefix plugins/lz-gardening` or
-  `npm uninstall <pkg> --prefix plugins/lz-gardening`. A test-only or tooling package goes to the root:
+  `npm install <pkg>@<version> --save-exact --prefix plugins/tometo` or
+  `npm uninstall <pkg> --prefix plugins/tometo`. A test-only or tooling package goes to the root:
   `npm install -D -E <pkg>`.
 - The tests, Stryker and `claude --plugin-dir` all run on the plugin's own `node_modules`, and `--plugin-dir`
   installs nothing. `npm ci` at the root fills it through the root `postinstall` script; `npm install <pkg>` at the
@@ -60,7 +60,7 @@ nothing, and the scripts fail when they import a package.
 
 Develop the scripts test-first, one `node:test` test per red-green-refactor cycle. Give each test its own state from a
 setup function it calls (a throwaway git repository for census tests), not shared `before` hooks. Mutation-test
-changes with StrykerJS, one script at a time: `npm exec -- nx mutate-<name> lz-gardening`, where `<name>` is a
+changes with StrykerJS, one script at a time: `npm exec -- nx mutate-<name> tometo`, where `<name>` is a
 script's name before its first hyphen, so `mutate-store` takes every `store-*.ts` (the `mutate` target takes every
 script). Stryker runs the command runner over `node --test`, or, on a machine with an
 `@layzee/stryker-node-test-runner` checkout, that runner and the checkout's mutators (`stryker.config.mjs` says how).
@@ -72,7 +72,7 @@ Prettier.
 
 ## Versioning and commits
 
-- `plugins/lz-gardening/CHANGELOG.md` defines the public interface. Pick each Conventional Commit type by its
+- `plugins/tometo/CHANGELOG.md` defines the public interface. Pick each Conventional Commit type by its
   SemVer effect on that interface.
 - Put a version bump and its CHANGELOG entry in their own commit, apart from the changes they describe.
 - Commit as the public maintainer identity; `tools/hygiene.test.ts` checks it.

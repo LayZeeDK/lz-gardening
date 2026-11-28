@@ -6,10 +6,10 @@ import { createRequire } from 'node:module';
 import { join, relative, sep } from 'node:path';
 import { test } from 'node:test';
 import { createProjectGraphAsync } from '@nx/devkit';
-import { isRecord } from '../plugins/lz-gardening/skills/lz-garden/scripts/log-guard.ts';
+import { isRecord } from '../plugins/tometo/skills/garden/scripts/log-guard.ts';
 
 const root = join(import.meta.dirname, '..');
-const plugin = join(root, 'plugins/lz-gardening');
+const plugin = join(root, 'plugins/tometo');
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -65,7 +65,7 @@ test('the plugin project has every target npm run check runs', async () => {
   const check = isRecord(scripts) ? scripts['check'] : undefined;
   const checked = typeof check === 'string' ? /nx run-many -t ([\w ]+?) &&/.exec(check)?.[1]?.split(' ') : undefined;
   const graph = await createProjectGraphAsync({ exitOnError: false });
-  const targets = graph.nodes['lz-gardening']?.data.targets ?? {};
+  const targets = graph.nodes['tometo']?.data.targets ?? {};
 
   assert.ok(checked !== undefined, 'package.json scripts.check runs no nx run-many -t');
   assert.deepEqual(
@@ -82,7 +82,7 @@ test("each plugin package resolves from the plugin's own node_modules at its loc
   const dependencies = isRecord(manifest) && isRecord(manifest['dependencies']) ? manifest['dependencies'] : {};
   const packages = isRecord(lockfile) && isRecord(lockfile['packages']) ? lockfile['packages'] : {};
   const require = createRequire(join(plugin, 'package.json'));
-  const fix = 'run npm ci --prefix plugins/lz-gardening --ignore-scripts';
+  const fix = 'run npm ci --prefix plugins/tometo --ignore-scripts';
 
   Object.keys(dependencies).forEach((name) => {
     const locked = packages[`node_modules/${name}`];
