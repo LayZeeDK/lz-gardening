@@ -8,7 +8,7 @@ Agents copy the nearest example and take the shortest path that compiles. Weaker
 ones. Every shortcut left in the code is a template for the next change, so the codebase drifts toward whatever
 grew unless someone tends it. The idea comes from Lauren Tan's
 [gardener post](https://x.com/poteto/status/2090546476464451907): "every weed you pull becomes a rule, so it can't
-grow back."
+grow back." The name _tometo_ is an homage to Lauren "poteto" Tan.
 
 ## Install
 
